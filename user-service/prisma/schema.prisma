@@ -1,0 +1,13 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Add the user-management models here once their fields and relations are defined:
+// accounts, profiles, friendships, follows, blocks, and privacy settings.
+// Add authentication persistence (such as sessions) as needed.
