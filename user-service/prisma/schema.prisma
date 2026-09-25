@@ -8,6 +8,79 @@ datasource db {
   provider = "postgresql"
 }
 
-// Add the user-management models here once their fields and relations are defined:
-// accounts, profiles, friendships, follows, blocks, and privacy settings.
-// Add authentication persistence (such as sessions) as needed.
+model User {
+  id          String   @id @default(uuid())
+  username    String   @unique
+  email       String   @unique
+  firstName   String?
+  lastName    String?
+  displayName String?  // fallback for OAuth users who skip profile setup
+  avatarUrl   String?
+  status      UserStatus @default(OFFLINE)
+
+  passwordHash String?  // nullable — OAuth-only users won't have one
+  emailVerifiedAt DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  authProviders AuthProvider[]
+  refreshTokens RefreshToken[]
+  twoFactor     TwoFactorAuth?
+  recoveryCodes RecoveryCode[]
+}
+
+model AuthProvider {
+  id             String   @id @default(uuid())
+  provider       Provider // GITHUB | DISCORD | FORTYTWO
+  providerUserId String   // the id from that provider's system
+  accessToken    String?  // encrypted at rest if you store it
+  refreshToken   String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerUserId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   // never store raw refresh tokens
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model TwoFactorAuth {
+  userId          String    @id
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secretEncrypted String
+  enabledAt       DateTime?
+  lastUsedStep    BigInt?
+  createdAt       DateTime  @default(now())
+}
+
+model RecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+enum Provider {
+  LOCAL
+  GITHUB
+  DISCORD
+  FORTYTWO
+}
+
+enum UserStatus {
+  ONLINE
+  OFFLINE
+  AWAY
+}
