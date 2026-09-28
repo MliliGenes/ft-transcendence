@@ -25,6 +25,8 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+See [API.md](API.md) for the user-service endpoint reference, authentication flow, validation rules, and curl examples.
+
 ## Project setup
 
 ```bash

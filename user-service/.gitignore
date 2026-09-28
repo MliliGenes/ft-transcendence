@@ -2,6 +2,7 @@
 /dist
 /node_modules
 /build
+/.keys/
 
 # Generated Prisma client
 /src/generated/prisma
