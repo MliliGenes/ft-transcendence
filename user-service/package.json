@@ -20,6 +20,8 @@
     "test": "vitest run",
     "test:register": "npm run build && node --test --test-isolation=none test/register-tokens.test.mjs",
     "test:auth": "npm run build && node --test --test-isolation=none test/register-tokens.test.mjs test/login-tokens.test.mjs test/current-user.test.mjs test/refresh-tokens.test.mjs",
+    "test:auth:postgres": "npm run build && node --test --test-isolation=none test/refresh-race.postgres.test.mjs",
+    "test:accounts": "npm run build && node --test --test-isolation=none test/accounts.test.mjs test/account-images.test.mjs",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
@@ -39,7 +41,8 @@
     "class-validator": "^0.15.1",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",

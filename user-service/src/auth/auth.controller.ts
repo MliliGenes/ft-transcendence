@@ -1,24 +1,15 @@
 import {
   Controller,
-  Get,
-  Param,
-  ParseUUIDPipe,
   Post,
-  Query,
   Body,
   Header,
   HttpCode,
   HttpStatus,
-  Req,
-  UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
-import { PaginationDto } from './dto/pagination.dto.js';
-import { AccessTokenGuard } from './guards/access-token.guard.js';
-import type { AuthenticatedRequest } from './guards/access-token.guard.js';
 
 @Controller('auth')
 export class AuthController {
@@ -50,22 +41,5 @@ export class AuthController {
   @Header('Cache-Control', 'no-store')
   async logout(@Body() dto: RefreshDto): Promise<void> {
     await this.authService.logout(dto);
-  }
-
-  @Get('users')
-  getUsers(@Query() query: PaginationDto) {
-    return this.authService.getUsers(query);
-  }
-
-  @Get('user/me')
-  @UseGuards(AccessTokenGuard)
-  @Header('Cache-Control', 'no-store')
-  getMe(@Req() request: AuthenticatedRequest) {
-    return this.authService.getUser(request.user.sub);
-  }
-
-  @Get('user/:id')
-  getUser(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.authService.getUser(id);
   }
 }

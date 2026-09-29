@@ -16,6 +16,7 @@ model User {
   lastName    String?
   displayName String?  // fallback for OAuth users who skip profile setup
   avatarUrl   String?
+  bannerUrl   String?
   status      UserStatus @default(OFFLINE)
 
   passwordHash String?  // nullable — OAuth-only users won't have one
@@ -28,6 +29,24 @@ model User {
   refreshTokens RefreshToken[]
   twoFactor     TwoFactorAuth?
   recoveryCodes RecoveryCode[]
+  images        UserImage[]
+}
+
+model UserImage {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind        UserImageKind
+  data        Bytes
+  contentType String
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([userId, kind])
+}
+
+enum UserImageKind {
+  AVATAR
+  BANNER
 }
 
 model AuthProvider {
@@ -44,12 +63,15 @@ model AuthProvider {
 
 model RefreshToken {
   id        String   @id @default(uuid())
+  sessionId String   @default(uuid()) // shared by all rotations of one login
   tokenHash String   // never store raw refresh tokens
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   expiresAt DateTime
   revokedAt DateTime?
   createdAt DateTime @default(now())
+
+  @@index([userId, sessionId])
 }
 
 model TwoFactorAuth {

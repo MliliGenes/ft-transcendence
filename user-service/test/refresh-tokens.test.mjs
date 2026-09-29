@@ -48,6 +48,7 @@ test('refresh-token verification and rotation', async (t) => {
       for (const row of rows.values()) {
         if (where.id && row.id !== where.id) continue;
         if (where.userId && row.userId !== where.userId) continue;
+        if (where.sessionId && row.sessionId !== where.sessionId) continue;
         if (where.tokenHash && row.tokenHash !== where.tokenHash) continue;
         if ('revokedAt' in where && row.revokedAt !== where.revokedAt) continue;
         if (where.expiresAt && row.expiresAt <= where.expiresAt.gt) continue;
@@ -71,7 +72,10 @@ test('refresh-token verification and rotation', async (t) => {
       const result = queue.then(async () => {
         const before = structuredClone(rows);
         try {
-          return await work({ refreshToken: delegate });
+          return await work({
+            refreshToken: delegate,
+            $queryRaw: async () => [],
+          });
         } catch (error) {
           rows = before;
           throw error;
@@ -87,6 +91,7 @@ test('refresh-token verification and rotation', async (t) => {
     rows.set(id, {
       id,
       userId: user.id,
+      sessionId: randomUUID(),
       tokenHash: createHash('sha256').update(secret).digest('hex'),
       expiresAt: new Date(Date.now() + 604800000),
       revokedAt: null,
@@ -163,7 +168,7 @@ test('refresh-token verification and rotation', async (t) => {
       assert.equal(claims.sub, user.id);
       assert.equal(claims.exp - claims.iat, 900);
       await request(server)
-        .get('/auth/user/me')
+        .get('/accounts/me')
         .auth(result.accessToken, { type: 'bearer' })
         .expect(200);
       await request(server)
@@ -240,7 +245,7 @@ test('refresh-token verification and rotation', async (t) => {
   );
 
   await t.test(
-    'confirmed reuse revokes this user’s remaining sessions only',
+    'confirmed reuse revokes the token session and preserves other sessions',
     async () => {
       rows.clear();
       const old = seed();
@@ -252,7 +257,7 @@ test('refresh-token verification and rotation', async (t) => {
         .send({ refreshToken: old.token })
         .expect(401);
       assert.ok(rows.get(first.refreshToken.split('.')[0]).revokedAt);
-      assert.ok(rows.get(otherSession.id).revokedAt);
+      assert.equal(rows.get(otherSession.id).revokedAt, null);
       assert.equal(rows.get(anotherUser.id).revokedAt, null);
     },
   );

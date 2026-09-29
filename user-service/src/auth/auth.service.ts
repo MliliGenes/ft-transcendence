@@ -1,7 +1,6 @@
 import {
   ConflictException,
   Injectable,
-  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
@@ -15,7 +14,6 @@ import {
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
-import type { PaginationDto } from './dto/pagination.dto.js';
 import type { RegisterDto } from './dto/register.dto.js';
 import type { LoginDto } from './dto/login.dto.js';
 import { REFRESH_TOKEN_PATTERN, type RefreshDto } from './dto/refresh.dto.js';
@@ -124,6 +122,7 @@ export class AuthService {
       select: {
         tokenHash: true,
         userId: true,
+        sessionId: true,
         expiresAt: true,
         revokedAt: true,
         user: { select: { id: true, email: true, username: true } },
@@ -141,16 +140,25 @@ export class AuthService {
       throw invalidToken;
     }
 
-    // Only a verified secret may trigger revocation; a record ID is not enough.
-    if (stored.revokedAt) {
-      await this.revokeUserRefreshTokens(stored.userId);
-      throw invalidToken;
-    }
-
-    const { tokens, refreshTokenData } = await this.createTokenPair(
-      stored.userId,
-    );
     const result = await this.prisma.$transaction(async (tx) => {
+      // Refresh and logout acquire the same database lock, even across servers.
+      await this.lockUserSessions(tx, stored.userId);
+      const current = await tx.refreshToken.findUnique({
+        where: { id: refreshId },
+        select: { revokedAt: true, expiresAt: true },
+      });
+      if (!current || current.expiresAt.getTime() <= Date.now()) return null;
+
+      if (current.revokedAt) {
+        await this.revokeSession(tx, stored.userId, stored.sessionId);
+        // Return instead of throwing so the revocation commits.
+        return null;
+      }
+
+      const { tokens, refreshTokenData } = await this.createTokenPair(
+        stored.userId,
+        stored.sessionId,
+      );
       const now = new Date();
       const consumed = await tx.refreshToken.updateMany({
         where: {
@@ -171,16 +179,7 @@ export class AuthService {
       return { user: stored.user, ...tokens };
     });
 
-    if (!result) {
-      const current = await this.prisma.refreshToken.findUnique({
-        where: { id: refreshId },
-        select: { revokedAt: true },
-      });
-      if (current?.revokedAt) {
-        await this.revokeUserRefreshTokens(stored.userId);
-      }
-      throw invalidToken;
-    }
+    if (!result) throw invalidToken;
 
     return result;
   }
@@ -192,7 +191,7 @@ export class AuthService {
 
     const stored = await this.prisma.refreshToken.findUnique({
       where: { id: refreshId },
-      select: { tokenHash: true },
+      select: { tokenHash: true, userId: true, sessionId: true },
     });
     if (!stored) return;
 
@@ -205,69 +204,34 @@ export class AuthService {
       return;
     }
 
-    await this.prisma.refreshToken.updateMany({
-      where: { id: refreshId, tokenHash: stored.tokenHash, revokedAt: null },
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockUserSessions(tx, stored.userId);
+      // Also revokes replacements if refresh finished before logout got the lock.
+      await this.revokeSession(tx, stored.userId, stored.sessionId);
+    });
+  }
+
+  private async lockUserSessions(tx: Prisma.TransactionClient, userId: string) {
+    await tx.$queryRaw`
+      SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE
+    `;
+  }
+
+  private async revokeSession(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    sessionId: string,
+  ) {
+    await tx.refreshToken.updateMany({
+      where: { userId, sessionId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
   }
 
-  async getUsers({ page, limit }: PaginationDto) {
-    const [users, total] = await this.prisma.$transaction(
-      [
-        this.prisma.user.findMany({
-          skip: (page - 1) * limit,
-          take: limit,
-          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-          select: { id: true, username: true },
-        }),
-        this.prisma.user.count(),
-      ],
-      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
-    );
-
-    return {
-      users,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
-  }
-
-  // async getMe(id: string) {
-  //   const user = await this.prisma.user.findUnique({
-  //     where: { id },
-  //     select: { id: true, email: true, username: true },
-  //   });
-
-  //   if (!user) {
-  //     throw new NotFoundException('User not found');
-  //   }
-
-  //   return user;
-  // }
-
-  async getUser(id: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      select: { id: true, email: true, username: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    return user;
-  }
-
-  private async revokeUserRefreshTokens(userId: string) {
-    await this.prisma.refreshToken.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-  }
-
-  private async createTokenPair(userId: string) {
+  private async createTokenPair(
+    userId: string,
+    sessionId: string = randomUUID(),
+  ) {
     const accessToken = await this.jwt.signAsync({ sub: userId });
 
     // The ID locates the refresh record; the random secret proves possession.
@@ -285,6 +249,7 @@ export class AuthService {
       },
       refreshTokenData: {
         id: refreshId,
+        sessionId,
         tokenHash,
         expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000),
       },

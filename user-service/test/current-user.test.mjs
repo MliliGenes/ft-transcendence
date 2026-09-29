@@ -11,7 +11,7 @@ import request from 'supertest';
 import { AppModule } from '../dist/app/app.module.js';
 import { PrismaService } from '../dist/prisma/prisma.service.js';
 
-test('GET /auth/user/me uses the verified access-token identity', async (t) => {
+test('GET /accounts/me uses the verified access-token identity', async (t) => {
   const keys = generateKeyPairSync('rsa', {
     modulusLength: 2048,
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
@@ -21,11 +21,42 @@ test('GET /auth/user/me uses the verified access-token identity', async (t) => {
     id: '15f154f1-b37f-4fe7-955f-e8f4de3ceb8d',
     username: 'tester',
     email: 'test@example.com',
+    firstName: 'Private',
+    lastName: 'Name',
+    displayName: 'Test Player',
+    avatarUrl: '/accounts/avatar-placeholder',
+    bannerUrl: null,
+    status: 'OFFLINE',
+    createdAt: '2026-09-28T00:00:00.000Z',
     passwordHash: await bcrypt.hash('test password', 12),
   };
   let lookups = 0;
+  let lastPage;
+  const publicUser = {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    avatarUrl: user.avatarUrl,
+    bannerUrl: user.bannerUrl,
+    status: user.status,
+    createdAt: user.createdAt,
+  };
   const prisma = {
+    $transaction: async (queries, options) => {
+      assert.equal(options.isolationLevel, 'RepeatableRead');
+      return Promise.all(queries);
+    },
     user: {
+      findMany: async ({ skip, take, select, orderBy }) => {
+        lastPage = { skip, take };
+        assert.deepEqual(orderBy, [{ createdAt: 'desc' }, { id: 'asc' }]);
+        assert.deepEqual(
+          Object.keys(select).sort(),
+          Object.keys(publicUser).sort(),
+        );
+        return skip === 0 ? [publicUser] : [];
+      },
+      count: async () => 1,
       findUnique: async ({ where, select }) => {
         lookups++;
         if (where.id !== user.id && where.email !== user.email) return null;
@@ -69,36 +100,94 @@ test('GET /auth/user/me uses the verified access-token identity', async (t) => {
     'accepts a login token and returns only the current profile',
     async () => {
       const response = await request(server)
-        .get('/auth/user/me')
+        .get('/accounts/me')
         .auth(token, { type: 'bearer' })
         .expect(200);
       assert.deepEqual(response.body, {
-        id: user.id,
-        username: user.username,
+        ...publicUser,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
       });
       assert.equal(response.headers['cache-control'], 'no-store');
       const withQuery = await request(server)
-        .get('/auth/user/me?id=someone-else')
+        .get('/accounts/me?id=someone-else')
         .auth(token, { type: 'bearer' })
         .expect(200);
       assert.deepEqual(withQuery.body, response.body);
     },
   );
 
-  await t.test('leaves the public profile response unchanged', async () => {
-    const response = await request(server)
-      .get(`/auth/user/${user.id}`)
-      .expect(200);
-    assert.deepEqual(response.body, { id: user.id, username: user.username });
+  await t.test(
+    'returns the expanded public profile without private fields',
+    async () => {
+      const response = await request(server)
+        .get(`/accounts/${user.id}`)
+        .expect(200);
+      assert.deepEqual(response.body, publicUser);
+    },
+  );
+
+  await t.test(
+    'paginates public profiles and validates query limits',
+    async () => {
+      const response = await request(server).get('/accounts').expect(200);
+      assert.deepEqual(response.body, {
+        users: [publicUser],
+        total: 1,
+        page: 1,
+        limit: 10,
+        totalPages: 1,
+      });
+      assert.deepEqual(lastPage, { skip: 0, take: 10 });
+      const next = await request(server)
+        .get('/accounts?page=2&limit=1')
+        .expect(200);
+      assert.deepEqual(next.body, {
+        users: [],
+        total: 1,
+        page: 2,
+        limit: 1,
+        totalPages: 1,
+      });
+      assert.deepEqual(lastPage, { skip: 1, take: 1 });
+      for (const query of [
+        'page=0',
+        'page=1.5',
+        'page=1000001',
+        'limit=101',
+        'limit=0',
+        'limit=abc',
+      ]) {
+        await request(server).get(`/accounts?${query}`).expect(400);
+      }
+      await request(server).get('/accounts/not-a-uuid').expect(400);
+      await request(server)
+        .get('/accounts/00000000-0000-4000-8000-000000000001')
+        .expect(404);
+    },
+  );
+
+  await t.test('removes the old auth profile routes', async () => {
+    for (const path of [
+      '/auth/users',
+      '/auth/user/me',
+      `/auth/user/${user.id}`,
+    ]) {
+      await request(server)
+        .get(path)
+        .auth(token, { type: 'bearer' })
+        .expect(404);
+    }
   });
 
   await t.test(
     'rejects missing or malformed authorization before database access',
     async () => {
       const before = lookups;
-      await request(server).get('/auth/user/me').expect(401);
+      await request(server).get('/accounts/me').expect(401);
       await request(server)
-        .get('/auth/user/me')
+        .get('/accounts/me')
         .query({ accessToken: token })
         .expect(401);
       for (const header of [
@@ -107,7 +196,7 @@ test('GET /auth/user/me uses the verified access-token identity', async (t) => {
         `Bearer ${token} extra`,
       ]) {
         await request(server)
-          .get('/auth/user/me')
+          .get('/accounts/me')
           .set('Authorization', header)
           .expect(401);
       }
@@ -164,7 +253,7 @@ test('GET /auth/user/me uses the verified access-token identity', async (t) => {
       ];
       for (const invalid of invalidTokens) {
         await request(server)
-          .get('/auth/user/me')
+          .get('/accounts/me')
           .auth(invalid, { type: 'bearer' })
           .expect(401);
       }
@@ -179,10 +268,10 @@ test('GET /auth/user/me uses the verified access-token identity', async (t) => {
         sub: '00000000-0000-4000-8000-000000000001',
       });
       const response = await request(server)
-        .get('/auth/user/me')
+        .get('/accounts/me')
         .auth(deletedUserToken, { type: 'bearer' })
         .expect(404);
-      assert.equal(response.body.message, 'User not found');
+      assert.equal(response.body.message, 'Account not found');
     },
   );
 });

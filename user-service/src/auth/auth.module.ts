@@ -49,5 +49,6 @@ import { ACCESS_TOKEN_TTL_SECONDS } from './token.constants.js';
   ],
   controllers: [AuthController],
   providers: [AuthService, AccessTokenGuard],
+  exports: [AccessTokenGuard, JwtModule],
 })
 export class AuthModule {}
