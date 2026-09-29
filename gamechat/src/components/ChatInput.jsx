@@ -19,9 +19,10 @@ function ChatInput({ onSendMessage }) {
 			  onSubmit={handleSubmit}>
 			<input
     			type="text"
-    			placeholder="All: Type a message..."
+    			placeholder="Type a message..."
     			value={message}
     			onChange={(event) => setMessage(event.target.value)}
+				autoFocus
 			/>
 			<button type="submit" aria-label="Send message">
     			➤
