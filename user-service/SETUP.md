@@ -1,44 +1,69 @@
-# User service setup
+﻿# User service setup
 
-NestJS is intentionally not scaffolded yet. From the repository root, run:
+The local testing flow is:
 
-```powershell
-npx @nestjs/cli@latest new user-service --directory user-service --package-manager npm --skip-git
+```text
+Clone branch
+  -> configure root .env
+  -> make -C postgres       (create database user and empty database)
+  -> npm i                 (install backend dependencies)
+  -> npx prisma generate   (generate the TypeScript client)
+  -> npx prisma migrate deploy (create application tables)
+  -> configure JWT keys
+  -> npm run start:dev     (start the backend)
 ```
 
-Use a Node.js version supported by the latest Nest CLI. The current Nest docs
-require Node 22.22.3+, 24.15+, or 26+ for generators; the installed Node 24.13.0
-needs an update before using those generators.
-See https://docs.nestjs.com/first-steps.
+## Configure the shared environment
 
-The root `.gitignore` already ignores `.env`, dependencies, and build output.
-These setup notes use `SETUP.md` so the CLI can create its own `README.md`.
+From `user-service`, copy `.env.example` to `.env` if the file does not exist yet.
+Keep an existing `.env` so you preserve your configuration.
 
-## Local PostgreSQL
+Set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`. For the test container,
+use `POSTGRES_HOST=127.0.0.1` and a free `POSTGRES_PORT` such as `5433`. Docker
+Compose, Prisma, and NestJS all read the same root `.env`.
 
-Use your existing PostgreSQL server at `localhost:5432`. Edit `.env` to match your
-actual username, password, port, and database. `nook_users` is a suggested database
-name; create it with your PostgreSQL tools or use an existing development database.
-No local database or PostgreSQL service settings have been changed by this setup.
+## Start the database and prepare the backend
 
-The environment file only stores configuration. After generating Nest, add
-environment loading (for example `@nestjs/config`) and your chosen database
-driver/ORM to connect the application. No database connection is implemented yet.
+Requires Docker with Compose, GNU Make, and a POSIX shell (Linux, macOS, or WSL).
+Node.js/npm are needed for the backend steps after the container starts.
 
-```powershell
-cd user-service
+```sh
+make -C postgres
+npm i
+npx prisma generate
+npx prisma migrate deploy
+```
+
+`migrate deploy` applies the branch's existing migrations. To create a migration
+for a new schema change during development, use
+`npx prisma migrate dev --name your_change` instead.
+
+The test database is disposable: stopping/removing its container clears its data.
+Start it again and rerun `npx prisma migrate deploy` to recreate its tables. See
+[postgres/README.md](postgres/README.md) for the flow diagram and Make commands.
+
+If you prefer your locally installed Postgres, skip `make -C postgres`, create
+the database yourself, and point the same `POSTGRES_*` settings at that server.
+
+## Configure authentication and run
+
+If you do not already have JWT keys:
+
+```sh
+node scripts/generate-jwt-keys.mjs
+```
+
+Copy the PEM contents from `.keys/jwt-private.pem` and `.keys/jwt-public.pem` into
+`JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` in the root `.env`. Existing keys can be
+reused; generating keys is not part of resetting the database.
+
+```sh
 npm run start:dev
 ```
 
-## Docker later
+The API defaults to `http://localhost:3000`. Register a test account through the
+API; a fresh database contains no users. Discord configuration is optional until
+you want to test Discord login.
 
-The Dockerfile and `.dockerignore` remain for containerizing the generated app.
-Build after the CLI has created `package-lock.json`, the Nest config, and `src`:
-
-```powershell
-docker build -t nook-user-service .
-```
-
-There is no PostgreSQL container or Compose configuration. If you later run the
-app in Docker Desktop and connect to your host PostgreSQL server, use
-`host.docker.internal` as the database host instead of `localhost`.
+Endpoint examples are in [API.md](API.md). The Discord strategy walkthrough is in
+[DISCORD_AUTH.md](DISCORD_AUTH.md).

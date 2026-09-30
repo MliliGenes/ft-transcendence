@@ -27,6 +27,8 @@
 
 See [API.md](API.md) for the user-service endpoint reference, authentication flow, validation rules, and curl examples.
 
+See [SETUP.md](SETUP.md) for local setup, or [postgres/README.md](postgres/README.md) to run the database in Docker instead of using a locally installed PostgreSQL server.
+
 ## Project setup
 
 ```bash
