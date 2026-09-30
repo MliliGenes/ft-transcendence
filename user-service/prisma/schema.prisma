@@ -18,6 +18,7 @@ model User {
   avatarUrl   String?
   bannerUrl   String?
   status      UserStatus @default(OFFLINE)
+  role        UserRole   @default(USER)
 
   passwordHash String?  // nullable — OAuth-only users won't have one
   emailVerifiedAt DateTime?
@@ -74,6 +75,15 @@ model RefreshToken {
   @@index([userId, sessionId])
 }
 
+// Short-lived, single-use browser challenges for Discord OAuth callbacks.
+model OAuthState {
+  tokenHash   String   @id
+  browserHash String
+  expiresAt   DateTime
+
+  @@index([expiresAt])
+}
+
 model TwoFactorAuth {
   userId          String    @id
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -105,4 +115,9 @@ enum UserStatus {
   ONLINE
   OFFLINE
   AWAY
+}
+
+enum UserRole {
+  USER
+  SUPERADMIN
 }

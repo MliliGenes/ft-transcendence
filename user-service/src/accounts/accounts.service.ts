@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   PayloadTooLargeException,
@@ -89,18 +90,30 @@ export class AccountsService {
       );
     }
 
+    // Explicit allowlist: never spread a request DTO into a Prisma write.
+    const data: Prisma.UserUpdateInput = {
+      username: dto.username,
+      email: dto.email,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      displayName: dto.displayName,
+    };
+
     try {
+      if (dto.email !== undefined) {
+        return await this.prisma.$transaction(async (tx) => {
+          // Keep the comparison and update together, including concurrent edits.
+          const users = await tx.$queryRaw<{ email: string }[]>`
+            SELECT "email" FROM "User" WHERE "id" = ${id} FOR UPDATE
+          `;
+          if (!users[0]) throw new NotFoundException('Account not found');
+          if (dto.email !== users[0].email) data.emailVerifiedAt = null;
+          return tx.user.update({ where: { id }, data, select: accountSelect });
+        });
+      }
       return await this.prisma.user.update({
         where: { id },
-        data: {
-          username: dto.username,
-          email: dto.email,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          displayName: dto.displayName,
-          // An email supplied here must be verified again.
-          ...(dto.email !== undefined ? { emailVerifiedAt: null } : {}),
-        },
+        data,
         select: accountSelect,
       });
     } catch (error) {
@@ -117,10 +130,15 @@ export class AccountsService {
   async deleteMe(id: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       // Serialize deletion with refresh/logout before removing their records.
-      const users = await tx.$queryRaw<{ id: string }[]>`
-        SELECT "id" FROM "User" WHERE "id" = ${id} FOR UPDATE
+      const users = await tx.$queryRaw<{ id: string; role: string }[]>`
+        SELECT "id", "role" FROM "User" WHERE "id" = ${id} FOR UPDATE
       `;
       if (users.length === 0) throw new NotFoundException('Account not found');
+      if (users[0].role === 'SUPERADMIN') {
+        throw new ForbiddenException(
+          'Superadmins must use the admin deletion endpoint',
+        );
+      }
 
       await tx.refreshToken.deleteMany({ where: { userId: id } });
       await tx.authProvider.deleteMany({ where: { userId: id } });

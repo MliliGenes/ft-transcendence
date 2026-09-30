@@ -82,6 +82,7 @@ export class AccountsController {
   ) {
     return this.accountsService.storeImage(request.user.sub, 'BANNER', file);
   }
+
   @Get()
   getUsers(@Query() query: PaginationDto) {
     return this.accountsService.getUsers(query);

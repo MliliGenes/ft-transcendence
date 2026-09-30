@@ -6,7 +6,7 @@ Request bodies use JSON, except image uploads which use multipart/form-data. The
 
 ## Authentication
 
-Successful registration, login, and refresh responses return an access/refresh token pair:
+Successful registration, login, Discord callback, and refresh responses return an access/refresh token pair:
 
 ```json
 {
@@ -26,7 +26,8 @@ Successful registration, login, and refresh responses return an access/refresh t
 - Access tokens are RS256 JWTs and expire after 15 minutes.
 - Send access tokens as `Authorization: Bearer <accessToken>`.
 - Refresh tokens expire after 7 days and are rotated after every successful refresh.
-- The client must replace both stored tokens after refresh.
+- The client must replace both stored tokens after refresh. Each replacement has a new seven-day lifetime.
+- Reusing a revoked, unexpired refresh token revokes the remaining refresh tokens in that login session; other login sessions remain active. Coordinate concurrent refresh attempts in the client.
 - Logout revokes all refresh tokens in the submitted token's login session. The current access token remains valid until it expires.
 
 ## Endpoints
@@ -49,6 +50,7 @@ Validation:
 
 - `username`: 3-30 characters
 - `email`: valid email address
+- New registrations always receive `USER`. A supplied `role` is rejected with 400.
 - `password`: 8-32 characters and no more than 72 UTF-8 bytes
 
 Responses:
@@ -75,6 +77,19 @@ Responses:
 - `200 OK`: user and token pair
 - `400 Bad Request`: invalid body
 - `401 Unauthorized`: invalid credentials
+
+### Discord Login
+
+`GET /auth/discord` starts authorization with a `302` redirect to Discord.
+
+`GET /auth/discord/callback` receives Discord's authorization code and state,
+checks the temporary browser cookie, and returns the user and token pair with
+`200 OK`. Neither endpoint requires an existing application access token or a
+JSON body. Start the flow in a browser; Discord supplies the callback parameters.
+
+See [Discord OAuth login](#discord-oauth-login) for configuration, account rules,
+and error responses, or [the strategy walkthrough](DISCORD_AUTH.md) for a
+step-by-step explanation of the implementation.
 
 ### Refresh Tokens
 
@@ -133,7 +148,12 @@ Response (`200 OK`):
   "users": [
     {
       "id": "2f1c2d1e-3c5a-4d6a-8b1c-123456789abc",
-      "username": "player1"
+      "username": "player1",
+      "displayName": "Player One",
+      "avatarUrl": null,
+      "bannerUrl": null,
+      "status": "OFFLINE",
+      "createdAt": "2026-09-29T12:00:00.000Z"
     }
   ],
   "total": 1,
@@ -203,9 +223,9 @@ Validation:
 - `email`: optional, valid email address
 - `firstName`, `lastName`, `displayName`: optional string or `null`, 1-50 characters when present
 - At least one field must be provided.
-- Image URLs, password, status, verification fields, and IDs cannot be changed here.
+- Role, image URLs, password, status, verification fields, and IDs cannot be changed here. Unknown fields are rejected even when included alongside valid fields. The target account comes from the verified JWT, not the body.
 
-An email update clears `emailVerifiedAt` and requires verification again.
+Supplying a different email clears `emailVerifiedAt`. Sending the same email, or omitting it, preserves verification. Both self-service and admin updates follow this rule. Email verification itself is not implemented or enforced yet; login immediately uses the updated address.
 
 Responses:
 
@@ -219,11 +239,12 @@ Responses:
 
 `DELETE /accounts/me`
 
-Requires an access token. Deletes the account and its refresh tokens and linked authentication providers.
+Requires an access token. Deletes the account and its refresh tokens and linked authentication providers. Images, two-factor settings, and recovery codes are also deleted through database cascades. Superadmins must use the superadmin deletion endpoint instead (403 here).
 
 Responses:
 
 - `204 No Content`: account deleted
+- `403 Forbidden`: superadmin attempting self-service deletion
 - `401 Unauthorized`: missing, invalid, or expired access token
 - `404 Not Found`: account does not exist
 
@@ -239,7 +260,7 @@ curl -X PUT http://localhost:3000/accounts/me/avatar \
   -F "file=@avatar.png"
 ```
 
-Accepted input formats are JPEG, PNG, and WebP. Animated images are rejected. Images are auto-oriented, resized to `256x256`, converted to WebP, and stored at no more than 1 MiB and 20 megapixels.
+Accepted input formats are JPEG, PNG, and WebP. Animated images are rejected. Input is limited to 1 MiB and 20 megapixels. Images are auto-oriented, center-cropped/resized to `256x256`, and converted to WebP. The stored result is also capped at 1 MiB. Uploading again replaces the avatar.
 
 Response (`200 OK`): updated private account.
 
@@ -256,7 +277,7 @@ Other responses:
 
 Requires an access token. Use the same multipart format as avatar upload, with a file field named `file`.
 
-Images are resized to `1500x500`, converted to WebP, and stored at no more than 5 MiB and 20 megapixels.
+Input is limited to 5 MiB and 20 megapixels. Images are center-cropped/resized to `1500x500` and converted to WebP. The stored result is also capped at 5 MiB. Uploading again replaces the banner.
 
 Response (`200 OK`): updated private account.
 
@@ -301,7 +322,7 @@ Other responses:
 - `400 Bad Request`: invalid UUID
 - `404 Not Found`: user does not exist
 
-The former `/auth/users`, `/auth/user/:id`, and `/auth/user/me` routes have been removed. Auth now exposes only register, login, refresh, and logout.
+The former `/auth/users`, `/auth/user/:id`, and `/auth/user/me` routes have been removed. Auth exposes register, login, refresh, logout, and Discord OAuth login/callback.
 
 ## Example Flow
 
@@ -330,3 +351,269 @@ curl -i -X POST http://localhost:3000/auth/logout \
   -H "Content-Type: application/json" \
   -d '{"refreshToken":"<refresh-id>.<refresh-secret>"}'
 ```
+
+## Discord OAuth login
+
+| Method | Endpoint               | Purpose                                                     |
+| ------ | ---------------------- | ----------------------------------------------------------- |
+| GET    | /auth/discord          | Start Discord authorization (302 redirect)                  |
+| GET    | /auth/discord/callback | Validate callback, log in/register, return token JSON (200) |
+
+### Application setup
+
+Create an application in the [Discord Developer Portal](https://discord.com/developers/applications).
+Under OAuth2, register exactly this development redirect URI:
+
+```text
+http://localhost:3000/auth/discord/callback
+```
+
+Fill the placeholders in the local ignored .env file, then restart the service:
+
+```dotenv
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
+DISCORD_REDIRECT_URI=http://localhost:3000/auth/discord/callback
+```
+
+The client secret stays on the backend. HTTPS is required for production;
+HTTP is permitted only on loopback hosts during development. An incomplete
+configuration makes the Discord routes return 503 without disabling local login.
+Use the same hostname to start and finish the flow; localhost and 127.0.0.1 do
+not share cookies. Apply migrations and regenerate Prisma when checking out this
+change: the OAuthState table is required.
+
+### Browser flow
+
+1. Open http://localhost:3000/auth/discord in a browser.
+2. The service saves hashes of a random state and browser secret, sets a ten-minute
+   HttpOnly/SameSite=Lax cookie, and redirects to Discord with identify/email scopes.
+3. Discord redirects back with a code and state. The service checks the browser
+   cookie and atomically consumes the unexpired state record before exchanging the code.
+4. The strategy exchanges the code and fetches Discord's user profile. Provider
+   errors and secrets are not forwarded to the browser.
+5. The callback returns our usual user/accessToken/refreshToken/tokenType/expiresIn/
+   refreshExpiresIn JSON. Use those tokens with existing protected, refresh, and
+   logout endpoints. No tokens are put in a redirect URL.
+
+The callback is intended for backend testing for now, with no frontend redirect.
+Begin in the same browser that receives the callback; a copied callback URL in
+Postman will lack the browser cookie. Only the latest started flow in one browser
+can complete; start again after cancellation, expiry, failure, or a lost callback
+response. The state is consumed once and expires after ten minutes; expired rows
+are cleaned when new authorizations start. A Secure cookie is used with HTTPS.
+
+### Local account rules
+
+- A linked Discord ID logs in to its existing local account even if Discord's
+  email changes. Existing username, email, role, and verification are preserved.
+- A new identity requires a valid email that Discord reports as verified. The new
+  local account starts with role USER, no password, and emailVerifiedAt set from
+  that verified provider response. Local username is a sanitized Discord name
+  plus a random suffix; it can be edited later. Display name is copied on signup.
+- The user, DISCORD provider record, and initial refresh session are saved together.
+- An email already used by another local account returns 409, including case-only
+  matches. No automatic account linking or merging occurs.
+- Explicit linking from authenticated account settings is a separate upcoming
+  endpoint. A conflicting account can continue using its existing login method.
+- Discord access/refresh tokens are not persisted or returned. Discord avatar and
+  banner images are not imported by this implementation.
+
+Errors: 401 for invalid/expired/reused state, denied authorization, rejected code,
+or a new user without a verified Discord email; 409 for an account conflict;
+502 for Discord outages or malformed responses; 503 for missing/invalid configuration.
+All responses use no-store and no-referrer policies.
+
+The implementation follows Discord's [authorization-code flow and state guidance](https://docs.discord.com/developers/topics/oauth2).
+
+## Superadmin API
+
+Every endpoint requires `Authorization: Bearer <accessToken>` and the current
+`SUPERADMIN` database role. Missing/invalid credentials return 401; ordinary
+users receive 403. Responses use `Cache-Control: no-store`.
+
+| Method | Endpoint                     | Action                            |
+| ------ | ---------------------------- | --------------------------------- |
+| GET    | `/superadmin/stats`          | Dashboard counters                |
+| GET    | `/superadmin/users`          | Filtered, sorted, paginated users |
+| GET    | `/superadmin/users/:id`      | User details                      |
+| POST   | `/superadmin/users`          | Create a user (201)               |
+| PATCH  | `/superadmin/users/:id`      | Edit allowed profile fields       |
+| PATCH  | `/superadmin/users/:id/role` | Change role                       |
+| DELETE | `/superadmin/users/:id`      | Permanently delete user (204)     |
+
+Stats return `totalUsers`, `regularUsers`, `superadmins`, `newUsersLast7Days`,
+`newUsersLast30Days`, and `asOf`. Registration counts use rolling 7/30-day windows
+ending at `asOf`, counting currently existing accounts. They are not login/activity
+counts. Ban statistics and live presence are not implemented.
+
+### Search and filters
+
+Example:
+
+```http
+GET /superadmin/users?search=alex&role=USER&sortBy=username&sortOrder=asc&page=1&limit=20
+```
+
+- `search`: up to 100 characters; case-insensitive substring of username, email,
+  or display name. Send plain text, not surrounding `%` characters. User-supplied
+  `%`, `_`, and backslashes are escaped to match literally.
+- `role`: `USER` or `SUPERADMIN`.
+- `createdFrom`, `createdTo`: inclusive ISO date/time bounds. Date-only values
+  mean midnight UTC; use full timestamps when including an entire final day.
+  Reversed ranges return 400.
+- `sortBy`: `createdAt` (default), `updatedAt`, `username`, `email`, or `role`.
+- `sortOrder`: `asc` or `desc` (default). User ID breaks ties consistently.
+- `page`: 1-1,000,000 (default 1); `limit`: 1-100 (default 10).
+
+Returns `{ users, total, page, limit, totalPages }`. The total uses the same
+filters as the list. List entries and detail responses include id, username,
+email, role, firstName, lastName, displayName, avatarUrl, bannerUrl, status,
+emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,
+and two-factor secrets are never included.
+
+### Create, edit, and delete
+
+Create body:
+
+```json
+{
+  "username": "new_player",
+  "email": "player@example.com",
+  "password": "long-password",
+  "role": "USER"
+}
+```
+
+Role is optional and defaults to USER. Password validation matches registration.
+Creation hashes the password but does not issue tokens or create a login session.
+
+Profile PATCH accepts username, email, firstName, lastName, and displayName.
+Omitted fields stay unchanged; optional names can be cleared with null. Email
+changes clear verification, while resubmitting the same email preserves it.
+Password, role, status, URLs, and verification timestamps are rejected here.
+
+Role PATCH accepts `{ "role": "SUPERADMIN" }` or `{ "role": "USER" }`.
+Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing
+user returns 404.
+
+Deletion removes refresh tokens and provider records; images, two-factor settings,
+and recovery codes cascade. The last superadmin cannot be deleted or demoted
+(409). Admin mutations share a PostgreSQL transaction advisory lock so competing
+requests cannot both remove the final admins; the caller's role is rechecked
+inside that transaction. Superadmins must use this guarded deletion endpoint,
+not `DELETE /accounts/me`, to preserve that protection.
+
+No accounts are automatically promoted. To promote an existing testing account, run
+`npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.
+The script reads the database settings from `.env`, preserves the password, and is
+safe to rerun. Register the account first if it does not exist. The role guard
+checks the database, so an existing valid access token works immediately. Ban/unban, MQ notifications, and the frontend are deferred.
+
+### Dashboard response example
+
+`GET /superadmin/stats` returns 200:
+
+```json
+{
+  "totalUsers": 12,
+  "regularUsers": 11,
+  "superadmins": 1,
+  "newUsersLast7Days": 3,
+  "newUsersLast30Days": 8,
+  "asOf": "2026-09-29T12:00:00.000Z"
+}
+```
+
+### User details and edit examples
+
+`GET /superadmin/users/:id` returns the same full admin user shape as
+list entries. Create, profile edit, and role edit also return this shape:
+
+```json
+{
+  "id": "2f1c2d1e-3c5a-4d6a-8b1c-123456789abc",
+  "username": "player1",
+  "email": "user@example.com",
+  "role": "USER",
+  "firstName": "Ada",
+  "lastName": null,
+  "displayName": "Ada",
+  "avatarUrl": null,
+  "bannerUrl": null,
+  "status": "OFFLINE",
+  "emailVerifiedAt": null,
+  "createdAt": "2026-09-29T12:00:00.000Z",
+  "updatedAt": "2026-09-29T12:00:00.000Z"
+}
+```
+
+Profile update (200):
+
+```http
+PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc
+Authorization: Bearer <superadmin-access-token>
+Content-Type: application/json
+
+{"displayName":"New display name","lastName":null}
+```
+
+Role update (200):
+
+```http
+PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/role
+Authorization: Bearer <superadmin-access-token>
+Content-Type: application/json
+
+{"role":"SUPERADMIN"}
+```
+
+Delete uses the same user URL with DELETE and no body; success returns 204 with
+an empty response. Deleting or demoting the last superadmin returns 409.
+An admin may delete/demote themselves through these endpoints if another
+superadmin remains. Subsequent admin requests check the current database role.
+Neither registration/login responses nor the current private/public account
+responses currently include role; the superadmin user responses do.
+
+### Testing the superadmin endpoints
+
+1. Register a testing account using the normal registration endpoint.
+2. Run `npm run bootstrap:superadmin -- existing-user@example.com` locally.
+3. Use that account's valid access token in Postman's Bearer Token authorization.
+4. Try GET stats, then search/list, then user details and edits.
+5. Use a separate USER account to verify the admin endpoints return 403.
+
+The bootstrap command changes only the role and update timestamp. It does not
+create an account, reset a password, or issue tokens. It matches the supplied
+email exactly after trimming surrounding spaces.
+
+## Deferred behavior and current limitations
+
+- Local email/password registration does not verify email ownership. It creates an active account
+  immediately; a unique email can therefore be occupied by an unverified signup.
+- Before public signup, implement expiring pending registrations, single-use email
+  verification, and safe signup restart for the actual email owner with their own
+  password. Do not activate a password selected by an unverified third party.
+- Email-change password confirmation and verification are deferred. No verification,
+  resend, pending-registration, or password-recovery endpoints exist yet.
+- Ban/unban, API keys, MQ events, and explicit linking of Discord to an existing account are not implemented.
+- Rate limiting is planned for the Nginx integration phase.
+- JWTs remain cryptographically valid until expiry after logout or account deletion.
+  This service's account reads fail for deleted users, but other services must
+  enforce account deletion separately when MQ integration is added.
+- Images are public and currently use no-store; there is no individual image
+  deletion endpoint. Presence status is stored but not maintained by live tracking.
+
+## Validation commands
+
+- `npm run build` and `npm run lint`
+- `npm run prisma:validate`
+- `npm run test:auth`
+- `npm run test:accounts`
+- `npm run test:superadmin`
+- `npm run test:discord` (mocked Discord responses and database; real JWT signing)
+
+These suites use mocked database access with real JWT/bcrypt/image processing.
+The separate `npm run test:auth:postgres` needs a migrated test database; see
+[test/README.md](test/README.md). The default `npm test` is still configured for
+Vitest spec files and does not run these suites.

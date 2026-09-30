@@ -10,6 +10,7 @@ import request from 'supertest';
 import { AppModule } from '../dist/app/app.module.js';
 import { PrismaService } from '../dist/prisma/prisma.service.js';
 import { Prisma } from '../dist/generated/prisma/client.js';
+import { AccountsService } from '../dist/accounts/accounts.service.js';
 
 test('account endpoints use the authenticated identity and validate changes', async (t) => {
   const keys = generateKeyPairSync('rsa', {
@@ -21,6 +22,7 @@ test('account endpoints use the authenticated identity and validate changes', as
   let user = {
     id,
     username: 'tester',
+    role: 'USER',
     email: 'test@example.com',
     firstName: 'Test',
     lastName: null,
@@ -73,7 +75,7 @@ test('account endpoints use the authenticated identity and validate changes', as
     $queryRaw: async (_sql, userId) => {
       assert.equal(userId, id);
       operations.push('lock');
-      return user ? [{ id }] : [];
+      return user ? [{ id, email: user.email, role: user.role }] : [];
     },
     refreshToken: {
       deleteMany: async ({ where }) => {
@@ -156,6 +158,31 @@ test('account endpoints use the authenticated identity and validate changes', as
     assert.equal(operations.length, before);
   });
   await t.test(
+    'rejects privilege injection without writing any fields',
+    async () => {
+      const before = operations.length;
+      for (const body of [
+        { role: 'SUPERADMIN' },
+        { role: null },
+        { role: { set: 'SUPERADMIN' } },
+        { displayName: 'Injected', role: 'SUPERADMIN' },
+        { roles: ['SUPERADMIN'] },
+        { isAdmin: true },
+        { data: { role: 'SUPERADMIN' } },
+        { user: { update: { role: 'SUPERADMIN' } } },
+      ]) {
+        await request(server)
+          .patch('/accounts/me')
+          .auth(token, { type: 'bearer' })
+          .send(body)
+          .expect(400);
+      }
+      assert.equal(operations.length, before);
+      assert.equal(user.role, 'USER');
+      assert.equal(user.displayName, null);
+    },
+  );
+  await t.test(
     'partial updates preserve omitted fields and allow clearing profile fields',
     async () => {
       const result = await request(server)
@@ -167,11 +194,30 @@ test('account endpoints use the authenticated identity and validate changes', as
       assert.equal(result.body.firstName, null);
       assert.equal(result.body.username, 'tester');
       assert.equal(user.passwordHash, 'secret');
+      assert.equal(user.role, 'USER');
       assert.equal(result.body.passwordHash, undefined);
     },
   );
   await t.test(
-    'email updates clear verification and unique conflicts return 409',
+    'unchanged or omitted email preserves verification',
+    async () => {
+      const verifiedAt = user.emailVerifiedAt.toISOString();
+      for (const body of [
+        { email: user.email },
+        { email: user.email, displayName: 'Same email' },
+        { displayName: 'Email omitted' },
+      ]) {
+        const result = await request(server)
+          .patch('/accounts/me')
+          .auth(token, { type: 'bearer' })
+          .send(body)
+          .expect(200);
+        assert.equal(result.body.emailVerifiedAt, verifiedAt);
+      }
+    },
+  );
+  await t.test(
+    'changed email clears verification and unique conflicts return 409',
     async () => {
       const result = await request(server)
         .patch('/accounts/me')
@@ -220,4 +266,35 @@ test('account endpoints use the authenticated identity and validate changes', as
         .expect(404);
     },
   );
+});
+
+test('account service never forwards injected privileges to Prisma even without DTO validation', async () => {
+  let write;
+  const service = new AccountsService({
+    user: {
+      update: async (args) => {
+        write = args;
+        return {};
+      },
+    },
+  });
+  await service.updateMe('verified-user-id', {
+    displayName: 'Allowed',
+    id: 'other-user-id',
+    role: 'SUPERADMIN',
+    passwordHash: 'injected',
+    emailVerifiedAt: new Date(),
+    authProviders: { create: { provider: 'DISCORD' } },
+  });
+  assert.deepEqual(write.where, { id: 'verified-user-id' });
+  assert.equal(write.data.displayName, 'Allowed');
+  for (const key of [
+    'id',
+    'role',
+    'passwordHash',
+    'emailVerifiedAt',
+    'authProviders',
+  ]) {
+    assert.equal(Object.hasOwn(write.data, key), false);
+  }
 });

@@ -9,6 +9,7 @@
   "scripts": {
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
+    "bootstrap:superadmin": "node scripts/bootstrap-superadmin.mjs",
     "build": "nest build",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -22,10 +23,12 @@
     "test:auth": "npm run build && node --test --test-isolation=none test/register-tokens.test.mjs test/login-tokens.test.mjs test/current-user.test.mjs test/refresh-tokens.test.mjs",
     "test:auth:postgres": "npm run build && node --test --test-isolation=none test/refresh-race.postgres.test.mjs",
     "test:accounts": "npm run build && node --test --test-isolation=none test/accounts.test.mjs test/account-images.test.mjs",
+    "test:superadmin": "npm run build && node --test --test-isolation=none test/superadmin.test.mjs test/superadmin-api.test.mjs",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "test:discord": "npm run build && node --test --test-isolation=none test/discord-oauth.test.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

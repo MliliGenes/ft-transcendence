@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 
 import type { RegisterDto } from './dto/register.dto.js';
 import type { LoginDto } from './dto/login.dto.js';
+import type { DiscordProfile } from './strategies/discord.strategy.js';
 import { REFRESH_TOKEN_PATTERN, type RefreshDto } from './dto/refresh.dto.js';
 
 import {
@@ -107,6 +108,69 @@ export class AuthService {
       user: { id: user.id, email: user.email, username: user.username },
       ...tokens,
     };
+  }
+
+  async loginWithDiscord(profile: DiscordProfile): Promise<AuthResult> {
+    const linked = await this.findDiscordUser(profile.id);
+    if (linked) return this.createDiscordSession(linked);
+
+    if (!profile.email || !profile.verified) {
+      throw new UnauthorizedException(
+        'A verified Discord email is required to create an account',
+      );
+    }
+    // Email equality is never proof that two local/provider accounts can be merged.
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        email: {
+          equals: profile.email.replace(/[\\%_]/g, '\\$&'),
+          mode: 'insensitive',
+        },
+      },
+      select: { id: true },
+    });
+    if (existing)
+      throw new ConflictException(
+        'Email is already in use. Sign in with your existing method to connect Discord; accounts are not linked automatically.',
+      );
+
+    const userId = randomUUID();
+    const { tokens, refreshTokenData } = await this.createTokenPair(userId);
+    const base =
+      profile.username.replace(/[^a-zA-Z0-9_.]/g, '').slice(0, 20) || 'discord';
+    const username = `${base}_${randomBytes(4).toString('hex')}`;
+    try {
+      // Account, provider identity, and session are created atomically.
+      const user = await this.prisma.user.create({
+        data: {
+          id: userId,
+          username,
+          email: profile.email,
+          displayName: profile.displayName,
+          emailVerifiedAt: new Date(),
+          role: 'USER',
+          authProviders: {
+            create: { provider: 'DISCORD', providerUserId: profile.id },
+          },
+          refreshTokens: { create: refreshTokenData },
+        },
+        select: { id: true, email: true, username: true },
+      });
+      return { user, ...tokens };
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        // Two successful Discord authorizations may race to create the same identity.
+        const winner = await this.findDiscordUser(profile.id);
+        if (winner) return this.createDiscordSession(winner);
+        throw new ConflictException(
+          'Email or username is already in use. Sign in with your existing method, or restart Discord login.',
+        );
+      }
+      throw error;
+    }
   }
 
   async refresh(dto: RefreshDto): Promise<AuthResult> {
@@ -208,6 +272,36 @@ export class AuthService {
       await this.lockUserSessions(tx, stored.userId);
       // Also revokes replacements if refresh finished before logout got the lock.
       await this.revokeSession(tx, stored.userId, stored.sessionId);
+    });
+  }
+
+  private async findDiscordUser(providerUserId: string) {
+    const provider = await this.prisma.authProvider.findUnique({
+      where: {
+        provider_providerUserId: { provider: 'DISCORD', providerUserId },
+      },
+      select: { user: { select: { id: true, email: true, username: true } } },
+    });
+    return provider?.user;
+  }
+
+  private async createDiscordSession(
+    user: AuthResult['user'],
+  ): Promise<AuthResult> {
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockUserSessions(tx, user.id);
+      const current = await tx.user.findUnique({
+        where: { id: user.id },
+        select: { id: true, email: true, username: true },
+      });
+      if (!current) throw new UnauthorizedException('Account no longer exists');
+      const { tokens, refreshTokenData } = await this.createTokenPair(
+        current.id,
+      );
+      await tx.refreshToken.create({
+        data: { ...refreshTokenData, userId: current.id },
+      });
+      return { user: current, ...tokens };
     });
   }
 

@@ -6,6 +6,8 @@ import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { AccessTokenGuard } from './guards/access-token.guard.js';
 import { ACCESS_TOKEN_TTL_SECONDS } from './token.constants.js';
+import { DiscordController } from './discord.controller.js';
+import { DiscordStrategy } from './strategies/discord.strategy.js';
 
 @Module({
   imports: [
@@ -47,8 +49,8 @@ import { ACCESS_TOKEN_TTL_SECONDS } from './token.constants.js';
       },
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, AccessTokenGuard],
+  controllers: [AuthController, DiscordController],
+  providers: [AuthService, AccessTokenGuard, DiscordStrategy],
   exports: [AccessTokenGuard, JwtModule],
 })
 export class AuthModule {}
