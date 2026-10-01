@@ -31,6 +31,7 @@ model User {
   twoFactor     TwoFactorAuth?
   recoveryCodes RecoveryCode[]
   images        UserImage[]
+  oauthStates   OAuthState[]
 }
 
 model UserImage {
@@ -60,6 +61,7 @@ model AuthProvider {
   user           User     @relation(fields: [userId], references: [id])
 
   @@unique([provider, providerUserId])
+  @@unique([userId, provider])
 }
 
 model RefreshToken {
@@ -80,8 +82,17 @@ model OAuthState {
   tokenHash   String   @id
   browserHash String
   expiresAt   DateTime
+  purpose     OAuthPurpose @default(LOGIN)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+  @@index([userId])
+}
+
+enum OAuthPurpose {
+  LOGIN
+  LINK
 }
 
 model TwoFactorAuth {

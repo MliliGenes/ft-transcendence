@@ -112,7 +112,15 @@ export class AuthService {
 
   async loginWithDiscord(profile: DiscordProfile): Promise<AuthResult> {
     const linked = await this.findDiscordUser(profile.id);
-    if (linked) return this.createDiscordSession(linked);
+    if (linked) {
+      if (profile.avatarUrl) {
+        await this.prisma.user.update({
+          where: { id: linked.id },
+          data: { avatarUrl: profile.avatarUrl },
+        });
+      }
+      return this.createDiscordSession(linked);
+    }
 
     if (!profile.email || !profile.verified) {
       throw new UnauthorizedException(
@@ -147,6 +155,7 @@ export class AuthService {
           username,
           email: profile.email,
           displayName: profile.displayName,
+          avatarUrl: profile.avatarUrl,
           emailVerifiedAt: new Date(),
           role: 'USER',
           authProviders: {
@@ -168,6 +177,71 @@ export class AuthService {
         throw new ConflictException(
           'Email or username is already in use. Sign in with your existing method, or restart Discord login.',
         );
+      }
+      throw error;
+    }
+  }
+
+  async linkDiscord(userId: string, profile: DiscordProfile) {
+    const result = { provider: 'DISCORD' as const, providerUserId: profile.id };
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await this.lockUserSessions(tx, userId);
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          select: { id: true },
+        });
+        if (!user) throw new UnauthorizedException('Account no longer exists');
+
+        const identity = await tx.authProvider.findUnique({
+          where: {
+            provider_providerUserId: {
+              provider: 'DISCORD',
+              providerUserId: profile.id,
+            },
+          },
+          select: { userId: true },
+        });
+        if (identity) {
+          if (identity.userId !== userId)
+            throw new ConflictException(
+              'This Discord account is already linked to another user',
+            );
+          return result;
+        }
+
+        const current = await tx.authProvider.findUnique({
+          where: { userId_provider: { userId, provider: 'DISCORD' } },
+          select: { id: true },
+        });
+        if (current)
+          throw new ConflictException(
+            'Your account already has a different Discord account linked',
+          );
+
+        // Linking adds a login method. It does not merge profiles or issue tokens.
+        await tx.authProvider.create({
+          data: { userId, provider: 'DISCORD', providerUserId: profile.id },
+        });
+        return result;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        // The provider identity constraint also protects different-user races.
+        const identity = await this.prisma.authProvider.findUnique({
+          where: {
+            provider_providerUserId: {
+              provider: 'DISCORD',
+              providerUserId: profile.id,
+            },
+          },
+          select: { userId: true },
+        });
+        if (identity?.userId === userId) return result;
+        throw new ConflictException('This Discord account is already linked');
       }
       throw error;
     }

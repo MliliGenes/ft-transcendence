@@ -40,6 +40,7 @@ const accountSelect = {
   avatarUrl: true,
   bannerUrl: true,
   status: true,
+  role: true,
   emailVerifiedAt: true,
   createdAt: true,
   updatedAt: true,

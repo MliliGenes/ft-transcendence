@@ -84,12 +84,68 @@ Responses:
 
 `GET /auth/discord/callback` receives Discord's authorization code and state,
 checks the temporary browser cookie, and returns the user and token pair with
-`200 OK`. Neither endpoint requires an existing application access token or a
+`200 OK` for JSON clients. Browser requests accepting `text/html` redirect to
+`AUTH_FRONTEND_URL` (default `http://localhost:5173`) with our tokens in the URL
+fragment. Neither endpoint requires an existing application access token or a
 JSON body. Start the flow in a browser; Discord supplies the callback parameters.
 
 See [Discord OAuth login](#discord-oauth-login) for configuration, account rules,
 and error responses, or [the strategy walkthrough](DISCORD_AUTH.md) for a
 step-by-step explanation of the implementation.
+
+### Link Discord to the signed-in account
+
+`POST /auth/discord/link` requires `Authorization: Bearer <accessToken>` and no
+body. It returns `200` with `{ "authorizationUrl": "https://discord.com/oauth2/authorize?..." }`
+and sets a temporary HttpOnly browser cookie. Navigate to that URL in the same
+browser. The account comes only from the validated access token.
+
+`GET /auth/discord/link/callback` receives Discord's `code` and `state`. It does
+not require a Bearer header: the single-use state and browser cookie bind the
+callback to the user who started linking. It returns `200` JSON:
+
+```json
+{ "provider": "DISCORD", "providerUserId": "123456789012345678" }
+```
+
+For browser requests accepting `text/html`, success redirects to
+`AUTH_FRONTEND_URL#providerLinked=discord`. Linking issues no new tokens; keep the
+existing local session. It preserves email, verification, username, password,
+role, and avatar. Discord email does not need to match the local email or be
+verified because this flow attaches a proven provider identity to an already
+authenticated local account. It requests only Discord's `identify` scope.
+
+- `401`: missing/invalid access token at start, deleted local account, or invalid,
+  expired, mismatched, denied, or reused callback authorization.
+- `409`: Discord belongs to another user, or the current user already linked a
+  different Discord account. Each user can have one identity per provider.
+- Linking the same identity again with a fresh authorization is idempotent.
+- `502` / `503`: provider failure / configuration error, as with Discord login.
+- Unlinking and listing connected providers are not implemented yet.
+
+Register **both** callback URLs in the Discord developer portal. Then run
+`npx prisma migrate deploy` and `npx prisma generate` before restarting the service.
+The migration adds the linking state owner/purpose and provider uniqueness constraint.
+
+Start linking from the frontend with a request, then a browser navigation:
+
+```js
+const response = await fetch(`${API_URL}/auth/discord/link`, {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${accessToken}` },
+  credentials: 'include', // Save the temporary linking cookie across the ports.
+});
+const result = await response.json();
+if (!response.ok) throw new Error(result.message);
+window.location.assign(result.authorizationUrl);
+```
+
+Use the same hostname for frontend, API, and callbacks during local testing
+(all `localhost`, or all `127.0.0.1`). The API allows credentialed requests from
+the two configured Vite origins. Do not put an access token or local user ID in
+the authorization URL. Login and linking have separate cookies and purposes;
+their callbacks are not interchangeable. Each purpose permits only the latest
+attempt started in that browser to complete.
 
 ### Refresh Tokens
 
@@ -322,7 +378,7 @@ Other responses:
 - `400 Bad Request`: invalid UUID
 - `404 Not Found`: user does not exist
 
-The former `/auth/users`, `/auth/user/:id`, and `/auth/user/me` routes have been removed. Auth exposes register, login, refresh, logout, and Discord OAuth login/callback.
+The former `/auth/users`, `/auth/user/:id`, and `/auth/user/me` routes have been removed. Auth exposes register, login, refresh, logout, and Discord OAuth login/link flows.
 
 ## Example Flow
 
@@ -358,14 +414,17 @@ curl -i -X POST http://localhost:3000/auth/logout \
 | ------ | ---------------------- | ----------------------------------------------------------- |
 | GET    | /auth/discord          | Start Discord authorization (302 redirect)                  |
 | GET    | /auth/discord/callback | Validate callback, log in/register, return token JSON (200) |
+| POST   | /auth/discord/link | Start linking for the authenticated user (200 URL JSON) |
+| GET    | /auth/discord/link/callback | Complete linking (200 JSON or 302 frontend redirect) |
 
 ### Application setup
 
 Create an application in the [Discord Developer Portal](https://discord.com/developers/applications).
-Under OAuth2, register exactly this development redirect URI:
+Under OAuth2, register both development redirect URIs:
 
 ```text
 http://localhost:3000/auth/discord/callback
+http://localhost:3000/auth/discord/link/callback
 ```
 
 Fill the placeholders in the local ignored .env file, then restart the service:
@@ -374,6 +433,8 @@ Fill the placeholders in the local ignored .env file, then restart the service:
 DISCORD_CLIENT_ID=
 DISCORD_CLIENT_SECRET=
 DISCORD_REDIRECT_URI=http://localhost:3000/auth/discord/callback
+DISCORD_LINK_REDIRECT_URI=http://localhost:3000/auth/discord/link/callback
+AUTH_FRONTEND_URL=http://localhost:5173
 ```
 
 The client secret stays on the backend. HTTPS is required for production;
@@ -381,7 +442,9 @@ HTTP is permitted only on loopback hosts during development. An incomplete
 configuration makes the Discord routes return 503 without disabling local login.
 Use the same hostname to start and finish the flow; localhost and 127.0.0.1 do
 not share cookies. Apply migrations and regenerate Prisma when checking out this
-change: the OAuthState table is required.
+change: the OAuthState table and linking migration are required. If
+`DISCORD_LINK_REDIRECT_URI` is omitted, it defaults to `/auth/discord/link/callback`
+on the origin of `DISCORD_REDIRECT_URI`.
 
 ### Browser flow
 
@@ -394,9 +457,11 @@ change: the OAuthState table is required.
    errors and secrets are not forwarded to the browser.
 5. The callback returns our usual user/accessToken/refreshToken/tokenType/expiresIn/
    refreshExpiresIn JSON. Use those tokens with existing protected, refresh, and
-   logout endpoints. No tokens are put in a redirect URL.
+   logout endpoints. For requests accepting `text/html`, the service instead
+   redirects to the frontend with accessToken/refreshToken in its URL fragment.
 
-The callback is intended for backend testing for now, with no frontend redirect.
+The testing frontend reads those tokens and removes the fragment. Fragments are
+readable by page JavaScript; they are not encryption or a secure token store.
 Begin in the same browser that receives the callback; a copied callback URL in
 Postman will lack the browser cookie. Only the latest started flow in one browser
 can complete; start again after cancellation, expiry, failure, or a lost callback
@@ -414,10 +479,10 @@ are cleaned when new authorizations start. A Secure cookie is used with HTTPS.
 - The user, DISCORD provider record, and initial refresh session are saved together.
 - An email already used by another local account returns 409, including case-only
   matches. No automatic account linking or merging occurs.
-- Explicit linking from authenticated account settings is a separate upcoming
-  endpoint. A conflicting account can continue using its existing login method.
-- Discord access/refresh tokens are not persisted or returned. Discord avatar and
-  banner images are not imported by this implementation.
+- Explicit linking uses the protected POST and separate callback documented above.
+- Discord access/refresh tokens are not persisted or returned. Discord login sets
+  avatarUrl from Discord's CDN when available, including on returning logins.
+  Linking preserves the current avatar. Banner images are not imported.
 
 Errors: 401 for invalid/expired/reused state, denied authorization, rejected code,
 or a new user without a verified Discord email; 409 for an account conflict;
@@ -508,7 +573,8 @@ No accounts are automatically promoted. To promote an existing testing account, 
 `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.
 The script reads the database settings from `.env`, preserves the password, and is
 safe to rerun. Register the account first if it does not exist. The role guard
-checks the database, so an existing valid access token works immediately. Ban/unban, MQ notifications, and the frontend are deferred.
+checks the database, so an existing valid access token works immediately. Ban/unban,
+MQ notifications, and the admin dashboard frontend are deferred.
 
 ### Dashboard response example
 
@@ -572,8 +638,8 @@ Delete uses the same user URL with DELETE and no body; success returns 204 with
 an empty response. Deleting or demoting the last superadmin returns 409.
 An admin may delete/demote themselves through these endpoints if another
 superadmin remains. Subsequent admin requests check the current database role.
-Neither registration/login responses nor the current private/public account
-responses currently include role; the superadmin user responses do.
+Private account responses and superadmin user responses include role.
+Registration/login and public account responses do not.
 
 ### Testing the superadmin endpoints
 
@@ -596,7 +662,7 @@ email exactly after trimming surrounding spaces.
   password. Do not activate a password selected by an unverified third party.
 - Email-change password confirmation and verification are deferred. No verification,
   resend, pending-registration, or password-recovery endpoints exist yet.
-- Ban/unban, API keys, MQ events, and explicit linking of Discord to an existing account are not implemented.
+- Ban/unban, API keys, MQ events, provider unlinking, and other OAuth providers are not implemented.
 - Rate limiting is planned for the Nginx integration phase.
 - JWTs remain cryptographically valid until expiry after logout or account deletion.
   This service's account reads fail for deleted users, but other services must
@@ -612,6 +678,7 @@ email exactly after trimming surrounding spaces.
 - `npm run test:accounts`
 - `npm run test:superadmin`
 - `npm run test:discord` (mocked Discord responses and database; real JWT signing)
+- `npm run test:discord:postgres` (real PostgreSQL linking races and constraints in a temporary schema)
 
 These suites use mocked database access with real JWT/bcrypt/image processing.
 The separate `npm run test:auth:postgres` needs a migrated test database; see

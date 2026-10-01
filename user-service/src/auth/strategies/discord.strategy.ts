@@ -9,17 +9,20 @@ import { createHash, randomBytes } from 'node:crypto';
 import { isEmail } from 'class-validator';
 import type { CookieOptions, Request, Response } from 'express';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import type { OAuthPurpose } from '../../generated/prisma/client.js';
 
 export type DiscordProfile = {
   id: string;
   username: string;
   displayName: string;
   email: string | null;
+  avatarUrl: string | null;
   verified: boolean;
 };
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const COOKIE_NAME = 'discord_oauth_browser';
+const LINK_COOKIE_NAME = 'discord_oauth_link_browser';
 const RANDOM_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const hash = (value: string) =>
   createHash('sha256').update(value).digest('hex');
@@ -36,21 +39,46 @@ export class DiscordStrategy {
   ) {}
 
   async authorize(response: Response): Promise<string> {
-    const settings = this.settings();
+    return this.begin(response, 'LOGIN', null);
+  }
+
+  async authorizeLink(userId: string, response: Response): Promise<string> {
+    return this.begin(response, 'LINK', userId);
+  }
+
+  private async begin(
+    response: Response,
+    purpose: OAuthPurpose,
+    userId: string | null,
+  ): Promise<string> {
+    const settings = this.settings(purpose);
     const state = randomBytes(32).toString('base64url');
     const browser = randomBytes(32).toString('base64url');
     const now = new Date();
     await this.prisma.oAuthState.deleteMany({
       where: { expiresAt: { lte: now } },
     });
-    await this.prisma.oAuthState.create({
-      data: {
-        tokenHash: hash(state),
-        browserHash: hash(browser),
-        expiresAt: new Date(now.getTime() + STATE_TTL_MS),
-      },
-    });
-    response.cookie(COOKIE_NAME, browser, {
+    const data = {
+      tokenHash: hash(state),
+      browserHash: hash(browser),
+      expiresAt: new Date(now.getTime() + STATE_TTL_MS),
+      purpose,
+      userId,
+    };
+    if (userId) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          select: { id: true },
+        });
+        if (!user) throw new UnauthorizedException('Account no longer exists');
+        await tx.oAuthState.create({ data });
+      });
+    } else {
+      await this.prisma.oAuthState.create({ data });
+    }
+    response.cookie(this.cookieName(purpose), browser, {
       ...this.cookieOptions(settings.redirectUri),
       maxAge: STATE_TTL_MS,
     });
@@ -59,7 +87,7 @@ export class DiscordStrategy {
       client_id: settings.clientId,
       redirect_uri: settings.redirectUri,
       response_type: 'code',
-      scope: 'identify email',
+      scope: purpose === 'LINK' ? 'identify' : 'identify email',
       state,
     }).toString();
     return url.toString();
@@ -69,15 +97,33 @@ export class DiscordStrategy {
     request: Request,
     response: Response,
   ): Promise<DiscordProfile> {
-    const settings = this.settings();
+    const result = await this.complete(request, response, 'LOGIN');
+    return result.profile;
+  }
+
+  async authenticateLink(request: Request, response: Response) {
+    const result = await this.complete(request, response, 'LINK');
+    // The state record, not a callback parameter, identifies the local account.
+    if (!result.userId)
+      throw new UnauthorizedException('Discord link state has no account');
+    return { profile: result.profile, userId: result.userId };
+  }
+
+  private async complete(
+    request: Request,
+    response: Response,
+    purpose: OAuthPurpose,
+  ): Promise<{ profile: DiscordProfile; userId: string | null }> {
+    const settings = this.settings(purpose);
+    const cookieName = this.cookieName(purpose);
     // The browser secret has a fixed base64url alphabet; no cookie parser needed.
     const cookies = (request.headers.cookie ?? '')
       .split(';')
       .map((value) => value.trim())
-      .filter((value) => value.startsWith(`${COOKIE_NAME}=`));
+      .filter((value) => value.startsWith(`${cookieName}=`));
     const browser =
-      cookies.length === 1 ? cookies[0].slice(COOKIE_NAME.length + 1) : '';
-    response.clearCookie(COOKIE_NAME, this.cookieOptions(settings.redirectUri));
+      cookies.length === 1 ? cookies[0].slice(cookieName.length + 1) : '';
+    response.clearCookie(cookieName, this.cookieOptions(settings.redirectUri));
     const { state, code, error } = request.query;
     if (
       typeof state !== 'string' ||
@@ -85,20 +131,36 @@ export class DiscordStrategy {
       !RANDOM_TOKEN.test(browser)
     ) {
       throw new UnauthorizedException(
-        'Discord login state is invalid or expired; start again',
+        'Discord authorization state is invalid or expired; start again',
       );
     }
-    // Atomic consumption prevents callback replay, even across service instances.
+    const stored = await this.prisma.oAuthState.findUnique({
+      where: { tokenHash: hash(state) },
+      select: { purpose: true, userId: true },
+    });
+    if (
+      !stored ||
+      stored.purpose !== purpose ||
+      (purpose === 'LINK' ? !stored.userId : stored.userId !== null)
+    ) {
+      throw new UnauthorizedException(
+        'Discord authorization state is invalid or expired; start again',
+      );
+    }
+    // Reading the owner does not authorize anything. Only the request that wins
+    // this conditional deletion may continue, even across service instances.
     const consumed = await this.prisma.oAuthState.deleteMany({
       where: {
         tokenHash: hash(state),
         browserHash: hash(browser),
         expiresAt: { gt: new Date() },
+        purpose,
+        userId: stored.userId,
       },
     });
     if (consumed.count !== 1)
       throw new UnauthorizedException(
-        'Discord login state is invalid or expired; start again',
+        'Discord authorization state is invalid or expired; start again',
       );
     if (error !== undefined)
       throw new UnauthorizedException(
@@ -152,31 +214,44 @@ export class DiscordStrategy {
       throw new BadGatewayException('Discord returned an invalid user profile');
     }
     return {
-      id: profile.id,
-      username: profile.username,
-      displayName:
-        typeof profile.global_name === 'string' && profile.global_name
-          ? profile.global_name.slice(0, 50)
-          : profile.username.slice(0, 50),
-      email:
-        typeof profile.email === 'string' && isEmail(profile.email)
-          ? profile.email
-          : null,
-      verified: profile.verified === true,
+      userId: stored.userId,
+      profile: {
+        id: profile.id,
+        username: profile.username,
+        displayName:
+          typeof profile.global_name === 'string' && profile.global_name
+            ? profile.global_name.slice(0, 50)
+            : profile.username.slice(0, 50),
+        email:
+          typeof profile.email === 'string' && isEmail(profile.email)
+            ? profile.email
+            : null,
+        avatarUrl:
+          typeof profile.avatar === 'string' &&
+          /^[A-Za-z0-9_]+$/.test(profile.avatar)
+            ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.${profile.avatar.startsWith('a_') ? 'gif' : 'png'}`
+            : null,
+        verified: profile.verified === true,
+      },
     };
   }
 
-  private settings() {
+  private settings(purpose: OAuthPurpose) {
     const clientId = this.config.get<string>('DISCORD_CLIENT_ID')?.trim();
     const clientSecret = this.config
       .get<string>('DISCORD_CLIENT_SECRET')
       ?.trim();
-    const redirectUri = this.config.get<string>('DISCORD_REDIRECT_URI')?.trim();
+    let redirectUri = this.config.get<string>('DISCORD_REDIRECT_URI')?.trim();
     if (!clientId || !/^\d+$/.test(clientId) || !clientSecret || !redirectUri) {
       throw new ServiceUnavailableException('Discord login is not configured');
     }
     let url: URL;
     try {
+      if (purpose === 'LINK') {
+        redirectUri =
+          this.config.get<string>('DISCORD_LINK_REDIRECT_URI')?.trim() ||
+          new URL('/auth/discord/link/callback', redirectUri).toString();
+      }
       url = new URL(redirectUri);
     } catch {
       throw new ServiceUnavailableException('Discord redirect URI is invalid');
@@ -198,6 +273,10 @@ export class DiscordStrategy {
       );
     }
     return { clientId, clientSecret, redirectUri };
+  }
+
+  private cookieName(purpose: OAuthPurpose): string {
+    return purpose === 'LINK' ? LINK_COOKIE_NAME : COOKIE_NAME;
   }
 
   private cookieOptions(redirectUri: string): CookieOptions {

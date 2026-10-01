@@ -64,6 +64,8 @@ The private `settings()` method reads these variables:
 | `DISCORD_CLIENT_ID` | Identifies your application to Discord. |
 | `DISCORD_CLIENT_SECRET` | Authenticates our backend when exchanging the authorization code. |
 | `DISCORD_REDIRECT_URI` | Tells Discord where to send the browser afterward. |
+| `DISCORD_LINK_REDIRECT_URI` | Separate callback for linking. Defaults to `/auth/discord/link/callback` on the login callback's origin. |
+| `AUTH_FRONTEND_URL` | Frontend destination for HTML callbacks; defaults to `http://localhost:5173`. |
 
 It checks that the configuration exists and that the callback URL uses HTTPS. HTTP is allowed on localhost during development; production requires HTTPS. It also rejects callback URLs containing credentials, query parameters, or a fragment.
 
@@ -287,7 +289,53 @@ At this point, the strategy has obtained the Discord identity. `loginWithDiscord
 - If that email already belongs to another local account, the request returns `409`. We do not automatically link accounts based on matching email.
 - A successful login issues our own access and refresh tokens using the existing authentication logic.
 
-Explicit linking of Discord to an existing account is a separate flow that has not been implemented yet. The callback currently returns our usual authentication JSON; it does not redirect to a frontend page.
+JSON clients receive our usual authentication response. Browser requests accepting
+`text/html` redirect to the configured frontend with our access and refresh tokens
+in the URL fragment. The testing frontend reads these tokens. Discord login also
+sets the local avatar URL from Discord when one is available.
+
+## 8. Linking is a separate, authenticated flow
+
+The two linking endpoints are `POST /auth/discord/link` and
+`GET /auth/discord/link/callback`. See [API.md](API.md#link-discord-to-the-signed-in-account)
+for the frontend fetch example and configuration.
+
+1. The frontend sends its current Bearer token to the POST endpoint with
+   `credentials: 'include'` so the browser saves the temporary cookie.
+2. `AccessTokenGuard` verifies the token. `authorizeLink()` checks the local user
+   still exists, then saves a state with `purpose: 'LINK'` and that user's ID.
+   The ID is never accepted from a request body or callback query parameter.
+3. The response contains an `authorizationUrl`. The frontend navigates there.
+   Linking requests only `identify`; it does not need Discord's email.
+4. Discord redirects to the linking callback. `authenticateLink()` checks the
+   separate `discord_oauth_link_browser` cookie and requires a LINK state.
+5. The strategy reads the state owner, then conditionally deletes the matching
+   row using state hash, browser hash, purpose, owner, and expiry. Reading alone
+   proves nothing: only a deletion count of one allows the callback to continue.
+6. The backend exchanges the code using the linking redirect URI and retrieves
+   the Discord identity. `linkDiscord()` locks and rechecks the local user, then
+   creates only an AuthProvider record. A deleted user cannot be linked.
+7. The callback returns the provider name and ID, or redirects HTML requests to
+   the frontend with `#providerLinked=discord`. It issues no new session tokens.
+
+The local email, verification state, password, username, role, and avatar stay
+unchanged during linking. The proof is control of both the authenticated local
+account and the authorized Discord identity; matching email is not required.
+Later Discord sign-ins find this provider record and log in to the same local user.
+The existing login avatar-sync behavior still applies to those later sign-ins.
+
+Two unique constraints enforce the relationship: `(provider, providerUserId)`
+prevents two users from claiming one Discord identity; `(userId, provider)`
+limits a user to one Discord identity. A conflicting link returns 409. Linking
+the same identity to the same user again is harmless with a fresh OAuth attempt.
+Concurrent claims are protected by the database, not only by an earlier lookup.
+
+LOGIN states have no local owner; LINK states require one. The migration adds a
+database check for that rule and cascades pending states when their user is
+deleted. Login and link use different cookies and reject each other's states.
+There is no Bearer guard on the callback because normal browser redirects do not
+carry your application's Authorization header. Its protection is the previously
+authenticated, expiring, browser-bound, single-use state.
 
 ## Keep these values separate when reading the code
 
@@ -300,4 +348,5 @@ Explicit linking of Discord to an existing account is a separate flow that has n
 | Our access token | Authenticates requests to our application's protected endpoints. |
 | Our refresh token | Lets the client obtain a new pair of our application tokens through our refresh endpoint. |
 
-There is one browser cookie for this flow. Starting another Discord login in the same browser replaces it, so the latest attempt is the one to complete.
+Login and linking have separate browser cookies. Starting another attempt of the
+same purpose replaces that purpose's cookie, so only the latest can complete.

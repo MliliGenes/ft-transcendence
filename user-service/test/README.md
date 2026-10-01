@@ -17,3 +17,14 @@ settings. Tests create their own users and remove only their own records. They
 verify both logout/refresh orders, concurrent replay, old-token logout, and
 preservation of other login sessions. The test database role must be able to
 inspect its own connections in `pg_stat_activity` to confirm lock waits.
+
+`npm run test:discord` checks Discord login and account linking over HTTP with
+mocked Discord/database access and real JWT verification.
+
+`npm run test:discord:postgres` verifies concurrent provider claims, idempotency,
+single-use state, state ownership constraints, and deletion cascades on PostgreSQL.
+It reads the root `.env` database settings, or `AUTH_TEST_DATABASE_URL` if set.
+Unlike the refresh race suite, it creates a unique `discord_link_test_<uuid>`
+schema, applies all migrations there, and drops only that schema afterward.
+The database role must be allowed to create schemas. Existing application tables
+and records are not modified; no real Discord requests are sent.
