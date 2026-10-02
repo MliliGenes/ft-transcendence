@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Post,
   Query,
   Patch,
   Put,
@@ -23,6 +24,10 @@ import type { AuthenticatedRequest } from '../auth/guards/access-token.guard.js'
 import { AccountsService } from './accounts.service.js';
 import { PaginationDto } from './dto/pagination.dto.js';
 import { UpdateAccountDto } from './dto/update-account.dto.js';
+import {
+  SetPasswordDto,
+  UpdatePasswordDto,
+} from './dto/update-password.dto.js';
 
 @Controller('accounts')
 export class AccountsController {
@@ -43,6 +48,28 @@ export class AccountsController {
     @Body() dto: UpdateAccountDto,
   ) {
     return this.accountsService.updateMe(request.user.sub, dto);
+  }
+
+  @Patch('me/password')
+  @UseGuards(AccessTokenGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Header('Cache-Control', 'no-store')
+  async updatePassword(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: UpdatePasswordDto,
+  ): Promise<void> {
+    await this.accountsService.updatePassword(request.user.sub, dto);
+  }
+
+  @Post('me/password')
+  @UseGuards(AccessTokenGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Header('Cache-Control', 'no-store')
+  async setPassword(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: SetPasswordDto,
+  ): Promise<void> {
+    await this.accountsService.setPassword(request.user.sub, dto);
   }
 
   @Delete('me')

@@ -7,6 +7,11 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import sharp from 'sharp';
+import * as bcrypt from 'bcrypt';
+import type {
+  SetPasswordDto,
+  UpdatePasswordDto,
+} from './dto/update-password.dto.js';
 import {
   IMAGE_SETTINGS,
   MAX_IMAGE_PIXELS,
@@ -44,7 +49,27 @@ const accountSelect = {
   emailVerifiedAt: true,
   createdAt: true,
   updatedAt: true,
+  passwordHash: true,
+  authProviders: { select: { provider: true } },
 } satisfies Prisma.UserSelect;
+
+function accountResponse<T extends { passwordHash: string | null }>(
+  account: T,
+) {
+  const { passwordHash, authProviders, ...response } = account as T & {
+    authProviders?: { provider: string }[];
+  };
+  return {
+    ...response,
+    hasPassword: Boolean(passwordHash),
+    hasDiscord: Boolean(
+      authProviders?.some(({ provider }) => provider === 'DISCORD'),
+    ),
+    hasGithub: Boolean(
+      authProviders?.some(({ provider }) => provider === 'GITHUB'),
+    ),
+  };
+}
 
 @Injectable()
 export class AccountsService {
@@ -56,7 +81,7 @@ export class AccountsService {
       select: accountSelect,
     });
     if (!user) throw new NotFoundException('Account not found');
-    return user;
+    return accountResponse(user);
   }
 
   async getUsers({ page, limit }: PaginationDto) {
@@ -84,6 +109,54 @@ export class AccountsService {
     return user;
   }
 
+  async updatePassword(id: string, dto: UpdatePasswordDto): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { passwordHash: true },
+    });
+    if (!user) throw new NotFoundException('Account not found');
+    if (!user.passwordHash)
+      throw new ConflictException(
+        'This account has no password. Setting an initial password requires a separate flow.',
+      );
+    if (!(await bcrypt.compare(dto.oldPassword, user.passwordHash)))
+      throw new ForbiddenException('The old password is incorrect.');
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+    // Only replace the hash we verified. A concurrent password change must win
+    // once, rather than letting a stale old password overwrite the new one.
+    const updated = await this.prisma.user.updateMany({
+      where: { id, passwordHash: user.passwordHash },
+      data: { passwordHash },
+    });
+    if (updated.count !== 1)
+      throw new ConflictException(
+        'Your account changed while updating the password. Please try again with your current password.',
+      );
+  }
+
+  async setPassword(id: string, dto: SetPasswordDto): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { passwordHash: true },
+    });
+    if (!user) throw new NotFoundException('Account not found');
+    if (user.passwordHash)
+      throw new ConflictException(
+        'This account already has a password. Use the change password flow.',
+      );
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+    const updated = await this.prisma.user.updateMany({
+      where: { id, passwordHash: null },
+      data: { passwordHash },
+    });
+    if (updated.count !== 1)
+      throw new ConflictException(
+        'A password was set while this request was in progress. Please use the change password flow.',
+      );
+  }
+
   async updateMe(id: string, dto: UpdateAccountDto) {
     if (!Object.values(dto).some((value) => value !== undefined)) {
       throw new BadRequestException(
@@ -109,14 +182,22 @@ export class AccountsService {
           `;
           if (!users[0]) throw new NotFoundException('Account not found');
           if (dto.email !== users[0].email) data.emailVerifiedAt = null;
-          return tx.user.update({ where: { id }, data, select: accountSelect });
+          return accountResponse(
+            await tx.user.update({
+              where: { id },
+              data,
+              select: accountSelect,
+            }),
+          );
         });
       }
-      return await this.prisma.user.update({
-        where: { id },
-        data,
-        select: accountSelect,
-      });
+      return accountResponse(
+        await this.prisma.user.update({
+          where: { id },
+          data,
+          select: accountSelect,
+        }),
+      );
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002')
@@ -221,11 +302,13 @@ export class AccountsService {
         select: { id: true },
       });
       // Store the URL and image together, or roll both changes back.
-      return tx.user.update({
-        where: { id },
-        data: kind === 'AVATAR' ? { avatarUrl: url } : { bannerUrl: url },
-        select: accountSelect,
-      });
+      return accountResponse(
+        await tx.user.update({
+          where: { id },
+          data: kind === 'AVATAR' ? { avatarUrl: url } : { bannerUrl: url },
+          select: accountSelect,
+        }),
+      );
     });
   }
 }

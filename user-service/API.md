@@ -108,6 +108,10 @@ callback to the user who started linking. It returns `200` JSON:
 { "provider": "DISCORD", "providerUserId": "123456789012345678" }
 ```
 
+Browser login and linking failures redirect to the frontend with safe
+`oauthError` and `oauthFlow` fragment values for display. JSON requests retain
+their normal error status and body.
+
 For browser requests accepting `text/html`, success redirects to
 `AUTH_FRONTEND_URL#providerLinked=discord`. Linking issues no new tokens; keep the
 existing local session. It preserves email, verification, username, password,
@@ -121,7 +125,11 @@ authenticated local account. It requests only Discord's `identify` scope.
   different Discord account. Each user can have one identity per provider.
 - Linking the same identity again with a fresh authorization is idempotent.
 - `502` / `503`: provider failure / configuration error, as with Discord login.
-- Unlinking and listing connected providers are not implemented yet.
+
+`DELETE /auth/discord/link` requires `Authorization: Bearer <accessToken>` and
+returns `204 No Content`. It removes the Discord identity from the current
+account. A passwordless account cannot unlink its only provider until it sets a
+password or connects another sign-in method.
 
 Register **both** callback URLs in the Discord developer portal. Then run
 `npx prisma migrate deploy` and `npx prisma generate` before restarting the service.
@@ -417,6 +425,12 @@ curl -i -X POST http://localhost:3000/auth/logout \
 | POST   | /auth/discord/link | Start linking for the authenticated user (200 URL JSON) |
 | GET    | /auth/discord/link/callback | Complete linking (200 JSON or 302 frontend redirect) |
 
+GitHub exposes the same login and linking routes under `/auth/github`. Its
+callback obtains the user's primary verified email through GitHub's `user:email`
+scope before creating or linking a local account. `DELETE /auth/github/link`
+removes the linked GitHub identity and, like Discord, refuses to remove the
+user's only sign-in method unless a password or another provider is available.
+
 ### Application setup
 
 Create an application in the [Discord Developer Portal](https://discord.com/developers/applications).
@@ -434,6 +448,10 @@ DISCORD_CLIENT_ID=
 DISCORD_CLIENT_SECRET=
 DISCORD_REDIRECT_URI=http://localhost:3000/auth/discord/callback
 DISCORD_LINK_REDIRECT_URI=http://localhost:3000/auth/discord/link/callback
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+GITHUB_REDIRECT_URI=http://localhost:3000/auth/github/callback
+GITHUB_LINK_REDIRECT_URI=http://localhost:3000/auth/github/link/callback
 AUTH_FRONTEND_URL=http://localhost:5173
 ```
 
@@ -481,7 +499,8 @@ are cleaned when new authorizations start. A Secure cookie is used with HTTPS.
   matches. No automatic account linking or merging occurs.
 - Explicit linking uses the protected POST and separate callback documented above.
 - Discord access/refresh tokens are not persisted or returned. Discord login sets
-  avatarUrl from Discord's CDN when available, including on returning logins.
+  avatarUrl from Discord's CDN when available. Returning logins fill it only when
+  the account has no avatar URL; existing avatar URLs are preserved.
   Linking preserves the current avatar. Banner images are not imported.
 
 Errors: 401 for invalid/expired/reused state, denied authorization, rejected code,

@@ -32,6 +32,25 @@ export function passwordError(password, registering) {
   return '';
 }
 
+export function passwordChangeError({
+  oldPassword,
+  newPassword,
+  confirmPassword,
+}) {
+  return (
+    passwordError(oldPassword, false) ||
+    passwordError(newPassword, true) ||
+    (newPassword !== confirmPassword ? 'The new passwords do not match.' : '')
+  );
+}
+
+export function passwordSetError({ newPassword, confirmPassword }) {
+  return (
+    passwordError(newPassword, true) ||
+    (newPassword !== confirmPassword ? 'The new passwords do not match.' : '')
+  );
+}
+
 export function imageError(file, kind) {
   if (!file) return '';
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type))

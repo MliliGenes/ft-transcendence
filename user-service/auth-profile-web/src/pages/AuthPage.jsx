@@ -143,6 +143,13 @@ export function AuthPage({ mode }) {
       >
         Discord<span aria-hidden="true">↗</span>
       </button>
+      <button
+        className="button button-secondary"
+        disabled={busy}
+        onClick={() => window.location.assign(`${API_URL}/auth/github`)}
+      >
+        GitHub<span aria-hidden="true">↗</span>
+      </button>
     </section>
   );
 }

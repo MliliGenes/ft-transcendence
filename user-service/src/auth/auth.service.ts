@@ -17,6 +17,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import type { RegisterDto } from './dto/register.dto.js';
 import type { LoginDto } from './dto/login.dto.js';
 import type { DiscordProfile } from './strategies/discord.strategy.js';
+import type { GithubProfile } from './strategies/github.strategy.js';
 import { REFRESH_TOKEN_PATTERN, type RefreshDto } from './dto/refresh.dto.js';
 
 import {
@@ -114,8 +115,11 @@ export class AuthService {
     const linked = await this.findDiscordUser(profile.id);
     if (linked) {
       if (profile.avatarUrl) {
-        await this.prisma.user.update({
-          where: { id: linked.id },
+        await this.prisma.user.updateMany({
+          where: {
+            id: linked.id,
+            OR: [{ avatarUrl: null }, { avatarUrl: '' }],
+          },
           data: { avatarUrl: profile.avatarUrl },
         });
       }
@@ -247,6 +251,201 @@ export class AuthService {
     }
   }
 
+  async loginWithGithub(profile: GithubProfile): Promise<AuthResult> {
+    const linked = await this.findProviderUser('GITHUB', profile.id);
+    if (linked) {
+      if (profile.avatarUrl) {
+        await this.prisma.user.updateMany({
+          where: {
+            id: linked.id,
+            OR: [{ avatarUrl: null }, { avatarUrl: '' }],
+          },
+          data: { avatarUrl: profile.avatarUrl },
+        });
+      }
+      return this.createProviderSession(linked);
+    }
+    if (!profile.email || !profile.verified)
+      throw new UnauthorizedException(
+        'A verified GitHub email is required to create an account',
+      );
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        email: {
+          equals: profile.email.replace(/[\\%_]/g, '\\$&'),
+          mode: 'insensitive',
+        },
+      },
+      select: { id: true },
+    });
+    if (existing)
+      throw new ConflictException(
+        'Email is already in use. Sign in with your existing method to connect GitHub; accounts are not linked automatically.',
+      );
+    const userId = randomUUID();
+    const { tokens, refreshTokenData } = await this.createTokenPair(userId);
+    const base =
+      profile.username.replace(/[^a-zA-Z0-9_.]/g, '').slice(0, 20) || 'github';
+    const username = `${base}_${randomBytes(4).toString('hex')}`;
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          id: userId,
+          username,
+          email: profile.email,
+          displayName: profile.displayName,
+          avatarUrl: profile.avatarUrl,
+          emailVerifiedAt: new Date(),
+          role: 'USER',
+          authProviders: {
+            create: { provider: 'GITHUB', providerUserId: profile.id },
+          },
+          refreshTokens: { create: refreshTokenData },
+        },
+        select: { id: true, email: true, username: true },
+      });
+      return { user, ...tokens };
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const winner = await this.findProviderUser('GITHUB', profile.id);
+        if (winner) return this.createProviderSession(winner);
+        throw new ConflictException(
+          'Email or username is already in use. Sign in with your existing method, or restart GitHub login.',
+        );
+      }
+      throw error;
+    }
+  }
+
+  async linkGithub(userId: string, profile: GithubProfile) {
+    const result = { provider: 'GITHUB' as const, providerUserId: profile.id };
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await this.lockUserSessions(tx, userId);
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          select: { id: true },
+        });
+        if (!user) throw new UnauthorizedException('Account no longer exists');
+        const identity = await tx.authProvider.findUnique({
+          where: {
+            provider_providerUserId: {
+              provider: 'GITHUB',
+              providerUserId: profile.id,
+            },
+          },
+          select: { userId: true },
+        });
+        if (identity) {
+          if (identity.userId !== userId)
+            throw new ConflictException(
+              'This GitHub account is already linked to another user',
+            );
+          return result;
+        }
+        const current = await tx.authProvider.findUnique({
+          where: { userId_provider: { userId, provider: 'GITHUB' } },
+          select: { id: true },
+        });
+        if (current)
+          throw new ConflictException(
+            'Your account already has a different GitHub account linked',
+          );
+        await tx.authProvider.create({
+          data: { userId, provider: 'GITHUB', providerUserId: profile.id },
+        });
+        return result;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const identity = await this.prisma.authProvider.findUnique({
+          where: {
+            provider_providerUserId: {
+              provider: 'GITHUB',
+              providerUserId: profile.id,
+            },
+          },
+          select: { userId: true },
+        });
+        if (identity?.userId === userId) return result;
+        throw new ConflictException('This GitHub account is already linked');
+      }
+      throw error;
+    }
+  }
+
+  async unlinkDiscord(userId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockUserSessions(tx, userId);
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          passwordHash: true,
+          authProviders: { select: { id: true, provider: true } },
+        },
+      });
+      if (!user) throw new UnauthorizedException('Account no longer exists');
+
+      const provider = user.authProviders.find(
+        (identity) => identity.provider === 'DISCORD',
+      );
+      if (!provider)
+        throw new ConflictException(
+          'No Discord account is linked to this user',
+        );
+      if (!user.passwordHash && user.authProviders.length === 1)
+        throw new ConflictException(
+          'Set a password or connect another sign-in method before unlinking Discord.',
+        );
+
+      const deleted = await tx.authProvider.deleteMany({
+        where: { id: provider.id, userId, provider: 'DISCORD' },
+      });
+      if (deleted.count !== 1)
+        throw new ConflictException(
+          'The Discord account could not be unlinked. Please try again.',
+        );
+    });
+  }
+
+  async unlinkGithub(userId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockUserSessions(tx, userId);
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          passwordHash: true,
+          authProviders: { select: { id: true, provider: true } },
+        },
+      });
+      if (!user) throw new UnauthorizedException('Account no longer exists');
+
+      const provider = user.authProviders.find(
+        (identity) => identity.provider === 'GITHUB',
+      );
+      if (!provider)
+        throw new ConflictException('No GitHub account is linked to this user');
+      if (!user.passwordHash && user.authProviders.length === 1)
+        throw new ConflictException(
+          'Set a password or connect another sign-in method before unlinking GitHub.',
+        );
+
+      const deleted = await tx.authProvider.deleteMany({
+        where: { id: provider.id, userId, provider: 'GITHUB' },
+      });
+      if (deleted.count !== 1)
+        throw new ConflictException(
+          'The GitHub account could not be unlinked. Please try again.',
+        );
+    });
+  }
+
   async refresh(dto: RefreshDto): Promise<AuthResult> {
     const invalidToken = new UnauthorizedException(
       'Refresh token is invalid or expired',
@@ -357,6 +556,37 @@ export class AuthService {
       select: { user: { select: { id: true, email: true, username: true } } },
     });
     return provider?.user;
+  }
+
+  private async findProviderUser(
+    provider: 'GITHUB' | 'DISCORD',
+    providerUserId: string,
+  ) {
+    const identity = await this.prisma.authProvider.findUnique({
+      where: { provider_providerUserId: { provider, providerUserId } },
+      select: { user: { select: { id: true, email: true, username: true } } },
+    });
+    return identity?.user;
+  }
+
+  private async createProviderSession(
+    user: AuthResult['user'],
+  ): Promise<AuthResult> {
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockUserSessions(tx, user.id);
+      const current = await tx.user.findUnique({
+        where: { id: user.id },
+        select: { id: true, email: true, username: true },
+      });
+      if (!current) throw new UnauthorizedException('Account no longer exists');
+      const { tokens, refreshTokenData } = await this.createTokenPair(
+        current.id,
+      );
+      await tx.refreshToken.create({
+        data: { ...refreshTokenData, userId: current.id },
+      });
+      return { user: current, ...tokens };
+    });
   }
 
   private async createDiscordSession(

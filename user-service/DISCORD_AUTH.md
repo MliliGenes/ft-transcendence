@@ -1,352 +1,200 @@
-# Understanding the Discord authentication strategy
+# Discord OAuth Strategy: Login and Linking Explained
 
-The strategy handles the conversation with Discord: it sends the user there, checks the callback, and retrieves their Discord identity. Then `AuthService` uses that identity to create or log in our user and issue our own tokens.
+Notes on the hand-rolled `DiscordStrategy` (NestJS + Prisma). It implements the OAuth 2.0 **authorization code flow** directly, without Passport.
 
-Here, **strategy** is the name of an ordinary Nest injectable class. We implemented the OAuth authorization-code flow directly, without Passport. The controller explicitly calls its methods.
+The strategy never logs anyone in by itself. It only proves: *"this browser really completed a Discord login, and here is the Discord profile."* The controller then decides what to do (issue a JWT, create a user, store a link).
 
-Read alongside:
+---
 
-- [Discord strategy](src/auth/strategies/discord.strategy.ts)
-- [Discord controller](src/auth/discord.controller.ts)
-- [Authentication service](src/auth/auth.service.ts)
-- [API documentation and setup](API.md)
+## 1. The core idea
 
-## The whole login flow
+Your app never sees the user's Discord password.
 
-```text
-Browser opens GET /auth/discord
-    |
-    v
-Strategy saves a temporary login attempt and sets a browser cookie
-    |
-    v
-Controller redirects the browser to Discord
-    |
-    v
-User authorizes our application on Discord
-    |
-    v
-Discord redirects the browser to /auth/discord/callback?code=...&state=...
-    |
-    v
-Strategy checks and consumes the temporary login attempt
-    |
-    v
-Backend exchanges the code for a Discord access token
-    |
-    v
-Backend uses that token to fetch the Discord profile
-    |
-    v
-AuthService finds or creates our user and issues our access/refresh tokens
+1. You send the browser to Discord.
+2. Discord sends it back with a one-time `code`.
+3. Your server swaps the code for an access token (server to server).
+4. Your server uses the token to read the profile.
+
+Most of the code exists to stop attackers from abusing the redirect.
+
+---
+
+## 2. The two secrets
+
+`begin()` generates two random values (32 bytes each, base64url, always 43 characters):
+
+| Secret | Where it travels | Purpose |
+|---|---|---|
+| `state` | In the URL, through Discord, echoed back on the callback | Says "this callback belongs to a flow we started" |
+| `browser` | In an `httpOnly` cookie, never sent to Discord | Says "and it's *this* browser that started it" |
+
+Only the **SHA-256 hashes** are stored in the `oAuthState` table, so a DB leak gives an attacker nothing usable.
+
+**Why both?** `state` travels through the URL, so it can leak or be embedded in a link an attacker sends. An attacker can hand a victim a callback URL with a valid `state`, but cannot plant your httpOnly cookie in the victim's browser.
+
+Both secrets serve your security. `state` rides the public route; the cookie stays private between browser and your API.
+
+### Cookie properties
+
+- `httpOnly`: JavaScript can't read it.
+- `sameSite: 'lax'`: still sent on the top-level redirect back from Discord.
+- `secure`: set when the redirect URI is HTTPS.
+- `path: '/auth/discord'`: not sent to the rest of your API.
+- `maxAge`: 10 minutes, matching the DB row expiry.
+
+---
+
+## 3. Login flow
+
+```
+Browser            Your API                 Discord
+   | GET /auth/discord  |                      |
+   |------------------->| begin('LOGIN')       |
+   |                    | - make state+browser |
+   |                    | - save hashes in DB  |
+   |<-------------------| set cookie + URL     |
+   | redirect --------------------------------->| user approves
+   |<--------------------------------- ?code&state
+   | GET /callback (cookie sent automatically)   |
+   |------------------->| complete('LOGIN')    |
+   |                    | verify + consume state
+   |                    |--- POST /token ----->|
+   |                    |<-- access_token -----|
+   |                    |--- GET /users/@me -->|
+   |                    |<-- profile ----------|
+   |<-------------------| profile -> controller|
 ```
 
-The browser follows the redirects. Our backend makes the token exchange and profile requests directly to Discord.
+### Phase 1: `authorize()` → `begin()`
 
-## 1. Nest supplies the dependencies
+1. `settings()` validates env config (503 if missing or insecure).
+2. Generate `state` and `browser`.
+3. Delete expired state rows (opportunistic cleanup).
+4. Store a row: both hashes, 10-minute expiry, `purpose`, `userId` (null for login).
+5. Set the cookie.
+6. Build the Discord authorize URL and return it; the controller redirects.
 
-```ts
-constructor(
-  private readonly config: ConfigService,
-  private readonly prisma: PrismaService,
-) {}
-```
+Scopes: login asks for `identify email`; link asks only for `identify`.
 
-`@Injectable()` allows Nest to manage this class. Because it is registered as a provider in `AuthModule`, Nest creates it and supplies its dependencies:
+### Phase 2: `authenticate()` → `complete()`
 
-- `ConfigService` reads the Discord configuration loaded from `.env`.
-- `PrismaService` stores and checks temporary login attempts.
+A series of gates:
 
-The private `settings()` method reads these variables:
+1. **Cookie extraction.** Parse the header by hand; require *exactly one* cookie with the expected name (rejects duplicates / cookie injection). Clear it immediately so it is single-use.
+2. **Format check.** `state` and `browser` must both match the 43-char base64url shape. Rejects garbage before touching the DB.
+3. **Lookup by `hash(state)`.** Check `purpose` matches. `LINK` requires a `userId`; `LOGIN` requires none. This prevents replaying a login state at the link callback, or the reverse.
+4. **Atomic consume** (the key step):
+   ```ts
+   deleteMany({ where: { tokenHash, browserHash, expiresAt > now, purpose, userId } })
+   if (count !== 1) reject
+   ```
+   One query checks the browser hash, expiry, purpose and owner, and deletes the row. If two requests race, exactly one gets `count === 1`. The state is truly single-use, even across multiple server instances. The earlier `findUnique` is only a peek; winning this delete is what authorizes.
+5. **Error and code checks.** If Discord sent `?error=` (user cancelled), throw. `code` must be a non-empty string of sane length.
+6. **Token exchange.** Server-to-server POST with the code and `client_secret`. Validate the response has a bearer `access_token`.
+7. **Profile fetch.** `GET /users/@me` with the token. Validate: id is a 17–20 digit snowflake, username is sane.
+8. **Normalization.** Truncate names to 50 chars, validate email with `isEmail`, build the avatar URL only if the hash matches a safe regex (`.gif` if it starts with `a_`), pass through `verified`.
 
-| Variable | Purpose |
-| --- | --- |
-| `DISCORD_CLIENT_ID` | Identifies your application to Discord. |
-| `DISCORD_CLIENT_SECRET` | Authenticates our backend when exchanging the authorization code. |
-| `DISCORD_REDIRECT_URI` | Tells Discord where to send the browser afterward. |
-| `DISCORD_LINK_REDIRECT_URI` | Separate callback for linking. Defaults to `/auth/discord/link/callback` on the login callback's origin. |
-| `AUTH_FRONTEND_URL` | Frontend destination for HTML callbacks; defaults to `http://localhost:5173`. |
+---
 
-It checks that the configuration exists and that the callback URL uses HTTPS. HTTP is allowed on localhost during development; production requires HTTPS. It also rejects callback URLs containing credentials, query parameters, or a fragment.
+## 4. Linking flow
 
-Missing or invalid configuration produces `503 Service Unavailable`. These checks happen when a Discord route is used, so leaving the Discord configuration empty does not prevent ordinary password login.
+Same machine, different `purpose`. Scenario: a user is already logged into your app and wants to attach their Discord account.
 
-## 2. `authorize()` prepares the login attempt
+**The problem:** the callback is a redirect from Discord, so it carries no `Authorization` header with your JWT. How does it know which local account to attach to?
 
-This method runs when the browser visits `GET /auth/discord`.
+**The answer:** `authorizeLink(userId)` stores the `userId` *inside the state row*. The JWT guard validated that user when the flow began. On callback, `stored.userId` comes from your own DB, not from the query string, so an attacker can't change which account gets linked by editing the URL.
 
-First, it generates two independent random values:
+Link-specific details:
 
-```ts
-const state = randomBytes(32).toString('base64url');
-const browser = randomBytes(32).toString('base64url');
-```
+- **`FOR UPDATE` transaction.** Locks the user row, confirms the user still exists, then creates the state. Prevents creating a state pointing at an account being deleted at that moment.
+- **Separate cookie name** (`discord_oauth_link_browser`) and **separate callback URL** (`/auth/discord/link/callback`, derived automatically unless `DISCORD_LINK_REDIRECT_URI` is set). A login flow and a link flow in the same browser can't clobber each other.
+- **Attack the cookie stops:** an attacker starts a link flow with *their* Discord account, grabs the callback URL, and tricks a logged-in victim into opening it. Without the cookie binding, the victim's account would be linked to the attacker's Discord, letting the attacker log in as the victim. With it, the victim's browser lacks the matching secret and the consume step fails.
 
-They have different jobs:
+---
 
-- **`state`** identifies this login attempt. We send it to Discord, which returns it in the callback.
-- **`browser`** is a separate secret placed in a browser cookie. It ties the callback to the browser that started the attempt.
+## 5. What happens on Discord's side
 
-We store their hashes together in the database:
+Your app is mostly a spectator here.
 
-```ts
-await this.prisma.oAuthState.create({
-  data: {
-    tokenHash: hash(state),
-    browserHash: hash(browser),
-    expiresAt: new Date(now.getTime() + STATE_TTL_MS),
-  },
-});
-```
+### Step 1: The browser lands on Discord
 
-`STATE_TTL_MS` is ten minutes. `hash()` uses SHA-256:
+Discord validates the request before showing anything:
 
-```ts
-const hash = (value: string) =>
-  createHash('sha256').update(value).digest('hex');
-```
+- `client_id` belongs to a real registered application.
+- `redirect_uri` **exactly matches** a URI registered in the Developer Portal. If not, Discord shows an error and does **not** redirect, so codes can't be sent to an attacker's domain.
+- `scope` is valid for your app.
 
-Later, we hash the returned values and look for a matching row. We do not need to store the original values. These are random strings, not JWTs, and hashing is not encryption.
+### Step 2: Discord identifies the user
 
-Before creating the row, the method deletes expired attempts with `deleteMany()`.
+If not logged in, the user sees Discord's own login page (the password never touches your app). Then the consent screen shows your app name, icon, and the scopes in plain language.
 
-### The browser cookie
+### Step 3: The user clicks Authorize
 
-The method sets a cookie named `discord_oauth_browser` containing the browser secret. The cookie options mean:
+Discord:
 
-| Option | Purpose |
-| --- | --- |
-| `httpOnly: true` | Page JavaScript cannot read the cookie. |
-| `sameSite: 'lax'` | Allows the cookie on the normal top-level GET navigation back from Discord. |
-| `secure` | Requires HTTPS when the configured callback uses HTTPS. |
-| `path: '/auth/discord'` | Limits the request paths where the browser sends this cookie. |
-| `maxAge` | Expires the cookie after ten minutes. |
+1. Records a **grant** (this user authorized this app with these scopes). This shows up in the user's authorized-apps settings, where they can revoke it.
+2. Generates a short-lived, single-use **authorization code**, bound to the user, your `client_id`, the scopes, and the exact `redirect_uri`.
 
-This is a temporary login cookie. Our application access and refresh tokens are issued later.
+Then it 302-redirects to `redirect_uri?code=XXXX&state=YYYY`. The `state` is echoed verbatim without being interpreted. On Cancel, the redirect carries `error=access_denied` plus `state`.
 
-### The authorization URL
+### Step 4: Your server redeems the code
 
-Finally, the method builds a URL pointing to `https://discord.com/oauth2/authorize`, with these parameters:
+Discord checks:
 
-```ts
-{
-  client_id: settings.clientId,
-  redirect_uri: settings.redirectUri,
-  response_type: 'code',
-  scope: 'identify email',
-  state,
-}
-```
+- `client_id` and `client_secret` are correct.
+- The code exists, is unused, and is unexpired.
+- `redirect_uri` is identical to the one from step 1.
 
-`identify email` requests access to the user's identity and email. `response_type: 'code'` asks Discord to return an authorization code.
+On success it marks the code consumed and returns an `access_token` (plus a refresh token you ignore, since you only need the profile once). A stolen `code` is nearly worthless alone because redeeming it needs your `client_secret`.
 
-`URLSearchParams` formats and URL-encodes the parameters. The strategy returns the URL, and the controller redirects the browser there:
+### Step 5: Your server reads the profile
 
-```ts
-response.redirect(await this.discord.authorize(response));
-```
+`GET /users/@me` returns only what the token's scopes allow:
 
-## 3. `authenticate()` checks the callback
+- `identify`: id, username, global name, avatar.
+- `email`: adds `email` and `verified`.
 
-After authorization, Discord sends the browser back to an address resembling:
+If you only requested `identify`, `profile.email` is missing, which is why the code treats it as nullable.
 
-```text
-/auth/discord/callback?code=...&state=...
-```
+> If a user already authorized your app with the same scopes, Discord may shortcut the consent screen later, depending on the `prompt` parameter. This code doesn't set it, so the default applies.
 
-The method reads the browser cookie and the query parameters. It clears the cookie because the attempt should be used once.
+---
 
-The cookie is read from `request.headers.cookie`. The code accepts exactly one cookie with the expected name. Its value uses a fixed alphabet, so this implementation does not require cookie-parser middleware.
+## 6. Supporting pieces
 
-This regular expression checks the format of `state` and the browser secret:
+- **`settings()`**: validates config; redirect URI must be HTTPS (HTTP only on localhost), with no credentials, hash or query; HTTPS required in production.
+- **`discordJson()`**: 10-second timeout and `redirect: 'error'` (never follows redirects, closing off SSRF-style tricks). Maps 400/401/403 to a 401 for your client; network errors and 5xx to 502.
+- **`record()`**: type guard. Discord's JSON is `unknown`, so it is validated at runtime rather than trusted.
 
-```ts
-/^[A-Za-z0-9_-]{43}$/
-```
+---
 
-It expects exactly 43 characters containing only letters, digits, underscores, or hyphens: the format produced by encoding our 32 random bytes as base64url.
+## 7. What the controller must still do
 
-**Matching the format does not prove the values are valid.** The database check does that:
+The strategy returns a profile. The controller does the rest:
 
-```ts
-const consumed = await this.prisma.oAuthState.deleteMany({
-  where: {
-    tokenHash: hash(state),
-    browserHash: hash(browser),
-    expiresAt: { gt: new Date() },
-  },
-});
+- **Login / register** (same endpoint, since Discord can't tell you in advance whether this person has an account): look up a user by `profile.id` (the Discord ID, not email or username, which can change). If found, issue your JWT; if not, create the user, then issue the JWT.
+- **Link:** store `profile.id` against the `userId` from the state row, and ensure that Discord ID isn't already linked to a different account.
+- **Email caution:** only trust `profile.email` if `profile.verified` is true. Auto-merging accounts by an unverified email is an account-takeover hole.
 
-if (consumed.count !== 1) {
-  throw new UnauthorizedException(
-    'Discord login state is invalid or expired; start again',
-  );
-}
-```
+---
 
-This finds and deletes an attempt only when both hashes match and it has not expired. `gt` means "greater than": the expiry must be later than the current time.
+## 8. Failure cases (test your understanding)
 
-### Why delete the row to validate it?
+| Situation | Why it's rejected |
+|---|---|
+| Attacker sends victim a callback URL with a valid `state` | Victim's browser has no matching cookie, so `browserHash` doesn't match and the delete removes nothing |
+| Victim opens the same callback twice (back button, double click) | First request deletes the row and clears the cookie; the second finds nothing |
+| User waits 15 minutes on Discord's consent screen | Cookie `maxAge` and row `expiresAt` have both lapsed; flow must restart |
+| Login state replayed at the link callback | `purpose` mismatch (and `userId` null vs required) |
+| Attacker edits the callback URL to target another account | Account comes from `stored.userId` in the DB, not the URL |
+| Two simultaneous requests with the same state | Only one `deleteMany` returns `count === 1` |
 
-The deletion makes the attempt **single-use**. If two callbacks arrive with the same values, only one can delete the row successfully. The other gets a count of zero and is rejected.
+---
 
-Because checking and consuming happen in one database operation, there is no gap between a separate read and delete. This also works across multiple service containers sharing the database.
+## 9. Mental model
 
-The state-and-cookie check helps prevent login CSRF: someone trying to make another browser finish a login that the attacker started. A callback URL alone is insufficient; it must match the secret in the initiating browser's cookie.
-
-The method then rejects a Discord cancellation/error or a missing or invalid authorization code. Once an attempt is consumed, an error requires starting a new login attempt.
-
-## 4. The backend exchanges the code for a Discord access token
-
-The strategy makes a POST request to:
-
-```text
-https://discord.com/api/oauth2/token
-```
-
-It sends these fields as URL-encoded form data:
-
-```ts
-{
-  grant_type: 'authorization_code',
-  code,
-  client_id: settings.clientId,
-  client_secret: settings.clientSecret,
-  redirect_uri: settings.redirectUri,
-}
-```
-
-**This is where the client secret is used.** It travels from our backend to Discord over HTTPS. It is not included in the browser's authorization URL.
-
-The authorization code represents the authorization just granted. Our backend exchanges it for a Discord access token, which permits the authorized API requests.
-
-The strategy checks that the response contains a nonempty `access_token` and a `token_type` of Bearer.
-
-## 5. The strategy fetches and validates the Discord profile
-
-Using the Discord access token, the backend calls:
-
-```text
-GET https://discord.com/api/v10/users/@me
-Authorization: Bearer <Discord access token>
-```
-
-It validates the response and returns a smaller object:
-
-```ts
-export type DiscordProfile = {
-  id: string;
-  username: string;
-  displayName: string;
-  email: string | null;
-  verified: boolean;
-};
-```
-
-The current checks and conversions are:
-
-- The Discord ID must be a string containing 17–20 digits.
-- The username must be a nonempty string of at most 100 characters.
-- The display name uses `global_name`, falling back to the username, capped at 50 characters.
-- Missing or invalid email becomes `null`.
-- `verified` is true only when Discord explicitly returns the boolean `true`.
-
-The `record()` helper first checks that a response is an object, rather than `null` or an array:
-
-```ts
-const record = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-```
-
-Its TypeScript return type helps us inspect the object's fields safely. Individual field checks are still necessary: external JSON does not automatically satisfy a TypeScript type.
-
-The Discord access token is used to fetch this profile. Our code neither persists it nor returns it to the client.
-
-## 6. `discordJson()` centralizes HTTP requests and errors
-
-Both Discord requests use this helper. It applies:
-
-- A ten-second timeout through `AbortSignal.timeout(10000)`.
-- `redirect: 'error'`, which rejects unexpected HTTP redirects.
-- Conversion of Discord `400`, `401`, and `403` responses into our `401 Unauthorized`.
-- Conversion of network problems, other unsuccessful responses, and invalid JSON into `502 Bad Gateway`.
-
-The helper returns parsed JSON as `unknown`. The caller then validates the expected token or profile fields. Provider error bodies and tokens are not included in the error messages returned to the client.
-
-## 7. The controller hands the profile to `AuthService`
-
-The callback controller connects the two responsibilities:
-
-```ts
-const profile = await this.discord.authenticate(request, response);
-return this.auth.loginWithDiscord(profile);
-```
-
-At this point, the strategy has obtained the Discord identity. `loginWithDiscord()` handles our application's rules:
-
-- An already-linked Discord identity logs in to its existing local account.
-- A new Discord identity needs a verified email to create an account. The new account defaults to `USER`.
-- If that email already belongs to another local account, the request returns `409`. We do not automatically link accounts based on matching email.
-- A successful login issues our own access and refresh tokens using the existing authentication logic.
-
-JSON clients receive our usual authentication response. Browser requests accepting
-`text/html` redirect to the configured frontend with our access and refresh tokens
-in the URL fragment. The testing frontend reads these tokens. Discord login also
-sets the local avatar URL from Discord when one is available.
-
-## 8. Linking is a separate, authenticated flow
-
-The two linking endpoints are `POST /auth/discord/link` and
-`GET /auth/discord/link/callback`. See [API.md](API.md#link-discord-to-the-signed-in-account)
-for the frontend fetch example and configuration.
-
-1. The frontend sends its current Bearer token to the POST endpoint with
-   `credentials: 'include'` so the browser saves the temporary cookie.
-2. `AccessTokenGuard` verifies the token. `authorizeLink()` checks the local user
-   still exists, then saves a state with `purpose: 'LINK'` and that user's ID.
-   The ID is never accepted from a request body or callback query parameter.
-3. The response contains an `authorizationUrl`. The frontend navigates there.
-   Linking requests only `identify`; it does not need Discord's email.
-4. Discord redirects to the linking callback. `authenticateLink()` checks the
-   separate `discord_oauth_link_browser` cookie and requires a LINK state.
-5. The strategy reads the state owner, then conditionally deletes the matching
-   row using state hash, browser hash, purpose, owner, and expiry. Reading alone
-   proves nothing: only a deletion count of one allows the callback to continue.
-6. The backend exchanges the code using the linking redirect URI and retrieves
-   the Discord identity. `linkDiscord()` locks and rechecks the local user, then
-   creates only an AuthProvider record. A deleted user cannot be linked.
-7. The callback returns the provider name and ID, or redirects HTML requests to
-   the frontend with `#providerLinked=discord`. It issues no new session tokens.
-
-The local email, verification state, password, username, role, and avatar stay
-unchanged during linking. The proof is control of both the authenticated local
-account and the authorized Discord identity; matching email is not required.
-Later Discord sign-ins find this provider record and log in to the same local user.
-The existing login avatar-sync behavior still applies to those later sign-ins.
-
-Two unique constraints enforce the relationship: `(provider, providerUserId)`
-prevents two users from claiming one Discord identity; `(userId, provider)`
-limits a user to one Discord identity. A conflicting link returns 409. Linking
-the same identity to the same user again is harmless with a fresh OAuth attempt.
-Concurrent claims are protected by the database, not only by an earlier lookup.
-
-LOGIN states have no local owner; LINK states require one. The migration adds a
-database check for that rule and cascades pending states when their user is
-deleted. Login and link use different cookies and reject each other's states.
-There is no Bearer guard on the callback because normal browser redirects do not
-carry your application's Authorization header. Its protection is the previously
-authenticated, expiring, browser-bound, single-use state.
-
-## Keep these values separate when reading the code
-
-| Value | What it does |
-| --- | --- |
-| OAuth `state` | Identifies the temporary login attempt sent through Discord. |
-| Browser cookie secret | Binds that attempt to the browser that started it. |
-| Authorization `code` | Lets our backend obtain a Discord access token after authorization. |
-| Discord access token | Lets our backend request the user's Discord profile. |
-| Our access token | Authenticates requests to our application's protected endpoints. |
-| Our refresh token | Lets the client obtain a new pair of our application tokens through our refresh endpoint. |
-
-Login and linking have separate browser cookies. Starting another attempt of the
-same purpose replaces that purpose's cookie, so only the latest can complete.
+- **`state`** says "this callback belongs to a flow we started."
+- **The cookie** says "and it's this browser that started it."
+- **The DB row** ties the two together; the atomic delete succeeds only if both match the *same* row, within expiry, with the right purpose and owner.
+- **Discord** never learns anything about your sessions, cookies or JWTs. It only knows a user said yes to an app and it issued a code.
+- **Only after** the state is consumed does the server-to-server exchange happen (code → token → profile), and only then does the controller decide: login, register, or link.

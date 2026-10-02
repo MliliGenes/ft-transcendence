@@ -7,9 +7,12 @@ export class RegisterDto {
   })
   username: string;
 
-  @IsEmail({}, {
-    message: 'Enter a valid email address, such as name@example.com.',
-  })
+  @IsEmail(
+    {},
+    {
+      message: 'Enter a valid email address, such as name@example.com.',
+    },
+  )
   email: string;
 
   @IsString({ message: 'Password is required and must be a text value.' })

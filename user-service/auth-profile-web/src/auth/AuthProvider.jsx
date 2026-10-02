@@ -113,6 +113,79 @@ export function AuthProvider({ children, initialNotice }) {
     }
   };
 
+  const changePassword = async (values) => {
+    if (mutation.current)
+      throw new Error('Please wait for your current change to finish.');
+    mutation.current = true;
+    setMutating(true);
+    const key = sessionStore.read()?.sessionKey;
+    try {
+      await api.request('/accounts/me/password', {
+        method: 'PATCH',
+        json: values,
+      });
+      if (!key || sessionStore.read()?.sessionKey !== key)
+        throw new ApiError('Your session changed. Please sign in again.', 401);
+    } finally {
+      mutation.current = false;
+      setMutating(false);
+    }
+  };
+
+  const setPassword = async (values) => {
+    if (mutation.current)
+      throw new Error('Please wait for your current change to finish.');
+    mutation.current = true;
+    setMutating(true);
+    const key = sessionStore.read()?.sessionKey;
+    try {
+      await api.request('/accounts/me/password', {
+        method: 'POST',
+        json: values,
+      });
+      if (!key || sessionStore.read()?.sessionKey !== key)
+        throw new ApiError('Your session changed. Please sign in again.', 401);
+      setProfile((current) => current && { ...current, hasPassword: true });
+    } finally {
+      mutation.current = false;
+      setMutating(false);
+    }
+  };
+
+  const unlinkDiscord = async () => {
+    if (mutation.current)
+      throw new Error('Please wait for your current change to finish.');
+    mutation.current = true;
+    setMutating(true);
+    const key = sessionStore.read()?.sessionKey;
+    try {
+      await api.request('/auth/discord/link', { method: 'DELETE' });
+      if (!key || sessionStore.read()?.sessionKey !== key)
+        throw new ApiError('Your session changed. Please sign in again.', 401);
+      setProfile((current) => current && { ...current, hasDiscord: false });
+    } finally {
+      mutation.current = false;
+      setMutating(false);
+    }
+  };
+
+  const unlinkGithub = async () => {
+    if (mutation.current)
+      throw new Error('Please wait for your current change to finish.');
+    mutation.current = true;
+    setMutating(true);
+    const key = sessionStore.read()?.sessionKey;
+    try {
+      await api.request('/auth/github/link', { method: 'DELETE' });
+      if (!key || sessionStore.read()?.sessionKey !== key)
+        throw new ApiError('Your session changed. Please sign in again.', 401);
+      setProfile((current) => current && { ...current, hasGithub: false });
+    } finally {
+      mutation.current = false;
+      setMutating(false);
+    }
+  };
+
   const updateAccount = async (path, options) => {
     if (mutation.current)
       throw new Error('Please wait for your current change to finish.');
@@ -144,6 +217,10 @@ export function AuthProvider({ children, initialNotice }) {
         signOut,
         restore,
         updateAccount,
+        changePassword,
+        setPassword,
+        unlinkDiscord,
+        unlinkGithub,
         mutating,
         revision,
       }}

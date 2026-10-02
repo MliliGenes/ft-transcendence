@@ -1,8 +1,10 @@
 import {
   Controller,
+  Delete,
   Get,
   Header,
   HttpCode,
+  HttpStatus,
   HttpException,
   Post,
   Req,
@@ -29,7 +31,10 @@ export class DiscordController {
   @Get()
   @Header('Cache-Control', 'no-store')
   @Header('Referrer-Policy', 'no-referrer')
-  async login(@Req() request: Request, @Res() response: Response): Promise<void> {
+  async login(
+    @Req() request: Request,
+    @Res() response: Response,
+  ): Promise<void> {
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('Referrer-Policy', 'no-referrer');
     try {
@@ -56,6 +61,14 @@ export class DiscordController {
     };
   }
 
+  @Delete('link')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AccessTokenGuard)
+  @Header('Cache-Control', 'no-store')
+  async unlink(@Req() request: AuthenticatedRequest): Promise<void> {
+    await this.auth.unlinkDiscord(request.user.sub);
+  }
+
   @Get('link/callback')
   @Header('Cache-Control', 'no-store')
   @Header('Referrer-Policy', 'no-referrer')
@@ -65,17 +78,17 @@ export class DiscordController {
   ) {
     try {
       const { userId, profile } = await this.discord.authenticateLink(
-      request,
-      response,
-    );
-    const result = await this.auth.linkDiscord(userId, profile);
-    if (request.headers.accept?.includes('text/html')) {
-      const redirect = this.frontendUrl();
-      redirect.hash = new URLSearchParams({
-        providerLinked: 'discord',
-      }).toString();
-      return response.redirect(redirect.toString());
-    }
+        request,
+        response,
+      );
+      const result = await this.auth.linkDiscord(userId, profile);
+      if (request.headers.accept?.includes('text/html')) {
+        const redirect = this.frontendUrl();
+        redirect.hash = new URLSearchParams({
+          providerLinked: 'discord',
+        }).toString();
+        return response.redirect(redirect.toString());
+      }
       return result;
     } catch (error) {
       return this.oauthError(error, request, response, 'link');
@@ -91,15 +104,15 @@ export class DiscordController {
   ) {
     try {
       const profile = await this.discord.authenticate(request, response);
-    const tokens = await this.auth.loginWithDiscord(profile);
-    if (request.headers.accept?.includes('text/html')) {
-      const redirect = this.frontendUrl();
-      redirect.hash = new URLSearchParams({
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      }).toString();
-      return response.redirect(redirect.toString());
-    }
+      const tokens = await this.auth.loginWithDiscord(profile);
+      if (request.headers.accept?.includes('text/html')) {
+        const redirect = this.frontendUrl();
+        redirect.hash = new URLSearchParams({
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        }).toString();
+        return response.redirect(redirect.toString());
+      }
       return tokens;
     } catch (error) {
       return this.oauthError(error, request, response, 'login');
@@ -114,13 +127,20 @@ export class DiscordController {
   ): void {
     if (!request.headers.accept?.includes('text/html')) throw error;
     const status = error instanceof HttpException ? error.getStatus() : 500;
-    const code = status === 409 ? 'conflict'
-      : status === 401 ? 'authorization'
-      : status === 503 ? 'configuration'
-      : 'unavailable';
+    const code =
+      status === 409
+        ? 'conflict'
+        : status === 401
+          ? 'authorization'
+          : status === 503
+            ? 'configuration'
+            : 'unavailable';
     const redirect = this.frontendUrl();
     // Only stable error codes reach the browser; provider responses stay private.
-    redirect.hash = new URLSearchParams({ oauthError: code, oauthFlow: flow }).toString();
+    redirect.hash = new URLSearchParams({
+      oauthError: code,
+      oauthFlow: flow,
+    }).toString();
     response.redirect(redirect.toString());
   }
 

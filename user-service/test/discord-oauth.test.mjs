@@ -132,6 +132,14 @@ test('Discord authorization-code login', async (t) => {
         Object.assign(user, data);
         return safe(user);
       },
+      updateMany: async ({ where, data }) => {
+        const user = users.get(where.id);
+        assert.deepEqual(where.OR, [{ avatarUrl: null }, { avatarUrl: '' }]);
+        if (!user || (user.avatarUrl != null && user.avatarUrl !== ''))
+          return { count: 0 };
+        Object.assign(user, data);
+        return { count: 1 };
+      },
     },
     refreshToken: {
       create: async ({ data }) => {
@@ -153,6 +161,27 @@ test('Discord authorization-code login', async (t) => {
   t.after(() => app.close());
   await app.init();
   const server = app.getHttpServer();
+  await t.test(
+    'browser callback errors return safe codes to the frontend',
+    async () => {
+      for (const flow of ['login', 'link']) {
+        const route =
+          flow === 'link'
+            ? '/auth/discord/link/callback'
+            : '/auth/discord/callback';
+        const result = await request(server)
+          .get(route)
+          .set('Accept', 'text/html')
+          .expect(302);
+        const redirect = new URL(result.headers.location);
+        assert.equal(redirect.origin, 'http://localhost:5173');
+        const params = new URLSearchParams(redirect.hash.slice(1));
+        assert.equal(params.get('oauthError'), 'authorization');
+        assert.equal(params.get('oauthFlow'), flow);
+        assert.equal(params.has('accessToken'), false);
+      }
+    },
+  );
   t.mock.method(globalThis, 'fetch', async (url, init) => {
     networkCalls++;
     assert.ok(init.signal);
@@ -298,6 +327,34 @@ test('Discord authorization-code login', async (t) => {
       assert.equal(users.size, size);
       assert.equal(stored.role, 'SUPERADMIN');
       assert.notEqual(sessions.at(-1).sessionId, sessions.at(-2).sessionId);
+    },
+  );
+  await t.test(
+    'returning Discord login fills only an unset avatar URL',
+    async () => {
+      const auth = module.get(AuthService);
+      const stored = users.get(localUser.id);
+      const profile = {
+        id: '223456789012345678',
+        avatarUrl:
+          'https://cdn.discordapp.com/avatars/223456789012345678/avatar.png',
+      };
+      for (const unset of [null, '']) {
+        stored.avatarUrl = unset;
+        await auth.loginWithDiscord(profile);
+        assert.equal(stored.avatarUrl, profile.avatarUrl);
+      }
+      for (const existing of [
+        '/accounts/me/avatar',
+        'https://example.com/avatar.png',
+      ]) {
+        stored.avatarUrl = existing;
+        await auth.loginWithDiscord(profile);
+        assert.equal(stored.avatarUrl, existing);
+      }
+      stored.avatarUrl = null;
+      await auth.loginWithDiscord({ ...profile, avatarUrl: null });
+      assert.equal(stored.avatarUrl, null);
     },
   );
   await t.test(

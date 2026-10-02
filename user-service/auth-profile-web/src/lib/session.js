@@ -21,7 +21,6 @@ export function createSessionStore(storage) {
       raw = storage.getItem(TOKEN_KEY);
     } catch {
       persistent = false;
-      try { storage.removeItem(TOKEN_KEY); } catch { /* Storage is unavailable. */ }
       return memory;
     }
     try {
@@ -45,6 +44,11 @@ export function createSessionStore(storage) {
       else storage.removeItem(TOKEN_KEY);
     } catch {
       persistent = false;
+      try {
+        storage.removeItem(TOKEN_KEY);
+      } catch {
+        /* Storage is unavailable. */
+      }
     }
     listeners.forEach((listener) => listener(value, reason));
     return value;
@@ -97,16 +101,19 @@ export function consumeOAuthReturn(location, history, store) {
   const hasTokens = fragment.has('accessToken') || fragment.has('refreshToken');
   const linked = fragment.get('providerLinked');
   const error = fragment.get('oauthError');
+  const provider =
+    fragment.get('oauthProvider') === 'github' ? 'GitHub' : 'Discord';
   if (!hasTokens && !linked && !error) return null;
   history.replaceState(null, '', location.pathname + location.search);
   if (error) {
     const messages = {
-      conflict: fragment.get('oauthFlow') === 'link'
-        ? 'This Discord account cannot be connected. It is already linked elsewhere, or you have connected a different Discord account.'
-        : 'That email is already in use. Sign in with your existing method, then connect Discord from your profile.',
-      authorization: 'Discord authorization was cancelled, expired or could not be verified. Please try again.',
-      configuration: 'Discord connection is not available right now. Please try another sign-in method.',
-      unavailable: 'Discord connection could not be completed. Please try again later.',
+      conflict:
+        fragment.get('oauthFlow') === 'link'
+          ? `This ${provider} account cannot be connected. It is already linked elsewhere, or you have connected a different ${provider} account.`
+          : `That email is already in use. Sign in with your existing method, then connect ${provider} from your profile.`,
+      authorization: `${provider} authorization was cancelled, expired or could not be verified. Please try again.`,
+      configuration: `${provider} connection is not available right now. Please try another sign-in method.`,
+      unavailable: `${provider} connection could not be completed. Please try again later.`,
     };
     return { type: 'error', text: messages[error] || messages.unavailable };
   }
@@ -123,7 +130,10 @@ export function consumeOAuthReturn(location, history, store) {
     store.replace(tokens); // A fresh callback always takes precedence over an old session.
     return { type: 'success', text: 'You are signed in.' };
   }
-  return linked === 'discord'
-    ? { type: 'success', text: 'Discord connected successfully.' }
+  return linked
+    ? {
+        type: 'success',
+        text: `${linked === 'github' ? 'GitHub' : 'Discord'} connected successfully.`,
+      }
     : null;
 }

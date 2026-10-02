@@ -29,6 +29,7 @@ test('GET /accounts/me uses the verified access-token identity', async (t) => {
     status: 'OFFLINE',
     createdAt: '2026-09-28T00:00:00.000Z',
     passwordHash: await bcrypt.hash('test password', 12),
+    authProviders: [{ provider: 'DISCORD' }],
   };
   let lookups = 0;
   let lastPage;
@@ -108,6 +109,8 @@ test('GET /accounts/me uses the verified access-token identity', async (t) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        hasPassword: true,
+        hasDiscord: true,
       });
       assert.equal(response.headers['cache-control'], 'no-store');
       const withQuery = await request(server)

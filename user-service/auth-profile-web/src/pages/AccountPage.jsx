@@ -3,6 +3,8 @@ import { ProfileImage } from '../components/ProfileImage.jsx';
 import { ProfileForm } from '../components/ProfileForm.jsx';
 import { ImageUpload } from '../components/ImageUpload.jsx';
 import { Connections } from '../components/Connections.jsx';
+import { PasswordForm } from '../components/PasswordForm.jsx';
+import { SetPasswordForm } from '../components/SetPasswordForm.jsx';
 
 export function AccountPage() {
   const { profile, revision } = useAuth();
@@ -49,6 +51,7 @@ export function AccountPage() {
         </div>
       </section>
       <Connections />
+      {profile.hasPassword ? <PasswordForm /> : <SetPasswordForm />}
     </div>
   );
 }
