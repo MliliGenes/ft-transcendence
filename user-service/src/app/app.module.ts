@@ -6,7 +6,6 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AccountsModule } from '../accounts/accounts.module.js';
 import { SuperadminModule } from '../superadmin/superadmin.module.js';
-import { SocialModule } from '../social/social.module.js';
 
 @Module({
   imports: [
@@ -15,7 +14,6 @@ import { SocialModule } from '../social/social.module.js';
     AuthModule,
     AccountsModule,
     SuperadminModule,
-    SocialModule,
   ],
   controllers: [AppController],
   providers: [AppService],

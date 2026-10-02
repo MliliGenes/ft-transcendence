@@ -422,8 +422,8 @@ curl -i -X POST http://localhost:3000/auth/logout \
 | ------ | ---------------------- | ----------------------------------------------------------- |
 | GET    | /auth/discord          | Start Discord authorization (302 redirect)                  |
 | GET    | /auth/discord/callback | Validate callback, log in/register, return token JSON (200) |
-| POST   | /auth/discord/link     | Start linking for the authenticated user (200 URL JSON)     |
-| GET    | .../link/callback      | Complete linking (200 JSON or 302 frontend redirect)        |
+| POST   | /auth/discord/link | Start linking for the authenticated user (200 URL JSON) |
+| GET    | /auth/discord/link/callback | Complete linking (200 JSON or 302 frontend redirect) |
 
 GitHub exposes the same login and linking routes under `/auth/github`. Its
 callback obtains the user's primary verified email through GitHub's `user:email`
