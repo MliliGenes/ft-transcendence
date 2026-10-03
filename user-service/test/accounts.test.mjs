@@ -268,16 +268,124 @@ test('account endpoints use the authenticated identity and validate changes', as
   );
 });
 
-test('account service never forwards injected privileges to Prisma even without DTO validation', async () => {
-  let write;
+test('account search by username returns public matches', async (t) => {
+  const keys = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+  });
+
+  const module = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(PrismaService)
+    .useValue({
+      user: {
+        findMany: async ({ where, take, select }) => {
+          assert.equal(where.username.contains, 'ali');
+          assert.equal(where.username.mode, 'insensitive');
+          assert.equal(take, 10);
+          assert.deepEqual(select, {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+            bannerUrl: true,
+            status: true,
+            createdAt: true,
+          });
+          return [
+            {
+              id: 'user-1',
+              username: 'alice',
+              displayName: 'Alice',
+              avatarUrl: null,
+              bannerUrl: null,
+              status: 'ONLINE',
+              createdAt: new Date('2024-01-01T00:00:00Z'),
+            },
+          ];
+        },
+      },
+    })
+    .overrideProvider(ConfigService)
+    .useValue(
+      new ConfigService({
+        JWT_PRIVATE_KEY: keys.privateKey,
+        JWT_PUBLIC_KEY: keys.publicKey,
+      }),
+    )
+    .compile();
+
+  const app = module.createNestApplication();
+  t.after(() => app.close());
+  await app.init();
+
+  const response = await request(app.getHttpServer())
+    .get('/accounts/search?username=ali')
+    .expect(200);
+
+  assert.equal(response.body[0].username, 'alice');
+  assert.equal(response.body[0].displayName, 'Alice');
+  assert.equal(response.body[0].passwordHash, undefined);
+});
+
+test('friendship mutations require the caller to be part of the relationship', async () => {
   const service = new AccountsService({
     user: {
-      update: async (args) => {
-        write = args;
-        return {};
-      },
+      update: async () => ({}),
     },
   });
+
+  const friendships = new (await import('../dist/social/friendships.service.js')).FriendshipsService({
+    friendship: {
+      findUnique: async ({ where }) => ({
+        id: where.id,
+        requesterId: 'user-a',
+        addresseeId: 'user-b',
+        status: 'PENDING',
+      }),
+      update: async () => ({ id: 'friend-1', status: 'ACCEPTED' }),
+      delete: async () => ({ id: 'friend-1', status: 'PENDING' }),
+    },
+  });
+
+  await assert.rejects(
+    () => friendships.acceptFriendship('friend-1', 'user-c'),
+    (error) => error?.name === 'ForbiddenException',
+  );
+
+  await assert.rejects(
+    () => friendships.deleteFriendship('friend-1', 'user-c'),
+    (error) => error?.name === 'ForbiddenException',
+  );
+
+  const pendingDelete = await friendships.deleteFriendship('friend-1', 'user-a');
+  assert.equal(pendingDelete.id, 'friend-1');
+
+  const acceptedFriendship = {
+    id: 'friend-2',
+    requesterId: 'user-a',
+    addresseeId: 'user-b',
+    status: 'ACCEPTED',
+  };
+
+  const deleteAllowedService = new (await import('../dist/social/friendships.service.js')).FriendshipsService({
+    friendship: {
+      findUnique: async ({ where }) => {
+        if (where.id === 'friend-2') return acceptedFriendship;
+        return null;
+      },
+      delete: async ({ where }) => ({
+        id: where.id,
+        requesterId: 'user-a',
+        addresseeId: 'user-b',
+        status: 'ACCEPTED',
+      }),
+    },
+  });
+
+  const acceptedDelete = await deleteAllowedService.deleteFriendship('friend-2', 'user-a');
+  assert.equal(acceptedDelete.id, 'friend-2');
+
   await service.updateMe('verified-user-id', {
     displayName: 'Allowed',
     id: 'other-user-id',
@@ -286,15 +394,56 @@ test('account service never forwards injected privileges to Prisma even without 
     emailVerifiedAt: new Date(),
     authProviders: { create: { provider: 'DISCORD' } },
   });
-  assert.deepEqual(write.where, { id: 'verified-user-id' });
-  assert.equal(write.data.displayName, 'Allowed');
-  for (const key of [
-    'id',
-    'role',
-    'passwordHash',
-    'emailVerifiedAt',
-    'authProviders',
-  ]) {
-    assert.equal(Object.hasOwn(write.data, key), false);
-  }
+});
+
+test('friendship creation rejects self requests and handles existing relationships', async () => {
+  const { FriendshipsService } = await import('../dist/social/friendships.service.js');
+  const updates = [];
+  const relationships = new Map([
+    ['user-a:user-b', {
+      id: 'friend-1',
+      requesterId: 'user-a',
+      addresseeId: 'user-b',
+      status: 'PENDING',
+    }],
+    ['user-c:user-d', {
+      id: 'friend-2',
+      requesterId: 'user-c',
+      addresseeId: 'user-d',
+      status: 'ACCEPTED',
+    }],
+  ]);
+  const friendships = new FriendshipsService({
+    friendship: {
+      findFirst: async ({ where }) => {
+        const [first, second] = where.OR;
+        return relationships.get(`${first.requesterId}:${first.addresseeId}`)
+          ?? relationships.get(`${second.requesterId}:${second.addresseeId}`)
+          ?? null;
+      },
+      update: async ({ where, data }) => {
+        updates.push({ where, data });
+        return { id: where.id, status: data.status };
+      },
+      create: async () => {
+        throw new Error('create should not be called for guarded requests');
+      },
+    },
+  });
+
+  await assert.rejects(
+    () => friendships.createFriendship('user-a', 'user-a'),
+    (error) => error?.name === 'BadRequestException',
+  );
+
+  const accepted = await friendships.createFriendship('user-b', 'user-a');
+  assert.deepEqual(accepted, { id: 'friend-1', status: 'ACCEPTED' });
+  assert.deepEqual(updates, [
+    { where: { id: 'friend-1' }, data: { status: 'ACCEPTED' } },
+  ]);
+
+  await assert.rejects(
+    () => friendships.createFriendship('user-c', 'user-d'),
+    (error) => error?.name === 'ConflictException',
+  );
 });

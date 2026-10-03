@@ -100,6 +100,25 @@ export class AccountsService {
     return { users, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
+  async searchUsersByUsername(username: string) {
+    const term = username?.trim();
+    if (!term) {
+      throw new BadRequestException('Username query is required');
+    }
+
+    return this.prisma.user.findMany({
+      where: {
+        username: {
+          contains: term,
+          mode: 'insensitive',
+        },
+      },
+      take: 10,
+      orderBy: [{ username: 'asc' }, { id: 'asc' }],
+      select: publicProfileSelect,
+    });
+  }
+
   async getUser(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },

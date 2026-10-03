@@ -115,6 +115,11 @@ export class AccountsController {
     return this.accountsService.getUsers(query);
   }
 
+  @Get('search')
+  searchUsers(@Query('username') username: string) {
+    return this.accountsService.searchUsersByUsername(username);
+  }
+
   // Keep the literal /me route above this parameter route.
   @Get(':id')
   getUser(@Param('id', new ParseUUIDPipe()) id: string) {
