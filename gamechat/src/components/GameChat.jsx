@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import "../styles/GameChat.css";
 import { MessageCircle, X } from "lucide-react";
 
-function GameChat() { /* is a React component. */ 
+function GameChat({ currentUser, accessToken }) {/* is a React component. */ 
     const [isOpen, setIsOpen] = useState(false);
     const [hasUnread, setHasUnread] = useState(false);
     const [messages, setMessages] = useState([]);
@@ -14,9 +14,7 @@ function GameChat() { /* is a React component. */
     const shouldReconnectRef = useRef(true);
     const isOpenRef = useRef(false);
     const [matchEnded, setMatchEnded] = useState(false);
-    const [username] = useState(() => {
-        return sessionStorage.getItem("chatUsername") || "Eva";
-    });
+    const username = currentUser?.username;
 
     useEffect(() => {
         shouldReconnectRef.current = true;
@@ -25,7 +23,8 @@ function GameChat() { /* is a React component. */
         function connect() {
             if (!isActive || !shouldReconnectRef.current) return;
 
-            const socket = new WebSocket("ws://localhost:9090");
+            const wsUrl = import.meta.env.VITE_CHAT_WS_URL;
+            const socket = new WebSocket(wsUrl);
             isRegisteredRef.current = false;
             socketRef.current = socket;
 
@@ -37,25 +36,42 @@ function GameChat() { /* is a React component. */
 
                 console.log("Connected to chat");
 
-                socket.send(JSON.stringify({
+                const joinMessage = accessToken
+                ? {
+                    event: "join",
+                    accessToken
+                }
+                : {
                     event: "join",
                     username
-                }));
-            };
+                };
+
+            socket.send(JSON.stringify(joinMessage));
+                        };
 
             socket.onmessage = event => {
-                const data = JSON.parse(event.data);
-                if (!isActive || socketRef.current !== socket) {
-                        return;
-                    }
-
+                let data;
+                try{
+                    data = JSON.parse(event.data);
+                } catch (error){
+                    console.error("Recieved invalid data from chat server");
+                    return;
+                }
+                if (!isActive || socketRef.current !== socket) return;
                 if (data.event === "error") {
                     console.error("Chat server:", data.message);
 
-                    if (data.message === "This player is already connected.") {
+                    const fatalErrors = [
+                        "This player is already connected.",
+                        "Authentication failed.",
+                        "Match assignment is not configured yet."
+                    ];
+
+                    if (fatalErrors.includes(data.message)) {
                         shouldReconnectRef.current = false;
                         socket.close();
                     }
+
                     return;
                 }
 
@@ -92,10 +108,12 @@ function GameChat() { /* is a React component. */
                     return;
                 }
 
-                setMessages(previous => [...previous, data]);
+                if (data.type === "team" || data.type === "all") {
+                    setMessages(previous => [...previous, data]);
 
-                if (!isOpenRef.current) {
-                    setHasUnread(true);
+                    if (!isOpenRef.current) {
+                        setHasUnread(true);
+                    }
                 }
             };
 
@@ -127,7 +145,7 @@ function GameChat() { /* is a React component. */
 
             socketRef.current?.close();
         };
-    }, [username]);
+    }, [username, accessToken]);
 
     function toggleChat() {
         const nextIsOpen = !isOpenRef.current;
@@ -174,8 +192,10 @@ function GameChat() { /* is a React component. */
             return;
         }
 
-        socketRef.current.send(JSON.stringify(newMessage));
-
+        socketRef.current.send(JSON.stringify({
+            type: newMessage.type,
+            message: newMessage.message
+        }));;
         setMessages(previous => [...previous, newMessage]);
     }
 
