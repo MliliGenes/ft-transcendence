@@ -59,6 +59,7 @@ export class AuthService {
     const { tokens, refreshTokenData } = await this.createTokenPair(userId);
 
     try {
+      // TODO(auth): scheduled cleanup should remove this account after one hour if it remains unverified.
       const user = await this.prisma.user.create({
         data: {
           id: userId,
