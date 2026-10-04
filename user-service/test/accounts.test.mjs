@@ -413,6 +413,7 @@ test('friendship creation rejects self requests and handles existing relationshi
       status: 'ACCEPTED',
     }],
   ]);
+  let targetExists = true;
   const friendships = new FriendshipsService({
     friendship: {
       findFirst: async ({ where }) => {
@@ -429,6 +430,24 @@ test('friendship creation rejects self requests and handles existing relationshi
         throw new Error('create should not be called for guarded requests');
       },
     },
+    $transaction: async (work) =>
+      work({
+        $queryRaw: async () => [],
+        user: {
+          findUnique: async () => (targetExists ? { id: 'user-a' } : null),
+        },
+        friendship: {
+          findFirst: async ({ where }) => {
+            const [first, second] = where.OR;
+            return relationships.get(`${first.requesterId}:${first.addresseeId}`)
+              ?? relationships.get(`${second.requesterId}:${second.addresseeId}`)
+              ?? null;
+          },
+          create: async () => {
+            throw new Error('create should not be called for guarded requests');
+          },
+        },
+      }),
   });
 
   await assert.rejects(
@@ -436,11 +455,18 @@ test('friendship creation rejects self requests and handles existing relationshi
     (error) => error?.name === 'BadRequestException',
   );
 
-  const accepted = await friendships.createFriendship('user-b', 'user-a');
-  assert.deepEqual(accepted, { id: 'friend-1', status: 'ACCEPTED' });
-  assert.deepEqual(updates, [
-    { where: { id: 'friend-1' }, data: { status: 'ACCEPTED' } },
-  ]);
+  targetExists = false;
+  await assert.rejects(
+    () => friendships.createFriendship('user-a', 'missing-user'),
+    (error) => error?.name === 'NotFoundException',
+  );
+  targetExists = true;
+
+  await assert.rejects(
+    () => friendships.createFriendship('user-b', 'user-a'),
+    (error) => error?.name === 'ConflictException',
+  );
+  assert.deepEqual(updates, []);
 
   await assert.rejects(
     () => friendships.createFriendship('user-c', 'user-d'),

@@ -3,6 +3,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Req,
@@ -26,7 +27,10 @@ export class SocialController {
   ) {}
 
   @Post('friendships/:id')
-  createFriendship(@Req() request: GetFriendshipsRequest, @Param('id') id: string) {
+  createFriendship(
+    @Req() request: GetFriendshipsRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
     return this.friendshipsService.createFriendship(request.user.sub, id);
   }
 
@@ -48,7 +52,7 @@ export class SocialController {
   @Patch('friendships/:friendshipId/accept')
   acceptFriendship(
     @Req() request: GetFriendshipsRequest,
-    @Param('friendshipId') friendshipId: string,
+    @Param('friendshipId', new ParseUUIDPipe()) friendshipId: string,
   ) {
     return this.friendshipsService.acceptFriendship(
       friendshipId,
@@ -59,7 +63,7 @@ export class SocialController {
   @Patch('friendships/:friendshipId/reject')
   rejectFriendship(
     @Req() request: GetFriendshipsRequest,
-    @Param('friendshipId') friendshipId: string,
+    @Param('friendshipId', new ParseUUIDPipe()) friendshipId: string,
   ) {
     return this.friendshipsService.rejectFriendship(
       friendshipId,
@@ -70,7 +74,7 @@ export class SocialController {
   @Delete('friendships/:friendshipId')
   deleteFriendship(
     @Req() request: GetFriendshipsRequest,
-    @Param('friendshipId') friendshipId: string,
+    @Param('friendshipId', new ParseUUIDPipe()) friendshipId: string,
   ) {
     return this.friendshipsService.deleteFriendship(
       friendshipId,

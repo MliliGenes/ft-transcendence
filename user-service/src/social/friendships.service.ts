@@ -58,54 +58,37 @@ export class FriendshipsService {
       );
     }
 
-    const existingFriendship = await this.prisma.friendship.findFirst({
-      where: {
-        OR: [
-          {
-            requesterId: requesterId,
-            addresseeId: addresseeId,
-          },
-          {
-            requesterId: addresseeId,
-            addresseeId: requesterId,
-          },
-        ],
-      },
-      select: {
-        id: true,
-        requesterId: true,
-        addresseeId: true,
-        status: true,
-      },
-    });
-
-    if (existingFriendship) {
-      if (
-        existingFriendship.requesterId === addresseeId &&
-        existingFriendship.addresseeId === requesterId &&
-        existingFriendship.status === 'PENDING'
-      ) {
-        return this.prisma.friendship.update({
-          where: { id: existingFriendship.id },
-          data: { status: 'ACCEPTED' },
-          select: friendshipSelect,
-        });
+    return this.withUserPairLock(requesterId, addresseeId, async (tx) => {
+      const addressee = await tx.user.findUnique({
+        where: { id: addresseeId },
+        select: { id: true },
+      });
+      if (!addressee) {
+        throw new NotFoundException('User not found');
       }
 
-      throw new ConflictException(
-        existingFriendship.status === 'DECLINED'
-          ? 'This friendship request was declined'
-          : 'A friendship already exists between these users',
-      );
-    }
+      const existingFriendship = await tx.friendship.findFirst({
+        where: {
+          OR: [
+            { requesterId, addresseeId },
+            { requesterId: addresseeId, addresseeId: requesterId },
+          ],
+        },
+        select: { status: true },
+      });
 
-    return this.prisma.friendship.create({
-      data: {
-        requesterId,
-        addresseeId,
-        status: 'PENDING',
-      },
-      select: friendshipSelect,
+      if (existingFriendship) {
+        throw new ConflictException(
+          existingFriendship.status === 'DECLINED'
+            ? 'This friendship request was declined'
+            : 'A friendship already exists between these users',
+        );
+      }
+
+      return tx.friendship.create({
+        data: { requesterId, addresseeId, status: 'PENDING' },
+        select: friendshipSelect,
+      });
     });
   }
 
@@ -114,11 +97,13 @@ export class FriendshipsService {
       friendshipId,
       userId,
     );
-    return this.prisma.friendship.update({
-      where: { id: friendship.id },
-      data: { status: 'ACCEPTED' },
-      select: friendshipSelect,
-    });
+    if (friendship.addresseeId !== userId) {
+      throw new ForbiddenException(
+        'Only the addressee can accept a friendship request',
+      );
+    }
+
+    return this.respondToFriendship(friendship.id, userId, 'ACCEPTED');
   }
 
   async rejectFriendship(friendshipId: string, userId: string) {
@@ -126,11 +111,12 @@ export class FriendshipsService {
       friendshipId,
       userId,
     );
-    return this.prisma.friendship.update({
-      where: { id: friendship.id },
-      data: { status: 'DECLINED' },
-      select: friendshipSelect,
-    });
+    if (friendship.addresseeId !== userId) {
+      throw new ForbiddenException(
+        'Only the addressee can reject a friendship request',
+      );
+    }
+    return this.respondToFriendship(friendship.id, userId, 'DECLINED');
   }
 
   async deleteFriendship(friendshipId: string, userId: string) {
@@ -160,6 +146,51 @@ export class FriendshipsService {
         addresseeId: userId,
         status: 'PENDING',
       },
+      select: friendshipSelect,
+    });
+  }
+
+  private async withUserPairLock<T>(
+    firstUserId: string,
+    secondUserId: string,
+    work: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    const [first, second] = [firstUserId, secondUserId].sort();
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT "id" FROM "User" WHERE "id" = ${first} FOR UPDATE
+      `;
+      await tx.$queryRaw`
+        SELECT "id" FROM "User" WHERE "id" = ${second} FOR UPDATE
+      `;
+
+      return work(tx);
+    });
+  }
+
+  private async respondToFriendship(
+    friendshipId: string,
+    userId: string,
+    status: 'ACCEPTED' | 'DECLINED',
+  ) {
+    const result = await this.prisma.friendship.updateMany({
+      where: {
+        id: friendshipId,
+        addresseeId: userId,
+        status: 'PENDING',
+      },
+      data: { status },
+    });
+
+    if (result.count === 0) {
+      throw new BadRequestException(
+        'No pending friendship request for you with this ID',
+      );
+    }
+
+    return this.prisma.friendship.findUniqueOrThrow({
+      where: { id: friendshipId },
       select: friendshipSelect,
     });
   }
