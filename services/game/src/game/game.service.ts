@@ -73,10 +73,18 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private broadcastRoomUpdate(roomId: string, room: PrivateRoom, members: PrivateRoomMember[]): void {
+  private emitLobbyHint(event: string, payload: unknown): void {
     for (const listener of this.lobbyListeners) {
-      listener("lobby.roomUpdated", { roomId, room, members });
+      try {
+        listener(event, payload);
+      } catch (error) {
+        console.error(`[lobby] live hint listener failed for ${event}:`, error);
+      }
     }
+  }
+
+  private broadcastRoomUpdate(roomId: string, room: PrivateRoom, members: PrivateRoomMember[]): void {
+    this.emitLobbyHint("lobby.roomUpdated", { roomId, room, members });
   }
 
   private checkLobbyRateLimit(userId: string): void {
@@ -269,8 +277,17 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   async joinQueue(userId: string, mode: MatchMode): Promise<QueueEntry> {
     this.checkLobbyRateLimit(userId);
     const entry = await this.lobbyStore.joinQueue(userId, mode);
-    await this.triggerMatchmaking(mode);
-    return (await this.lobbyStore.queueStatus(userId)) ?? entry;
+    try {
+      await this.triggerMatchmaking(mode);
+    } catch (error) {
+      console.error("[lobby] failed to trigger matchmaking after joinQueue:", error);
+    }
+    try {
+      return (await this.lobbyStore.queueStatus(userId)) ?? entry;
+    } catch (error) {
+      console.error("[lobby] failed to refresh queue status after joinQueue:", error);
+      return entry;
+    }
   }
 
   async cancelQueue(userId: string): Promise<{ cancelled: boolean; matched: boolean; matchId?: string }> {
@@ -288,8 +305,13 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
       this.engine.createMatch(input, save),
     );
     if (result) {
-      for (const listener of this.lobbyListeners) {
-        listener("lobby.queueMatched", { matchId: result.matchId, userIds: result.entries.map((e: QueueEntry) => e.userId) });
+      try {
+        this.emitLobbyHint("lobby.queueMatched", {
+          matchId: result.matchId,
+          userIds: result.entries.map((e: QueueEntry) => e.userId),
+        });
+      } catch (error) {
+        console.error("[lobby] failed to broadcast queueMatched hint:", error);
       }
     }
     return result;
@@ -303,16 +325,24 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   async joinPrivateRoom(userId: string, inviteCode: string): Promise<RoomWithMembers & { full: boolean }> {
     this.checkLobbyRateLimit(userId);
     const res = await this.lobbyStore.joinPrivateRoom(userId, inviteCode);
-    this.broadcastRoomUpdate(res.room.id, res.room, res.members);
+    try {
+      this.broadcastRoomUpdate(res.room.id, res.room, res.members);
+    } catch (error) {
+      console.error("[lobby] failed to broadcast room update after joinPrivateRoom:", error);
+    }
     return res;
   }
 
   async leavePrivateRoom(userId: string, roomId: string): Promise<{ left: boolean; closed: boolean }> {
     this.checkLobbyRateLimit(userId);
     const res = await this.lobbyStore.leavePrivateRoom(userId, roomId);
-    const updated = await this.lobbyStore.getRoomWithMembers(roomId);
-    if (updated) {
-      this.broadcastRoomUpdate(roomId, updated.room, updated.members);
+    try {
+      const updated = await this.lobbyStore.getRoomWithMembers(roomId);
+      if (updated) {
+        this.broadcastRoomUpdate(roomId, updated.room, updated.members);
+      }
+    } catch (error) {
+      console.error("[lobby] failed to broadcast room update after leavePrivateRoom:", error);
     }
     return res;
   }
@@ -320,14 +350,22 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   async setRoomMemberSide(userId: string, roomId: string, sideId: LobbySideId): Promise<RoomWithMembers> {
     this.checkLobbyRateLimit(userId);
     const res = await this.lobbyStore.setRoomMemberSide(userId, roomId, sideId);
-    this.broadcastRoomUpdate(roomId, res.room, res.members);
+    try {
+      this.broadcastRoomUpdate(roomId, res.room, res.members);
+    } catch (error) {
+      console.error("[lobby] failed to broadcast room update after setRoomMemberSide:", error);
+    }
     return res;
   }
 
   async setRoomMemberReady(userId: string, roomId: string, ready: boolean): Promise<RoomWithMembers> {
     this.checkLobbyRateLimit(userId);
     const res = await this.lobbyStore.setRoomMemberReady(userId, roomId, ready);
-    this.broadcastRoomUpdate(roomId, res.room, res.members);
+    try {
+      this.broadcastRoomUpdate(roomId, res.room, res.members);
+    } catch (error) {
+      console.error("[lobby] failed to broadcast room update after setRoomMemberReady:", error);
+    }
     return res;
   }
 
@@ -340,9 +378,17 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
       problems,
       (input, save) => this.engine.createMatch(input, save),
     );
-    const room = await this.lobbyStore.getRoomWithMembers(roomId);
-    for (const listener of this.lobbyListeners) {
-      listener("lobby.matchFound", { roomId, matchId, userIds: room!.members.map((member) => member.userId) });
+    try {
+      const room = await this.lobbyStore.getRoomWithMembers(roomId);
+      if (room) {
+        this.emitLobbyHint("lobby.matchFound", {
+          roomId,
+          matchId,
+          userIds: room.members.map((member) => member.userId),
+        });
+      }
+    } catch (error) {
+      console.error("[lobby] failed to broadcast matchFound hint after startPrivateRoom:", error);
     }
     return { matchId };
   }
