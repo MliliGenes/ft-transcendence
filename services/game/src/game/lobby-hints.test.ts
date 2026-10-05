@@ -102,7 +102,7 @@ describe("Lobby live hint isolation and committed command preservation", () => {
     expect(errorSpy).toHaveBeenCalled();
   });
 
-  it("preserves committed Leave and Start results when post-commit room lookup fails", async () => {
+  it("preserves committed Leave and Start results when hint delivery fails", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const host = `host-${Date.now()}`;
     const guest = `guest-${Date.now()}`;
@@ -111,26 +111,19 @@ describe("Lobby live hint isolation and committed command preservation", () => {
     const roomId = created.room.id;
     await game.joinPrivateRoom(guest, created.room.code);
 
-    // Make getRoomWithMembers fail on subsequent reads
-    const origGetRoom = (game as any).lobbyStore.getRoomWithMembers.bind((game as any).lobbyStore);
-    (game as any).lobbyStore.getRoomWithMembers = async (rId: string) => {
-      throw new Error("injected post-commit read failure");
-    };
+    game.onLobbyEvent(() => {
+      throw new Error("injected hint failure");
+    });
 
     // Leave must still succeed
     const leaveResult = await game.leavePrivateRoom(guest, roomId);
     expect(leaveResult).toEqual({ left: true, closed: false });
+    expect(errorSpy).toHaveBeenCalled();
 
-    // Restore getRoom to set up Start
-    (game as any).lobbyStore.getRoomWithMembers = origGetRoom;
+    errorSpy.mockClear();
     await game.joinPrivateRoom(guest, created.room.code);
     await game.setRoomMemberReady(guest, roomId, true);
     await game.setRoomMemberReady(host, roomId, true);
-
-    // Injected failure for Start's post-commit read
-    (game as any).lobbyStore.getRoomWithMembers = async (rId: string) => {
-      throw new Error("injected post-commit read failure");
-    };
 
     const startResult = await game.startPrivateRoom(host, roomId);
     expect(startResult.matchId).toBeDefined();
@@ -141,7 +134,7 @@ describe("Lobby live hint isolation and committed command preservation", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const user = `q-user-${Date.now()}`;
 
-    // Force triggerMatchmaking or queueStatus to fail
+    const originalQueueStatus = (game as any).lobbyStore.queueStatus;
     (game as any).lobbyStore.queueStatus = async () => {
       throw new Error("injected queueStatus failure");
     };
@@ -150,6 +143,9 @@ describe("Lobby live hint isolation and committed command preservation", () => {
     expect(entry.userId).toBe(user);
     expect(entry.mode).toBe("1v1");
     expect(errorSpy).toHaveBeenCalled();
+
+    (game as any).lobbyStore.queueStatus = originalQueueStatus;
+    await game.cancelQueue(user);
   });
 
   it("isolates throwing listener during queue matchmaking", async () => {

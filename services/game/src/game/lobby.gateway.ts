@@ -1,3 +1,4 @@
+import { OnApplicationBootstrap, OnModuleDestroy } from "@nestjs/common";
 import {
   ConnectedSocket,
   MessageBody,
@@ -20,20 +21,27 @@ function roomChannel(roomId: string): string {
 }
 
 @WebSocketGateway({ namespace: "/lobby", cors: { origin: true } })
-export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect, OnApplicationBootstrap, OnModuleDestroy {
   @WebSocketServer()
   server!: Namespace;
 
-  constructor(private readonly game: GameService) {
-    this.game.onLobbyEvent((event, payload) => {
+  private disposeLobbySub?: () => void;
+
+  constructor(private readonly game: GameService) {}
+
+  onApplicationBootstrap(): void {
+    this.disposeLobbySub = this.game.onLobbyEvent((event, payload) => {
       if (event === "lobby.roomUpdated") {
-        const p = payload as { roomId: string; room: unknown; members: Array<{ userId: string }> };
+        const p = payload as { roomId: string; room: unknown; members: Array<{ userId: string }>; audienceUserIds?: string[] };
         if (p?.roomId) {
-          this.server?.to(p.members.map((member) => userChannel(member.userId))).emit("lobby.roomUpdated", p);
+          const audience = p.audienceUserIds ?? p.members?.map((member) => member.userId) ?? [];
+          if (audience.length > 0) {
+            this.server?.to(audience.map(userChannel)).emit("lobby.roomUpdated", p);
+          }
         }
       } else if (event === "lobby.matchFound") {
         const p = payload as { roomId: string; matchId: string; userIds: string[] };
-        if (p?.roomId) {
+        if (p?.roomId && Array.isArray(p.userIds)) {
           this.server?.to(p.userIds.map(userChannel)).emit("lobby.matchFound", { roomId: p.roomId, matchId: p.matchId });
         }
       } else if (event === "lobby.queueMatched") {
@@ -45,6 +53,11 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
     });
+  }
+
+  onModuleDestroy(): void {
+    this.disposeLobbySub?.();
+    this.disposeLobbySub = undefined;
   }
 
   async handleConnection(client: Socket): Promise<void> {

@@ -12,8 +12,8 @@ import {
   testPrincipal,
   InMemoryLobbyStore,
   InMemoryMatchStore,
+  Lobby,
   RateLimitedError,
-  selectProblems,
   type AuthenticatedPrincipal,
   type MatchPersistence,
   type ILobbyStore,
@@ -38,9 +38,8 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   private engine!: ArenaEngine;
   private stores?: PostgresStores;
   private lobbyStore!: ILobbyStore;
+  private lobby!: Lobby;
   private readonly listeners = new Set<(event: string, matchId: string, payload: unknown) => void>();
-  private readonly lobbyListeners = new Set<(event: string, payload: unknown) => void>();
-  private readonly userActionTimes = new Map<string, number[]>();
   private readonly evaluationTelemetry = new InMemoryEvaluationTelemetry();
   private readonly matchSocketPresence: MatchSocketPresence;
   private graceTimer?: NodeJS.Timeout;
@@ -67,41 +66,7 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   }
 
   onLobbyEvent(listener: (event: string, payload: unknown) => void): () => void {
-    this.lobbyListeners.add(listener);
-    return () => {
-      this.lobbyListeners.delete(listener);
-    };
-  }
-
-  private emitLobbyHint(event: string, payload: unknown): void {
-    for (const listener of this.lobbyListeners) {
-      try {
-        listener(event, payload);
-      } catch (error) {
-        console.error(`[lobby] live hint listener failed for ${event}:`, error);
-      }
-    }
-  }
-
-  private broadcastRoomUpdate(roomId: string, room: PrivateRoom, members: PrivateRoomMember[]): void {
-    this.emitLobbyHint("lobby.roomUpdated", { roomId, room, members });
-  }
-
-  private checkLobbyRateLimit(userId: string): void {
-    const now = Date.now();
-    const windowMs = 10000;
-    const maxActions = 15;
-    let list = this.userActionTimes.get(userId);
-    if (!list) {
-      list = [];
-      this.userActionTimes.set(userId, list);
-    }
-    const recent = list.filter((t) => now - t < windowMs);
-    if (recent.length >= maxActions) {
-      throw new RateLimitedError("too many lobby requests; please slow down");
-    }
-    recent.push(now);
-    this.userActionTimes.set(userId, recent);
+    return this.lobby.on(listener as any);
   }
 
   async onModuleInit(): Promise<void> {
@@ -129,6 +94,11 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
       telemetry: this.evaluationTelemetry,
       // Configurable within the spec 60–90s window; tests inject short values.
       reconnectGraceMs: Number(process.env.RECONNECT_GRACE_MS ?? 90000),
+    });
+    this.lobby = new Lobby({
+      store: this.lobbyStore,
+      createMatch: (input, save) => this.engine.createMatch(input, save),
+      availableProblems: ["even-ledger", "double-it"],
     });
     this.engine.on((event, payload) => {
       const matchId = (payload as { matchId?: string } | null)?.matchId;
@@ -275,139 +245,55 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   // ─── Ticket 04: Lobby and Matchmaking ──────────────────────────────────────
 
   async joinQueue(userId: string, mode: MatchMode): Promise<QueueEntry> {
-    this.checkLobbyRateLimit(userId);
-    const entry = await this.lobbyStore.joinQueue(userId, mode);
-    try {
-      await this.triggerMatchmaking(mode);
-    } catch (error) {
-      console.error("[lobby] failed to trigger matchmaking after joinQueue:", error);
-    }
-    try {
-      return (await this.lobbyStore.queueStatus(userId)) ?? entry;
-    } catch (error) {
-      console.error("[lobby] failed to refresh queue status after joinQueue:", error);
-      return entry;
-    }
+    return this.lobby.joinQueue(userId, mode);
   }
 
   async cancelQueue(userId: string): Promise<{ cancelled: boolean; matched: boolean; matchId?: string }> {
-    this.checkLobbyRateLimit(userId);
-    return this.lobbyStore.cancelQueue(userId);
+    return this.lobby.cancelQueue(userId);
   }
 
   async queueStatus(userId: string): Promise<QueueEntry | null> {
-    return this.lobbyStore.queueStatus(userId);
+    return this.lobby.queueStatus(userId);
   }
 
   async triggerMatchmaking(mode: MatchMode): Promise<{ matchId: string; entries: QueueEntry[] } | null> {
-    const problems = selectProblems(["even-ledger", "double-it"], 3);
-    const result = await this.lobbyStore.tryMatch(mode, problems, (input, save) =>
-      this.engine.createMatch(input, save),
-    );
-    if (result) {
-      try {
-        this.emitLobbyHint("lobby.queueMatched", {
-          matchId: result.matchId,
-          userIds: result.entries.map((e: QueueEntry) => e.userId),
-        });
-      } catch (error) {
-        console.error("[lobby] failed to broadcast queueMatched hint:", error);
-      }
-    }
-    return result;
+    return this.lobby.triggerMatchmaking(mode);
   }
 
   async createPrivateRoom(userId: string, mode: MatchMode): Promise<RoomWithMembers> {
-    this.checkLobbyRateLimit(userId);
-    return this.lobbyStore.createPrivateRoom(userId, mode);
+    return this.lobby.createPrivateRoom(userId, mode);
   }
 
   async joinPrivateRoom(userId: string, inviteCode: string): Promise<RoomWithMembers & { full: boolean }> {
-    this.checkLobbyRateLimit(userId);
-    const res = await this.lobbyStore.joinPrivateRoom(userId, inviteCode);
-    try {
-      this.broadcastRoomUpdate(res.room.id, res.room, res.members);
-    } catch (error) {
-      console.error("[lobby] failed to broadcast room update after joinPrivateRoom:", error);
-    }
-    return res;
+    return this.lobby.joinPrivateRoom(userId, inviteCode);
   }
 
   async leavePrivateRoom(userId: string, roomId: string): Promise<{ left: boolean; closed: boolean }> {
-    this.checkLobbyRateLimit(userId);
-    const res = await this.lobbyStore.leavePrivateRoom(userId, roomId);
-    try {
-      const updated = await this.lobbyStore.getRoomWithMembers(roomId);
-      if (updated) {
-        this.broadcastRoomUpdate(roomId, updated.room, updated.members);
-      }
-    } catch (error) {
-      console.error("[lobby] failed to broadcast room update after leavePrivateRoom:", error);
-    }
-    return res;
+    return this.lobby.leavePrivateRoom(userId, roomId);
   }
 
   async setRoomMemberSide(userId: string, roomId: string, sideId: LobbySideId): Promise<RoomWithMembers> {
-    this.checkLobbyRateLimit(userId);
-    const res = await this.lobbyStore.setRoomMemberSide(userId, roomId, sideId);
-    try {
-      this.broadcastRoomUpdate(roomId, res.room, res.members);
-    } catch (error) {
-      console.error("[lobby] failed to broadcast room update after setRoomMemberSide:", error);
-    }
-    return res;
+    return this.lobby.setRoomMemberSide(userId, roomId, sideId);
   }
 
   async setRoomMemberReady(userId: string, roomId: string, ready: boolean): Promise<RoomWithMembers> {
-    this.checkLobbyRateLimit(userId);
-    const res = await this.lobbyStore.setRoomMemberReady(userId, roomId, ready);
-    try {
-      this.broadcastRoomUpdate(roomId, res.room, res.members);
-    } catch (error) {
-      console.error("[lobby] failed to broadcast room update after setRoomMemberReady:", error);
-    }
-    return res;
+    return this.lobby.setRoomMemberReady(userId, roomId, ready);
   }
 
   async startPrivateRoom(userId: string, roomId: string): Promise<{ matchId: string }> {
-    this.checkLobbyRateLimit(userId);
-    const problems = selectProblems(["even-ledger", "double-it"], 3);
-    const { matchId } = await this.lobbyStore.startPrivateRoom(
-      userId,
-      roomId,
-      problems,
-      (input, save) => this.engine.createMatch(input, save),
-    );
-    try {
-      const room = await this.lobbyStore.getRoomWithMembers(roomId);
-      if (room) {
-        this.emitLobbyHint("lobby.matchFound", {
-          roomId,
-          matchId,
-          userIds: room.members.map((member) => member.userId),
-        });
-      }
-    } catch (error) {
-      console.error("[lobby] failed to broadcast matchFound hint after startPrivateRoom:", error);
-    }
-    return { matchId };
+    return this.lobby.startPrivateRoom(userId, roomId);
   }
 
   async roomForMember(userId: string, roomId: string): Promise<RoomWithMembers> {
-    const result = await this.lobbyStore.getRoomWithMembers(roomId);
-    if (!result) throw new NotFoundException("room not found");
-    if (!result.members.some((member) => member.userId === userId)) {
-      throw new ForbiddenException("not a member of this room");
-    }
-    return result;
+    return this.lobby.roomForMember(userId, roomId);
   }
 
   async getRoomWithMembers(roomId: string): Promise<RoomWithMembers | null> {
-    return this.lobbyStore.getRoomWithMembers(roomId);
+    return this.lobby.getRoomWithMembers(roomId);
   }
 
   async userActiveRoom(userId: string): Promise<RoomWithMembers | null> {
-    return this.lobbyStore.userActiveRoom(userId);
+    return this.lobby.userActiveRoom(userId);
   }
 
   private async maybeAutoReveal(userId: string, matchId: string): Promise<void> {

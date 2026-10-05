@@ -85,7 +85,10 @@ for (const adapter of ["memory", "postgres"] as const) {
       await expect(lobby.startPrivateRoom("mate", room.id, ["p"], create)).rejects.toMatchObject({ code: 403 });
       await expect(lobby.startPrivateRoom("host", room.id, ["p"], create)).rejects.toThrow("all players must be ready");
       for (const user of ["host", "mate", "rival", "other"]) await lobby.setRoomMemberReady(user, room.id, true);
-      await expect(lobby.startPrivateRoom("host", room.id, ["p"], create)).resolves.toEqual({ matchId: "match" });
+      await expect(lobby.startPrivateRoom("host", room.id, ["p"], create)).resolves.toMatchObject({
+        matchId: "match",
+        userIds: ["host", "mate", "rival", "other"],
+      });
       expect(create.mock.calls[0][0]).toEqual({ mode: "2v2", problemVersionIds: ["p"], participants: [
         { userId: "host", sideId: "left" }, { userId: "mate", sideId: "left" },
         { userId: "rival", sideId: "right" }, { userId: "other", sideId: "right" },

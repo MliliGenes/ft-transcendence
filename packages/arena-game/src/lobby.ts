@@ -1,49 +1,28 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { saveMatchTx } from "./lib/match-write.js";
 import type { MatchStore } from "./store.js";
 import type { MatchRecord } from "./records.js";
 import type { MatchMode } from "arena-model";
 
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-export type QueueStatus = "waiting" | "matched" | "cancelled";
-export type PrivateRoomStatus = "open" | "matched" | "expired" | "closed";
-export type LobbySideId = "left" | "right";
-
-export interface QueueEntry {
-  id: string;
-  userId: string;
-  mode: MatchMode;
-  status: QueueStatus;
-  joinedAt: number;
-  matchedMatchId: string | null;
-  cancelledAt: number | null;
-}
-
-export interface PrivateRoom {
-  id: string;
-  code: string;
-  mode: MatchMode;
-  ownerUserId: string;
-  status: PrivateRoomStatus;
-  createdAt: number;
-  expiresAt: number;
-  matchId: string | null;
-}
-
-export interface PrivateRoomMember {
-  roomId: string;
-  userId: string;
-  sideId: LobbySideId;
-  ready: boolean;
-  joinedAt: number;
-}
-
-export interface RoomWithMembers {
-  room: PrivateRoom;
-  members: PrivateRoomMember[];
-}
+export * from "./lib/lobby-types.js";
+import {
+  type QueueStatus,
+  type PrivateRoomStatus,
+  type LobbySideId,
+  type QueueEntry,
+  type PrivateRoom,
+  type PrivateRoomMember,
+  type RoomWithMembers,
+  type LeavePrivateRoomResult,
+  type StartPrivateRoomResult,
+  LobbyError,
+  generateInviteCode,
+  capacityFor,
+  perSideCapacity,
+  selectProblems,
+  type ILobbyStore,
+} from "./lib/lobby-types.js";
 
 // ─── Schema ─────────────────────────────────────────────────────────────────
 
@@ -83,83 +62,6 @@ CREATE TABLE IF NOT EXISTS arena_private_room_members (
 );
 `;
 
-// ─── Error helpers ──────────────────────────────────────────────────────────
-
-export class LobbyError extends Error {
-  constructor(
-    message: string,
-    readonly code: number = 400,
-  ) {
-    super(message);
-    this.name = "LobbyError";
-  }
-}
-
-// ─── Invite code ────────────────────────────────────────────────────────────
-
-/** Six characters from a 32-character alphabet (30 bits of entropy). */
-export function generateInviteCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I confusion
-  const bytes = randomBytes(6);
-  let code = "";
-  for (let i = 0; i < 6; i++) code += chars[bytes[i]! % chars.length];
-  return code;
-}
-
-export function capacityFor(mode: MatchMode): number {
-  return mode === "1v1" ? 2 : 4;
-}
-
-export function perSideCapacity(mode: MatchMode): number {
-  return mode === "1v1" ? 1 : 2;
-}
-
-// ─── Problem selection ──────────────────────────────────────────────────────
-
-/**
- * ponytail: server-owned problem selection — clients never choose.
- * Picks 3 problem version IDs from the available bank. Deterministic
- * when a seed is provided (tests), otherwise random shuffle.
- */
-export function selectProblems(
-  available: string[],
-  count: number = 3,
-  rng: () => number = Math.random,
-): string[] {
-  if (available.length === 0) throw new LobbyError("no problems in bank");
-  const shuffled = [...available].sort(() => rng() - 0.5);
-  const out: string[] = [];
-  for (let i = 0; i < count; i++) out.push(shuffled[i % shuffled.length]!);
-  return out;
-}
-
-// ─── Interface ──────────────────────────────────────────────────────────────
-
-export interface ILobbyStore {
-  ensureSchema(): Promise<void>;
-  joinQueue(userId: string, mode: MatchMode): Promise<QueueEntry>;
-  cancelQueue(userId: string): Promise<{ cancelled: boolean; matched: boolean; matchId?: string }>;
-  queueStatus(userId: string): Promise<QueueEntry | null>;
-  tryMatch(
-    mode: MatchMode,
-    problemVersionIds: string[],
-    createMatchFn: (input: { mode: MatchMode; participants: Array<{ userId: string; sideId: string }>; problemVersionIds: string[] }, save?: (match: MatchRecord) => Promise<void>) => Promise<string>,
-  ): Promise<{ matchId: string; entries: QueueEntry[] } | null>;
-  createPrivateRoom(userId: string, mode: MatchMode, expiryMs?: number): Promise<RoomWithMembers>;
-  joinPrivateRoom(userId: string, inviteCode: string): Promise<RoomWithMembers & { full: boolean }>;
-  leavePrivateRoom(userId: string, roomId: string): Promise<{ left: boolean; closed: boolean }>;
-  setRoomMemberSide(userId: string, roomId: string, sideId: LobbySideId): Promise<RoomWithMembers>;
-  setRoomMemberReady(userId: string, roomId: string, ready: boolean): Promise<RoomWithMembers>;
-  startPrivateRoom(
-    userId: string,
-    roomId: string,
-    problemVersionIds: string[],
-    createMatchFn: (input: { mode: MatchMode; participants: Array<{ userId: string; sideId: string }>; problemVersionIds: string[] }, save?: (match: MatchRecord) => Promise<void>) => Promise<string>,
-  ): Promise<{ matchId: string }>;
-  getRoomByCode(code: string): Promise<RoomWithMembers | null>;
-  getRoomWithMembers(roomId: string): Promise<RoomWithMembers | null>;
-  userActiveRoom(userId: string): Promise<RoomWithMembers | null>;
-}
 
 // Private Lobby policy runs only after the adapter acquires its admission/room
 // locks. Both storage adapters apply these transitions to normalized state.
@@ -581,16 +483,33 @@ export class LobbyStore implements ILobbyStore {
     }
   }
 
-  async leavePrivateRoom(userId: string, roomId: string): Promise<{ left: boolean; closed: boolean }> {
+  async leavePrivateRoom(userId: string, roomId: string): Promise<LeavePrivateRoomResult> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
 
       const roomRes = await client.query(
-        `SELECT id, status, owner_user_id FROM arena_private_rooms WHERE id = $1 FOR UPDATE`,
+        `SELECT id, code, mode, owner_user_id, status, created_at, expires_at, match_id
+         FROM arena_private_rooms WHERE id = $1 FOR UPDATE`,
         [roomId],
       );
       if ((roomRes.rowCount ?? 0) === 0 || roomRes.rows[0].status !== "open") {
+        await client.query("COMMIT");
+        return { left: false, closed: false };
+      }
+
+      const r = roomRes.rows[0];
+      const memberRes = await client.query(
+        `SELECT room_id, user_id, side_id, ready, joined_at
+         FROM arena_private_room_members WHERE room_id = $1 ORDER BY joined_at ASC`,
+        [roomId],
+      );
+      const allMembers: PrivateRoomMember[] = memberRes.rows.map((m: any) => ({
+        roomId: m.room_id, userId: m.user_id, sideId: m.side_id as LobbySideId, ready: Boolean(m.ready), joinedAt: Number(m.joined_at),
+      }));
+
+      const isMember = allMembers.some((m) => m.userId === userId);
+      if (!isMember) {
         await client.query("COMMIT");
         return { left: false, closed: false };
       }
@@ -601,13 +520,33 @@ export class LobbyStore implements ILobbyStore {
       );
 
       let closed = false;
-      if (roomRes.rows[0].owner_user_id === userId) {
+      let room: PrivateRoom = {
+        id: r.id, code: r.code, mode: r.mode, ownerUserId: r.owner_user_id,
+        status: r.status, createdAt: Number(r.created_at), expiresAt: Number(r.expires_at), matchId: r.match_id,
+      };
+
+      let audienceUserIds: string[];
+      let remainingMembers: PrivateRoomMember[];
+
+      if (r.owner_user_id === userId) {
         await client.query(`UPDATE arena_private_rooms SET status = 'closed' WHERE id = $1`, [roomId]);
         closed = true;
+        room = { ...room, status: "closed" };
+        remainingMembers = [];
+        audienceUserIds = allMembers.filter((m) => m.userId !== userId).map((m) => m.userId);
+      } else {
+        remainingMembers = allMembers.filter((m) => m.userId !== userId);
+        audienceUserIds = remainingMembers.map((m) => m.userId);
       }
 
       await client.query("COMMIT");
-      return { left: true, closed };
+      return {
+        left: true,
+        closed,
+        room,
+        members: remainingMembers,
+        audienceUserIds,
+      };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -661,7 +600,7 @@ export class LobbyStore implements ILobbyStore {
     roomId: string,
     problemVersionIds: string[],
     createMatchFn: (input: { mode: MatchMode; participants: Array<{ userId: string; sideId: string }>; problemVersionIds: string[] }, save?: (match: MatchRecord) => Promise<void>) => Promise<string>,
-  ): Promise<{ matchId: string }> {
+  ): Promise<StartPrivateRoomResult> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -673,7 +612,12 @@ export class LobbyStore implements ILobbyStore {
         `UPDATE arena_private_rooms SET status = 'matched', match_id = $1 WHERE id = $2`, [matchId, roomId],
       );
       await client.query("COMMIT");
-      return { matchId };
+      return {
+        matchId,
+        userIds: lobby.members.map((m) => m.userId),
+        room: { ...lobby.room, status: "matched", matchId },
+        members: lobby.members.map((m) => ({ ...m })),
+      };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -902,21 +846,41 @@ export class InMemoryLobbyStore implements ILobbyStore {
     });
   }
 
-  async leavePrivateRoom(userId: string, roomId: string): Promise<{ left: boolean; closed: boolean }> {
+  async leavePrivateRoom(userId: string, roomId: string): Promise<LeavePrivateRoomResult> {
     return this.exclusive(async () => {
       const room = this.rooms.get(roomId);
       if (!room || room.status !== "open") return { left: false, closed: false };
 
-      let mems = this.members.get(roomId) ?? [];
-      mems = mems.filter((m) => m.userId !== userId);
-      this.members.set(roomId, mems);
+      const allMembers = this.members.get(roomId) ?? [];
+      const isMember = allMembers.some((m) => m.userId === userId);
+      if (!isMember) return { left: false, closed: false };
 
       let closed = false;
+      let audienceUserIds: string[];
+      let remainingMembers: PrivateRoomMember[];
+      let updatedRoom: PrivateRoom;
+
       if (room.ownerUserId === userId) {
         room.status = "closed";
         closed = true;
+        updatedRoom = { ...room };
+        remainingMembers = [];
+        audienceUserIds = allMembers.filter((m) => m.userId !== userId).map((m) => m.userId);
+        this.members.set(roomId, []);
+      } else {
+        remainingMembers = allMembers.filter((m) => m.userId !== userId);
+        audienceUserIds = remainingMembers.map((m) => m.userId);
+        this.members.set(roomId, remainingMembers);
+        updatedRoom = { ...room };
       }
-      return { left: true, closed };
+
+      return {
+        left: true,
+        closed,
+        room: updatedRoom,
+        members: remainingMembers,
+        audienceUserIds,
+      };
     });
   }
 
@@ -945,7 +909,7 @@ export class InMemoryLobbyStore implements ILobbyStore {
     roomId: string,
     problemVersionIds: string[],
     createMatchFn: (input: { mode: MatchMode; participants: Array<{ userId: string; sideId: string }>; problemVersionIds: string[] }, save?: (match: MatchRecord) => Promise<void>) => Promise<string>,
-  ): Promise<{ matchId: string }> {
+  ): Promise<StartPrivateRoomResult> {
     return this.exclusive(async () => {
       const room = this.rooms.get(roomId);
       if (!room) throw new LobbyError("room not found", 404);
@@ -954,7 +918,12 @@ export class InMemoryLobbyStore implements ILobbyStore {
 
       room.status = "matched";
       room.matchId = matchId;
-      return { matchId };
+      return {
+        matchId,
+        userIds: lobby.members.map((m) => m.userId),
+        room: { ...room },
+        members: lobby.members.map((m) => ({ ...m })),
+      };
     });
   }
 
@@ -983,3 +952,11 @@ export class InMemoryLobbyStore implements ILobbyStore {
     return null;
   }
 }
+
+export {
+  Lobby,
+  type CreateMatchCallback,
+  type LobbyEvent,
+  type LobbyEventListener,
+  type LobbyOptions,
+} from "./lib/lobby-module.js";
