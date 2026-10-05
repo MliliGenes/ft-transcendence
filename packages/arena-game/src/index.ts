@@ -16,3 +16,4 @@ export * from "./worker-judge.js";
 export * from "./judge0.js";
 export * from "./postgres-store.js";
 export * from "./lobby.js";
+export * from "./team-chat.js";
