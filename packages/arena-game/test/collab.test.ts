@@ -5,7 +5,8 @@ import { ArenaEngine, type EngineOptions } from "../src/engine.js";
 import { FileBank } from "../src/file-bank.js";
 import { testPrincipal, type AuthenticatedPrincipal } from "../src/principal.js";
 import { InMemoryCollabPersist } from "../src/collab.js";
-import { InMemoryMatchStore, InMemoryRevealStore, InMemorySubmissionStore } from "../src/store.js";
+import { InMemoryMatchStore, InMemoryRevealStore, InMemorySubmissionStore, MatchRevisionConflictError } from "../src/store.js";
+import { StoreBackedMatchPersistence } from "../src/persistence.js";
 import { PostgresStores } from "../src/postgres-store.js";
 import { ScriptedJudge, type ScriptPlan } from "./scripted-judge.js";
 import type { SealedEvaluationRequest } from "../src/judge.js";
@@ -677,6 +678,182 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
     // Source contains only one instance of the edit
     const occurrences = (replay.source.match(/# commit-r2/g) || []).length;
     expect(occurrences).toBe(1);
+
+    await stores.close();
+  });
+
+  it("19. stale document edit rejected by revision check across two coordinated engines", async () => {
+    const stores = new PostgresStores(PG_URL);
+    await stores.ensureSchema();
+    await stores.raw.query("TRUNCATE matches, rounds, round_sides, submissions, reveals, match_failures, collab_documents RESTART IDENTITY CASCADE");
+    const clock = (): number => 1_000_000;
+
+    let engine2PausedAtGate = false;
+    let releaseGate: () => void = () => {};
+    const gatePromise = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+
+    const engine1 = new ArenaEngine({
+      judge: new ScriptedJudge([{ score: 100 }]),
+      bank: new FileBank(),
+      clock,
+      revealGraceMs: 0,
+      persistence: stores.persistence,
+    });
+
+    const engine2Events: string[] = [];
+    const engine2Persistence = new StoreBackedMatchPersistence({
+      matches: stores.matches,
+      submissions: stores.submissions,
+      reveals: stores.reveals,
+      collab: stores.collab,
+      commitMatchAndTeamDocuments: async (match, rows, expectedRevision) => {
+        if (!engine2PausedAtGate) {
+          engine2PausedAtGate = true;
+          await gatePromise;
+        }
+        return stores.saveMatchAndCollab(match, rows, expectedRevision);
+      },
+    });
+    const engine2 = new ArenaEngine({
+      judge: new ScriptedJudge([{ score: 100 }]),
+      bank: new FileBank(),
+      clock,
+      revealGraceMs: 0,
+      persistence: engine2Persistence,
+    });
+    engine2.on((event) => engine2Events.push(event));
+
+    const a1 = testPrincipal("user-a1");
+    const a2 = testPrincipal("user-a2");
+    const matchId = await engine1.createMatch({
+      mode: "2v2",
+      participants: [
+        { userId: "user-a1", sideId: "left" },
+        { userId: "user-a2", sideId: "left" },
+        { userId: "user-b1", sideId: "right" },
+        { userId: "user-b2", sideId: "right" },
+      ],
+      problemVersionIds: ["even-ledger"],
+    });
+    await engine1.startRound(a1, matchId);
+    await engine1.beginCoding(a1, matchId);
+
+    // Initial sync on both engines
+    const sync1 = await engine1.collabSync(a1, matchId);
+    const sync2 = await engine2.collabSync(a2, matchId);
+    expect(sync1.source).toBe(sync2.source);
+
+    const client1 = new Y.Doc();
+    Y.applyUpdate(client1, new Uint8Array(Buffer.from(sync1.stateB64, "base64")));
+    const update1 = frame(client1, (t) => t.insert(t.length, "\n# engine1-wins"));
+
+    const client2 = new Y.Doc();
+    Y.applyUpdate(client2, new Uint8Array(Buffer.from(sync2.stateB64, "base64")));
+    const update2 = frame(client2, (t) => t.insert(t.length, "\n# engine2-stale"));
+
+    // Start engine2's update in background: it loads the match at revision r, then pauses at the gate
+    const engine2UpdatePromise = engine2.applyCollabUpdate(a2, matchId, { roundId: sync2.roundId, updateB64: update2 });
+
+    // Wait until engine2 reaches the gate
+    while (!engine2PausedAtGate) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    // Now engine1 commits first: revision advances r -> r+1 in DB
+    const res1 = await engine1.applyCollabUpdate(a1, matchId, { roundId: sync1.roundId, updateB64: update1 });
+    expect(res1.changed).toBe(true);
+
+    const matchRevAfterRes1 = (await stores.matches.load(matchId))!.revision;
+
+    // Release engine2's gate: it attempts to commit with stale revision r
+    releaseGate();
+    await expect(engine2UpdatePromise).rejects.toBeInstanceOf(MatchRevisionConflictError);
+
+    // The failed commit changes neither the durable Match nor the document
+    const durableMatch = (await stores.matches.load(matchId))!;
+    const durableDoc = (await stores.collab.load(matchId, sync1.roundId, "left"))!;
+    expect(durableDoc.appRevision).toBe(res1.revision);
+    const durableSync1 = await engine1.collabSync(a1, matchId);
+    expect(durableDoc.stateB64).toBe(durableSync1.stateB64);
+    expect(durableMatch.revision).toBe(matchRevAfterRes1);
+
+    // The rejected edit reloads its local Y.Doc, preserves the winner's state, and publishes no gameplay event
+    const sync2After = await engine2.collabSync(a2, matchId);
+    expect(sync2After.source).toContain("# engine1-wins");
+    expect(sync2After.source).not.toContain("# engine2-stale");
+    expect(engine2Events).toHaveLength(0);
+
+    // A fresh read followed by a commit with the current revision succeeds
+    const client2Fresh = new Y.Doc();
+    Y.applyUpdate(client2Fresh, new Uint8Array(Buffer.from(sync2After.stateB64, "base64")));
+    const update2Fresh = frame(client2Fresh, (t) => t.insert(t.length, "\n# engine2-fresh"));
+    const res2 = await engine2.applyCollabUpdate(a2, matchId, { roundId: sync2After.roundId, updateB64: update2Fresh });
+    expect(res2.changed).toBe(true);
+    expect(res2.source).toContain("# engine1-wins");
+    expect(res2.source).toContain("# engine2-fresh");
+
+    await stores.close();
+  });
+
+  it("20. PostgreSQL document-write failure rolls back the preceding Match write", async () => {
+    const stores = new PostgresStores(PG_URL);
+    await stores.ensureSchema();
+    await stores.raw.query("TRUNCATE matches, rounds, round_sides, submissions, reveals, match_failures, collab_documents RESTART IDENTITY CASCADE");
+    const clock = (): number => 1_000_000;
+    const engine = new ArenaEngine({
+      judge: new ScriptedJudge([{ score: 100 }]),
+      bank: new FileBank(),
+      clock,
+      revealGraceMs: 0,
+      persistence: stores.persistence,
+    });
+
+    const a1 = testPrincipal("user-a1");
+    const matchId = await engine.createMatch({
+      mode: "2v2",
+      participants: [
+        { userId: "user-a1", sideId: "left" },
+        { userId: "user-a2", sideId: "left" },
+        { userId: "user-b1", sideId: "right" },
+        { userId: "user-b2", sideId: "right" },
+      ],
+      problemVersionIds: ["even-ledger"],
+    });
+    await engine.startRound(a1, matchId);
+    await engine.beginCoding(a1, matchId);
+
+    const initialMatch = (await stores.matches.load(matchId))!;
+    const initialRev = initialMatch.revision;
+
+    // Mutate match record to attempt to advance revision and presence
+    const modifiedMatch = structuredClone(initialMatch);
+    modifiedMatch.presence.left = "offline";
+    modifiedMatch.revision = initialRev + 1;
+
+    // Provide a collab row that will fail in PostgreSQL because language violates NOT NULL constraint
+    const invalidCollabRow = {
+      roundId: modifiedMatch.rounds[0]!.roundId,
+      sideId: "left",
+      appRevision: 2,
+      language: null as unknown as string,
+      stateB64: "invalid-doc",
+    };
+
+    // saveMatchAndCollab will run BEGIN, then saveMatchTx (which updates matches table),
+    // and then the INSERT into collab_documents will fail with null column constraint.
+    await expect(
+      stores.saveMatchAndCollab(modifiedMatch, [invalidCollabRow], initialRev),
+    ).rejects.toThrow();
+
+    // Verify transaction rolled back: neither match change nor document write survived
+    const durableMatchAfter = (await stores.matches.load(matchId))!;
+    expect(durableMatchAfter.revision).toBe(initialRev);
+    expect(durableMatchAfter.presence.left).toBe(initialMatch.presence.left);
+
+    const durableCollab = await stores.collab.load(matchId, modifiedMatch.rounds[0]!.roundId, "left");
+    expect(durableCollab).toBeUndefined();
 
     await stores.close();
   });

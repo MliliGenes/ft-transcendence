@@ -117,7 +117,7 @@ export class PostgresStores {
       submissions: this.submissions,
       reveals: this.reveals,
       collab: this.collab,
-      commitMatchAndTeamDocuments: (match, rows) => this.saveMatchAndCollab(match, rows),
+      commitMatchAndTeamDocuments: (match, rows, expectedRevision) => this.saveMatchAndCollab(match, rows, expectedRevision),
       claimPendingEvaluation: (evaluationId) => this.claimPendingEvaluation(evaluationId),
       commitClaimedEvaluation: (claim, match, submission) => this.commitClaimedEvaluation(claim, match, submission),
     });

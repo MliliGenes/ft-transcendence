@@ -136,6 +136,58 @@ async function assertPersistenceContract(persistence: MatchPersistence, id: stri
     language: "Python",
     stateB64: "state-1",
   });
+
+  const docMatch1 = structuredClone(await persistence.loadMatch(id))!;
+  const currentRev = docMatch1.revision;
+  const docMatch2 = structuredClone(docMatch1);
+
+  docMatch1.presence.left = "offline";
+  docMatch1.revision = currentRev + 1;
+  await persistence.commitMatchAndTeamDocuments(
+    docMatch1,
+    [{ roundId: match.rounds[0]!.roundId, sideId: "left", appRevision: 3, language: "Python", stateB64: "state-doc-1" }],
+    currentRev,
+  );
+  expect((await persistence.loadMatch(id))?.presence.left).toBe("offline");
+  expect((await persistence.loadMatch(id))?.revision).toBe(currentRev + 1);
+  expect(await persistence.loadTeamDocument(id, match.rounds[0]!.roundId, "left")).toEqual({
+    appRevision: 3,
+    language: "Python",
+    stateB64: "state-doc-1",
+  });
+
+  docMatch2.presence.right = "offline";
+  docMatch2.revision = currentRev + 1;
+  await expect(
+    persistence.commitMatchAndTeamDocuments(
+      docMatch2,
+      [{ roundId: match.rounds[0]!.roundId, sideId: "left", appRevision: 4, language: "Python", stateB64: "state-doc-stale" }],
+      currentRev,
+    ),
+  ).rejects.toBeInstanceOf(MatchRevisionConflictError);
+
+  expect((await persistence.loadMatch(id))?.presence.right).toBeUndefined();
+  expect(await persistence.loadTeamDocument(id, match.rounds[0]!.roundId, "left")).toEqual({
+    appRevision: 3,
+    language: "Python",
+    stateB64: "state-doc-1",
+  });
+
+  const freshDocMatch = structuredClone(await persistence.loadMatch(id))!;
+  const freshRev = freshDocMatch.revision;
+  freshDocMatch.presence.right = "offline";
+  freshDocMatch.revision = freshRev + 1;
+  await persistence.commitMatchAndTeamDocuments(
+    freshDocMatch,
+    [{ roundId: match.rounds[0]!.roundId, sideId: "left", appRevision: 4, language: "Python", stateB64: "state-doc-fresh" }],
+    freshRev,
+  );
+  expect((await persistence.loadMatch(id))?.presence.right).toBe("offline");
+  expect(await persistence.loadTeamDocument(id, match.rounds[0]!.roundId, "left")).toEqual({
+    appRevision: 4,
+    language: "Python",
+    stateB64: "state-doc-fresh",
+  });
 }
 
 describe("MatchPersistence contract", () => {
@@ -205,6 +257,9 @@ describe.runIf(HAS_POSTGRES)("MatchPersistence Postgres adapter contract", () =>
       await stores.ensureSchema();
       await assertPersistenceContract(stores.persistence, id);
     } finally {
+      await stores.raw.query("DELETE FROM collab_documents WHERE match_id = $1", [id]);
+      await stores.raw.query("DELETE FROM round_sides WHERE match_id = $1", [id]);
+      await stores.raw.query("DELETE FROM rounds WHERE match_id = $1", [id]);
       await stores.raw.query("DELETE FROM submissions WHERE match_id = $1", [id]);
       await stores.raw.query("DELETE FROM reveals WHERE match_id = $1", [id]);
       await stores.raw.query("DELETE FROM match_failures WHERE match_id = $1", [id]);

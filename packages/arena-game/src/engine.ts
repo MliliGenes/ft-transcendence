@@ -114,7 +114,7 @@ export interface EngineOptions {
    * Provided by PostgresStores in production; absent in-memory/tests (where
    * the match lock alone serializes and saves cannot split-brain a process).
    */
-  saveMatchAndCollab?: (match: MatchRecord, rows: CollabRow[]) => Promise<void>;
+  saveMatchAndCollab?: (match: MatchRecord, rows: CollabRow[], expectedRevision?: number) => Promise<void>;
 }
 
 export { IllegalStateError, NotMemberError } from "./match-authority.js";
