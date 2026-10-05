@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 import { ArenaEngine } from "../src/index.js";
 import { FileBank } from "../src/judge.js";
-import { CollabDocs } from "../src/team-collaboration.js";
 import { inMemoryPersistence } from "../src/persistence.js";
 import { testPrincipal } from "../src/index.js";
 import { ScriptedJudge } from "./scripted-judge.js";
@@ -25,14 +24,13 @@ async function fixture(plans: ConstructorParameters<typeof ScriptedJudge>[0] = [
   const engine = new ArenaEngine(options);
   const a = testPrincipal("a");
   const b = testPrincipal("b");
-  const documents = new Set<CollabDocs>();
-  const seed = CollabDocs.prototype.seedOnce;
-  const restore = CollabDocs.prototype.restoreState;
-  vi.spyOn(CollabDocs.prototype, "seedOnce").mockImplementation(function (this: CollabDocs, ...args: any[]) {
-    documents.add(this); return seed.apply(this, args as [any, any]);
-  });
-  vi.spyOn(CollabDocs.prototype, "restoreState").mockImplementation(function (this: CollabDocs, ...args: any[]) {
-    documents.add(this); return restore.apply(this, args as [any, any]);
+  // Observe Yjs's public document lifecycle while exercising only ArenaEngine.
+  // This also captures documents restored during terminal reconnect reads.
+  const documents = new Set<Y.Doc>();
+  const getText = Y.Doc.prototype.getText;
+  vi.spyOn(Y.Doc.prototype, "getText").mockImplementation(function (this: Y.Doc, name?: string) {
+    documents.add(this);
+    return getText.call(this, name);
   });
   const matchId = await engine.createMatch({ mode: "2v2", participants: [
     { userId: "a", sideId: "left" }, { userId: "mate", sideId: "left" },
@@ -50,7 +48,7 @@ async function fixture(plans: ConstructorParameters<typeof ScriptedJudge>[0] = [
   edit.destroy();
   const left = await engine.collabSync(a, matchId);
   const right = await engine.collabSync(b, matchId);
-  const retained = () => [...documents].some((docs) => docs.has(left.roomId) || docs.has(right.roomId));
+  const retained = () => [...documents].some((doc) => !doc.isDestroyed);
   return {
     engine,
     a,

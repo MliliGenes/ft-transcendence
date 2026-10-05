@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import { CollabDocs, type CollabRow } from "../src/team-collaboration.js";
+import type { CollabRow } from "../src/persistence.js";
 import { TeamCollaboration, type TeamCollaborationPersistence } from "../src/team-collaboration.js";
 import type { MatchRecord } from "../src/index.js";
 
@@ -79,7 +79,6 @@ function updateFrom(source: string, edit: (text: Y.Text) => void): string {
 function createCollaboration(persistence = new MemoryTeamPersistence()): TeamCollaboration {
   return new TeamCollaboration({
     persistence,
-    collab: new CollabDocs(),
     bank: { loadProblem: () => ({ starters: { Python: "starter()", C: "", "C++": "" } }) },
     clock: () => 2_000,
   });

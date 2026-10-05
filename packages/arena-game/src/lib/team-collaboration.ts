@@ -2,7 +2,6 @@ import type { PlayerStatus, Readiness } from "arena-model";
 import { assertSupportedLanguage, type SupportedLanguage } from "./judge-types.js";
 import { IllegalStateError, NotMemberError } from "./match-authority.js";
 import { collabRoomId, CollabDocs, type CollabRow } from "./collab.js";
-export { collabRoomId, CollabDocs, type CollabRow } from "./collab.js";
 import type {
   DocumentRevision,
   MatchRecord,
@@ -77,7 +76,6 @@ export interface TeamCollaborationOptions {
   persistence: TeamCollaborationPersistence;
   bank: TeamProblemBank;
   clock: () => number;
-  collab?: CollabDocs;
 }
 
 /**
@@ -99,7 +97,7 @@ export class TeamCollaboration {
     this.persistence = options.persistence;
     this.bank = options.bank;
     this.clock = options.clock;
-    this.collab = options.collab ?? new CollabDocs();
+    this.collab = new CollabDocs();
   }
 
   readinessFor(match: MatchRecord, side: SideId): Readiness {
