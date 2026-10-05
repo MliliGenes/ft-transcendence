@@ -30,7 +30,7 @@ export interface ArenaSidecarLifecycle {
   dispose(): void;
 }
 
-type DisposableClient = { disconnect(): void };
+type DisposableClient = { disconnect(): void; dispose?(): void };
 
 interface PendingClient<T> {
   key: string;
@@ -61,7 +61,8 @@ function configKey(config: LiveClientConfig): string {
 
 function disconnect(client: DisposableClient): void {
   try {
-    client.disconnect();
+    if (client.dispose) client.dispose();
+    else client.disconnect();
   } catch {
     // Disposal is best effort so one sidecar cannot strand the other.
   }

@@ -205,6 +205,8 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
  */
 export class SocketArenaTransport implements ArenaTransport {
   private socket: Socket | null = null;
+  private lifetime: AbortController | null = null;
+  private connecting: Promise<void> | null = null;
   private snap: ArenaSnapshot | null = null;
   private readonly session = new TransportSession("connecting");
   private language = "Python";
@@ -262,52 +264,73 @@ export class SocketArenaTransport implements ArenaTransport {
     if (this.session.setConnection(next)) this.session.notify();
   }
 
-  async connect(): Promise<void> {
+  connect(): Promise<void> {
+    if (this.connecting) return this.connecting;
+    if (this.connected) return Promise.resolve();
+    this.stopConnection();
+    const lifetime = new AbortController();
+    this.lifetime = lifetime;
+    this.connectError = null;
     this.setConn("connecting");
-    const snap = (await this.get("/snapshot")) as ServerSnapshot;
-    this.applySnapshot(snap);
-    this.attachFreshSocket();
-    await this.awaitBaseline(this.socket!);
-    this.connected = true;
-    this.setConn("connected");
-    this.emit();
+    this.wireBrowserSignals(lifetime);
+    const connecting = (async () => {
+      const snap = (await this.get("/snapshot", lifetime)) as ServerSnapshot;
+      this.assertActive(lifetime);
+      this.applySnapshot(snap);
+      const socket = this.attachFreshSocket(lifetime);
+      const baseline = this.awaitBaseline(socket, lifetime);
+      socket.connect();
+      await baseline;
+    })().catch((error: Error) => {
+      if (this.lifetime === lifetime && !lifetime.signal.aborted) {
+        this.stopConnection();
+        this.connectError = error.message;
+        this.setConn("offline");
+        this.emit();
+      }
+      throw error;
+    }).finally(() => {
+      if (this.connecting === connecting) this.connecting = null;
+    });
+    this.connecting = connecting;
+    return connecting;
   }
 
-  /**
-   * Manual re-handshake (ticket 11 §2): socket.io does not reliably
-   * self-heal after a real network outage, so the browser `online` signal
-   * (and any rejoin path) tears the stale socket down and rejoins the
-   * authorized room for ONE fresh authoritative baseline. The server's
-   * per-user socket counting absorbs the overlap: presence stays correct and
-   * the stale server-side socket ages out on heartbeat timeout.
-   */
+  /** Browser network recovery rejoins the authorized room for a fresh baseline. */
   private async reopen(): Promise<void> {
-    if (this.session.connection() === "connected" || this.reopening || !this.socket) return;
+    const lifetime = this.lifetime;
+    if (!lifetime || this.connecting || this.connected || this.reopening || !this.socket) return;
     this.reopening = true;
     try {
-      this.socket.disconnect();
-      this.socket = null;
-      this.setConn("connecting");
-      this.emit();
-      this.attachFreshSocket();
-      await this.awaitBaseline(this.socket!);
+      this.detachSocket();
       this.browserOffline = false;
-      this.connected = true;
-      this.setConn("connected");
+      this.setConn("connecting");
+      const socket = this.attachFreshSocket(lifetime);
+      const baseline = this.awaitBaseline(socket, lifetime);
+      socket.connect();
+      await baseline;
     } catch {
-      this.connected = false;
-      this.setConn("reconnecting");
+      if (this.lifetime === lifetime && !lifetime.signal.aborted) {
+        this.connected = false;
+        this.setConn("reconnecting");
+      }
     } finally {
-      this.reopening = false;
-      this.emit();
+      if (this.lifetime === lifetime) {
+        this.reopening = false;
+        this.emit();
+      }
     }
   }
 
-  private attachFreshSocket(): void {
+  private attachFreshSocket(lifetime: AbortController): Socket {
+    this.assertActive(lifetime);
     const socket = io(this.options.baseUrl, {
       auth: { userId: this.options.userId, matchId: this.options.matchId },
+      forceNew: true,
+      autoConnect: false,
     });
     this.socket = socket;
+    const active = () => this.socket === socket && this.lifetime === lifetime && !lifetime.signal.aborted;
     for (const event of [
       "phase.changed",
       "player.statusChanged",
@@ -320,71 +343,109 @@ export class SocketArenaTransport implements ArenaTransport {
       "match.ended",
     ]) {
       socket.on(event, (payload: unknown) => {
+        if (!active()) return;
         const p = payload as { revision?: number; round?: number } | null;
-        void this.refresh({ revision: p?.revision, round: p?.round }).catch(() => {});
+        void this.refresh({ revision: p?.revision, round: p?.round }, lifetime).catch(() => {});
       });
     }
+    // This handler survives reconnects; only a server baseline enables commands.
+    socket.on("snapshot", (snapshot: ServerSnapshot) => {
+      if (!active() || this.browserOffline) return;
+      this.applySnapshot(snapshot);
+      this.connected = true;
+      this.connectError = null;
+      this.setConn("connected");
+      this.emit();
+    });
     socket.on("disconnect", () => {
+      if (!active()) return;
       this.connected = false;
-      // socket.io retries by itself: reconnecting until re-established.
       this.setConn("reconnecting");
       this.emit();
     });
-    socket.io.on("reconnect", () => {
-      // Re-baseline on the authoritative socket snapshot, then refresh.
-      this.connected = true;
-      this.setConn("connected");
-      void this.refresh().catch(() => {});
+    socket.on("connect_error", (error: Error) => {
+      if (!active()) return;
+      this.connectError = error.message;
+      this.connected = false;
+      this.setConn("reconnecting");
       this.emit();
     });
-    this.wireBrowserSignalsOnce();
+    return socket;
   }
 
-  private browserSignalsWired = false;
-
-  private wireBrowserSignalsOnce(): void {
-    if (this.browserSignalsWired) return;
+  private wireBrowserSignals(lifetime: AbortController): void {
     if (typeof window === "undefined" || typeof window.addEventListener !== "function") return;
-    this.browserSignalsWired = true;
-    // Browser-level signal fires far sooner than the socket heartbeat
-    // timeout (~20s): go visibly reconnecting at once and re-handshake on
-    // return. Never mark connected here — only the server baseline does.
     window.addEventListener("offline", () => {
-      // The socket object itself may still report connected until its
-      // heartbeat times out (~45s); the browser signal is authoritative here.
       this.browserOffline = true;
       this.connected = false;
       this.setConn("reconnecting");
       this.emit();
-    });
+    }, { signal: lifetime.signal });
     window.addEventListener("online", () => {
-      if (this.browserOffline || !this.socket?.connected) void this.reopen();
-      else void this.refresh().catch(() => {});
+      const wasOffline = this.browserOffline;
+      this.browserOffline = false;
+      if (wasOffline || !this.socket?.connected) void this.reopen();
+      else void this.refresh(undefined, lifetime).catch(() => {});
+    }, { signal: lifetime.signal });
+  }
+
+  private awaitBaseline(socket: Socket, lifetime: AbortController): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const finish = (error?: Error) => {
+        clearTimeout(timer);
+        socket.off("snapshot", baseline);
+        socket.off("connect_error", failed);
+        socket.off("disconnect", denied);
+        lifetime.signal.removeEventListener("abort", cancelled);
+        if (error) reject(error);
+        else resolve();
+      };
+      const baseline = () => finish();
+      const failed = (error: Error) => {
+        if (!socket.active) finish(error);
+      };
+      const denied = () => finish(new Error("Arena room refused"));
+      const cancelled = () => finish(new Error("Arena connection cancelled"));
+      const timer = setTimeout(() => finish(new Error("Arena connection timed out")), 10_000);
+      socket.once("snapshot", baseline);
+      socket.on("connect_error", failed);
+      socket.once("disconnect", denied);
+      lifetime.signal.addEventListener("abort", cancelled, { once: true });
     });
   }
 
-  private awaitBaseline(socket: Socket): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("socket connect timeout")), 10000);
-      socket.once("snapshot", (s) => {
-        clearTimeout(timer);
-        this.applySnapshot(s as ServerSnapshot);
-        resolve();
-      });
-      socket.once("connect_error", (error: Error) => {
-        clearTimeout(timer);
-        this.connectError = error.message;
-        reject(error);
-      });
-    });
+  private detachSocket(): void {
+    if (!this.socket) return;
+    this.socket.removeAllListeners();
+    this.socket.disconnect();
+    this.socket = null;
+  }
+
+  private stopConnection(): void {
+    this.lifetime?.abort();
+    this.lifetime = null;
+    this.detachSocket();
+    this.connecting = null;
+    this.connected = false;
+    this.browserOffline = false;
+    this.reopening = false;
   }
 
   disconnect(): void {
-    this.socket?.disconnect();
-    this.socket = null;
-    this.connected = false;
+    this.stopConnection();
     this.setConn("offline");
     this.emit();
+  }
+
+  private activeLifetime(): AbortController {
+    const lifetime = this.lifetime;
+    if (!lifetime) throw new Error("Arena is disconnected");
+    this.assertActive(lifetime);
+    return lifetime;
+  }
+
+  private assertActive(lifetime: AbortController): void {
+    if (this.lifetime !== lifetime || lifetime.signal.aborted) throw new Error("Arena connection cancelled");
   }
 
   /** Apply a fetched server snapshot unless provably stale (§3). */
@@ -416,39 +477,39 @@ export class SocketArenaTransport implements ArenaTransport {
   }
 
   async startRound(): Promise<void> {
-    this.requireConnected("start");
-    await this.post("/start", {});
-    await this.refresh();
+    const lifetime = this.requireConnected("start");
+    await this.post("/start", {}, lifetime);
+    await this.refresh(undefined, lifetime);
   }
 
   async beginCoding(): Promise<void> {
-    this.requireConnected("begin");
-    await this.post("/begin", {});
-    await this.refresh();
+    const lifetime = this.requireConnected("begin");
+    await this.post("/begin", {}, lifetime);
+    await this.refresh(undefined, lifetime);
   }
 
   async setLanguage(language: string): Promise<void> {
     if (this.snap?.mode === "2v2") {
       // Authoritative team switch: bumps the doc revision and invalidates
       // both approvals server-side (the refresh carries the new revision).
-      this.requireConnected("language");
-      await this.post("/language", { language });
-      await this.refresh();
+      const lifetime = this.requireConnected("language");
+      await this.post("/language", { language }, lifetime);
+      await this.refresh(undefined, lifetime);
       return;
     }
     this.language = language;
-    void this.refresh();
+    void this.refresh().catch(() => {});
   }
 
   async run(input: { code: string; language: string }): Promise<RunReceipt> {
-    this.requireConnected("run");
-    await this.post("/run", input);
-    await this.refresh();
+    const lifetime = this.requireConnected("run");
+    await this.post("/run", input, lifetime);
+    await this.refresh(undefined, lifetime);
     return { ok: true };
   }
 
   async submit(input: { code: string; language: string; documentRevision?: number }): Promise<SubmitReceipt> {
-    this.requireConnected("submit");
+    const lifetime = this.requireConnected("submit");
     const documentRevision = input.documentRevision ?? this.lastDocRevision ?? undefined;
     const request = this.submitRequest(input, documentRevision);
     const receipt = (await this.post("/submit", {
@@ -456,9 +517,9 @@ export class SocketArenaTransport implements ArenaTransport {
       documentRevision,
       submissionId: request.submissionId,
       evaluationId: request.evaluationId,
-    })) as SubmitReceipt;
-    await this.refresh();
-    this.pendingSubmit = null;
+    }, lifetime)) as SubmitReceipt;
+    await this.refresh(undefined, lifetime);
+    if (this.pendingSubmit === request) this.pendingSubmit = null;
     return receipt;
   }
 
@@ -468,37 +529,40 @@ export class SocketArenaTransport implements ArenaTransport {
    * approval throws and the snapshot (source of truth) corrects the UI.
    */
   async setReady(value: boolean): Promise<void> {
-    const sock = this.socket;
-    if (!sock) return;
+    const lifetime = this.requireConnected("setReady");
+    const sock = this.socket!;
     const payload = { value, documentRevision: this.lastDocRevision ?? undefined };
     await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("setReady timed out")), 5000);
-      sock.emit("setReady", payload, (res: { ok: boolean; error?: string } | undefined) => {
-        clearTimeout(timer);
-        if (res?.ok) resolve();
+      const cancelled = () => reject(new Error("Readiness confirmation was lost"));
+      lifetime.signal.addEventListener("abort", cancelled, { once: true });
+      sock.timeout(5_000).emit("setReady", payload, (error: Error | null, res?: { ok: boolean; error?: string }) => {
+        lifetime.signal.removeEventListener("abort", cancelled);
+        if (error || lifetime.signal.aborted || this.socket !== sock) reject(new Error("Readiness confirmation was lost"));
+        else if (res?.ok) resolve();
         else reject(new Error(res?.error ?? "setReady rejected"));
       });
     });
   }
 
   async advance(): Promise<void> {
-    this.requireConnected("advance");
-    await this.post("/advance", {});
-    await this.refresh();
+    const lifetime = this.requireConnected("advance");
+    await this.post("/advance", {}, lifetime);
+    await this.refresh(undefined, lifetime);
   }
 
   async leave(): Promise<void> {
-    this.requireConnected("leave");
-    await this.post("/leave", {});
-    await this.refresh();
+    const lifetime = this.requireConnected("leave");
+    await this.post("/leave", {}, lifetime);
+    await this.refresh(undefined, lifetime);
   }
 
-  private requireConnected(action: string): void {
+  private requireConnected(action: string): AbortController {
     const connection = this.session.connection();
     if (connection !== "connected") throw new Error(`${action} unavailable while ${connection}`);
+    return this.activeLifetime();
   }
 
-  private async refresh(trigger?: { revision?: number; round?: number }): Promise<void> {
+  private async refresh(trigger?: { revision?: number; round?: number }, lifetime = this.activeLifetime()): Promise<void> {
     if (
       trigger &&
       !shouldApplyUpdate(
@@ -508,7 +572,8 @@ export class SocketArenaTransport implements ArenaTransport {
     ) {
       return;
     }
-    const snap = (await this.get("/snapshot")) as ServerSnapshot;
+    const snap = (await this.get("/snapshot", lifetime)) as ServerSnapshot;
+    this.assertActive(lifetime);
     if (this.applySnapshot(snap)) this.emit();
   }
 
@@ -536,29 +601,39 @@ export class SocketArenaTransport implements ArenaTransport {
     this.session.notify();
   }
 
-  private async get(path: string): Promise<unknown> {
+  private async get(path: string, lifetime = this.activeLifetime()): Promise<unknown> {
+    this.assertActive(lifetime);
     const res = await fetch(`${this.options.baseUrl}/matches/${this.options.matchId}${path}`, {
       headers: { "x-dev-user-id": this.options.userId },
+      signal: lifetime.signal,
     });
+    this.assertActive(lifetime);
     if (!res.ok) throw new Error(`${path} failed with ${res.status}`);
-    return res.json();
+    const payload = await res.json();
+    this.assertActive(lifetime);
+    return payload;
   }
 
-  private async post(path: string, body: unknown): Promise<unknown> {
+  private async post(path: string, body: unknown, lifetime = this.activeLifetime()): Promise<unknown> {
+    this.assertActive(lifetime);
     const res = await fetch(`${this.options.baseUrl}/matches/${this.options.matchId}${path}`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-dev-user-id": this.options.userId },
       body: JSON.stringify(body),
+      signal: lifetime.signal,
     });
+    this.assertActive(lifetime);
     if (!res.ok) {
       const payload = (await res.json().catch(() => null)) as { error?: string } | null;
       if (res.status === 409) {
         const conflict = new StaleCommandError(payload?.error ?? `${path} rejected against a newer Match revision`);
-        await this.refresh().catch(() => {});
+        await this.refresh(undefined, lifetime).catch(() => {});
         throw conflict;
       }
       throw new Error(payload?.error ?? `${path} failed with ${res.status}`);
     }
-    return res.json();
+    const payload = await res.json();
+    this.assertActive(lifetime);
+    return payload;
   }
 }

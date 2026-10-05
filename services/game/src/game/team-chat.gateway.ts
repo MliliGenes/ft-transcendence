@@ -122,8 +122,8 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
 
     const rawClientMsgId = body?.clientMessageId;
     const clientMessageId = typeof rawClientMsgId === "string" ? rawClientMsgId.trim().slice(0, 64) : undefined;
-    if (clientMessageId) {
-      const ackKey = `${roomId}:${userId}:${clientMessageId}`;
+    const ackKey = clientMessageId ? `${roomId}:${userId}:${clientMessageId}` : undefined;
+    if (ackKey) {
       const existing = this.clientMsgAcks.get(ackKey);
       if (existing) {
         return { ok: true, id: existing.id };
@@ -156,6 +156,13 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
       return { ok: false, error: `message exceeds ${MAX_TEXT_LENGTH} characters` };
     }
 
+    // A manual retry can overlap the original lifecycle lookup. Re-check
+    // after that await, then record and broadcast without another yield.
+    if (ackKey) {
+      const existing = this.clientMsgAcks.get(ackKey);
+      if (existing) return { ok: true, id: existing.id };
+    }
+
     // Sender identity and side are authoritatively derived from the socket session, never trusted from client
     const msg: TeamChatMessage = {
       id: randomUUID(),
@@ -167,8 +174,7 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
       type: "text",
     };
 
-    if (clientMessageId) {
-      const ackKey = `${roomId}:${userId}:${clientMessageId}`;
+    if (ackKey) {
       this.clientMsgAcks.set(ackKey, { id: msg.id, timestamp: msg.timestamp });
       if (this.clientMsgAcks.size > 200) {
         const oldest = this.clientMsgAcks.keys().next().value;

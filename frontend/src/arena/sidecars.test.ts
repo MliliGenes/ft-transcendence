@@ -41,6 +41,20 @@ function deferred<T>() {
 }
 
 describe("arena sidecar lifecycle", () => {
+  it("permanently disposes a replaced Round when the client supports it", async () => {
+    const first = { disconnect: vi.fn(), dispose: vi.fn() } as unknown as CollabClient;
+    const second = collabClient();
+    const lifecycle = createArenaSidecarLifecycle({
+      createCollab: vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second),
+      createChat: vi.fn().mockResolvedValue(chatClient()),
+    });
+    const key = {};
+    await lifecycle.sync(scope(key, 1));
+    await lifecycle.sync(scope(key, 2));
+    expect(first.dispose).toHaveBeenCalledOnce();
+    expect(first.disconnect).not.toHaveBeenCalled();
+    lifecycle.dispose();
+  });
   it("replaces collaboration per round while preserving match-scoped chat", async () => {
     const transportKey = {};
     const firstCollab = collabClient();

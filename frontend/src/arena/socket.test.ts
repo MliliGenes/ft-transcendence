@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { io } from "socket.io-client";
+import { TestSocket } from "../../test/socket.js";
+
+vi.mock("socket.io-client", () => ({ io: vi.fn() }));
+
 import { adaptFinal, adaptReveal, shouldApplyUpdate, SocketArenaTransport, StaleCommandError } from "./socket.js";
 
 const SERVER_REVEAL = {
@@ -102,15 +107,22 @@ describe("SocketArenaTransport revision conflicts", () => {
     };
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => serverSnapshot })
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: "stale Match revision" }), { status: 409 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(serverSnapshot), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const transport = new SocketArenaTransport({ baseUrl: "http://arena.test", userId: "user-left", matchId: "match-1" });
-    (transport as unknown as { session: { setConnection: (state: "connected") => void } }).session.setConnection("connected");
+    const socket = new TestSocket();
+    vi.mocked(io).mockReturnValue(socket as unknown as ReturnType<typeof io>);
+    const connecting = transport.connect();
+    for (let n = 0; n < 10; n++) await Promise.resolve();
+    socket.server("snapshot", serverSnapshot);
+    await connecting;
 
     await expect(transport.startRound()).rejects.toBeInstanceOf(StaleCommandError);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(transport.snapshot().revision).toBe(7);
+    transport.disconnect();
   });
 });

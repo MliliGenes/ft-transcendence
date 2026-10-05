@@ -94,6 +94,10 @@ export class CollabClient {
   language: string | null = null;
   roundId: string | null = null;
   private socket: Socket | null = null;
+  private lifetime: AbortController | null = null;
+  private connecting: Promise<CollabSyncPayload> | null = null;
+  private baseline: CollabSyncPayload | null = null;
+  private disposed = false;
   private conn: CollabConnection = "connecting";
   private readonly listeners = new Set<() => void>();
   /** userId -> Y clientId for peer-left cleanup. */
@@ -254,6 +258,7 @@ export class CollabClient {
     } finally {
       this.applyingRemote = false;
     }
+    this.baseline = sync;
     this.roundId = sync.roundId;
     this.revision = sync.revision;
     this.language = sync.language;
@@ -261,49 +266,103 @@ export class CollabClient {
   }
 
   connect(): Promise<CollabSyncPayload> {
+    if (this.disposed) return Promise.reject(new Error("Collaboration client is disposed"));
+    if (this.connecting) return this.connecting;
+    if (this.conn === "connected" && this.socket?.connected && this.baseline) return Promise.resolve(this.baseline);
+    this.stopSocket();
+    const lifetime = new AbortController();
+    this.lifetime = lifetime;
     this.setConn("connecting");
     const sock = io(`${this.options.baseUrl}/collab`, {
       auth: { userId: this.options.userId, matchId: this.options.matchId },
       forceNew: true,
+      autoConnect: false,
     });
     this.socket = sock;
+    const active = () => this.socket === sock && !lifetime.signal.aborted;
     sock.on("sync", (sync: CollabSyncPayload) => {
+      if (!active()) return;
       this.applySync(sync);
       this.setConn("connected");
     });
     sock.on("remote-update", (p: { updateB64: string; revision: number }) => {
+      if (!active()) return;
       this.applyRemoteUpdate(p.updateB64);
       this.revision = p.revision;
       this.emit();
     });
-    sock.on("peer-cursor", (p: PeerCursor) => this.applyPeerCursor(p));
+    sock.on("peer-cursor", (p: PeerCursor) => {
+      if (active()) this.applyPeerCursor(p);
+    });
     sock.on("peer-left", (p: { userId: string }) => {
-      if (p && typeof p.userId === "string") this.removePeer(p.userId);
+      if (active() && p && typeof p.userId === "string") this.removePeer(p.userId);
     });
-    sock.on("disconnect", () => this.setConn("reconnecting"));
-    sock.io.on("reconnect", () => {
-      // Re-baseline arrives as a fresh "sync" (idempotent merge).
+    sock.on("disconnect", () => {
+      if (active()) this.setConn("reconnecting");
     });
-    return new Promise<CollabSyncPayload>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("collab connect timeout")), 10000);
-      sock.once("sync", (sync: CollabSyncPayload) => {
-        clearTimeout(timer);
-        resolve(sync);
-      });
-      sock.once("connect_error", (error: Error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-      sock.once("disconnect", () => {
-        clearTimeout(timer);
-        reject(new Error("collab room refused"));
-      });
+    sock.on("connect_error", () => {
+      if (active()) this.setConn("reconnecting");
     });
+    const wait = new Promise<CollabSyncPayload>((resolve, reject) => {
+      const finish = (error?: Error, sync?: CollabSyncPayload) => {
+        clearTimeout(timer);
+        sock.off("sync", synced);
+        sock.off("connect_error", failed);
+        sock.off("disconnect", denied);
+        lifetime.signal.removeEventListener("abort", cancelled);
+        if (error) reject(error);
+        else resolve(sync!);
+      };
+      const synced = (sync: CollabSyncPayload) => finish(undefined, sync);
+      const failed = (error: Error) => {
+        if (!sock.active) finish(error);
+      };
+      const denied = () => finish(new Error("Collaboration room refused"));
+      const cancelled = () => finish(new Error("Collaboration connection cancelled"));
+      const timer = setTimeout(() => finish(new Error("Collaboration connection timed out")), 10_000);
+      sock.once("sync", synced);
+      sock.on("connect_error", failed);
+      sock.once("disconnect", denied);
+      lifetime.signal.addEventListener("abort", cancelled, { once: true });
+    });
+    const connecting = wait.catch((error: Error) => {
+      if (active()) {
+        this.stopSocket();
+        this.setConn("offline");
+      }
+      throw error;
+    }).finally(() => {
+      if (this.connecting === connecting) this.connecting = null;
+    });
+    this.connecting = connecting;
+    sock.connect();
+    return connecting;
   }
 
+  private stopSocket(): void {
+    this.lifetime?.abort();
+    this.lifetime = null;
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
+    }
+    this.connecting = null;
+    for (const userId of this.peerIds.keys()) this.removePeer(userId);
+  }
+
+  /** Stop transport while preserving this Round's document for a rejoin. */
   disconnect(): void {
-    this.socket?.disconnect();
-    this.socket = null;
+    this.stopSocket();
     this.setConn("offline");
+  }
+
+  /** Permanently release a replaced Round, including the awareness heartbeat. */
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.disconnect();
+    this.doc.destroy(); // Awareness observes document destruction and stops its interval.
+    this.listeners.clear();
   }
 }
