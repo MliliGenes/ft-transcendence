@@ -42,7 +42,11 @@ export class MatchAuthority {
   private readonly lockPersisted = new Set<string>();
   private readonly lockLastState = new Map<string, string | null>();
 
-  constructor(private readonly persistence: MatchPersistence) {}
+  constructor(
+    private readonly persistence: MatchPersistence,
+    /** Called under the lock with durable state, before the next command enters. */
+    private readonly settled?: (match: MatchRecord) => void,
+  ) {}
 
   /**
    * Serialize short Match mutations. Long judge calls stay outside this
@@ -56,7 +60,8 @@ export class MatchAuthority {
     const mine = new Promise<void>((resolve) => {
       release = resolve;
     });
-    this.matchLocks.set(matchId, prev.then(() => mine));
+    const tail = prev.then(() => mine);
+    this.matchLocks.set(matchId, tail);
     await prev;
     const beforeRow = await this.persistence.loadMatch(matchId).catch(() => undefined);
     const beforeText = beforeRow ? JSON.stringify(beforeRow) : null;
@@ -64,6 +69,7 @@ export class MatchAuthority {
     this.lockRevision.set(matchId, (beforeRow?.revision ?? 0) + 1);
     this.lockPersisted.delete(matchId);
     this.lockLastState.set(matchId, beforeRow ? this.stateText(beforeRow) : null);
+    let durable = beforeRow;
     try {
       const result = await fn();
       const fresh = await this.persistence.loadMatch(matchId);
@@ -71,14 +77,22 @@ export class MatchAuthority {
         fresh.revision = this.lockRevision.get(matchId) ?? fresh.revision + 1;
         await this.saveMatch(fresh);
       }
+      durable = fresh;
       return { value: result, revision: fresh?.revision };
     } finally {
+      // Failed writes retain the pre-command durable state. Cleanup cannot
+      // invalidate a committed command or run after a queued document read.
+      try {
+        if (durable) this.settled?.(durable);
+      } catch {
+        // Resource retirement is retryable on the next locked read.
+      }
       release();
       this.lockRevision.delete(matchId);
       this.lockBaseRevision.delete(matchId);
       this.lockPersisted.delete(matchId);
       this.lockLastState.delete(matchId);
-      if (this.matchLocks.get(matchId) === mine) this.matchLocks.delete(matchId);
+      if (this.matchLocks.get(matchId) === tail) this.matchLocks.delete(matchId);
     }
   }
 

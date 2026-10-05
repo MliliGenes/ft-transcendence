@@ -202,7 +202,7 @@ export class ArenaEngine {
         collab: options.collab ?? new InMemoryCollabPersist(),
         commitMatchAndTeamDocuments: options.saveMatchAndCollab,
     });
-    this.authority = new MatchAuthority(this.persistence);
+    this.authority = new MatchAuthority(this.persistence, (match) => this.retireMatchResources(match));
     this.roundLifecycle = new RoundLifecycle();
     this.clock = options.clock ?? (() => Date.now());
     this.teamCollaboration = new TeamCollaboration({
@@ -1310,7 +1310,17 @@ export class ArenaEngine {
   }
 
   private rememberDeadline(match: MatchRecord): void {
-    this.deadlineByMatch.set(match.id, match.startedAt + match.durationMs);
+    if (match.roundPhase === "MATCH_COMPLETE") this.deadlineByMatch.delete(match.id);
+    else this.deadlineByMatch.set(match.id, match.startedAt + match.durationMs);
+  }
+
+  private retireMatchResources(match: MatchRecord): void {
+    if (match.roundPhase !== "MATCH_COMPLETE") return;
+    this.deadlineByMatch.delete(match.id);
+    for (const side of new Set(match.participants.map((participant) => participant.sideId))) {
+      this.runStamps.delete(`${match.id}:${side}`);
+    }
+    for (const round of match.rounds) this.teamCollaboration.destroyRound(match, round);
   }
 
   private deadlineHasElapsedOrUnknown(matchId: string): boolean {
