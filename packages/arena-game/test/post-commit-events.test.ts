@@ -1,29 +1,26 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ArenaEvent } from "arena-model";
-import { InMemoryMatchStore } from "../src/store.js";
+import { inMemoryPersistence, type MatchPersistence } from "../src/persistence.js";
 import { setup } from "./setup.js";
-
-class FailNextMatchSave extends InMemoryMatchStore {
-  failNext = false;
-
-  override async save(...args: Parameters<InMemoryMatchStore["save"]>): Promise<void> {
-    if (this.failNext) {
-      this.failNext = false;
-      throw new Error("injected Match save failure");
-    }
-    await super.save(...args);
-  }
-}
 
 afterEach(() => vi.restoreAllMocks());
 
 describe("ArenaEngine post-commit events", () => {
   it("does not publish a terminal event when the Match save fails", async () => {
-    const matches = new FailNextMatchSave();
-    const fx = await setup([], { matches });
+    const base = inMemoryPersistence();
+    let failNext = false;
+    const persistence: MatchPersistence = Object.create(base);
+    persistence.saveMatch = async (...args) => {
+      if (failNext) {
+        failNext = false;
+        throw new Error("injected Match save failure");
+      }
+      return base.saveMatch(...args);
+    };
+    const fx = await setup([], { persistence });
     const emitted: ArenaEvent[] = [];
     fx.engine.on((event) => emitted.push(event));
-    matches.failNext = true;
+    failNext = true;
 
     await expect(fx.engine.leaveMatch(fx.left, fx.matchId)).rejects.toThrow("injected Match save failure");
 

@@ -23,9 +23,8 @@ import {
   assertSupportedLanguage,
 } from "./judge.js";
 import type { AuthenticatedPrincipal } from "./principal.js";
-import { InMemoryCollabPersist, type CollabPersist, type CollabRow } from "./collab.js";
 import { IllegalStateError, MatchAuthority, NotMemberError, type MatchLockOptions } from "./match-authority.js";
-import { StoreBackedMatchPersistence, type MatchPersistence } from "./persistence.js";
+import { inMemoryPersistence, type MatchPersistence } from "./persistence.js";
 import { RoundLifecycle, type SealedVerdict } from "./round-lifecycle.js";
 import { TeamCollaboration, type TeamSnapshot } from "./team-collaboration.js";
 import {
@@ -46,13 +45,7 @@ import type {
 } from "./records.js";
 import {
   DuplicateError,
-  InMemoryMatchStore,
-  InMemoryRevealStore,
-  InMemorySubmissionStore,
   MatchRevisionConflictError,
-  type MatchStore,
-  type RevealStore,
-  type SubmissionStore,
 } from "./store.js";
 
 export const MATCH_DURATION_MS = 30 * 60 * 1000;
@@ -86,14 +79,8 @@ export interface RatePolicy {
 export interface EngineOptions {
   judge: GameJudge;
   bank: ProblemBank;
-  /** Preferred dependency: one domain-shaped durable Match module. */
+  /** Domain-shaped durable Match persistence module. Defaults to in-memory persistence. */
   persistence?: MatchPersistence;
-  /** @deprecated Use persistence. Kept as a migration adapter for callers. */
-  matches?: MatchStore;
-  /** @deprecated Use persistence. Kept as a migration adapter for callers. */
-  submissions?: SubmissionStore;
-  /** @deprecated Use persistence. Kept as a migration adapter for callers. */
-  reveals?: RevealStore;
   clock?: () => number;
   uuid?: () => string;
   limits?: JudgeLimits;
@@ -107,14 +94,6 @@ export interface EngineOptions {
    * Default 90s per the Code Arena spec window (60–90, configurable).
    */
   reconnectGraceMs?: number;
-  /** Durable collab-document storage (ticket 15, option B: full state per commit). */
-  collab?: CollabPersist;
-  /**
-   * Ticket 15 closure: ONE database transaction for match row + collab rows.
-   * Provided by PostgresStores in production; absent in-memory/tests (where
-   * the match lock alone serializes and saves cannot split-brain a process).
-   */
-  saveMatchAndCollab?: (match: MatchRecord, rows: CollabRow[], expectedRevision?: number) => Promise<void>;
 }
 
 export { IllegalStateError, NotMemberError } from "./match-authority.js";
@@ -190,18 +169,7 @@ export class ArenaEngine {
   constructor(options: EngineOptions) {
     this.judge = options.judge;
     this.bank = options.bank;
-    const matches = options.matches ?? new InMemoryMatchStore();
-    const submissions = options.submissions ?? new InMemorySubmissionStore();
-    const reveals = options.reveals ?? new InMemoryRevealStore();
-    this.persistence =
-      options.persistence ??
-      new StoreBackedMatchPersistence({
-        matches,
-        submissions,
-        reveals,
-        collab: options.collab ?? new InMemoryCollabPersist(),
-        commitMatchAndTeamDocuments: options.saveMatchAndCollab,
-    });
+    this.persistence = options.persistence ?? inMemoryPersistence();
     this.authority = new MatchAuthority(this.persistence, (match) => this.retireMatchResources(match));
     this.roundLifecycle = new RoundLifecycle();
     this.clock = options.clock ?? (() => Date.now());

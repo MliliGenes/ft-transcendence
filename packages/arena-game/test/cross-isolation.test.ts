@@ -6,7 +6,7 @@ import {
   ValidationError,
   assertSupportedLanguage,
 } from "../src/index.js";
-import { InMemoryMatchStore, InMemorySubmissionStore } from "../src/store.js";
+import { inMemoryPersistence } from "../src/persistence.js";
 import { FileBank } from "../src/file-bank.js";
 import { ScriptedJudge } from "./scripted-judge.js";
 import { testPrincipal, type AuthenticatedPrincipal } from "../src/principal.js";
@@ -19,8 +19,6 @@ describe("cross-match and cross-team security isolation", () => {
   it("cross-match attack: participant in Match 1 cannot access, read, or act on Match 2", async () => {
     const judge = new ScriptedJudge([{ score: 100 }]);
     const engine = new ArenaEngine({
-      matches: new InMemoryMatchStore(),
-      submissions: new InMemorySubmissionStore(),
       bank: new FileBank(),
       judge,
     });
@@ -81,8 +79,6 @@ describe("cross-match and cross-team security isolation", () => {
   it("cross-team attack inside Match 1: Alpha member cannot access Beta collab, chat, or forge Beta actions", async () => {
     const judge = new ScriptedJudge([{ score: 100 }]);
     const engine = new ArenaEngine({
-      matches: new InMemoryMatchStore(),
-      submissions: new InMemorySubmissionStore(),
       bank: new FileBank(),
       judge,
     });
@@ -132,8 +128,6 @@ describe("cross-match and cross-team security isolation", () => {
   it("language and command injection payloads are rejected by allowlist and cannot reach the execution environment", async () => {
     const judge = new ScriptedJudge([{ score: 100 }]);
     const engine = new ArenaEngine({
-      matches: new InMemoryMatchStore(),
-      submissions: new InMemorySubmissionStore(),
       bank: new FileBank(),
       judge,
     });
@@ -177,10 +171,9 @@ describe("cross-match and cross-team security isolation", () => {
 
   it("submission idempotency: duplicate submission retries return identical receipts and do not create duplicate attempts", async () => {
     const judge = new ScriptedJudge([{ score: 100 }]);
-    const subs = new InMemorySubmissionStore();
+    const persistence = inMemoryPersistence();
     const engine = new ArenaEngine({
-      matches: new InMemoryMatchStore(),
-      submissions: subs,
+      persistence,
       bank: new FileBank(),
       judge,
     });
@@ -221,7 +214,7 @@ describe("cross-match and cross-team security isolation", () => {
     // Verify exactly one submission was recorded
     const snap = await engine.snapshot(p("u1"), matchId);
     expect(snap.sides["left"].submissions).toBe(1);
-    const rec = await subs.getBySubmissionId(subId);
+    const rec = await persistence.findSubmissionById(subId);
     expect(rec).toBeDefined();
     expect(rec?.submissionId).toBe(subId);
   });
@@ -230,8 +223,6 @@ describe("cross-match and cross-team security isolation", () => {
     let now = 1000000;
     const judge = new ScriptedJudge([{ score: 100 }]);
     const engine = new ArenaEngine({
-      matches: new InMemoryMatchStore(),
-      submissions: new InMemorySubmissionStore(),
       bank: new FileBank(),
       judge,
       clock: () => now,
@@ -261,8 +252,6 @@ describe("cross-match and cross-team security isolation", () => {
   it("collab update bounds: oversized Yjs frames and malformed base64 are rejected", async () => {
     const judge = new ScriptedJudge([{ score: 100 }]);
     const engine = new ArenaEngine({
-      matches: new InMemoryMatchStore(),
-      submissions: new InMemorySubmissionStore(),
       bank: new FileBank(),
       judge,
     });

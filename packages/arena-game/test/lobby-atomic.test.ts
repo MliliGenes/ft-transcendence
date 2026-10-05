@@ -5,6 +5,9 @@ import { ArenaEngine } from "../src/engine.js";
 import { FileBank } from "../src/file-bank.js";
 import { GAME_SCHEMA } from "../src/postgres-store.js";
 import { LobbyStore } from "../src/lobby.js";
+import { InMemoryCollabPersist } from "../src/collab.js";
+import { StoreBackedMatchPersistence } from "../src/persistence.js";
+import { InMemoryRevealStore, InMemorySubmissionStore } from "../src/store.js";
 import { ScriptedJudge } from "./scripted-judge.js";
 
 const url = process.env.DATABASE_URL;
@@ -21,11 +24,18 @@ describe.runIf(Boolean(url))("lobby atomicity (isolated PostgreSQL schema)", () 
     await pool.query(GAME_SCHEMA);
     lobby = new LobbyStore(pool);
     await lobby.ensureSchema();
-    engine = new ArenaEngine({ judge: new ScriptedJudge([]), bank: new FileBank(), matches: {
-      async save(match) { await pool.query("INSERT INTO matches VALUES ($1, $2)", [match.id, match]); },
-      async load(id) { return (await pool.query("SELECT data FROM matches WHERE id=$1", [id])).rows[0]?.data; },
+    const matches = {
+      async save(match: any) { await pool.query("INSERT INTO matches VALUES ($1, $2)", [match.id, match]); },
+      async load(id: string) { return (await pool.query("SELECT data FROM matches WHERE id=$1", [id])).rows[0]?.data; },
       async listIds() { return (await pool.query("SELECT id FROM matches")).rows.map(r => r.id); },
-    }});
+    };
+    const persistence = new StoreBackedMatchPersistence({
+      matches,
+      submissions: new InMemorySubmissionStore(),
+      reveals: new InMemoryRevealStore(),
+      collab: new InMemoryCollabPersist(),
+    });
+    engine = new ArenaEngine({ judge: new ScriptedJudge([]), bank: new FileBank(), persistence });
   });
   beforeEach(async () => { await pool.query("TRUNCATE arena_queue_entries, arena_private_rooms, matches CASCADE"); });
   afterAll(async () => {

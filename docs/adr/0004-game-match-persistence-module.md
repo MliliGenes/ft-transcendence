@@ -97,3 +97,12 @@ claim-session transaction seam. The existing JSONB schema is unchanged.
 
 The frontend refreshes authoritative state after a 409 and rethrows the stale
 command error; it does not automatically replay non-idempotent commands.
+
+## Amendment 2026-10-05 (completion of Match persistence constructor migration)
+
+The temporary migration adapter on `EngineOptions` (`matches`, `submissions`,
+`reveals`, `collab`, and `saveMatchAndCollab`) has been removed. All tests and
+production wiring now supply a single `MatchPersistence` instance, defaulting to
+in-memory persistence via `inMemoryPersistence()`. `ArenaEngine` retains exactly
+one persistence seam.
+

@@ -6,7 +6,7 @@ import { FileBank } from "../src/file-bank.js";
 import { testPrincipal, type AuthenticatedPrincipal } from "../src/principal.js";
 import { InMemoryCollabPersist } from "../src/collab.js";
 import { InMemoryMatchStore, InMemoryRevealStore, InMemorySubmissionStore, MatchRevisionConflictError } from "../src/store.js";
-import { StoreBackedMatchPersistence } from "../src/persistence.js";
+import { StoreBackedMatchPersistence, type MatchPersistence } from "../src/persistence.js";
 import { PostgresStores } from "../src/postgres-store.js";
 import { ScriptedJudge, type ScriptPlan } from "./scripted-judge.js";
 import type { SealedEvaluationRequest } from "../src/judge.js";
@@ -327,11 +327,14 @@ describe("frozen submission from the authoritative doc", () => {
 describe("persistence + process restart", () => {
   it("14. committed update survives engine restart; uncommitted never appears", async () => {
     const persist = new InMemoryCollabPersist();
-    const matches = new InMemoryMatchStore();
-    const submissions = new InMemorySubmissionStore();
-    const reveals = new InMemoryRevealStore();
+    const persistence = new StoreBackedMatchPersistence({
+      matches: new InMemoryMatchStore(),
+      submissions: new InMemorySubmissionStore(),
+      reveals: new InMemoryRevealStore(),
+      collab: persist,
+    });
     const clock = (): number => 1_000_000;
-    const fx = await setupCollab([{ score: 100 }], { collab: persist, matches, submissions, reveals });
+    const fx = await setupCollab([{ score: 100 }], { persistence });
     const { doc, sync } = await clientFromSync(fx, fx.a1);
     await fx.engine.applyCollabUpdate(fx.a1, fx.matchId, {
       roundId: sync.roundId,
@@ -344,10 +347,7 @@ describe("persistence + process restart", () => {
       bank: new FileBank(),
       clock,
       revealGraceMs: 0,
-      matches,
-      submissions,
-      reveals,
-      collab: persist,
+      persistence,
     });
     const rsync = await reboot.collabSync(fx.a1, fx.matchId);
     expect(rsync.revision).toBe(2);
@@ -405,11 +405,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
       bank: new FileBank(),
       clock,
       revealGraceMs: 0,
-      matches: stores.matches,
-      submissions: stores.submissions,
-      reveals: stores.reveals,
-      collab: stores.collab,
-      saveMatchAndCollab: (match, rows) => stores.saveMatchAndCollab(match, rows),
+      persistence: stores.persistence,
     });
     const a1 = testPrincipal("user-a1");
     const a2 = testPrincipal("user-a2");
@@ -440,11 +436,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
       bank: new FileBank(),
       clock,
       revealGraceMs: 0,
-      matches: stores.matches,
-      submissions: stores.submissions,
-      reveals: stores.reveals,
-      collab: stores.collab,
-      saveMatchAndCollab: (match, rows) => stores.saveMatchAndCollab(match, rows),
+      persistence: stores.persistence,
     });
     const rsync = await reboot.collabSync(a2, matchId);
     expect(rsync.revision).toBe(2);
@@ -471,21 +463,19 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
     const clock = (): number => 1_000_000;
     let failDb = false;
     const events: string[] = [];
+    const persistence: MatchPersistence = Object.create(stores.persistence);
+    persistence.commitMatchAndTeamDocuments = async (...args) => {
+      if (failDb) {
+        throw new Error("injected DB commit failure");
+      }
+      return stores.persistence.commitMatchAndTeamDocuments(...args);
+    };
     const engine = new ArenaEngine({
       judge: new ScriptedJudge([{ score: 100 }]),
       bank: new FileBank(),
       clock,
       revealGraceMs: 0,
-      matches: stores.matches,
-      submissions: stores.submissions,
-      reveals: stores.reveals,
-      collab: stores.collab,
-      saveMatchAndCollab: async (match, rows) => {
-        if (failDb) {
-          throw new Error("injected DB commit failure");
-        }
-        return stores.saveMatchAndCollab(match, rows);
-      },
+      persistence,
     });
     engine.on((event) => events.push(event));
 
@@ -552,21 +542,19 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
     const clock = (): number => 1_000_000;
     let failDb = false;
     const events: string[] = [];
+    const persistence: MatchPersistence = Object.create(stores.persistence);
+    persistence.commitMatchAndTeamDocuments = async (...args) => {
+      if (failDb) {
+        throw new Error("injected language commit failure");
+      }
+      return stores.persistence.commitMatchAndTeamDocuments(...args);
+    };
     const engine = new ArenaEngine({
       judge: new ScriptedJudge([{ score: 100 }]),
       bank: new FileBank(),
       clock,
       revealGraceMs: 0,
-      matches: stores.matches,
-      submissions: stores.submissions,
-      reveals: stores.reveals,
-      collab: stores.collab,
-      saveMatchAndCollab: async (match, rows) => {
-        if (failDb) {
-          throw new Error("injected language commit failure");
-        }
-        return stores.saveMatchAndCollab(match, rows);
-      },
+      persistence,
     });
     engine.on((event) => events.push(event));
 
@@ -622,11 +610,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
       bank: new FileBank(),
       clock,
       revealGraceMs: 0,
-      matches: stores.matches,
-      submissions: stores.submissions,
-      reveals: stores.reveals,
-      collab: stores.collab,
-      saveMatchAndCollab: (match, rows) => stores.saveMatchAndCollab(match, rows),
+      persistence: stores.persistence,
     });
     engine.on((event) => events.push(event));
 
@@ -703,19 +687,14 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
     });
 
     const engine2Events: string[] = [];
-    const engine2Persistence = new StoreBackedMatchPersistence({
-      matches: stores.matches,
-      submissions: stores.submissions,
-      reveals: stores.reveals,
-      collab: stores.collab,
-      commitMatchAndTeamDocuments: async (match, rows, expectedRevision) => {
-        if (!engine2PausedAtGate) {
-          engine2PausedAtGate = true;
-          await gatePromise;
-        }
-        return stores.saveMatchAndCollab(match, rows, expectedRevision);
-      },
-    });
+    const engine2Persistence: MatchPersistence = Object.create(stores.persistence);
+    engine2Persistence.commitMatchAndTeamDocuments = async (...args) => {
+      if (!engine2PausedAtGate) {
+        engine2PausedAtGate = true;
+        await gatePromise;
+      }
+      return stores.persistence.commitMatchAndTeamDocuments(...args);
+    };
     const engine2 = new ArenaEngine({
       judge: new ScriptedJudge([{ score: 100 }]),
       bank: new FileBank(),

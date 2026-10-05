@@ -2,28 +2,26 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 import { ArenaEngine } from "../src/engine.js";
 import { FileBank } from "../src/file-bank.js";
-import { CollabDocs, InMemoryCollabPersist } from "../src/collab.js";
-import { InMemoryMatchStore, InMemorySubmissionStore, InMemoryRevealStore } from "../src/store.js";
+import { CollabDocs } from "../src/collab.js";
+import { inMemoryPersistence } from "../src/persistence.js";
 import { testPrincipal } from "../src/principal.js";
 import { ScriptedJudge } from "./scripted-judge.js";
 import { P100, SOLVED_PY, tick } from "./setup.js";
 
-class FailableMatches extends InMemoryMatchStore {
-  failNext = false;
-  override async save(...args: Parameters<InMemoryMatchStore["save"]>) {
-    if (this.failNext) { this.failNext = false; throw new Error("Match commit failed"); }
-    return super.save(...args);
-  }
-}
-
 async function fixture(plans: ConstructorParameters<typeof ScriptedJudge>[0] = []) {
   let now = 1000;
-  const matches = new FailableMatches();
-  const submissions = new InMemorySubmissionStore();
-  const reveals = new InMemoryRevealStore();
-  const collab = new InMemoryCollabPersist();
+  const persistence = inMemoryPersistence();
+  let failNext = false;
+  const originalSave = persistence.saveMatch.bind(persistence);
+  persistence.saveMatch = async (...args) => {
+    if (failNext) {
+      failNext = false;
+      throw new Error("Match commit failed");
+    }
+    return originalSave(...args);
+  };
   const judge = new ScriptedJudge(plans);
-  const options = { judge, bank: new FileBank(), matches, submissions, reveals, collab, clock: () => now, revealGraceMs: 0 };
+  const options = { judge, bank: new FileBank(), persistence, clock: () => now, revealGraceMs: 0 };
   const engine = new ArenaEngine(options);
   const a = testPrincipal("a");
   const b = testPrincipal("b");
@@ -53,7 +51,20 @@ async function fixture(plans: ConstructorParameters<typeof ScriptedJudge>[0] = [
   const left = await engine.collabSync(a, matchId);
   const right = await engine.collabSync(b, matchId);
   const retained = () => [...documents].some((docs) => docs.has(left.roomId) || docs.has(right.roomId));
-  return { engine, a, b, matchId, left, right, retained, matches, submissions, reveals, collab, judge, options, advance: () => { now += 1000; } };
+  return {
+    engine,
+    a,
+    b,
+    matchId,
+    left,
+    right,
+    retained,
+    persistence,
+    setFailNext: (val: boolean) => { failNext = val; },
+    judge,
+    options,
+    advance: () => { now += 1000; },
+  };
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -70,19 +81,19 @@ describe("completed Match resource retirement through ArenaEngine", () => {
       await fx.engine.sweepExpiredMatches();
     } else await fx.engine.leaveMatch(fx.a, fx.matchId);
     expect(fx.retained()).toBe(false);
-    const stored = await fx.matches.load(fx.matchId);
+    const stored = await fx.persistence.loadMatch(fx.matchId);
     expect(stored?.roundPhase).toBe("MATCH_COMPLETE");
-    expect(await fx.collab.load(fx.matchId, fx.left.roundId, "left")).toBeDefined();
+    expect(await fx.persistence.loadTeamDocument(fx.matchId, fx.left.roundId, "left")).toBeDefined();
     expect((await fx.engine.snapshot(fx.a, fx.matchId)).final).toBeDefined();
-    if (path !== "forfeit") expect(await fx.reveals.get(fx.matchId, fx.left.roundId)).toBeDefined();
+    if (path !== "forfeit") expect(await fx.persistence.findReveal(fx.matchId, fx.left.roundId)).toBeDefined();
   });
 
   it("retains live documents on a failed terminal commit and retires them after retry", async () => {
     const fx = await fixture();
-    fx.matches.failNext = true;
+    fx.setFailNext(true);
     await expect(fx.engine.leaveMatch(fx.a, fx.matchId)).rejects.toThrow("commit failed");
     expect(fx.retained()).toBe(true);
-    expect((await fx.matches.load(fx.matchId))?.roundPhase).toBe("CODING");
+    expect((await fx.persistence.loadMatch(fx.matchId))?.roundPhase).toBe("CODING");
     expect((await fx.engine.collabSync(fx.a, fx.matchId)).source).toBe(fx.left.source);
     await fx.engine.leaveMatch(fx.a, fx.matchId);
     expect(fx.retained()).toBe(false);
@@ -118,7 +129,7 @@ describe("completed Match resource retirement through ArenaEngine", () => {
     expect(fx.retained()).toBe(false);
     fx.judge.release(P100);
     await submitting;
-    expect((await fx.submissions.getBySubmissionId("late-submission"))?.status).not.toBe("pending");
+    expect((await fx.persistence.findSubmissionById("late-submission"))?.status).not.toBe("pending");
     expect((await fx.engine.snapshot(fx.a, fx.matchId)).roundPhase).toBe("MATCH_COMPLETE");
     expect(fx.retained()).toBe(false);
   });

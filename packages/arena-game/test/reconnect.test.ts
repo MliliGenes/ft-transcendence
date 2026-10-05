@@ -530,7 +530,10 @@ describe("boot recovery across a simulated process death (ticket 11 §10)", () =
     const matches = new InMemoryMatchStore();
     const submissions = new InMemorySubmissionStore();
     const reveals = new InMemoryRevealStore();
-    const stores = { matches, submissions, reveals };
+    const collab = new InMemoryCollabPersist();
+    const persistence1 = new StoreBackedMatchPersistence({ matches, submissions, reveals, collab });
+    const persistence2 = new StoreBackedMatchPersistence({ matches, submissions, reveals, collab });
+    const stores = { matches, submissions, reveals, collab, persistence: persistence1 };
     const left = testPrincipal("user-left");
     const right = testPrincipal("user-right");
     const engine1 = new ArenaEngine({
@@ -538,7 +541,7 @@ describe("boot recovery across a simulated process death (ticket 11 §10)", () =
       bank: new FileBank(),
       clock: () => now,
       revealGraceMs: 0,
-      ...stores,
+      persistence: persistence1,
       ...options,
     });
     const matchId = await engine1.createMatch({
@@ -556,10 +559,10 @@ describe("boot recovery across a simulated process death (ticket 11 §10)", () =
       bank: new FileBank(),
       clock: () => now,
       revealGraceMs: 0,
-      ...stores,
+      persistence: persistence2,
       ...options,
     });
-    return { engine1, engine2, judge, left, right, matchId, stores, advance: (ms: number) => { now += ms; } };
+    return { engine1, engine2, judge, left, right, matchId, stores, persistence: persistence1, advance: (ms: number) => { now += ms; } };
   }
 
   it("presence resets offline, transient activity repairs, pending re-drives once", async () => {

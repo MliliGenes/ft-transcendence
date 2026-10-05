@@ -1,6 +1,14 @@
-import type { CollabPersist, CollabRow } from "./collab.js";
+import { InMemoryCollabPersist, type CollabPersist, type CollabRow } from "./collab.js";
 import type { MatchRecord, RevealSnapshot, SubmissionRecord } from "./records.js";
-import { DuplicateError, type MatchStore, type RevealStore, type SubmissionStore } from "./store.js";
+import {
+  DuplicateError,
+  InMemoryMatchStore,
+  InMemoryRevealStore,
+  InMemorySubmissionStore,
+  type MatchStore,
+  type RevealStore,
+  type SubmissionStore,
+} from "./store.js";
 
 export { MatchRevisionConflictError } from "./store.js";
 
@@ -271,3 +279,13 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
     }
   }
 }
+
+export function inMemoryPersistence(): MatchPersistence {
+  return new StoreBackedMatchPersistence({
+    matches: new InMemoryMatchStore(),
+    submissions: new InMemorySubmissionStore(),
+    reveals: new InMemoryRevealStore(),
+    collab: new InMemoryCollabPersist(),
+  });
+}
+

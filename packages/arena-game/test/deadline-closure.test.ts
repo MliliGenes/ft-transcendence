@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ArenaEngine, MATCH_DURATION_MS } from "../src/engine.js";
 import { FileBank } from "../src/file-bank.js";
-import { InMemoryCollabPersist } from "../src/collab.js";
-import { InMemoryMatchStore, InMemoryRevealStore, InMemorySubmissionStore } from "../src/store.js";
+import { inMemoryPersistence } from "../src/persistence.js";
 import { ScriptedJudge } from "./scripted-judge.js";
 import { P70, SOLVED_PY, setup, tick } from "./setup.js";
 import { testPrincipal } from "../src/principal.js";
@@ -84,17 +83,11 @@ describe("Match deadline closure", () => {
 
   it("waits for an accepted evaluation owned by another Game process", async () => {
     let now = 1_000_000;
-    const matches = new InMemoryMatchStore();
-    const submissions = new InMemorySubmissionStore();
-    const reveals = new InMemoryRevealStore();
-    const collab = new InMemoryCollabPersist();
+    const persistence = inMemoryPersistence();
     const bank = new FileBank();
     const shared = {
       bank,
-      matches,
-      submissions,
-      reveals,
-      collab,
+      persistence,
       clock: () => now,
       revealGraceMs: 100,
     };
