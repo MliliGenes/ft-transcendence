@@ -78,7 +78,7 @@ export function adaptFinal(
     you,
     opponent,
     outcome:
-      you > opponent ? "You win the match." : you < opponent ? "Opponent wins the match." : "The match is a draw.",
+      f.winner === null ? "The match is a draw." : f.winner === mySide ? "You win the match." : "Opponent wins the match.",
   };
 }
 

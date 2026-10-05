@@ -61,6 +61,12 @@ describe("adaptFinal (server terminal result -> viewer-relative final)", () => {
     expect(adaptFinal({ ...base, forfeit }, "left", "right")?.outcome).toBe("You win by forfeit.");
     expect(adaptFinal({ ...base, forfeit }, "right", "left")?.outcome).toBe("Opponent wins by forfeit.");
   });
+  it("uses the authoritative tie-break winner even when scores are equal", () => {
+    const tied = { ...base, scores: { left: 220, right: 220 } };
+    expect(adaptFinal(tied, "left", "right")?.outcome).toBe("You win the match.");
+    expect(adaptFinal(tied, "right", "left")?.outcome).toBe("Opponent wins the match.");
+    expect(adaptFinal({ ...tied, outcome: "draw", winner: null }, "left", "right")?.outcome).toBe("The match is a draw.");
+  });
   it("passes null through when the match is not terminal", () => {
     expect(adaptFinal(null, "left", "right")).toBeNull();
   });
