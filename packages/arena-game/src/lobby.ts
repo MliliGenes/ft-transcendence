@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
-import { saveMatchTx } from "./postgres-store.js";
+import { saveMatchTx } from "./lib/match-write.js";
 import type { MatchStore } from "./store.js";
 import type { MatchRecord } from "./records.js";
 import type { MatchMode } from "arena-model";
