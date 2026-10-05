@@ -1,0 +1,5 @@
+{
+  "name": "arena-module-example",
+  "private": true,
+  "type": "module"
+}
