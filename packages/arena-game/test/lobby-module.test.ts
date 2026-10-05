@@ -184,7 +184,7 @@ describe.each(["memory", "postgres"])("Lobby module (%s adapter)", (adapterKind)
 
     await lobby.leavePrivateRoom("guest", created.room.id);
     const saved = await lobby.getRoomWithMembers(created.room.id);
-    expect(saved.members).toEqual([
+    expect(saved?.members).toEqual([
       expect.objectContaining({ userId: "host", ready: false }),
     ]);
   });
@@ -210,6 +210,13 @@ describe.each(["memory", "postgres"])("Lobby module (%s adapter)", (adapterKind)
     expect(hints[0].payload.room.status).toBe("closed");
     expect(hints[0].payload.audienceUserIds).toEqual(expect.arrayContaining([guest1, guest2]));
     expect(hints[0].payload.audienceUserIds).not.toContain(host);
+    const saved = await lobby.getRoomWithMembers(created.room.id);
+    expect(saved?.room.status).toBe("closed");
+    expect(saved?.members).toEqual([]);
+    for (const guest of [guest1, guest2]) {
+      expect(await lobby.userActiveRoom(guest)).toBeNull();
+      await expect(lobby.roomForMember(guest, created.room.id)).rejects.toMatchObject({ code: 403 });
+    }
   });
 
   it("committed results survive failed hint listener delivery", async () => {

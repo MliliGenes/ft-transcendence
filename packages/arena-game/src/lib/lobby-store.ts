@@ -526,6 +526,7 @@ export class LobbyStore implements ILobbyStore {
       let remainingMembers: PrivateRoomMember[];
 
       if (r.owner_user_id === userId) {
+        await client.query(`DELETE FROM arena_private_room_members WHERE room_id = $1`, [roomId]);
         await client.query(`UPDATE arena_private_rooms SET status = 'closed' WHERE id = $1`, [roomId]);
         closed = true;
         room = { ...room, status: "closed" };
