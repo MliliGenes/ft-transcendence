@@ -63,7 +63,7 @@ authoritative state and does not replay the command automatically.
 queue wait, execution duration, outcome, and infrastructure errors. It never
 changes Match state and does not make scheduling decisions.
 
-**Lobby**: The invitation-code pre-match gathering where players assemble sides and ready up. Public-queue backend code remains available for a future release but is hidden from the first-release entry flow; a recovered waiting queue entry is canceled. Lobby socket changes are hints to fetch the latest authoritative state, and stale fetch responses are discarded. The reference starts at round intro.
+**Lobby**: The invitation-code pre-match gathering where players assemble sides and ready up. PostgreSQL and in-memory adapters apply one private Lobby policy for admission, side capacity, readiness, exact expiry, and the host start gate after acquiring their storage locks. Public-queue backend code remains available for a future release but is hidden from the first-release entry flow; a recovered waiting queue entry is canceled. Lobby socket changes are hints to fetch the latest authoritative state, and stale fetch responses are discarded. The reference starts at round intro.
 
 **Match event**: A transient live update published after the Match write commits and stamped with the committed revision. Reconnect and refresh recover missed updates from the latest authoritative snapshot; this release does not keep a durable event outbox.
 

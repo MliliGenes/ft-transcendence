@@ -161,6 +161,91 @@ export interface ILobbyStore {
   userActiveRoom(userId: string): Promise<RoomWithMembers | null>;
 }
 
+// Private Lobby policy runs only after the adapter acquires its admission/room
+// locks. Both storage adapters apply these transitions to normalized state.
+class PrivateLobby {
+  constructor(readonly room: PrivateRoom, readonly members: PrivateRoomMember[], private readonly now: number) {}
+
+  private requireUnexpired(markExpired = false): void {
+    if (this.room.status === "open" && this.now >= this.room.expiresAt) {
+      if (markExpired) this.room.status = "expired";
+      throw new LobbyError("room has expired", 410);
+    }
+  }
+
+  private requireOpen(starting = false): void {
+    this.requireUnexpired();
+    if (starting && this.room.status === "matched") throw new LobbyError("room has already started", 409);
+    if (this.room.status !== "open") throw new LobbyError(`room is ${this.room.status}`, 409);
+  }
+
+  private member(userId: string): PrivateRoomMember {
+    const member = this.members.find((candidate) => candidate.userId === userId);
+    if (!member) throw new LobbyError("not a member of this room", 403);
+    return member;
+  }
+
+  join(userId: string): PrivateRoomMember {
+    this.requireUnexpired(true);
+    this.requireOpen(true);
+    if (this.members.some((member) => member.userId === userId)) throw new LobbyError("already in this private room", 409);
+    if (this.members.length >= capacityFor(this.room.mode)) throw new LobbyError("room is full", 409);
+    const leftCount = this.members.filter((member) => member.sideId === "left").length;
+    const member: PrivateRoomMember = {
+      roomId: this.room.id, userId,
+      sideId: leftCount < perSideCapacity(this.room.mode) ? "left" : "right",
+      ready: false, joinedAt: this.now,
+    };
+    this.members.push(member);
+    return member;
+  }
+
+  setSide(userId: string, sideId: LobbySideId): PrivateRoomMember {
+    if (sideId !== "left" && sideId !== "right") throw new LobbyError("invalid side");
+    this.requireOpen();
+    const member = this.member(userId);
+    if (member.sideId !== sideId) {
+      if (this.members.filter((candidate) => candidate.sideId === sideId).length >= perSideCapacity(this.room.mode)) {
+        throw new LobbyError("side is full", 409);
+      }
+      member.sideId = sideId;
+      member.ready = false;
+    }
+    return member;
+  }
+
+  setReady(userId: string, ready: boolean): PrivateRoomMember {
+    this.requireOpen();
+    const member = this.member(userId);
+    member.ready = ready;
+    return member;
+  }
+
+  start(userId: string, problemVersionIds: string[]): {
+    mode: MatchMode; participants: Array<{ userId: string; sideId: string }>; problemVersionIds: string[];
+  } {
+    this.requireUnexpired();
+    if (this.room.ownerUserId !== userId) throw new LobbyError("only the lobby host can start the match", 403);
+    this.requireOpen(true);
+    const sideCap = perSideCapacity(this.room.mode);
+    if (this.members.length !== capacityFor(this.room.mode) ||
+        this.members.filter((member) => member.sideId === "left").length !== sideCap ||
+        this.members.filter((member) => member.sideId === "right").length !== sideCap) {
+      throw new LobbyError(`cannot start: sides must be full (${sideCap} per side)`, 400);
+    }
+    if (this.members.some((member) => !member.ready)) throw new LobbyError("cannot start: all players must be ready", 400);
+    return { mode: this.room.mode, participants: this.members.map(({ userId, sideId }) => ({ userId, sideId })), problemVersionIds };
+  }
+
+  snapshot(): RoomWithMembers {
+    return { room: { ...this.room }, members: this.members.map((member) => ({ ...member })) };
+  }
+
+  get full(): boolean {
+    return this.members.length >= capacityFor(this.room.mode);
+  }
+}
+
 // ─── Postgres Implementation ────────────────────────────────────────────────
 
 export class LobbyStore implements ILobbyStore {
@@ -423,6 +508,26 @@ export class LobbyStore implements ILobbyStore {
     }
   }
 
+  private async loadPrivateLobby(client: PoolClient, value: string, byCode = false): Promise<PrivateLobby> {
+    const roomRes = await client.query(
+      `SELECT id, code, mode, owner_user_id, status, created_at, expires_at, match_id
+       FROM arena_private_rooms WHERE ${byCode ? "code" : "id"} = $1 FOR UPDATE`, [value],
+    );
+    if ((roomRes.rowCount ?? 0) === 0) throw new LobbyError(byCode ? "invalid invite code" : "room not found", 404);
+    const row = roomRes.rows[0];
+    const members = await client.query(
+      `SELECT room_id, user_id, side_id, ready, joined_at
+       FROM arena_private_room_members WHERE room_id = $1 ORDER BY joined_at ASC`, [row.id],
+    );
+    return new PrivateLobby({
+      id: row.id, code: row.code, mode: row.mode, ownerUserId: row.owner_user_id,
+      status: row.status, createdAt: Number(row.created_at), expiresAt: Number(row.expires_at), matchId: row.match_id,
+    }, members.rows.map((member) => ({
+      roomId: member.room_id, userId: member.user_id, sideId: member.side_id,
+      ready: Boolean(member.ready), joinedAt: Number(member.joined_at),
+    })), this.clock());
+  }
+
   async joinPrivateRoom(userId: string, inviteCode: string): Promise<RoomWithMembers & { full: boolean }> {
     const client = await this.pool.connect();
     try {
@@ -449,76 +554,25 @@ export class LobbyStore implements ILobbyStore {
       );
       if ((activeMatch.rowCount ?? 0) > 0) throw new LobbyError("already in an active match", 409);
 
-      const roomRes = await client.query(
-        `SELECT id, code, mode, owner_user_id, status, created_at, expires_at, match_id
-         FROM arena_private_rooms WHERE code = $1 FOR UPDATE`,
-        [inviteCode.toUpperCase().trim()],
-      );
-      if ((roomRes.rowCount ?? 0) === 0) throw new LobbyError("invalid invite code", 404);
-
-      const r = roomRes.rows[0];
-
-      if (r.status === "open" && Number(r.expires_at) < this.clock()) {
-        await client.query(`UPDATE arena_private_rooms SET status = 'expired' WHERE id = $1`, [r.id]);
-        await client.query("COMMIT");
-        throw new LobbyError("room has expired", 410);
+      const lobby = await this.loadPrivateLobby(client, inviteCode.toUpperCase().trim(), true);
+      let member: PrivateRoomMember;
+      try {
+        member = lobby.join(userId);
+      } catch (error) {
+        // Expiring an invitation is durable even though the admission fails.
+        if (lobby.room.status === "expired" && error instanceof LobbyError && error.code === 410) {
+          await client.query(`UPDATE arena_private_rooms SET status = 'expired' WHERE id = $1`, [lobby.room.id]);
+          await client.query("COMMIT");
+        }
+        throw error;
       }
-
-      if (r.status === "matched") throw new LobbyError("room has already started", 409);
-      if (r.status !== "open") throw new LobbyError(`room is ${r.status}`, 409);
-
-      const memberRes = await client.query(
-        `SELECT room_id, user_id, side_id, ready, joined_at
-         FROM arena_private_room_members WHERE room_id = $1 ORDER BY joined_at ASC`,
-        [r.id],
-      );
-
-      const members: PrivateRoomMember[] = memberRes.rows.map((m: any) => ({
-        roomId: m.room_id,
-        userId: m.user_id,
-        sideId: m.side_id as LobbySideId,
-        ready: Boolean(m.ready),
-        joinedAt: Number(m.joined_at),
-      }));
-
-      const existing = members.find((m) => m.userId === userId);
-      const cap = capacityFor(r.mode);
-      if (existing) throw new LobbyError("already in this private room", 409);
-
-      if (members.length >= cap) throw new LobbyError("room is full", 409);
-
-      // Auto-assign side
-      const sideCap = perSideCapacity(r.mode);
-      const leftCount = members.filter((m) => m.sideId === "left").length;
-      const assignedSide: LobbySideId = leftCount < sideCap ? "left" : "right";
-
-      const newMember: PrivateRoomMember = {
-        roomId: r.id,
-        userId,
-        sideId: assignedSide,
-        ready: false,
-        joinedAt: this.clock(),
-      };
-
       await client.query(
         `INSERT INTO arena_private_room_members (room_id, user_id, side_id, ready, joined_at)
          VALUES ($1, $2, $3, $4, $5)`,
-        [newMember.roomId, newMember.userId, newMember.sideId, newMember.ready, newMember.joinedAt],
+        [member.roomId, member.userId, member.sideId, member.ready, member.joinedAt],
       );
-
-      members.push(newMember);
-      const full = members.length >= cap;
-
       await client.query("COMMIT");
-
-      return {
-        room: {
-          id: r.id, code: r.code, mode: r.mode, ownerUserId: r.owner_user_id,
-          status: r.status, createdAt: Number(r.created_at), expiresAt: Number(r.expires_at), matchId: r.match_id,
-        },
-        members,
-        full,
-      };
+      return { ...lobby.snapshot(), full: lobby.full };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -563,71 +617,17 @@ export class LobbyStore implements ILobbyStore {
   }
 
   async setRoomMemberSide(userId: string, roomId: string, sideId: LobbySideId): Promise<RoomWithMembers> {
-    if (sideId !== "left" && sideId !== "right") throw new LobbyError("invalid side");
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-
-      const roomRes = await client.query(
-        `SELECT id, code, mode, owner_user_id, status, created_at, expires_at, match_id
-         FROM arena_private_rooms WHERE id = $1 FOR UPDATE`,
-        [roomId],
-      );
-      if ((roomRes.rowCount ?? 0) === 0) throw new LobbyError("room not found", 404);
-      const r = roomRes.rows[0];
-      if (r.status === "open" && Number(r.expires_at) <= this.clock()) throw new LobbyError("room has expired", 410);
-      if (r.status !== "open") throw new LobbyError(`room is ${r.status}`, 409);
-
-      const memberRes = await client.query(
-        `SELECT room_id, user_id, side_id, ready, joined_at
-         FROM arena_private_room_members WHERE room_id = $1 FOR UPDATE`,
-        [roomId],
-      );
-
-      const targetMember = memberRes.rows.find((m: any) => m.user_id === userId);
-      if (!targetMember) throw new LobbyError("not a member of this room", 403);
-
-      if (targetMember.side_id === sideId) {
-        // Already on this side
-        await client.query("COMMIT");
-        return {
-          room: {
-            id: r.id, code: r.code, mode: r.mode, ownerUserId: r.owner_user_id,
-            status: r.status, createdAt: Number(r.created_at), expiresAt: Number(r.expires_at), matchId: r.match_id,
-          },
-          members: memberRes.rows.map((m: any) => ({
-            roomId: m.room_id, userId: m.user_id, sideId: m.side_id, ready: Boolean(m.ready), joinedAt: Number(m.joined_at),
-          })),
-        };
-      }
-
-      const sideCap = perSideCapacity(r.mode);
-      const onSideCount = memberRes.rows.filter((m: any) => m.side_id === sideId).length;
-      if (onSideCount >= sideCap) throw new LobbyError("side is full", 409);
-
-      // Change-clears-ready semantics: changing side resets ready to false!
+      const lobby = await this.loadPrivateLobby(client, roomId);
+      const member = lobby.setSide(userId, sideId);
       await client.query(
-        `UPDATE arena_private_room_members SET side_id = $1, ready = FALSE WHERE room_id = $2 AND user_id = $3`,
-        [sideId, roomId, userId],
+        `UPDATE arena_private_room_members SET side_id = $1, ready = $2 WHERE room_id = $3 AND user_id = $4`,
+        [member.sideId, member.ready, roomId, userId],
       );
-
-      const updatedMembers = await client.query(
-        `SELECT room_id, user_id, side_id, ready, joined_at
-         FROM arena_private_room_members WHERE room_id = $1 ORDER BY joined_at ASC`,
-        [roomId],
-      );
-
       await client.query("COMMIT");
-
-      return {
-        room: {
-          id: r.id, code: r.code, mode: r.mode, ownerUserId: r.owner_user_id,
-          status: r.status, createdAt: Number(r.created_at), expiresAt: Number(r.expires_at), matchId: r.match_id,
-        },
-        members: updatedMembers.rows.map((m: any) => ({
-          roomId: m.room_id, userId: m.user_id, sideId: m.side_id as LobbySideId, ready: Boolean(m.ready), joinedAt: Number(m.joined_at),
-        })),
-      };
+      return lobby.snapshot();
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -640,40 +640,14 @@ export class LobbyStore implements ILobbyStore {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-
-      const roomRes = await client.query(
-        `SELECT id, code, mode, owner_user_id, status, created_at, expires_at, match_id
-         FROM arena_private_rooms WHERE id = $1 FOR UPDATE`,
-        [roomId],
-      );
-      if ((roomRes.rowCount ?? 0) === 0) throw new LobbyError("room not found", 404);
-      const r = roomRes.rows[0];
-      if (r.status === "open" && Number(r.expires_at) <= this.clock()) throw new LobbyError("room has expired", 410);
-      if (r.status !== "open") throw new LobbyError(`room is ${r.status}`, 409);
-
-      const updateRes = await client.query(
+      const lobby = await this.loadPrivateLobby(client, roomId);
+      const member = lobby.setReady(userId, ready);
+      await client.query(
         `UPDATE arena_private_room_members SET ready = $1 WHERE room_id = $2 AND user_id = $3`,
-        [ready, roomId, userId],
+        [member.ready, roomId, userId],
       );
-      if ((updateRes.rowCount ?? 0) === 0) throw new LobbyError("not a member of this room", 403);
-
-      const memberRes = await client.query(
-        `SELECT room_id, user_id, side_id, ready, joined_at
-         FROM arena_private_room_members WHERE room_id = $1 ORDER BY joined_at ASC`,
-        [roomId],
-      );
-
       await client.query("COMMIT");
-
-      return {
-        room: {
-          id: r.id, code: r.code, mode: r.mode, ownerUserId: r.owner_user_id,
-          status: r.status, createdAt: Number(r.created_at), expiresAt: Number(r.expires_at), matchId: r.match_id,
-        },
-        members: memberRes.rows.map((m: any) => ({
-          roomId: m.room_id, userId: m.user_id, sideId: m.side_id as LobbySideId, ready: Boolean(m.ready), joinedAt: Number(m.joined_at),
-        })),
-      };
+      return lobby.snapshot();
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -691,52 +665,13 @@ export class LobbyStore implements ILobbyStore {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-
-      const roomRes = await client.query(
-        `SELECT id, code, mode, owner_user_id, status, created_at, expires_at, match_id
-         FROM arena_private_rooms WHERE id = $1 FOR UPDATE`,
-        [roomId],
-      );
-      if ((roomRes.rowCount ?? 0) === 0) throw new LobbyError("room not found", 404);
-      const r = roomRes.rows[0];
-
-      if (r.status === "open" && Number(r.expires_at) <= this.clock()) throw new LobbyError("room has expired", 410);
-      if (r.owner_user_id !== userId) throw new LobbyError("only the lobby host can start the match", 403);
-      if (r.status === "matched") throw new LobbyError("room has already started", 409);
-      if (r.status !== "open") throw new LobbyError(`room is ${r.status}`, 409);
-
-      const memberRes = await client.query(
-        `SELECT room_id, user_id, side_id, ready, joined_at
-         FROM arena_private_room_members WHERE room_id = $1 ORDER BY joined_at ASC`,
-        [roomId],
-      );
-
-      const members: PrivateRoomMember[] = memberRes.rows.map((m: any) => ({
-        roomId: m.room_id, userId: m.user_id, sideId: m.side_id as LobbySideId, ready: Boolean(m.ready), joinedAt: Number(m.joined_at),
-      }));
-
-      const cap = capacityFor(r.mode);
-      const sideCap = perSideCapacity(r.mode);
-      const leftMembers = members.filter((m) => m.sideId === "left");
-      const rightMembers = members.filter((m) => m.sideId === "right");
-
-      if (members.length !== cap || leftMembers.length !== sideCap || rightMembers.length !== sideCap) {
-        throw new LobbyError(`cannot start: sides must be full (${sideCap} per side)`, 400);
-      }
-
-      const notReady = members.filter((m) => !m.ready);
-      if (notReady.length > 0) {
-        throw new LobbyError("cannot start: all players must be ready", 400);
-      }
-
-      const participants = members.map((m) => ({ userId: m.userId, sideId: m.sideId }));
-      const matchId = await createMatchFn({ mode: r.mode, participants, problemVersionIds }, (match) => saveMatchTx(client, match));
-
+      const lobby = await this.loadPrivateLobby(client, roomId);
+      const input = lobby.start(userId, problemVersionIds);
+      // The Match and room linkage still commit together under the room lock.
+      const matchId = await createMatchFn(input, (match) => saveMatchTx(client, match));
       await client.query(
-        `UPDATE arena_private_rooms SET status = 'matched', match_id = $1 WHERE id = $2`,
-        [matchId, roomId],
+        `UPDATE arena_private_rooms SET status = 'matched', match_id = $1 WHERE id = $2`, [matchId, roomId],
       );
-
       await client.query("COMMIT");
       return { matchId };
     } catch (error) {
@@ -960,40 +895,10 @@ export class InMemoryLobbyStore implements ILobbyStore {
       if (!room) throw new LobbyError("invalid invite code", 404);
       await this.assertAvailable(userId, room.id);
 
-      if (room.status === "open" && room.expiresAt < this.clock()) {
-        room.status = "expired";
-        throw new LobbyError("room has expired", 410);
-      }
-      if (room.status === "matched") throw new LobbyError("room has already started", 409);
-      if (room.status === "open" && room.expiresAt <= this.clock()) throw new LobbyError("room has expired", 410);
-      if (room.status !== "open") throw new LobbyError(`room is ${room.status}`, 409);
-
-      const mems = this.members.get(room.id) ?? [];
-      const existing = mems.find((m) => m.userId === userId);
-      const cap = capacityFor(room.mode);
-      if (existing) throw new LobbyError("already in this private room", 409);
-
-      if (mems.length >= cap) throw new LobbyError("room is full", 409);
-
-      const sideCap = perSideCapacity(room.mode);
-      const leftCount = mems.filter((m) => m.sideId === "left").length;
-      const assignedSide: LobbySideId = leftCount < sideCap ? "left" : "right";
-
-      const newMember: PrivateRoomMember = {
-        roomId: room.id,
-        userId,
-        sideId: assignedSide,
-        ready: false,
-        joinedAt: this.clock(),
-      };
-      mems.push(newMember);
-      this.members.set(room.id, mems);
-
-      return {
-        room: { ...room },
-        members: mems.map((m) => ({ ...m })),
-        full: mems.length >= cap,
-      };
+      const lobby = new PrivateLobby(room, this.members.get(room.id) ?? [], this.clock());
+      lobby.join(userId);
+      this.members.set(room.id, lobby.members);
+      return { ...lobby.snapshot(), full: lobby.full };
     });
   }
 
@@ -1019,24 +924,9 @@ export class InMemoryLobbyStore implements ILobbyStore {
     return this.exclusive(async () => {
       const room = this.rooms.get(roomId);
       if (!room) throw new LobbyError("room not found", 404);
-      if (room.status === "open" && room.expiresAt <= this.clock()) throw new LobbyError("room has expired", 410);
-      if (room.status !== "open") throw new LobbyError(`room is ${room.status}`, 409);
-
-      const mems = this.members.get(roomId) ?? [];
-      const target = mems.find((m) => m.userId === userId);
-      if (!target) throw new LobbyError("not a member of this room", 403);
-
-      if (target.sideId === sideId) {
-        return { room: { ...room }, members: mems.map((m) => ({ ...m })) };
-      }
-
-      const sideCap = perSideCapacity(room.mode);
-      const onSide = mems.filter((m) => m.sideId === sideId).length;
-      if (onSide >= sideCap) throw new LobbyError("side is full", 409);
-
-      target.sideId = sideId;
-      target.ready = false; // change-clears-ready
-      return { room: { ...room }, members: mems.map((m) => ({ ...m })) };
+      const lobby = new PrivateLobby(room, this.members.get(roomId) ?? [], this.clock());
+      lobby.setSide(userId, sideId);
+      return lobby.snapshot();
     });
   }
 
@@ -1044,15 +934,9 @@ export class InMemoryLobbyStore implements ILobbyStore {
     return this.exclusive(async () => {
       const room = this.rooms.get(roomId);
       if (!room) throw new LobbyError("room not found", 404);
-      if (room.status === "open" && room.expiresAt <= this.clock()) throw new LobbyError("room has expired", 410);
-      if (room.status !== "open") throw new LobbyError(`room is ${room.status}`, 409);
-
-      const mems = this.members.get(roomId) ?? [];
-      const target = mems.find((m) => m.userId === userId);
-      if (!target) throw new LobbyError("not a member of this room", 403);
-
-      target.ready = ready;
-      return { room: { ...room }, members: mems.map((m) => ({ ...m })) };
+      const lobby = new PrivateLobby(room, this.members.get(roomId) ?? [], this.clock());
+      lobby.setReady(userId, ready);
+      return lobby.snapshot();
     });
   }
 
@@ -1065,27 +949,8 @@ export class InMemoryLobbyStore implements ILobbyStore {
     return this.exclusive(async () => {
       const room = this.rooms.get(roomId);
       if (!room) throw new LobbyError("room not found", 404);
-      if (room.ownerUserId !== userId) throw new LobbyError("only the lobby host can start the match", 403);
-      if (room.status === "matched") throw new LobbyError("room has already started", 409);
-      if (room.status === "open" && room.expiresAt <= this.clock()) throw new LobbyError("room has expired", 410);
-      if (room.status !== "open") throw new LobbyError(`room is ${room.status}`, 409);
-
-      const mems = this.members.get(roomId) ?? [];
-      const cap = capacityFor(room.mode);
-      const sideCap = perSideCapacity(room.mode);
-      const left = mems.filter((m) => m.sideId === "left");
-      const right = mems.filter((m) => m.sideId === "right");
-
-      if (mems.length !== cap || left.length !== sideCap || right.length !== sideCap) {
-        throw new LobbyError(`cannot start: sides must be full (${sideCap} per side)`, 400);
-      }
-
-      if (mems.some((m) => !m.ready)) {
-        throw new LobbyError("cannot start: all players must be ready", 400);
-      }
-
-      const participants = mems.map((m) => ({ userId: m.userId, sideId: m.sideId }));
-      const matchId = await createMatchFn({ mode: room.mode, participants, problemVersionIds });
+      const lobby = new PrivateLobby(room, this.members.get(roomId) ?? [], this.clock());
+      const matchId = await createMatchFn(lobby.start(userId, problemVersionIds));
 
       room.status = "matched";
       room.matchId = matchId;
