@@ -1,5 +1,5 @@
 import type { MatchMode, PlayerStatus, Presence, RoundPhase } from "arena-model";
-import type { ExecutionStatus } from "./judge.js";
+import type { ExecutionStatus } from "./judge-types.js";
 
 export type SideId = string;
 

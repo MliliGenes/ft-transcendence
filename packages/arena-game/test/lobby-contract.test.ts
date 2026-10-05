@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { InMemoryLobbyStore, LobbyStore, type ILobbyStore, type LobbySideId } from "../src/lobby.js";
-import { GAME_SCHEMA } from "../src/postgres-store.js";
+import { GAME_SCHEMA } from "../src/persistence.js";
 
 for (const adapter of ["memory", "postgres"] as const) {
   describe.runIf(adapter === "memory" || Boolean(process.env.DATABASE_URL))(`private Lobby contract (${adapter})`, () => {

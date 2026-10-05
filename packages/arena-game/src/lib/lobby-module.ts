@@ -1,5 +1,5 @@
 import type { MatchMode } from "arena-model";
-import type { MatchRecord } from "../records.js";
+import type { MatchRecord } from "./records.js";
 import {
   type ILobbyStore,
   type LobbySideId,
@@ -10,7 +10,7 @@ import {
   LobbyError,
   selectProblems,
 } from "./lobby-types.js";
-import { RateLimitedError } from "../engine.js";
+import { RateLimitedError } from "./engine.js";
 
 export type CreateMatchCallback = (
   input: {

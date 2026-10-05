@@ -4,14 +4,16 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import type { MatchMode } from "arena-model";
 import {
   GAME_SCHEMA,
-  InMemoryLobbyStore,
   InMemoryMatchStore,
+} from "../src/persistence.js";
+import {
+  InMemoryLobbyStore,
   Lobby,
   LobbyError,
   LobbyStore,
   type ILobbyStore,
   type LobbyEvent,
-} from "../src/index.js";
+} from "../src/lobby.js";
 
 const pgUrl = process.env.TEST_PG_URL ?? process.env.DATABASE_URL;
 

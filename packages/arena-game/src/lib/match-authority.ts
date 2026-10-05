@@ -1,5 +1,5 @@
 import type { AuthenticatedPrincipal } from "./principal.js";
-import type { MatchPersistence } from "./persistence.js";
+import type { MatchPersistence } from "./persistence-types.js";
 import type { CollabRow } from "./collab.js";
 import type { MatchRecord, RoundState, SideId } from "./records.js";
 

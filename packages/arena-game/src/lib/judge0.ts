@@ -10,7 +10,7 @@ import {
   type SupportedLanguage,
   type VisibleTest,
   type GameJudge,
-} from "./judge.js";
+} from "./judge-types.js";
 
 export interface Judge0SubmissionRequest {
   languageId: number;

@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { ArenaEngine } from "../src/engine.js";
-import { FileBank } from "../src/file-bank.js";
-import { GAME_SCHEMA } from "../src/postgres-store.js";
+import { ArenaEngine } from "../src/index.js";
+import { FileBank } from "../src/judge.js";
+import { GAME_SCHEMA } from "../src/persistence.js";
 import { LobbyStore } from "../src/lobby.js";
-import { InMemoryCollabPersist } from "../src/collab.js";
+import { InMemoryCollabPersist } from "../src/persistence.js";
 import { StoreBackedMatchPersistence } from "../src/persistence.js";
-import { InMemoryRevealStore, InMemorySubmissionStore } from "../src/store.js";
+import { InMemoryRevealStore, InMemorySubmissionStore } from "../src/persistence.js";
 import { ScriptedJudge } from "./scripted-judge.js";
 
 const url = process.env.DATABASE_URL;

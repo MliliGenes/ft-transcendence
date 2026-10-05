@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryCollabPersist } from "../src/collab.js";
+import { InMemoryCollabPersist } from "../src/persistence.js";
 import { StoreBackedMatchPersistence } from "../src/persistence.js";
 import {
   InMemoryMatchStore,
   InMemoryRevealStore,
   InMemorySubmissionStore,
   MatchRevisionConflictError,
-} from "../src/store.js";
+} from "../src/persistence.js";
 import { P100, SOLVED_PY, setup, tick } from "./setup.js";
 
 class ConflictOnceMatchStore extends InMemoryMatchStore {

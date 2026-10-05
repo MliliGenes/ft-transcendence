@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { ArenaEngine } from "../src/engine.js";
-import { FileBank } from "../src/file-bank.js";
-import { InMemoryCollabPersist } from "../src/collab.js";
+import { ArenaEngine } from "../src/index.js";
+import { FileBank } from "../src/judge.js";
+import { InMemoryCollabPersist } from "../src/persistence.js";
 import { StoreBackedMatchPersistence } from "../src/persistence.js";
-import { testPrincipal } from "../src/principal.js";
-import type { SubmissionRecord } from "../src/records.js";
-import { InMemoryMatchStore, InMemoryRevealStore, InMemorySubmissionStore } from "../src/store.js";
+import { testPrincipal } from "../src/index.js";
+import type { SubmissionRecord } from "../src/index.js";
+import { InMemoryMatchStore, InMemoryRevealStore, InMemorySubmissionStore } from "../src/persistence.js";
 import { ScriptedJudge } from "./scripted-judge.js";
 import { P100, P40, SOLVED_PY, STARTER_PY, setup, tick } from "./setup.js";
 

@@ -3,7 +3,7 @@ import {
   Judge0Adapter,
   WorkerJudgeAdapter,
   type GameJudge,
-} from "arena-game-engine";
+} from "arena-game-engine/judge";
 
 export type JudgeEnvironment = Readonly<Record<string, string | undefined>>;
 

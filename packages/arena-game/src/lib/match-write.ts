@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
-import type { MatchRecord } from "../records.js";
-import { MatchRevisionConflictError } from "../store.js";
+import type { MatchRecord } from "./records.js";
+import { MatchRevisionConflictError } from "./store.js";
 
 /** Match-row writes against an already-open transaction client. */
 export async function saveMatchTx(client: PoolClient, match: MatchRecord, expectedRevision?: number): Promise<void> {

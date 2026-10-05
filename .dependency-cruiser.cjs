@@ -106,7 +106,7 @@ module.exports = {
       // Workspace source metadata resolves package imports to the checked sources.
       mainFields: ["source", "types", "main"],
       exportsFields: ["exports"],
-      conditionNames: ["import", "require", "node", "default", "types"],
+      conditionNames: ["source", "import", "require", "node", "default", "types"],
     },
   },
 };

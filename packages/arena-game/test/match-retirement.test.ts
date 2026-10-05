@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
-import { ArenaEngine } from "../src/engine.js";
-import { FileBank } from "../src/file-bank.js";
-import { CollabDocs } from "../src/collab.js";
+import { ArenaEngine } from "../src/index.js";
+import { FileBank } from "../src/judge.js";
+import { CollabDocs } from "../src/team-collaboration.js";
 import { inMemoryPersistence } from "../src/persistence.js";
-import { testPrincipal } from "../src/principal.js";
+import { testPrincipal } from "../src/index.js";
 import { ScriptedJudge } from "./scripted-judge.js";
 import { P100, SOLVED_PY, tick } from "./setup.js";
 
@@ -28,11 +28,11 @@ async function fixture(plans: ConstructorParameters<typeof ScriptedJudge>[0] = [
   const documents = new Set<CollabDocs>();
   const seed = CollabDocs.prototype.seedOnce;
   const restore = CollabDocs.prototype.restoreState;
-  vi.spyOn(CollabDocs.prototype, "seedOnce").mockImplementation(function (this: CollabDocs, ...args) {
-    documents.add(this); return seed.apply(this, args);
+  vi.spyOn(CollabDocs.prototype, "seedOnce").mockImplementation(function (this: CollabDocs, ...args: any[]) {
+    documents.add(this); return seed.apply(this, args as [any, any]);
   });
-  vi.spyOn(CollabDocs.prototype, "restoreState").mockImplementation(function (this: CollabDocs, ...args) {
-    documents.add(this); return restore.apply(this, args);
+  vi.spyOn(CollabDocs.prototype, "restoreState").mockImplementation(function (this: CollabDocs, ...args: any[]) {
+    documents.add(this); return restore.apply(this, args as [any, any]);
   });
   const matchId = await engine.createMatch({ mode: "2v2", participants: [
     { userId: "a", sideId: "left" }, { userId: "mate", sideId: "left" },

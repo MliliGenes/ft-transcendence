@@ -1,14 +1,13 @@
 import { Pool, type PoolClient } from "pg";
-import { saveMatchTx } from "./lib/match-write.js";
-export { saveMatchTx } from "./lib/match-write.js";
+import { saveMatchTx } from "./match-write.js";
 import type { MatchRecord, RevealSnapshot, SubmissionRecord } from "./records.js";
 import type { CollabPersist, CollabRow } from "./collab.js";
 import {
   EvaluationClaimLostError,
-  StoreBackedMatchPersistence,
   type EvaluationClaim,
   type MatchPersistence,
-} from "./persistence.js";
+} from "./persistence-types.js";
+import { StoreBackedMatchPersistence } from "./persistence-module.js";
 import { DuplicateError, type MatchStore, type RevealStore, type SubmissionStore } from "./store.js";
 
 export const GAME_SCHEMA = `
@@ -73,7 +72,7 @@ CREATE TABLE IF NOT EXISTS collab_documents (
  * changes nothing: same ids return the same outcome with no new attempt, and
  * a pending row left by a crash is re-driven under its original ids.
  */
-import { LobbyStore } from "./lobby.js";
+import { LobbyStore } from "./lobby-store.js";
 
 class PostgresEvaluationClaim implements EvaluationClaim {
   constructor(

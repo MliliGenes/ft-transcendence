@@ -7,7 +7,7 @@ import type {
   SealedEvaluationRequest,
   SupportedLanguage,
   VisibleTest,
-} from "arena-game-engine";
+} from "arena-game-engine/judge";
 import {
   BoundedJobQueue,
   QueueExecutionTimeoutError,

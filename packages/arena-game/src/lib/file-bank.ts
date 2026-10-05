@@ -8,7 +8,7 @@ export class FileBank implements ProblemBank {
   constructor(private readonly dir?: string) {}
 
   loadProblem(problemVersionId: string): BankProblem {
-    const base = this.dir ?? join(dirname(fileURLToPath(import.meta.url)), "..", "..", "problem-bank", "problems");
+    const base = this.dir ?? join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "problem-bank", "problems");
     const raw = JSON.parse(readFileSync(join(base, `${problemVersionId}.json`), "utf8")) as {
       id: string;
       title: string;

@@ -1,19 +1,16 @@
-export * from "./principal.js";
-export * from "./judge.js";
-export * from "./records.js";
-export * from "./store.js";
-export * from "./persistence.js";
-export * from "./match-authority.js";
-export * from "./round-lifecycle.js";
-export * from "./evaluation-orchestration.js";
-export * from "./evaluation-telemetry.js";
-export * from "./team-collaboration.js";
-export * from "./collab.js";
-export * from "./engine.js";
-export * from "./file-bank.js";
-export * from "./container-judge.js";
-export * from "./worker-judge.js";
-export * from "./judge0.js";
-export * from "./postgres-store.js";
-export * from "./lobby.js";
-export * from "./team-chat.js";
+export {
+  ArenaEngine,
+  type EngineOptions,
+  type ProblemBank,
+  type BankProblem,
+  RateLimitedError,
+  MATCH_DURATION_MS,
+} from "./lib/engine.js";
+export * from "./lib/records.js";
+export * from "./lib/principal.js";
+export {
+  NotMemberError,
+  IllegalStateError,
+} from "./lib/match-authority.js";
+export { ValidationError } from "./lib/judge-types.js";
+export type { ArenaEvent } from "arena-model";

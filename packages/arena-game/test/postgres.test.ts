@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { ArenaEngine } from "../src/engine.js";
-import { FileBank } from "../src/file-bank.js";
-import { PostgresStores } from "../src/postgres-store.js";
-import { testPrincipal } from "../src/principal.js";
-import type { SubmissionRecord } from "../src/records.js";
+import { ArenaEngine } from "../src/index.js";
+import { FileBank } from "../src/judge.js";
+import { PostgresStores } from "../src/persistence.js";
+import { testPrincipal } from "../src/index.js";
+import type { SubmissionRecord } from "../src/index.js";
 import { P100, P70, SOLVED_PY, passes, tick } from "./setup.js";
 import { ScriptedJudge, type ScriptPlan } from "./scripted-judge.js";
 

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ArenaEngine, MATCH_DURATION_MS } from "../src/engine.js";
-import { FileBank } from "../src/file-bank.js";
+import { ArenaEngine, MATCH_DURATION_MS } from "../src/index.js";
+import { FileBank } from "../src/judge.js";
 import { inMemoryPersistence } from "../src/persistence.js";
 import { ScriptedJudge } from "./scripted-judge.js";
 import { P70, SOLVED_PY, setup, tick } from "./setup.js";
-import { testPrincipal } from "../src/principal.js";
+import { testPrincipal } from "../src/index.js";
 
 describe("Match deadline closure", () => {
   it("rejects Run and Submit at the exact deadline", async () => {

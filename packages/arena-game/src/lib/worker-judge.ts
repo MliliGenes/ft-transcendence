@@ -9,7 +9,7 @@ import {
   type SealedGroupResult,
   type SupportedLanguage,
   type VisibleTest,
-} from "./judge.js";
+} from "./judge-types.js";
 
 export interface WorkerJudgeAdapterOptions {
   baseUrl: string;

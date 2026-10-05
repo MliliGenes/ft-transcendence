@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { MatchMode } from "arena-model";
-import type { MatchRecord } from "../records.js";
+import type { MatchRecord } from "./records.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { JudgeInfraError } from "../src/judge.js";
 import { setup, SOLVED_PY } from "./setup.js";
 
-const modulePath = "../src/worker-judge.js";
+const modulePath = "../src/judge.js";
 const baseUrl = "http://judge-worker.internal:3010";
 const token = "worker-adapter-test-token";
 const limits = {

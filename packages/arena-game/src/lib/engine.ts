@@ -21,10 +21,11 @@ import {
   JudgeInfraError,
   ValidationError,
   assertSupportedLanguage,
-} from "./judge.js";
+} from "./judge-types.js";
 import type { AuthenticatedPrincipal } from "./principal.js";
 import { IllegalStateError, MatchAuthority, NotMemberError, type MatchLockOptions } from "./match-authority.js";
-import { inMemoryPersistence, type MatchPersistence } from "./persistence.js";
+import type { MatchPersistence } from "./persistence-types.js";
+import { inMemoryPersistence } from "./persistence-module.js";
 import { RoundLifecycle, type SealedVerdict } from "./round-lifecycle.js";
 import { TeamCollaboration, type TeamSnapshot } from "./team-collaboration.js";
 import {

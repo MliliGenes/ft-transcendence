@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { execSync } from "node:child_process";
-import { ContainerJudge } from "../src/container-judge.js";
+import { ContainerJudge } from "../src/judge.js";
 import { SPIKE_LIMITS } from "../src/judge.js";
 
 const LIMITS = {

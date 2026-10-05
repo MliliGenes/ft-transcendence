@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ContainerJudge } from "../src/container-judge.js";
+import { ContainerJudge } from "../src/judge.js";
 import { JudgeInfraError, SPIKE_LIMITS } from "../src/judge.js";
 
 const LIMITS = { ...SPIKE_LIMITS, runWallMs: 4000, compileWallMs: 15000 };

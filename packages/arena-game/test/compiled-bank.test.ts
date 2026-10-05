@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ContainerJudge } from "../src/container-judge.js";
-import { ArenaEngine } from "../src/engine.js";
-import { FileBank } from "../src/file-bank.js";
+import { ContainerJudge } from "../src/judge.js";
+import { ArenaEngine } from "../src/index.js";
+import { FileBank } from "../src/judge.js";
 import { SPIKE_LIMITS } from "../src/judge.js";
-import { testPrincipal } from "../src/principal.js";
+import { testPrincipal } from "../src/index.js";
 
 const LIMITS = { ...SPIKE_LIMITS, runWallMs: 8000, compileWallMs: 60000 };
 

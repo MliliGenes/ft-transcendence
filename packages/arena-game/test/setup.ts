@@ -1,6 +1,6 @@
-import { ArenaEngine, type EngineOptions } from "../src/engine.js";
-import { FileBank } from "../src/file-bank.js";
-import { testPrincipal, type AuthenticatedPrincipal } from "../src/principal.js";
+import { ArenaEngine, type EngineOptions } from "../src/index.js";
+import { FileBank } from "../src/judge.js";
+import { testPrincipal, type AuthenticatedPrincipal } from "../src/index.js";
 import { ScriptedJudge, type ScriptPlan } from "./scripted-judge.js";
 
 export const SOLVED_PY = `def ledger_sum(nums):

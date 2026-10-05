@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RoundLifecycle, type SealedVerdict } from "../src/round-lifecycle.js";
-import type { MatchRecord } from "../src/records.js";
+import type { MatchRecord } from "../src/index.js";
 
 function round(roundId: string, activity: "coding" | "locked" = "coding") {
   return {

@@ -2,27 +2,32 @@ import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import {
   ArenaEngine,
-  InMemoryEvaluationTelemetry,
-  FileBank,
-  InMemoryCollabPersist,
-  PostgresStores,
-  InMemoryRevealStore,
-  InMemorySubmissionStore,
-  StoreBackedMatchPersistence,
-  testPrincipal,
-  InMemoryLobbyStore,
-  InMemoryMatchStore,
-  Lobby,
   RateLimitedError,
+  testPrincipal,
   type AuthenticatedPrincipal,
+} from "arena-game-engine";
+import {
+  PostgresStores,
+  StoreBackedMatchPersistence,
+  inMemoryPersistence,
+  InMemoryMatchStore,
+  InMemorySubmissionStore,
+  InMemoryRevealStore,
+  InMemoryCollabPersist,
   type MatchPersistence,
+} from "arena-game-engine/persistence";
+import {
+  Lobby,
+  InMemoryLobbyStore,
   type ILobbyStore,
   type LobbySideId,
   type PrivateRoom,
   type PrivateRoomMember,
   type QueueEntry,
   type RoomWithMembers,
-} from "arena-game-engine";
+} from "arena-game-engine/lobby";
+import { FileBank } from "arena-game-engine/judge";
+import { InMemoryEvaluationTelemetry } from "arena-game-engine/evaluation-orchestration";
 import type { MatchMode } from "arena-model";
 import { MatchSocketPresence } from "./match-socket-presence.js";
 import { createGameJudge } from "./judge-factory.js";

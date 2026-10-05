@@ -4,7 +4,7 @@ import { EngineErrorFilter } from "./errors.js";
 import { GameService } from "./game.service.js";
 import { requirePrincipal } from "./principal.js";
 import type { MatchMode } from "arena-model";
-import type { LobbySideId } from "arena-game-engine";
+import type { LobbySideId } from "arena-game-engine/lobby";
 
 @Controller("lobby")
 @UseFilters(EngineErrorFilter)

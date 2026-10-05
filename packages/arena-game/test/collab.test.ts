@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import { ArenaEngine, type EngineOptions } from "../src/engine.js";
-import { FileBank } from "../src/file-bank.js";
-import { testPrincipal, type AuthenticatedPrincipal } from "../src/principal.js";
-import { InMemoryCollabPersist } from "../src/collab.js";
-import { InMemoryMatchStore, InMemoryRevealStore, InMemorySubmissionStore, MatchRevisionConflictError } from "../src/store.js";
+import { ArenaEngine, type EngineOptions } from "../src/index.js";
+import { FileBank } from "../src/judge.js";
+import { testPrincipal, type AuthenticatedPrincipal } from "../src/index.js";
+import { InMemoryCollabPersist } from "../src/persistence.js";
+import { InMemoryMatchStore, InMemoryRevealStore, InMemorySubmissionStore, MatchRevisionConflictError } from "../src/persistence.js";
 import { StoreBackedMatchPersistence, type MatchPersistence } from "../src/persistence.js";
-import { PostgresStores } from "../src/postgres-store.js";
+import { PostgresStores } from "../src/persistence.js";
 import { ScriptedJudge, type ScriptPlan } from "./scripted-judge.js";
 import type { SealedEvaluationRequest } from "../src/judge.js";
 

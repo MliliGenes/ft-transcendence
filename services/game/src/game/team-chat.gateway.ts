@@ -1,3 +1,4 @@
+import { Optional } from "@nestjs/common";
 import {
   ConnectedSocket,
   MessageBody,
@@ -9,7 +10,7 @@ import {
 } from "@nestjs/websockets";
 import type { Namespace, Socket } from "socket.io";
 import { type TeamChatEntry } from "arena-model";
-import { TeamChat } from "arena-game-engine";
+import { TeamChat } from "arena-game-engine/team-chat";
 import { GameService } from "./game.service.js";
 import { attachSocketPrincipal, principalFromHandshake, socketPrincipal } from "./socket-auth.js";
 
@@ -34,7 +35,7 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   constructor(
     private readonly game: GameService,
-    chat?: TeamChat,
+    @Optional() chat?: TeamChat,
   ) {
     this.chat =
       chat ??

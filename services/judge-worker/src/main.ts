@@ -1,4 +1,4 @@
-import { ContainerJudge } from "arena-game-engine";
+import { ContainerJudge } from "arena-game-engine/judge";
 import { BoundedJobQueue } from "./job-queue.js";
 import { createJudgeWorkerServer } from "./http-server.js";
 import { DockerImageReadiness } from "./readiness.js";

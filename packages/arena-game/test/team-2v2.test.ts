@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import { ArenaEngine, type EngineOptions } from "../src/engine.js";
-import { FileBank } from "../src/file-bank.js";
-import { testPrincipal, type AuthenticatedPrincipal } from "../src/principal.js";
+import { ArenaEngine, type EngineOptions } from "../src/index.js";
+import { FileBank } from "../src/judge.js";
+import { testPrincipal, type AuthenticatedPrincipal } from "../src/index.js";
 import { ScriptedJudge, type ScriptPlan } from "./scripted-judge.js";
 import { P100, SOLVED_PY, STARTER_PY, setup, tick } from "./setup.js";
 

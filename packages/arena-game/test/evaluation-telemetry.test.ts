@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryEvaluationTelemetry } from "../src/evaluation-telemetry.js";
+import { InMemoryEvaluationTelemetry } from "../src/evaluation-orchestration.js";
 
 describe("evaluation telemetry", () => {
   it("records provider timing and aggregates infrastructure failures", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { JudgeInfraError, type JudgeLimits, type SealedEvaluationRequest } from "../src/judge.js";
-import { Judge0Adapter, type Judge0HttpClient, type Judge0SubmissionResponse } from "../src/judge0.js";
+import { Judge0Adapter, type Judge0HttpClient, type Judge0SubmissionResponse } from "../src/judge.js";
 
 const limits: JudgeLimits = {
   compileWallMs: 2_000,

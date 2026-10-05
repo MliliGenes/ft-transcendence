@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryCollabPersist } from "../src/collab.js";
+import { InMemoryCollabPersist } from "../src/persistence.js";
 import { StoreBackedMatchPersistence, type MatchPersistence } from "../src/persistence.js";
-import type { MatchRecord } from "../src/records.js";
+import type { MatchRecord } from "../src/index.js";
 import {
   InMemoryMatchStore,
   InMemoryRevealStore,
   InMemorySubmissionStore,
   MatchRevisionConflictError,
-} from "../src/store.js";
+} from "../src/persistence.js";
 
 function match(): MatchRecord {
   return {

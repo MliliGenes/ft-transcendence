@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import { CollabDocs, type CollabRow } from "../src/collab.js";
+import { CollabDocs, type CollabRow } from "../src/team-collaboration.js";
 import { TeamCollaboration, type TeamCollaborationPersistence } from "../src/team-collaboration.js";
-import type { MatchRecord } from "../src/records.js";
+import type { MatchRecord } from "../src/index.js";
 
 class MemoryTeamPersistence implements TeamCollaborationPersistence {
   readonly rows = new Map<string, CollabRow>();

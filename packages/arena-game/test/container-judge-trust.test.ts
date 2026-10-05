@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ContainerJudge } from "../src/container-judge.js";
+import { ContainerJudge } from "../src/judge.js";
 import { SPIKE_LIMITS } from "../src/judge.js";
 
 const scratchDirs: string[] = [];

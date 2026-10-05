@@ -20,3 +20,18 @@ packages/<name>/
 **Tests through entry points.** Files under a package's `test/` or `tests/` folder may import any package's entry points and fixtures from their own test folder. They may not import private implementation, including their own package's implementation. Application code and other packages cannot import those fixtures.
 
 **No cycles.** Dependency cycles are errors, including cycles involving type-only imports. Run `npm run lint:boundaries` to check package imports across packages, the game processes, the frontend, and scripts. `npm run check` combines this with repository checks, typechecks, and lint. Run the starter's public-interface tests with `npm run test:example`.
+
+## Supported Entry Points
+
+### `arena-game-engine` (`packages/arena-game`)
+
+| Entry point | Supported interface |
+| --- | --- |
+| `index.ts` | ArenaEngine, trusted-principal construction, public command/record types, and gameplay errors |
+| `persistence.ts` | Match persistence contract, supported adapter composition, memory/PostgreSQL construction and lifecycle |
+| `lobby.ts` | Lobby operations and supported Lobby storage composition |
+| `team-chat.ts` | Team chat operations and their result types |
+| `judge.ts` | Judge contract, supported execution adapters, and problem-bank construction |
+| `round-lifecycle.ts` | Focused Round lifecycle interface retained by ADR-0007 |
+| `team-collaboration.ts` | Focused Team collaboration interface retained by ADR-0008 |
+| `evaluation-orchestration.ts` | Focused Evaluation orchestration and telemetry interfaces retained by ADR-0012 |

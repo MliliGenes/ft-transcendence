@@ -4,12 +4,11 @@ import {
   IllegalStateError,
   NotMemberError,
   ValidationError,
-  assertSupportedLanguage,
 } from "../src/index.js";
 import { inMemoryPersistence } from "../src/persistence.js";
-import { FileBank } from "../src/file-bank.js";
+import { FileBank, assertSupportedLanguage } from "../src/judge.js";
 import { ScriptedJudge } from "./scripted-judge.js";
-import { testPrincipal, type AuthenticatedPrincipal } from "../src/principal.js";
+import { testPrincipal, type AuthenticatedPrincipal } from "../src/index.js";
 
 function p(userId: string): AuthenticatedPrincipal {
   return testPrincipal(userId);

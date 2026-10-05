@@ -1,17 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { describe, expect, it } from "vitest";
-import type { MatchRecord, RevealSnapshot, SubmissionRecord } from "../src/records.js";
-import { InMemoryCollabPersist } from "../src/collab.js";
+import type { MatchRecord, RevealSnapshot, SubmissionRecord } from "../src/index.js";
+import { InMemoryCollabPersist } from "../src/persistence.js";
 import { StoreBackedMatchPersistence, type MatchPersistence, type MatchPersistenceAdapters } from "../src/persistence.js";
-import { PostgresStores } from "../src/postgres-store.js";
+import { PostgresStores } from "../src/persistence.js";
 import {
   DuplicateError,
   InMemoryMatchStore,
   InMemoryRevealStore,
   InMemorySubmissionStore,
   MatchRevisionConflictError,
-} from "../src/store.js";
+} from "../src/persistence.js";
 
 function makeMatch(id: string): MatchRecord {
   return {

@@ -6,6 +6,74 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "source": "src/index.ts",
+  "typesVersions": {
+    "*": {
+      "persistence": [
+        "dist/persistence.d.ts"
+      ],
+      "lobby": [
+        "dist/lobby.d.ts"
+      ],
+      "team-chat": [
+        "dist/team-chat.d.ts"
+      ],
+      "judge": [
+        "dist/judge.d.ts"
+      ],
+      "round-lifecycle": [
+        "dist/round-lifecycle.d.ts"
+      ],
+      "team-collaboration": [
+        "dist/team-collaboration.d.ts"
+      ],
+      "evaluation-orchestration": [
+        "dist/evaluation-orchestration.d.ts"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./persistence": {
+      "source": "./src/persistence.ts",
+      "types": "./dist/persistence.d.ts",
+      "default": "./dist/persistence.js"
+    },
+    "./lobby": {
+      "source": "./src/lobby.ts",
+      "types": "./dist/lobby.d.ts",
+      "default": "./dist/lobby.js"
+    },
+    "./team-chat": {
+      "source": "./src/team-chat.ts",
+      "types": "./dist/team-chat.d.ts",
+      "default": "./dist/team-chat.js"
+    },
+    "./judge": {
+      "source": "./src/judge.ts",
+      "types": "./dist/judge.d.ts",
+      "default": "./dist/judge.js"
+    },
+    "./round-lifecycle": {
+      "source": "./src/round-lifecycle.ts",
+      "types": "./dist/round-lifecycle.d.ts",
+      "default": "./dist/round-lifecycle.js"
+    },
+    "./team-collaboration": {
+      "source": "./src/team-collaboration.ts",
+      "types": "./dist/team-collaboration.d.ts",
+      "default": "./dist/team-collaboration.js"
+    },
+    "./evaluation-orchestration": {
+      "source": "./src/evaluation-orchestration.ts",
+      "types": "./dist/evaluation-orchestration.d.ts",
+      "default": "./dist/evaluation-orchestration.js"
+    }
+  },
   "scripts": {
     "test": "vitest run --no-file-parallelism",
     "typecheck": "tsc --noEmit",
@@ -20,6 +88,5 @@
     "@types/pg": "^8.11.0",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
-  },
-  "source": "src/index.ts"
+  }
 }
