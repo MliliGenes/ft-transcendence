@@ -172,6 +172,23 @@ describe.each(["memory", "postgres"])("Lobby module (%s adapter)", (adapterKind)
     expect(hints[0].payload.audienceUserIds).not.toContain(guest);
   });
 
+  it("Leave hints cannot mutate authoritative membership or readiness", async () => {
+    const created = await lobby.createPrivateRoom("host", "1v1");
+    await lobby.joinPrivateRoom("guest", created.room.code);
+    lobby.on((event, payload) => {
+      if (event !== "lobby.roomUpdated") return;
+      const hint = payload as { members: Array<{ ready: boolean }> };
+      hint.members[0].ready = true;
+      hint.members.length = 0;
+    });
+
+    await lobby.leavePrivateRoom("guest", created.room.id);
+    const saved = await lobby.getRoomWithMembers(created.room.id);
+    expect(saved.members).toEqual([
+      expect.objectContaining({ userId: "host", ready: false }),
+    ]);
+  });
+
   it("host closure targets affected other members before membership is cleared", async () => {
     const hints: Array<{ event: LobbyEvent; payload: any }> = [];
     lobby.on((event, payload) => hints.push({ event, payload }));

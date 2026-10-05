@@ -875,7 +875,7 @@ export class InMemoryLobbyStore implements ILobbyStore {
         left: true,
         closed,
         room: updatedRoom,
-        members: remainingMembers,
+        members: remainingMembers.map((member) => ({ ...member })),
         audienceUserIds,
       };
     });
