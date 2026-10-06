@@ -53,7 +53,7 @@ function GameChat({ currentUser, accessToken }) {/* is a React component. */
                 let data;
                 try{
                     data = JSON.parse(event.data);
-                } catch (error){
+                } catch {
                     console.error("Recieved invalid data from chat server");
                     return;
                 }

@@ -1,0 +1,43 @@
+@import "tailwindcss/theme";
+@import "tailwindcss/utilities";
+@source "./";
+@layer base {
+    .admin-shell {
+        background: radial-gradient(ellipse at 80% 0%, #30204d55, transparent 48%), #0b0a12;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        line-height: 1.5;
+        color-scheme: dark;
+    }
+    :where(.admin-shell, .admin-dialog) * {
+        box-sizing: border-box;
+        border: 0 solid;
+    }
+    :where(.admin-shell, .admin-dialog) :is(h1, h2, p, dl, dd) {
+        margin: 0;
+    }
+    :where(.admin-shell, .admin-dialog) :is(button, input, select) {
+        font: inherit;
+    }
+    :where(.admin-shell, .admin-dialog) button {
+        cursor: pointer;
+        background: transparent;
+    }
+    :where(.admin-shell, .admin-dialog) button:focus-visible {
+        outline: 2px solid #a78bfa;
+        outline-offset: 3px;
+    }
+    .admin-shell table {
+        border-collapse: collapse;
+    }
+    .admin-dialog {
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        color-scheme: dark;
+    }
+    body:has(.admin-shell) {
+        margin: 0;
+    }
+}
+.admin-dialog::backdrop {
+    background: #000b;
+    backdrop-filter: blur(5px);
+}
