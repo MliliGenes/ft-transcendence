@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
@@ -11,14 +12,18 @@ import {
   randomUUID,
   timingSafeEqual,
 } from 'node:crypto';
-import { Prisma } from '../generated/prisma/client.js';
+import { AuthTokenPurpose, Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { MailService } from '../mail/mail.service.js';
 
 import type { RegisterDto } from './dto/register.dto.js';
 import type { LoginDto } from './dto/login.dto.js';
 import type { DiscordProfile } from './strategies/discord.strategy.js';
 import type { GithubProfile } from './strategies/github.strategy.js';
 import { REFRESH_TOKEN_PATTERN, type RefreshDto } from './dto/refresh.dto.js';
+
+export const AUTH_TOKEN_PATTERN =
+  /^([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.([A-Za-z0-9_-]{43})$/;
 
 import {
   ACCESS_TOKEN_TTL_SECONDS,
@@ -39,6 +44,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly mail: MailService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResult> {
@@ -76,6 +82,12 @@ export class AuthService {
           username: true,
         },
       });
+      const verificationToken = await this.createAuthToken(
+        user.id,
+        AuthTokenPurpose.EMAIL_VERIFICATION,
+      );
+      await this.mail.sendVerificationEmail(user.email, verificationToken);
+
       return { user, ...tokens };
     } catch (error) {
       if (
@@ -653,5 +665,203 @@ export class AuthService {
         expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000),
       },
     };
+  }
+
+  async verifyEmail(token: string): Promise<void> {
+    const invalidToken = new UnauthorizedException(
+      'Verification token is invalid or expired',
+    );
+
+    const parts = AUTH_TOKEN_PATTERN.exec(token);
+    if (!parts) {
+      throw invalidToken;
+    }
+
+    const [, tokenId, secret] = parts;
+
+    const stored = await this.prisma.authToken.findUnique({
+      where: { id: tokenId },
+      select: {
+        tokenHash: true,
+        purpose: true,
+        expiresAt: true,
+        usedAt: true,
+        userId: true,
+      },
+    });
+
+    if (
+      !stored ||
+      stored.purpose !== AuthTokenPurpose.EMAIL_VERIFICATION ||
+      stored.usedAt ||
+      stored.expiresAt.getTime() <= Date.now()
+    ) {
+      throw invalidToken;
+    }
+
+    const submittedHash = createHash('sha256').update(secret).digest();
+    const storedHash = Buffer.from(stored.tokenHash, 'hex');
+
+    if (
+      storedHash.length !== submittedHash.length ||
+      !timingSafeEqual(storedHash, submittedHash)
+    ) {
+      throw invalidToken;
+    }
+
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      const consumed = await tx.authToken.updateMany({
+        where: {
+          id: tokenId,
+          purpose: AuthTokenPurpose.EMAIL_VERIFICATION,
+          usedAt: null,
+          expiresAt: { gt: now },
+          tokenHash: stored.tokenHash,
+        },
+        data: { usedAt: now },
+      });
+
+      if (consumed.count !== 1) {
+        throw invalidToken;
+      }
+
+      await tx.user.update({
+        where: { id: stored.userId },
+        data: { emailVerifiedAt: now },
+      });
+    });
+  }
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User not found`);
+    }
+
+    const resetToken = await this.prisma.$transaction(async (tx) => {
+      await this.lockUserSessions(tx, user.id);
+      await tx.authToken.deleteMany({
+        where: { userId: user.id, purpose: AuthTokenPurpose.PASSWORD_RESET, usedAt: null },
+      });
+      return this.createAuthToken(user.id, AuthTokenPurpose.PASSWORD_RESET, tx);
+    });
+
+    try {
+      await this.mail.sendPasswordResetEmail(user.email, resetToken);
+    } catch (error) {
+      // A failed send must not delete a newer token from another request.
+      await this.prisma.authToken.deleteMany({
+        where: { id: resetToken.split('.')[0], usedAt: null },
+      });
+      throw error;
+    }
+  }
+
+  async confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+    const invalidToken = new UnauthorizedException(
+      'Password reset token is invalid or expired',
+    );
+
+    const parts = AUTH_TOKEN_PATTERN.exec(token);
+    if (!parts) {
+      throw invalidToken;
+    }
+
+    const [, tokenId, secret] = parts;
+
+    const stored = await this.prisma.authToken.findUnique({
+      where: { id: tokenId },
+      select: {
+        tokenHash: true,
+        purpose: true,
+        expiresAt: true,
+        usedAt: true,
+        userId: true,
+      },
+    });
+
+    if (
+      !stored ||
+      stored.purpose !== AuthTokenPurpose.PASSWORD_RESET ||
+      stored.usedAt ||
+      stored.expiresAt.getTime() <= Date.now()
+    ) {
+      throw invalidToken;
+    }
+
+    const submittedHash = createHash('sha256').update(secret).digest();
+    const storedHash = Buffer.from(stored.tokenHash, 'hex');
+
+    if (
+      storedHash.length !== submittedHash.length ||
+      !timingSafeEqual(storedHash, submittedHash)
+    ) {
+      throw invalidToken;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockUserSessions(tx, stored.userId);
+      const now = new Date();
+      const consumed = await tx.authToken.updateMany({
+        where: {
+          id: tokenId,
+          purpose: AuthTokenPurpose.PASSWORD_RESET,
+          usedAt: null,
+          expiresAt: { gt: now },
+          tokenHash: stored.tokenHash,
+        },
+        data: { usedAt: now },
+      });
+
+      if (consumed.count !== 1) {
+        throw invalidToken;
+      }
+
+      await tx.user.update({
+        where: { id: stored.userId },
+        data: { passwordHash },
+      });
+      await tx.refreshToken.updateMany({
+        where: { userId: stored.userId, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      await tx.authToken.deleteMany({
+        where: {
+          userId: stored.userId,
+          purpose: AuthTokenPurpose.PASSWORD_RESET,
+          usedAt: null,
+        },
+      });
+    });
+  }
+
+  private async createAuthToken(
+    userId: string,
+    purpose: AuthTokenPurpose,
+    client: Pick<Prisma.TransactionClient, 'authToken'> = this.prisma,
+  ): Promise<string> {
+    const tokenId = randomUUID();
+    const secret = randomBytes(32).toString('base64url');
+    const tokenHash = createHash('sha256').update(secret).digest('hex');
+
+    await client.authToken.create({
+      data: {
+        id: tokenId,
+        tokenHash,
+        purpose,
+        userId,
+        expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+      },
+    });
+
+    return `${tokenId}.${secret}`;
   }
 }

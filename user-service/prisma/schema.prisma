@@ -34,6 +34,7 @@ model User {
   oauthStates   OAuthState[]
   sentFriendships     Friendship[] @relation("FriendshipRequester")
   receivedFriendships Friendship[] @relation("FriendshipAddressee")
+  authTokens AuthToken[]
 }
 
 model Friendship {
@@ -155,4 +156,23 @@ enum UserStatus {
 enum UserRole {
   USER
   SUPERADMIN
+}
+
+model AuthToken {
+  id        String          @id @default(uuid())
+  tokenHash String          @unique
+  purpose   AuthTokenPurpose
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime        @default(now())
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+}
+
+enum AuthTokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
 }

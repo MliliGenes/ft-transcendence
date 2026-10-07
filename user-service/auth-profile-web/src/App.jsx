@@ -3,6 +3,8 @@ import { useAuth } from './auth/AuthProvider.jsx';
 import { navigate, useRoute } from './lib/navigation.js';
 import { AuthPage } from './pages/AuthPage.jsx';
 import { AccountPage } from './pages/AccountPage.jsx';
+import { VerifyEmailPage } from './pages/VerifyEmailPage.jsx';
+import { PasswordResetPage } from './pages/PasswordResetPage.jsx';
 import { Directory } from './components/Directory.jsx';
 import { Loading, Notice } from './components/Notice.jsx';
 
@@ -18,17 +20,41 @@ export function App() {
     restore,
     mutating,
   } = useAuth();
-  const known = ['/', '/login', '/register', '/account'].includes(path);
+  const known = [
+    '/',
+    '/login',
+    '/register',
+    '/account',
+    '/verify-email',
+    '/forgot-password',
+    '/reset-password',
+  ].includes(path);
+  const passwordReset = path === '/forgot-password' || path === '/reset-password';
   useEffect(() => {
     if (!known || status === 'loading' || status === 'error') return;
-    if (status === 'authenticated' && path !== '/account')
+    if (
+      status === 'authenticated' &&
+      !passwordReset &&
+      path !== '/account' &&
+      path !== '/verify-email'
+    )
       navigate('/account', { replace: true });
     if (status === 'anonymous' && (path === '/' || path === '/account'))
       navigate('/login', { replace: true });
-  }, [path, status, known]);
+  }, [path, status, known, passwordReset]);
   useEffect(() => {
-    document.title = `${status === 'authenticated' ? 'Your profile' : path === '/register' ? 'Create account' : 'Log in'} · Fieldnote`;
-  }, [path, status]);
+    document.title = `${
+      passwordReset
+        ? 'Reset password'
+        : path === '/verify-email'
+        ? 'Verify email'
+        : status === 'authenticated'
+          ? 'Your profile'
+          : path === '/register'
+            ? 'Create account'
+            : 'Log in'
+    } · Fieldnote`;
+  }, [path, status, passwordReset]);
   const authenticated = status === 'authenticated';
   return (
     <main className="shell" id="main-content">
@@ -90,6 +116,8 @@ export function App() {
                   Go back
                 </button>
               </section>
+            ) : passwordReset ? (
+              <PasswordResetPage key={path} confirm={path === '/reset-password'} />
             ) : status === 'loading' ? (
               <section className="card">
                 <Loading />
@@ -107,6 +135,8 @@ export function App() {
                   </button>
                 </div>
               </section>
+            ) : path === '/verify-email' ? (
+              <VerifyEmailPage />
             ) : authenticated ? (
               <AccountPage />
             ) : (

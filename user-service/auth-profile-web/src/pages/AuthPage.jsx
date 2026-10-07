@@ -133,6 +133,8 @@ export function AuthPage({ mode }) {
           </button>
         </fieldset>
       </form>
+      {!register && <button className="button button-secondary" disabled={busy}
+        onClick={() => navigate('/forgot-password')}>Forgot password?</button>}
       <div className="divider">
         <span>or continue with</span>
       </div>

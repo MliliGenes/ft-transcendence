@@ -1,4 +1,3 @@
-import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.jsx';
 import { AuthProvider } from './auth/AuthProvider.jsx';
@@ -13,9 +12,7 @@ const initialNotice = consumeOAuthReturn(
 );
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <AuthProvider initialNotice={initialNotice}>
-      <App />
-    </AuthProvider>
-  </StrictMode>,
+  <AuthProvider initialNotice={initialNotice}>
+    <App />
+  </AuthProvider>,
 );
