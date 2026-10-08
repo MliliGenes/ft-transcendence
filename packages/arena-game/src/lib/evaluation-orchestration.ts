@@ -20,7 +20,7 @@ import type {
 
 export type EvaluationCompletion = { ok: true } | { ok: false; error: unknown };
 
-export interface EvaluationIdentity {
+interface EvaluationIdentity {
   matchId: string;
   roundId: string;
   sideId: SideId;
@@ -31,7 +31,7 @@ export interface EvaluationIdentity {
   documentRevision: DocumentRevision | null;
 }
 
-export interface InFlightEvaluation extends EvaluationIdentity {
+interface InFlightEvaluation extends EvaluationIdentity {
   evaluationId: string;
   promise: Promise<EvaluationCompletion>;
   resolve: (completion: EvaluationCompletion) => void;
@@ -44,7 +44,7 @@ export interface InFlightEvaluation extends EvaluationIdentity {
  * This registry only lets duplicate requests in the same process attach to
  * one logical evaluation and lets reveal wait for evaluations already running.
  */
-export class EvaluationInFlightRegistry {
+class EvaluationInFlightRegistry {
   private readonly entries = new Map<string, InFlightEvaluation>();
   private readonly settledFailures = new Map<string, unknown>();
 
@@ -94,7 +94,7 @@ export class EvaluationInFlightRegistry {
   }
 }
 
-export interface EvaluationRunInput {
+interface EvaluationRunInput {
   matchId: string;
   roundNo: number;
   roundId: string;
@@ -144,7 +144,7 @@ interface EvaluationProblemBank {
   };
 }
 
-interface EvaluationOrchestrationHost {
+export interface EvaluationOrchestrationHost {
   revisionFor(matchId: string): number | undefined;
   withMatchLock<T>(matchId: string, fn: () => Promise<T>, options?: MatchLockOptions): Promise<T>;
   loadMatchOrThrow(matchId: string): Promise<MatchRecord>;
@@ -171,31 +171,16 @@ export interface EvaluationOrchestratorOptions {
  * Owns the lock-free/locked phases of a logical Evaluation.
  *
  * ArenaEngine remains the compatibility facade: it authorizes the request,
- * creates the durable pending Submission, enters short Match locks, and emits
- * transport events. This module owns the work that must be identical for a
- * direct Submit and boot recovery: process-local attachment, durable claim,
- * provider invocation, failure classification, and claim-session commit.
+ * creates the durable pending Submission, and supplies short Match commands
+ * and transport events through a structural host. This module owns immutable
+ * retry validation and completion as well as the work shared by direct Submit
+ * and boot recovery: durable claim, provider invocation, failure classification,
+ * and claim-session commit. Internal attachment bookkeeping stays private.
  */
 export class EvaluationOrchestrator {
   private readonly inFlight = new EvaluationInFlightRegistry();
 
   constructor(private readonly options: EvaluationOrchestratorOptions) {}
-
-  get(evaluationId: string): InFlightEvaluation | undefined {
-    return this.inFlight.get(evaluationId);
-  }
-
-  track(evaluationId: string, identity: EvaluationIdentity): InFlightEvaluation {
-    return this.inFlight.track(evaluationId, identity);
-  }
-
-  settle(evaluationId: string, tracked: InFlightEvaluation, completion: EvaluationCompletion): void {
-    this.inFlight.settle(evaluationId, tracked, completion);
-  }
-
-  failureFor(evaluationId: string): unknown {
-    return this.inFlight.failureFor(evaluationId);
-  }
 
   forRound(
     matchId: string,
@@ -217,21 +202,21 @@ export class EvaluationOrchestrator {
         throw new DuplicateError("evaluation request does not belong to this Match command");
       }
       const problem = this.options.bank.loadProblem(input.problemVersionId);
-      const duplicate = this.get(input.evaluationId);
+      const duplicate = this.inFlight.get(input.evaluationId);
       if (duplicate) {
         this.assertIdentity(identity, duplicate);
         return { attached: true as const, roundNo: input.roundNo,
           evaluationId: input.evaluationId, waitFor: duplicate.promise };
       }
-      const tracked = this.track(input.evaluationId, identity);
+      const tracked = this.inFlight.track(input.evaluationId, identity);
       owned = { evaluationId: input.evaluationId, tracked };
       const existing = await this.options.persistence.findSubmissionByEvaluationId(input.evaluationId);
       if (existing) this.assertIdentity(identity, this.identityFor(existing));
       if (existing && existing.status !== "pending") {
         if (existing.status === "failed") {
-          throw this.failureFor(input.evaluationId) ?? new JudgeInfraError("evaluation previously failed");
+          throw this.inFlight.failureFor(input.evaluationId) ?? new JudgeInfraError("evaluation previously failed");
         }
-        this.settle(input.evaluationId, tracked, { ok: true });
+        this.inFlight.settle(input.evaluationId, tracked, { ok: true });
         return { attached: true as const, roundNo: input.roundNo, evaluationId: input.evaluationId };
       }
       const record = await input.acceptPending(existing);
@@ -251,7 +236,7 @@ export class EvaluationOrchestrator {
       } };
     }).catch((error: unknown) => {
       // Include errors from the host's final durable save, not just acceptance.
-      if (owned) this.settle(owned.evaluationId, owned.tracked, { ok: false, error });
+      if (owned) this.inFlight.settle(owned.evaluationId, owned.tracked, { ok: false, error });
       throw error;
     });
     if (!setup.attached) return this.run(setup.input);
@@ -272,12 +257,12 @@ export class EvaluationOrchestrator {
     }
   }
 
-  async run(input: EvaluationRunInput): Promise<{ ok: true; round: number; submissionId: string; evaluationId: string }> {
+  private async run(input: EvaluationRunInput): Promise<{ ok: true; round: number; submissionId: string; evaluationId: string }> {
     let claim: EvaluationClaim | undefined;
     try {
       claim = await this.options.persistence.claimPendingEvaluation(input.evaluationId);
     } catch (error) {
-      this.settle(input.evaluationId, input.tracked, { ok: false, error });
+      this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error });
       throw error;
     }
     if (!claim) {
@@ -286,7 +271,7 @@ export class EvaluationOrchestrator {
         if (!settled || settled.status === "pending") {
           throw new IllegalStateError("evaluation claim disappeared before completion");
         }
-        this.settle(input.evaluationId, input.tracked, { ok: true });
+        this.inFlight.settle(input.evaluationId, input.tracked, { ok: true });
         return {
           ok: true,
           round: input.roundNo,
@@ -294,7 +279,7 @@ export class EvaluationOrchestrator {
           evaluationId: input.evaluationId,
         };
       } catch (error) {
-        this.settle(input.evaluationId, input.tracked, { ok: false, error });
+        this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error });
         throw error;
       }
     }
@@ -320,7 +305,7 @@ export class EvaluationOrchestrator {
         try {
           claim.assertActive();
         } catch (claimError) {
-          this.settle(input.evaluationId, input.tracked, { ok: false, error: claimError });
+          this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error: claimError });
           throw claimError;
         }
         try {
@@ -339,10 +324,10 @@ export class EvaluationOrchestrator {
             { skipFinalSave: true },
           );
         } catch (failureError) {
-          this.settle(input.evaluationId, input.tracked, { ok: false, error: failureError });
+          this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error: failureError });
           throw failureError;
         }
-        this.settle(input.evaluationId, input.tracked, { ok: false, error });
+        this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error });
         throw error;
       }
 
@@ -372,7 +357,7 @@ export class EvaluationOrchestrator {
         completion = { ok: false, error };
         throw error;
       } finally {
-        this.settle(input.evaluationId, input.tracked, completion);
+        this.inFlight.settle(input.evaluationId, input.tracked, completion);
       }
     } finally {
       await claim.release();
@@ -384,8 +369,8 @@ export class EvaluationOrchestrator {
     let retried = 0;
     let failed = 0;
     for (const stored of await this.options.persistence.listPendingSubmissions()) {
-      if (this.get(stored.evaluationId)) continue;
-      const tracked = this.track(stored.evaluationId, this.identityFor(stored));
+      if (this.inFlight.get(stored.evaluationId)) continue;
+      const tracked = this.inFlight.track(stored.evaluationId, this.identityFor(stored));
       let claim: EvaluationClaim | undefined;
       let judgeStarted = false;
       let completion: EvaluationCompletion = { ok: true };
@@ -459,7 +444,7 @@ export class EvaluationOrchestrator {
         throw error;
       } finally {
         if (claim) await claim.release();
-        this.settle(stored.evaluationId, tracked, completion);
+        this.inFlight.settle(stored.evaluationId, tracked, completion);
       }
     }
     return { retried, failed };

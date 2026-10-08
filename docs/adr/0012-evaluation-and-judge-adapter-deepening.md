@@ -101,3 +101,15 @@ The focused in-memory and adapter suites, workspace typechecks, arena build,
 frontend tests, and frontend lint pass. Postgres- and Docker-backed suites
 remain environment-gated when those services are unavailable; this record does
 not present them as passing evidence.
+
+## Ownership clarification, 2026-10-08
+
+`EvaluationOrchestrator.submit` now owns immutable retry validation, attachment,
+and completion from pending acceptance through the final Match command. The
+facade supplies authorization and pending acceptance inside the short command
+lock; the orchestrator settles callers when acceptance or command exit fails,
+then invokes the judge and waits for duplicates outside that lock. Its structural
+host supplies revision access without requiring a concrete `MatchAuthority`.
+Registry entries, resolvers, and execution inputs are private. Public receipts,
+claim-owned commits, recovery, persistence schema, and gameplay behavior remain
+as specified above.
