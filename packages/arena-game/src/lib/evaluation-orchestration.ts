@@ -1,6 +1,7 @@
 import type { ArenaEvent, PlayerStatus } from "arena-model";
 import type { DriverKind, GameJudge, JudgeLimits, SealedGroup, SupportedLanguage } from "./judge-types.js";
 import { JudgeInfraError } from "./judge-types.js";
+import { DuplicateError } from "./store.js";
 import { IllegalStateError, type MatchLockOptions } from "./match-authority.js";
 import type { EvaluationClaim, MatchPersistence } from "./persistence-types.js";
 import type {
@@ -111,6 +112,21 @@ export interface EvaluationRunInput {
   tracked: InFlightEvaluation;
 }
 
+/** Accepted command context; pending acceptance stays with the Match facade. */
+export interface EvaluationSubmission extends EvaluationIdentity {
+  evaluationId: string;
+  roundNo: number;
+  hiddenSuiteId: string;
+  acceptPending(existing: SubmissionRecord | undefined): Promise<SubmissionRecord>;
+}
+
+export interface EvaluationReceipt {
+  ok: true;
+  round: number;
+  submissionId: string;
+  evaluationId: string;
+}
+
 export interface EvaluationRecoveryReport {
   retried: number;
   failed: number;
@@ -186,6 +202,74 @@ export class EvaluationOrchestrator {
     roundId: string,
   ): Array<{ evaluationId: string; promise: Promise<EvaluationCompletion> }> {
     return this.inFlight.forRound(matchId, roundId);
+  }
+
+  /** Authorize/accept under a short command lock, then complete outside it. */
+  async submit(
+    matchId: string,
+    prepare: () => Promise<EvaluationSubmission>,
+  ): Promise<EvaluationReceipt> {
+    let owned: { evaluationId: string; tracked: InFlightEvaluation } | undefined;
+    const setup = await this.options.host.withMatchLock(matchId, async () => {
+      const input = await prepare();
+      const identity = this.identityFor(input);
+      if (identity.matchId !== matchId) {
+        throw new DuplicateError("evaluation request does not belong to this Match command");
+      }
+      const problem = this.options.bank.loadProblem(input.problemVersionId);
+      const duplicate = this.get(input.evaluationId);
+      if (duplicate) {
+        this.assertIdentity(identity, duplicate);
+        return { attached: true as const, roundNo: input.roundNo,
+          evaluationId: input.evaluationId, waitFor: duplicate.promise };
+      }
+      const tracked = this.track(input.evaluationId, identity);
+      owned = { evaluationId: input.evaluationId, tracked };
+      const existing = await this.options.persistence.findSubmissionByEvaluationId(input.evaluationId);
+      if (existing) this.assertIdentity(identity, this.identityFor(existing));
+      if (existing && existing.status !== "pending") {
+        if (existing.status === "failed") {
+          throw this.failureFor(input.evaluationId) ?? new JudgeInfraError("evaluation previously failed");
+        }
+        this.settle(input.evaluationId, tracked, { ok: true });
+        return { attached: true as const, roundNo: input.roundNo, evaluationId: input.evaluationId };
+      }
+      const record = await input.acceptPending(existing);
+      this.assertIdentity(identity, this.identityFor(record));
+      return { attached: false as const, input: {
+        matchId, roundNo: input.roundNo, roundId: record.roundId, sideId: record.sideId,
+        submissionId: record.submissionId, evaluationId: record.evaluationId,
+        problemVersionId: record.problemVersionId, hiddenSuiteId: input.hiddenSuiteId,
+        language: record.language as SupportedLanguage,
+        driver: problem.driver ?? (record.language === "Python" ? "snippet" : "stdio"),
+        entrypoint: problem.entrypoint, source: record.source,
+        groups: problem.hidden.map((group) => ({
+          name: group.name, weight: group.weight,
+          tests: group.tests.map((test) => ({ id: test.id, input: test.input, expected: test.expected })),
+        })),
+        documentRevision: record.documentRevision ?? null, tracked,
+      } };
+    }).catch((error: unknown) => {
+      // Include errors from the host's final durable save, not just acceptance.
+      if (owned) this.settle(owned.evaluationId, owned.tracked, { ok: false, error });
+      throw error;
+    });
+    if (!setup.attached) return this.run(setup.input);
+    if (setup.waitFor) {
+      const completion = await setup.waitFor;
+      if (!completion.ok) throw completion.error;
+    }
+    const stored = await this.storedSubmission(setup.evaluationId);
+    return { ok: true, round: setup.roundNo, submissionId: stored.submissionId, evaluationId: setup.evaluationId };
+  }
+
+  private assertIdentity(expected: EvaluationIdentity, actual: EvaluationIdentity): void {
+    if (expected.matchId !== actual.matchId || expected.roundId !== actual.roundId
+      || expected.sideId !== actual.sideId || expected.submissionId !== actual.submissionId
+      || expected.problemVersionId !== actual.problemVersionId || expected.language !== actual.language
+      || expected.sourceHash !== actual.sourceHash || expected.documentRevision !== actual.documentRevision) {
+      throw new DuplicateError("evaluation id is already bound to different submission data");
+    }
   }
 
   async run(input: EvaluationRunInput): Promise<{ ok: true; round: number; submissionId: string; evaluationId: string }> {
@@ -522,7 +606,7 @@ export class EvaluationOrchestrator {
     return stored;
   }
 
-  private identityFor(stored: SubmissionRecord): EvaluationIdentity {
+  private identityFor(stored: EvaluationIdentity | SubmissionRecord): EvaluationIdentity {
     return {
       matchId: stored.matchId,
       roundId: stored.roundId,

@@ -18,7 +18,6 @@ import {
   type JudgeLimits,
   SPIKE_LIMITS,
   type SupportedLanguage,
-  JudgeInfraError,
   ValidationError,
   assertSupportedLanguage,
 } from "./judge-types.js";
@@ -520,7 +519,7 @@ export class ArenaEngine {
   ): Promise<{ ok: true; round: number; submissionId: string; evaluationId: string }> {
     if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
     // Phase 1 (locked): gates, ids, pending record, activity dispatch.
-    const setup = await this.withMatchLock(matchId, async () => {
+    return this.evaluation.submit(matchId, async () => {
       const match = await this.requireMember(principal, matchId);
       const side = this.sideOf(match, principal);
       const round = this.currentRound(match);
@@ -550,146 +549,55 @@ export class ArenaEngine {
       const submissionId = input.submissionId ?? this.uuid();
       const evaluationId = input.evaluationId ?? this.uuid();
       const sourceHash = createHash("sha256").update(submitCode, "utf8").digest("hex");
-      const problem = this.bank.loadProblem(round.problemVersionId);
-      const dup = this.evaluation.get(evaluationId);
-      if (dup) {
-        if (
-          dup.matchId !== matchId ||
-          dup.roundId !== round.roundId ||
-          dup.sideId !== side ||
-          dup.submissionId !== submissionId ||
-          dup.problemVersionId !== round.problemVersionId ||
-          dup.language !== input.language ||
-          dup.sourceHash !== sourceHash ||
-          dup.documentRevision !== submitDocRevision
-        ) {
-          throw new DuplicateError("evaluation id is already bound to different submission data");
-        }
-        // Concurrent duplicate under the same ids: attach to the accepted
-        // evaluation, never duplicate work or history.
-        // The caller waits after leaving the Match lock. The original
-        // evaluator must re-enter this lock to commit its verdict.
-        return { attached: true as const, waitFor: dup.promise, roundNo: match.currentRound, evaluationId };
-      }
-      const tracked = this.evaluation.track(evaluationId, {
+      return {
         matchId,
+        roundNo: match.currentRound,
         roundId: round.roundId,
         sideId: side,
         submissionId,
+        evaluationId,
         problemVersionId: round.problemVersionId,
+        hiddenSuiteId: round.hiddenSuiteId,
         language: input.language,
         sourceHash,
         documentRevision: submitDocRevision,
-      });
-      try {
-        const existing = await this.persistence.findSubmissionByEvaluationId(evaluationId);
-        if (
-          existing &&
-          (existing.submissionId !== submissionId ||
-            existing.matchId !== matchId ||
-            existing.roundId !== round.roundId ||
-            existing.sideId !== side ||
-            existing.problemVersionId !== round.problemVersionId ||
-            existing.language !== input.language ||
-            existing.sourceHash !== sourceHash ||
-            (existing.documentRevision ?? null) !== submitDocRevision)
-        ) {
-          throw new DuplicateError("evaluation id is already bound to different submission data");
-        }
-        if (existing && existing.status !== "pending") {
-          if (existing.status === "failed") {
-            throw this.evaluation.failureFor(evaluationId) ?? new JudgeInfraError("evaluation previously failed");
+        acceptPending: async (existing: SubmissionRecord | undefined) => {
+          const resumed = existing?.status === "pending";
+          if (!resumed && !canSideSubmit(this.activityOf(round, side))) {
+            throw new IllegalStateError(`submit rejected for side while ${this.activityOf(round, side)}`);
           }
-          // Idempotent retry: same stored outcome, no second logical evaluation.
-          this.evaluation.settle(evaluationId, tracked, { ok: true });
-          return { attached: true as const, roundNo: match.currentRound, submissionId: existing.submissionId, evaluationId: existing.evaluationId };
-        }
-        const resumed = existing?.status === "pending";
-        if (resumed && (existing!.matchId !== matchId || existing!.roundId !== round.roundId || existing!.sideId !== side)) {
-          throw new IllegalStateError("pending evaluation does not belong to this round and side");
-        }
-        if (!resumed && !canSideSubmit(this.activityOf(round, side))) {
-          throw new IllegalStateError(`submit rejected for side while ${this.activityOf(round, side)}`);
-        }
-        const now = this.clock();
-        let record = existing ?? null;
-        if (!record) {
-          record = {
-            submissionId,
-            evaluationId,
-            matchId,
-            roundId: round.roundId,
-            sideId: side,
-            problemVersionId: round.problemVersionId,
-            language: input.language,
-            source: submitCode,
-            sourceHash,
-            documentRevision: submitDocRevision,
-            submittedAt: now,
-            elapsedMatchMs: now - match.startedAt,
-            status: "pending",
-            score: null,
-            scoreBp: null,
-            groups: null,
-            testStatuses: null,
-            failureCode: null,
-          };
-          await this.persistence.recordSubmission(record);
-        }
-        if (!resumed) {
-          await this.setActivity(match, round, side, "submitted");
-          await this.setActivity(match, round, side, "evaluating");
-        }
-        return {
-          attached: false as const,
-          roundNo: match.currentRound,
-          submissionId: record.submissionId,
-          evaluationId,
-          side,
-          roundId: round.roundId,
-          problemVersionId: round.problemVersionId,
-          hiddenSuiteId: round.hiddenSuiteId,
-          language: record.language as SupportedLanguage,
-          driver: problem.driver ?? driverFor(record.language as SupportedLanguage),
-          entrypoint: problem.entrypoint,
-          source: record.source,
-          groups: problem.hidden.map((g) => ({
-            name: g.name,
-            weight: g.weight,
-            tests: g.tests.map((t) => ({ id: t.id, input: t.input, expected: t.expected })),
-          })),
-          tracked,
-        };
-      } catch (error) {
-        this.evaluation.settle(evaluationId, tracked, { ok: false, error });
-        throw error;
-      }
-    });
-    if (setup.attached) {
-      if (setup.waitFor) {
-        const completion = await setup.waitFor;
-        if (!completion.ok) throw completion.error;
-      }
-      const settled = await this.persistence.findSubmissionByEvaluationId(setup.evaluationId);
-      if (!settled) throw new IllegalStateError("evaluation vanished");
-      return { ok: true, round: setup.roundNo, submissionId: settled.submissionId, evaluationId: setup.evaluationId };
-    }
-    return this.evaluation.run({
-      matchId,
-      roundNo: setup.roundNo,
-      roundId: setup.roundId,
-      sideId: setup.side,
-      submissionId: setup.submissionId,
-      evaluationId: setup.evaluationId,
-      problemVersionId: setup.problemVersionId,
-      hiddenSuiteId: setup.hiddenSuiteId,
-      language: setup.language,
-      driver: setup.driver,
-      entrypoint: setup.entrypoint,
-      source: setup.source,
-      groups: setup.groups,
-      documentRevision: setup.tracked.documentRevision,
-      tracked: setup.tracked,
+          const now = this.clock();
+          let record = existing;
+          if (!record) {
+            record = {
+              submissionId,
+              evaluationId,
+              matchId,
+              roundId: round.roundId,
+              sideId: side,
+              problemVersionId: round.problemVersionId,
+              language: input.language,
+              source: submitCode,
+              sourceHash,
+              documentRevision: submitDocRevision,
+              submittedAt: now,
+              elapsedMatchMs: now - match.startedAt,
+              status: "pending",
+              score: null,
+              scoreBp: null,
+              groups: null,
+              testStatuses: null,
+              failureCode: null,
+            };
+            await this.persistence.recordSubmission(record);
+          }
+          if (!resumed) {
+            await this.setActivity(match, round, side, "submitted");
+            await this.setActivity(match, round, side, "evaluating");
+          }
+          return record;
+        },
+      };
     });
   }
 
