@@ -124,6 +124,23 @@ describe("Evaluation retry workflow", () => {
     });
   });
 
+  it("rejects an accepted record under a different evaluation ID and releases ownership", async () => {
+    const f = await evaluationFixture();
+    let judgeCalls = 0;
+    const judge = f.options.judge;
+    f.options.judge = { ...judge, evaluateSealed: async (input) => {
+      judgeCalls++;
+      return judge.evaluateSealed(input);
+    } };
+    const workflow = new EvaluationOrchestrator(f.options);
+    await expect(workflow.submit(f.match.id, async () => f.request({
+      acceptPending: async () => f.persistence.recordSubmission({ ...f.record, evaluationId: "other-evaluation" }),
+    }))).rejects.toBeInstanceOf(DuplicateError);
+    expect(judgeCalls).toBe(0);
+    expect(workflow.forRound(f.match.id, "evaluation-round")).toEqual([]);
+    await expect(f.persistence.findSubmissionByEvaluationId("other-evaluation")).resolves.toMatchObject({ status: "pending" });
+  });
+
   it("attaches identical requests without holding the Match lock while waiting", async () => {
     const control = controlledJudge();
     const f = await evaluationFixture(control.judge);

@@ -1,9 +1,9 @@
 # Code Arena: deepen Evaluation retry ownership
 
-Date: 2026-10-08  
-Status: Proposal; no implementation selected  
-Repository: `/Users/ayousr/Documents/ft-transcendence`  
-Branch: `Aimane`  
+Date: 2026-10-08
+Status: Proposal; no implementation selected
+Repository: `/Users/ayousr/Documents/ft-transcendence`
+Branch: `Aimane`
 Reviewed revision: `832aa8dcac774af774bea6dc4101fcdd330df044`
 
 **Recommendation: deepen immutable Evaluation retry ownership in the existing Evaluation orchestration module.** This is the only surviving candidate. Its strength is **moderate**, because the retry caller is hot but the Evaluation implementation has little behavioral churn. Explore this candidate before committing to a refactor.

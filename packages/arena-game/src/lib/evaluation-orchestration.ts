@@ -220,6 +220,9 @@ export class EvaluationOrchestrator {
         return { attached: true as const, roundNo: input.roundNo, evaluationId: input.evaluationId };
       }
       const record = await input.acceptPending(existing);
+      if (record.evaluationId !== input.evaluationId) {
+        throw new DuplicateError("accepted submission has a different evaluation id");
+      }
       this.assertIdentity(identity, this.identityFor(record));
       return { attached: false as const, input: {
         matchId, roundNo: input.roundNo, roundId: record.roundId, sideId: record.sideId,
