@@ -1,7 +1,7 @@
 import type { ArenaEvent, PlayerStatus } from "arena-model";
 import type { DriverKind, GameJudge, JudgeLimits, SealedGroup, SupportedLanguage } from "./judge-types.js";
 import { JudgeInfraError } from "./judge-types.js";
-import { IllegalStateError, type MatchAuthority, type MatchLockOptions } from "./match-authority.js";
+import { IllegalStateError, type MatchLockOptions } from "./match-authority.js";
 import type { EvaluationClaim, MatchPersistence } from "./persistence-types.js";
 import type {
   CountedResult,
@@ -129,6 +129,7 @@ interface EvaluationProblemBank {
 }
 
 interface EvaluationOrchestrationHost {
+  revisionFor(matchId: string): number | undefined;
   withMatchLock<T>(matchId: string, fn: () => Promise<T>, options?: MatchLockOptions): Promise<T>;
   loadMatchOrThrow(matchId: string): Promise<MatchRecord>;
   currentRound(match: MatchRecord): RoundState;
@@ -141,7 +142,6 @@ export interface EvaluationOrchestratorOptions {
   judge: GameJudge;
   bank: EvaluationProblemBank;
   persistence: MatchPersistence;
-  authority: MatchAuthority;
   roundLifecycle: RoundLifecycle;
   clock: () => number;
   /** Time after Match expiry during which already-accepted evaluations may count. */
@@ -443,7 +443,7 @@ export class EvaluationOrchestrator {
   ): Promise<void> {
     const match = structuredClone(await this.options.host.loadMatchOrThrow(matchId));
     const stored = structuredClone(await this.storedSubmission(evaluationId));
-    const lockRevision = this.options.authority.revisionFor(matchId);
+    const lockRevision = this.options.host.revisionFor(matchId);
     if (lockRevision !== undefined) match.revision = lockRevision;
     if (stored.status !== "pending") return;
     const round = match.rounds.find((candidate) => candidate.roundId === stored.roundId) ?? this.options.host.currentRound(match);
@@ -506,7 +506,7 @@ export class EvaluationOrchestrator {
       stored.failureCode = error instanceof JudgeInfraError ? "internal_error" : "evaluation_error";
     }
     const match = structuredClone(await this.options.host.loadMatchOrThrow(matchId));
-    const lockRevision = this.options.authority.revisionFor(matchId);
+    const lockRevision = this.options.host.revisionFor(matchId);
     if (lockRevision !== undefined) match.revision = lockRevision;
     match.failures.push(`submit: ${error instanceof Error ? error.message : String(error)}`);
     const round = match.rounds.find((candidate) => candidate.roundId === roundId) ?? this.options.host.currentRound(match);
