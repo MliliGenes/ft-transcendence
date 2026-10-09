@@ -26,9 +26,9 @@ Supersedes the 2026-09-17 campus puzzle-race glossary (room, stage, role, clue c
 
 **Presence**: Connectivity information (`online` / `offline`), modeled separately from gameplay status.
 
-**Player status**: Gameplay state of one player. One of `coding`, `running`, `submitted`, `evaluating`, `locked in`, `disconnected`. It is the source of truth; presence never doubles as status.
+**Player status**: Gameplay activity of one competitive side: a player in 1v1 or a team in 2v2. One of `coding`, `running`, `submitted`, `evaluating`, or `locked` (displayed as Locked in). Each side progresses independently. Disconnect changes Presence, not Player status.
 
-**Match phase**: The authoritative match state. `ROUND_INTRO` → `CODING` → (`RUNNING_TESTS` → `CODING`)* → `SUBMITTED` → `EVALUATING` → `SCORE_REVEAL` → next round or match end. Only `CODING` permits Run and Submit, and the server rejects both at the exact Match deadline.
+**Match phase**: The authoritative global Round/Match lifecycle: `MATCH_FOUND` → `ROUND_INTRO` → `CODING` → `SCORE_REVEAL` → next `ROUND_INTRO` or `MATCH_COMPLETE`. `ROUND_COMPLETE` is also a supported intermediate phase. Running, submitted, and evaluating are per-side Player status values, not global phases. Only `CODING` permits Run and Submit, and the server rejects both at the exact Match deadline.
 
 **Match deadline**: The end of the one Match-wide server clock. A Submission accepted before the deadline may count if judging settles within the bounded reveal grace; the accepted time is used for the scoring-time tie-break. When grace ends, the server durably saves a Reveal for the current Round and completes the Match; unplayed Rounds count as zero. The UI shows that Reveal before the final result.
 

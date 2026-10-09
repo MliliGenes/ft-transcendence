@@ -42,9 +42,7 @@ export interface RoundAdvance {
 }
 
 export interface RevealInput {
-  scores: Partial<Record<SideId, number>>;
   groups: RevealSnapshot["groups"];
-  totals: Partial<Record<SideId, number>>;
   publishedAt: number;
 }
 
@@ -119,12 +117,18 @@ export class RoundLifecycle {
 
   createReveal(match: MatchRecord, input: RevealInput): RevealSnapshot {
     const round = this.currentRound(match);
+    const scores: Partial<Record<SideId, number>> = {};
+    const totals: Partial<Record<SideId, number>> = {};
+    for (const side of Object.keys(round.activities)) {
+      scores[side] = round.counted[side]?.score ?? 0;
+      totals[side] = this.totalScore(match, side);
+    }
     return Object.freeze({
       round: match.currentRound,
       roundId: round.roundId,
-      scores: Object.freeze({ ...input.scores }),
+      scores: Object.freeze(scores),
       groups: Object.freeze({ ...input.groups }),
-      totals: Object.freeze({ ...input.totals }),
+      totals: Object.freeze(totals),
       publishedAt: input.publishedAt,
     }) as RevealSnapshot;
   }

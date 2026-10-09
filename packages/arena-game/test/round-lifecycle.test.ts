@@ -41,6 +41,35 @@ function match(): MatchRecord {
 }
 
 describe("RoundLifecycle", () => {
+  it("prepares Reveal scores and cumulative totals from Match state with supplied groups", () => {
+    const lifecycle = new RoundLifecycle();
+    const current = match();
+    current.currentRound = 2;
+    current.rounds[0].counted = {
+      left: { score: 70, scoringTimeMs: 100 },
+      right: { score: 40, scoringTimeMs: 200 },
+    };
+    current.rounds[1].counted = { left: { score: 30, scoringTimeMs: 300 } };
+    const groups = [{ name: "Basic", weight: 100, earned: 30, earnedBp: 3000 }];
+    const input = { groups: { left: groups, right: [] }, publishedAt: 1234 };
+
+    const reveal = lifecycle.createReveal(current, input);
+
+    expect(reveal).toEqual({
+      round: 2,
+      roundId: "round-2",
+      scores: { left: 30, right: 0 },
+      groups: { left: groups, right: [] },
+      totals: { left: 100, right: 40 },
+      publishedAt: 1234,
+    });
+    current.rounds[1].counted.left!.score = 90;
+    input.groups.left = [];
+    expect(reveal.scores).toEqual({ left: 30, right: 0 });
+    expect(reveal.totals).toEqual({ left: 100, right: 40 });
+    expect(reveal.groups.left).toEqual(groups);
+  });
+
   it("scores competitive verdicts and rejects infrastructure verdicts", () => {
     const lifecycle = new RoundLifecycle();
     const verdict: SealedVerdict = {

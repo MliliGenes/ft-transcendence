@@ -45,3 +45,15 @@ Socket.IO-facing events, collaboration cleanup, and judge execution.
 - `packages/arena-game/test/round-lifecycle.test.ts`
 - `packages/arena-game/src/engine.ts`
 - `CONTEXT.md` glossary
+
+## Reveal preparation clarification, 2026-10-09
+
+`RoundLifecycle.createReveal` derives current-Round side scores and cumulative
+Match totals from the loaded Match, alongside the group breakdowns and publication
+time supplied by the facade. Both ordinary publication and deadline closure use
+the same facade helper to retrieve those groups and construct the Reveal.
+
+The facade retains Submission retrieval and its existing last-completed-record
+selection, short Match locks, persistence, grace, recovery ordering, and event
+delivery. This deepens the existing lifecycle seam without adding a persistence
+adapter or changing record ordering, scoring rules, or the Match schema.

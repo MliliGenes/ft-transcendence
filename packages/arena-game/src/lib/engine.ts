@@ -644,18 +644,7 @@ export class ArenaEngine {
         ),
         this.evaluation.forRound(matchId, round.roundId).map((entry) => entry.evaluationId),
       );
-      const now = this.clock();
-      const scores: Partial<Record<SideId, number>> = {};
-      const groups: RevealSnapshot["groups"] = {};
-      const totals: Partial<Record<SideId, number>> = {};
-      for (const side of Object.keys(round.activities)) {
-        const counted = round.counted[side];
-        scores[side] = counted?.score ?? 0;
-        const latest = await this.latestCompleted(matchId, round.roundId, side);
-        groups[side] = latest?.groups ?? [];
-        totals[side] = this.roundLifecycle.totalScore(match, side);
-      }
-      const snapshot = this.roundLifecycle.createReveal(match, { scores, groups, totals, publishedAt: now });
+      const snapshot = await this.createRevealSnapshot(match, round, this.clock());
       try {
         await this.persistence.publishReveal(match.id, round.roundId, snapshot);
       } catch (error) {
@@ -1036,17 +1025,13 @@ export class ArenaEngine {
     this.emit("match.ended", { matchId: match.id, result: "deadline", winner: final.winner ?? undefined });
   }
 
-  private async createRevealSnapshot(match: MatchRecord, round: RoundState): Promise<RevealSnapshot> {
-    const scores: Partial<Record<SideId, number>> = {};
+  private async createRevealSnapshot(match: MatchRecord, round: RoundState, publishedAt?: number): Promise<RevealSnapshot> {
     const groups: RevealSnapshot["groups"] = {};
-    const totals: Partial<Record<SideId, number>> = {};
     for (const side of Object.keys(round.activities)) {
-      scores[side] = round.counted[side]?.score ?? 0;
       const latest = await this.latestCompleted(match.id, round.roundId, side);
       groups[side] = latest?.groups ?? [];
-      totals[side] = this.roundLifecycle.totalScore(match, side);
     }
-    return this.roundLifecycle.createReveal(match, { scores, groups, totals, publishedAt: this.clock() });
+    return this.roundLifecycle.createReveal(match, { groups, publishedAt: publishedAt ?? this.clock() });
   }
 
   /**

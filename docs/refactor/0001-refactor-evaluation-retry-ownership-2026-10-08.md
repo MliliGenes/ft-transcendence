@@ -1,12 +1,14 @@
 # Code Arena: deepen Evaluation retry ownership
 
 Date: 2026-10-08
-Status: Proposal; no implementation selected
+Status: Implemented on 2026-10-08; completion recorded on 2026-10-09
 Repository: `/Users/ayousr/Documents/ft-transcendence`
 Branch: `Aimane`
 Reviewed revision: `832aa8dcac774af774bea6dc4101fcdd330df044`
 
-**Recommendation: deepen immutable Evaluation retry ownership in the existing Evaluation orchestration module.** This is the only surviving candidate. Its strength is **moderate**, because the retry caller is hot but the Evaluation implementation has little behavioral churn. Explore this candidate before committing to a refactor.
+**Completed: immutable Evaluation retry ownership now lives in the Evaluation orchestration module.** Commits `016612f`, `fdf4900`, `6a1d99b`, and `c1ecea0` implemented the structural command context, retry completion ownership, private bookkeeping, and accepted Evaluation identity validation. See the [ADR-0012 ownership clarification](../adr/0012-evaluation-and-judge-adapter-deepening.md#ownership-clarification-2026-10-08).
+
+The survey evidence, rankings, and proposed shape below describe revision `832aa8d` before implementation. They are retained as historical rationale, not outstanding work. The implemented revision is `c1ecea06f27fef9d20fa04cd95aad660cf4f27fc`.
 
 ## Coverage and method
 
@@ -134,11 +136,9 @@ One production caller changes: `ArenaEngine.submit`. Boot recovery changes inter
 
 This proposal is compatible with **ADR-0004**, **ADR-0011**, and **ADR-0012**. Preserve Match persistence ownership, immutable Evaluation identity, short Match locks, detached retry waits, durable claim ownership, and claim-session verdict commits. Preserve **ADR-0007** and **ADR-0008** ownership of Round lifecycle and Team collaboration. No superseding ADR is currently required.
 
-## Follow-up plan
+## Implemented plan (historical)
 
-Use this proposal as the input to an architecture interview before implementation. Use the installed `grilling` skill for that interview. Resolve retry admission, completion ownership, failure replay, and command-context responsibilities. Use `codebase-design` to compare interface choices if the seam remains uncertain.
-
-Then refine the following phases into an implementation plan. Keep each phase at a safe intermediate state and prove it with the stated check.
+The implementation resolved retry admission, completion ownership, failure replay, and the facade command-context responsibilities. The phases below retain the original planning and verification intent; they are no longer a build queue.
 
 | Phase | Work | Check that proves the intermediate state |
 | --- | --- | --- |
@@ -147,10 +147,8 @@ Then refine the following phases into an implementation plan. Keep each phase at
 | 3. Concentrate retry ownership | Move identity, attachment, replay, and settlement sequencing into Evaluation orchestration. Keep authorization and pending acceptance under their current short Match lock. | Run focused retry tests and the retained Submit/concurrency/deadline/reconnect tests. Verify pending writes that fail settle waiting callers and emit no uncommitted gameplay event. |
 | 4. Close the public bookkeeping seam | Keep registry entries/resolvers private and replace their external tests after equivalent workflow checks exist. Review the complete diff. | Run package checks and relevant builds. Run PostgreSQL claim/recovery regression checks against a disposable database. Verify failed or stale claim owners cannot commit and ordinary revision checks remain intact. |
 
-Pass the refined plan through `grilling` before the build. Implement it only after the candidate and design are selected. Use the repository's implementation workflow and review the final diff with `code-review`. The named `plankit`, `grillkit`, and `implementkit` skills are not installed; the phases above provide the planning fallback.
+## Completion
 
-## Survey handoff
+The original candidate is implemented. Future reviews should inspect the current supported Evaluation workflow and its behavior tests rather than re-suggesting caller-owned retry bookkeeping. The [implementation plan](../plans/2026-10-08-evaluation-retry-ownership.md) and ADR-0012 preserve the decision trail.
 
-Review this proposal in `docs/refactor/0001-refactor-evaluation-retry-ownership-2026-10-08.md`. Select the candidate before starting the architecture interview. Refine the phases after that interview. Build the selected change after the plan is settled.
-
-This survey writes one Markdown proposal. No source file is touched, no commit is created, and no test suite is executed. No HTML report is created, as requested.
+The original survey itself was read-only and wrote this Markdown proposal. Implementation happened afterward in the four commits recorded above.
