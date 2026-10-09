@@ -11,6 +11,7 @@ import bcrypt from 'bcrypt';
 import request from 'supertest';
 import { AppModule } from '../dist/app/app.module.js';
 import { AuthService } from '../dist/auth/auth.service.js';
+import { MailService } from '../dist/mail/mail.service.js';
 import { PrismaService } from '../dist/prisma/prisma.service.js';
 import { Prisma } from '../dist/generated/prisma/client.js';
 
@@ -28,6 +29,9 @@ test('registration issues tokens and prepares a nested user/session write', asyn
   let duplicate = false;
   let createError;
   const prisma = {
+    authToken: {
+      create: async () => ({}),
+    },
     user: {
       findFirst: async () => (duplicate ? { id: 'existing' } : null),
       create: async (args) => {
@@ -44,6 +48,10 @@ test('registration issues tokens and prepares a nested user/session write', asyn
   const module = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PrismaService)
     .useValue(prisma)
+    .overrideProvider(MailService)
+    .useValue({
+      sendVerificationEmail: async () => {},
+    })
     .overrideProvider(ConfigService)
     .useValue(config)
     .compile();

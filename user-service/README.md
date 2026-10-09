@@ -116,3 +116,7 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## Service documentation
+
+See [SERVICE.md](SERVICE.md) for the full service guide: setup and configuration, architecture, data model, authentication, Postman usage, testing, operations, and limitations. Import [openapi.json](openapi.json) for all 44 HTTP controller routes, including friendships, account search, and password management.

@@ -1,19 +1,18 @@
-FROM node:24-alpine AS dependencies
+FROM node:24-alpine
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm ci && npm cache clean --force
 
-FROM dependencies AS build
 COPY nest-cli.json tsconfig*.json ./
+COPY prisma ./prisma
+COPY prisma.config.ts ./
 COPY src ./src
-RUN npm run build
+# Config requires these values for generation; no database is contacted.
+RUN POSTGRES_HOST=localhost POSTGRES_PORT=5432 POSTGRES_USER=build \
+    POSTGRES_PASSWORD=build POSTGRES_DB=build npx prisma generate \
+    && npm run build
 
-FROM node:24-alpine AS production
 ENV NODE_ENV=production
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-COPY --from=build --chown=node:node /app/dist ./dist
 USER node
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && exec node dist/main.js"]

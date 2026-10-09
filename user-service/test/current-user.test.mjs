@@ -111,6 +111,7 @@ test('GET /accounts/me uses the verified access-token identity', async (t) => {
         lastName: user.lastName,
         hasPassword: true,
         hasDiscord: true,
+        hasGithub: false,
       });
       assert.equal(response.headers['cache-control'], 'no-store');
       const withQuery = await request(server)

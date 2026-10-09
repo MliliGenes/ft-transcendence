@@ -778,3 +778,48 @@
   The separate `npm run test:auth:postgres` needs a migrated test database; see
   [test/README.md](test/README.md). The default `npm test` is still configured for
   Vitest spec files and does not run these suites.
+
+## Additional routes verified against source
+
+These routes are present in the service and included in openapi.json.
+
+### Service root
+
+`GET /` is public and returns 200 with `{ "message": "KILL ME PLEASE!!!" }`. This is a static development response, not a database readiness check.
+
+### Search accounts
+
+`GET /accounts/search?username=player` is public. The query is trimmed and must be nonempty (400 otherwise). It performs case-insensitive username substring search and returns an array of at most ten public profiles, sorted by username then ID. No pagination envelope is returned.
+
+### Set or change password
+
+Both routes require Bearer access authorization, reject unknown DTO fields, and return 204 with Cache-Control: no-store.
+
+- `POST /accounts/me/password`: `{ "newPassword": "correct horse battery staple" }`. Only for passwordless accounts. Returns 409 if a password already exists or a concurrent request sets one first.
+- `PATCH /accounts/me/password`: `{ "oldPassword": "previous-password", "newPassword": "correct horse battery staple" }`. Returns 403 for incorrect old password; 409 for a passwordless account or concurrent change.
+
+New passwords must be 8–32 characters and at most 72 UTF-8 bytes. Old passwords must be nonempty and at most 72 UTF-8 bytes. Invalid bodies return 400, invalid access tokens 401, missing accounts 404. These endpoints do not revoke refresh sessions.
+
+Private account JSON also includes `hasPassword`, `hasDiscord`, and `hasGithub` boolean flags, in addition to the fields shown above.
+
+### Friendships
+
+Every social route requires Bearer access authorization. Path IDs must be UUIDs (400 otherwise); missing/invalid access tokens return 401. No request body is needed.
+
+| Method | Path | Success and behavior |
+| --- | --- | --- |
+| POST | `/social/friendships/:id` | 201 friendship; id is the recipient user ID |
+| GET | `/social/friendships` | 200 array of accepted friends' profiles |
+| GET | `/social/friendships/requests` | 200 array of incoming PENDING friendship records |
+| GET | `/social/friendships/sent` | 200 array of outgoing PENDING friendship records |
+| PATCH | `/social/friendships/:friendshipId/accept` | 200 updated ACCEPTED friendship |
+| PATCH | `/social/friendships/:friendshipId/reject` | 200 updated DECLINED friendship |
+| DELETE | `/social/friendships/:friendshipId` | 200 deleted friendship JSON |
+
+Friendship records include id, requesterId, addresseeId, status, createdAt, requester, and addressee. Nested profiles contain id, username, displayName, avatarUrl, bannerUrl, and status. Accepted-friend listing returns these profiles directly, not friendship records. Lists have no pagination or guaranteed ordering.
+
+Sending to yourself returns 400; a missing recipient returns 404; an existing friendship in either direction returns 409, even if declined. Only the addressee can accept/reject (403 otherwise), and the request must still be pending (400 otherwise). Either participant can delete; other users receive 403. Missing friendship records return 404. Deleting a declined request permits a later new request.
+
+### Corrections to earlier limitation notes
+
+Email verification, Discord/GitHub login/link/unlink, password set/change, and friendships are implemented. Earlier statements marking verification or provider unlinking unimplemented are stale. Two-factor HTTP routes, blocking, FORTYTWO OAuth, and verification resend remain unimplemented. See SERVICE.md for configuration, architecture, data models, and operations.

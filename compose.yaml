@@ -1,0 +1,43 @@
+name: nook
+
+services:
+  nginx:
+    build: ./nginx
+    ports:
+      - "127.0.0.1:443:443"
+    volumes:
+      - ./volumes/nginx/certs:/etc/nginx/certs
+    depends_on:
+      - user-service
+      - auth-profile-web
+
+  user-db:
+    image: postgres:18-alpine
+    env_file: ./envs/user-db.env
+    volumes:
+      - ./volumes/user-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 12
+
+  user-service:
+    build: ./user-service
+    env_file: ./envs/user-service.env
+    depends_on:
+      user-db:
+        condition: service_healthy
+
+  auth-profile-web:
+    build: ./auth-profile-web
+    env_file: ./envs/auth-profile-web.env
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      - user-service
+
+networks:
+  default:
+    driver: bridge
