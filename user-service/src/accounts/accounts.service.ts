@@ -31,7 +31,6 @@ const publicProfileSelect = {
   displayName: true,
   avatarUrl: true,
   bannerUrl: true,
-  status: true,
   createdAt: true,
 } satisfies Prisma.UserSelect;
 
@@ -44,7 +43,6 @@ const accountSelect = {
   displayName: true,
   avatarUrl: true,
   bannerUrl: true,
-  status: true,
   role: true,
   emailVerifiedAt: true,
   createdAt: true,

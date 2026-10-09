@@ -26,7 +26,6 @@ test('GET /accounts/me uses the verified access-token identity', async (t) => {
     displayName: 'Test Player',
     avatarUrl: '/accounts/avatar-placeholder',
     bannerUrl: null,
-    status: 'OFFLINE',
     createdAt: '2026-09-28T00:00:00.000Z',
     passwordHash: await bcrypt.hash('test password', 12),
     authProviders: [{ provider: 'DISCORD' }],
@@ -39,7 +38,6 @@ test('GET /accounts/me uses the verified access-token identity', async (t) => {
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
     bannerUrl: user.bannerUrl,
-    status: user.status,
     createdAt: user.createdAt,
   };
   const prisma = {

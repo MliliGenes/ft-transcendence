@@ -17,7 +17,6 @@ model User {
   displayName String?  // fallback for OAuth users who skip profile setup
   avatarUrl   String?
   bannerUrl   String?
-  status      UserStatus @default(OFFLINE)
   role        UserRole   @default(USER)
 
   passwordHash String?  // nullable — OAuth-only users won't have one
@@ -145,12 +144,6 @@ enum Provider {
   GITHUB
   DISCORD
   FORTYTWO
-}
-
-enum UserStatus {
-  ONLINE
-  OFFLINE
-  AWAY
 }
 
 enum UserRole {

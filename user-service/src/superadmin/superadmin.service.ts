@@ -23,7 +23,6 @@ const adminUserSelect = {
   displayName: true,
   avatarUrl: true,
   bannerUrl: true,
-  status: true,
   emailVerifiedAt: true,
   createdAt: true,
   updatedAt: true,

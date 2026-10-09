@@ -14,7 +14,6 @@ const friendUserSelect = {
   displayName: true,
   avatarUrl: true,
   bannerUrl: true,
-  status: true,
 } satisfies Prisma.UserSelect;
 
 const friendshipSelect = {

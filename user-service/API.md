@@ -290,7 +290,6 @@
         "displayName": "Player One",
         "avatarUrl": null,
         "bannerUrl": null,
-        "status": "OFFLINE",
         "createdAt": "2026-09-29T12:00:00.000Z"
       }
     ],
@@ -325,7 +324,6 @@
     "displayName": "Ada",
     "avatarUrl": "/accounts/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/avatar",
     "bannerUrl": null,
-    "status": "OFFLINE",
     "emailVerifiedAt": null,
     "createdAt": "2026-09-29T12:00:00.000Z",
     "updatedAt": "2026-09-29T12:00:00.000Z"
@@ -453,7 +451,7 @@
 
   `:id` must be a UUID.
 
-  Public endpoint. Response (`200 OK`): the same public profile fields as each entry in `GET /accounts`: `id`, `username`, `displayName`, `avatarUrl`, `bannerUrl`, `status`, and `createdAt`. Email, first/last names, verification fields, timestamps other than `createdAt`, and authentication data are excluded.
+  Public endpoint. Response (`200 OK`): the same public profile fields as each entry in `GET /accounts`: `id`, `username`, `displayName`, `avatarUrl`, `bannerUrl`, and `createdAt`. Email, first/last names, verification fields, timestamps other than `createdAt`, and authentication data are excluded.
 
   Other responses:
 
@@ -626,7 +624,7 @@
 
   Returns `{ users, total, page, limit, totalPages }`. The total uses the same
   filters as the list. List entries and detail responses include id, username,
-  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl, status,
+  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,
   emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,
   and two-factor secrets are never included.
 
@@ -649,7 +647,7 @@
   Profile PATCH accepts username, email, firstName, lastName, and displayName.
   Omitted fields stay unchanged; optional names can be cleared with null. Email
   changes clear verification, while resubmitting the same email preserves it.
-  Password, role, status, URLs, and verification timestamps are rejected here.
+  Password, role, URLs, and verification timestamps are rejected here.
 
   Role PATCH accepts `{ "role": "SUPERADMIN" }` or `{ "role": "USER" }`.
   Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing
@@ -700,7 +698,6 @@
     "displayName": "Ada",
     "avatarUrl": null,
     "bannerUrl": null,
-    "status": "OFFLINE",
     "emailVerifiedAt": null,
     "createdAt": "2026-09-29T12:00:00.000Z",
     "updatedAt": "2026-09-29T12:00:00.000Z"
@@ -762,7 +759,7 @@
     This service's account reads fail for deleted users, but other services must
     enforce account deletion separately when MQ integration is added.
   - Images are public and currently use no-store; there is no individual image
-    deletion endpoint. Presence status is stored but not maintained by live tracking.
+    deletion endpoint. Live presence is deferred to the chat service.
 
   ## Validation commands
 
@@ -816,7 +813,7 @@ Every social route requires Bearer access authorization. Path IDs must be UUIDs 
 | PATCH | `/social/friendships/:friendshipId/reject` | 200 updated DECLINED friendship |
 | DELETE | `/social/friendships/:friendshipId` | 200 deleted friendship JSON |
 
-Friendship records include id, requesterId, addresseeId, status, createdAt, requester, and addressee. Nested profiles contain id, username, displayName, avatarUrl, bannerUrl, and status. Accepted-friend listing returns these profiles directly, not friendship records. Lists have no pagination or guaranteed ordering.
+Friendship records include id, requesterId, addresseeId, status, createdAt, requester, and addressee. Nested profiles contain id, username, displayName, avatarUrl, and bannerUrl. Accepted-friend listing returns these profiles directly, not friendship records. Lists have no pagination or guaranteed ordering.
 
 Sending to yourself returns 400; a missing recipient returns 404; an existing friendship in either direction returns 409, even if declined. Only the addressee can accept/reject (403 otherwise), and the request must still be pending (400 otherwise). Either participant can delete; other users receive 403. Missing friendship records return 404. Deleting a declined request permits a later new request.
 

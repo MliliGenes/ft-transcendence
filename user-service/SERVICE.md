@@ -99,7 +99,7 @@ Private account responses include role, profile/verification timestamps, and `ha
 
 | Model | Stored information |
 | --- | --- |
-| `User` | Unique username/email, optional names/images/password hash, role, presence status, verification, timestamps |
+| `User` | Unique username/email, optional names/images/password hash, role, verification, timestamps |
 | `AuthProvider` | Provider identity linked to a user; unique provider identity and one identity per provider per user |
 | `RefreshToken` | Hashed refresh secret, user, login session, expiry and revocation timestamps |
 | `OAuthState` | Hashed browser/state challenge, LOGIN/LINK purpose, optional linking owner, expiry |
@@ -108,7 +108,7 @@ Private account responses include role, profile/verification timestamps, and `ha
 | `Friendship` | Requester, addressee, PENDING/ACCEPTED/DECLINED status, timestamps |
 | `TwoFactorAuth`, `RecoveryCode` | Schema support for future two-factor functionality |
 
-User roles are USER/SUPERADMIN; stored presence values are ONLINE/OFFLINE/AWAY. Presence is not maintained by live tracking. Friendship creation locks both participant rows in deterministic order to prevent duplicate requests in opposite directions. Only the addressee can accept/reject a pending request; either participant can delete it. Declined rows remain until deleted and prevent a new request between that pair.
+User roles are USER/SUPERADMIN. Presence is deferred to the chat service. Friendship creation locks both participant rows in deterministic order to prevent duplicate requests in opposite directions. Only the addressee can accept/reject a pending request; either participant can delete it. Declined rows remain until deleted and prevent a new request between that pair.
 
 Deletion handlers explicitly clean up provider/refresh records where needed; schema cascades remove images, OAuth ownership rows, friendship records, auth tokens, and two-factor/recovery records. Superadmin deletion/demotion protects the final superadmin using transactional locking.
 

@@ -28,7 +28,6 @@ test('account endpoints use the authenticated identity and validate changes', as
     lastName: null,
     displayName: null,
     avatarUrl: null,
-    status: 'OFFLINE',
     emailVerifiedAt: new Date(),
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -289,7 +288,6 @@ test('account search by username returns public matches', async (t) => {
             displayName: true,
             avatarUrl: true,
             bannerUrl: true,
-            status: true,
             createdAt: true,
           });
           return [
@@ -299,7 +297,6 @@ test('account search by username returns public matches', async (t) => {
               displayName: 'Alice',
               avatarUrl: null,
               bannerUrl: null,
-              status: 'ONLINE',
               createdAt: new Date('2024-01-01T00:00:00Z'),
             },
           ];
