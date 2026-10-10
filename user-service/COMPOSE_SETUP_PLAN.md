@@ -1,6 +1,6 @@
 # Local microservices setup plan
 
-Status: initial scaffold created in the parent `ft-transcendence/` repository root. See root `COMPOSE.md` for usage. Superadmin bootstrap and later services remain pending. This document is stored in `user-service/`.
+Status: initial scaffold and environment-based superadmin bootstrap implemented in the parent `ft-transcendence/` repository root. See root `COMPOSE.md` for usage. Later services remain pending. This document is stored in `user-service/`.
 
 ## Goal
 
@@ -49,17 +49,17 @@ Migration history is consolidated into `prisma/migrations/20261009000000_init/mi
 
 1. Build the service image: install dependencies once, generate Prisma Client, and compile the app.
 2. At container startup, run `prisma migrate deploy` after Postgres becomes healthy.
-3. Application superadmin setup: pending clarification. Do not assume reuse of the existing bootstrap script. If automatic creation is retained, preserve any existing superadmin and password.
+3. Run `npm run bootstrap:superadmin:env` using `SUPERADMIN_USERNAME`, `SUPERADMIN_EMAIL`, and `SUPERADMIN_PASSWORD`. Create only when no superadmin exists; preserve existing superadmins and passwords. Fail on invalid settings or a collision with an existing regular account.
 4. Start the server with `exec node dist/main.js`.
 
 Stop startup if migrations or any required bootstrap step fails. Do not infer schema readiness from the existence of a volume. Database creation belongs to Postgres initialization; application tables belong to Prisma migrations.
 
 ## Implementation checklist
 
-- [ ] Resolve superadmin setup. The scaffold currently uses image rebuilds rather than development reload.
+- [x] Resolve superadmin setup. The scaffold currently uses image rebuilds rather than development reload.
 - [x] Create root `envs/`, `volumes/`, example files, and Git ignore rules.
 - [x] Create root Compose entries for user-service and user-db, including network, persistent storage, and database health check.
-- [ ] Add the service entrypoint and copy required startup files into its image.
+- [x] Chain migrations, bootstrap, and server startup in the Docker CMD; copy startup scripts into the image.
 - [ ] Verify startup with empty storage, migrations, and the agreed superadmin behavior.
 - [ ] Restart and rebuild; verify that data and existing account credentials remain unchanged.
 - [ ] Verify that a migration failure prevents server startup and that database/backend ports are not published.

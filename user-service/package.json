@@ -10,6 +10,7 @@
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "bootstrap:superadmin": "node scripts/bootstrap-superadmin.mjs",
+    "bootstrap:superadmin:env": "node scripts/bootstrap-superadmin-env.mjs",
     "build": "nest build",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

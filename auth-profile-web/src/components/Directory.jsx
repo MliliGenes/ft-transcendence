@@ -90,6 +90,7 @@ export function Directory() {
               <div>
                 <strong>{user.displayName || user.username}</strong>
                 <span>@{user.username}</span>
+                <code className="directory-user-id" title={user.id}>{user.id}</code>
               </div>
             </li>
           ))}

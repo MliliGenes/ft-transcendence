@@ -33,8 +33,6 @@ services:
   auth-profile-web:
     build: ./auth-profile-web
     env_file: ./envs/auth-profile-web.env
-    ports:
-      - "127.0.0.1:5173:5173"
     depends_on:
       - user-service
 

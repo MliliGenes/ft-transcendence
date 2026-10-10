@@ -660,7 +660,13 @@
   inside that transaction. Superadmins must use this guarded deletion endpoint,
   not `DELETE /accounts/me`, to preserve that protection.
 
-  No accounts are automatically promoted. To promote an existing testing account, run
+  Docker startup creates the initial superadmin after migrations using
+  `SUPERADMIN_USERNAME`, `SUPERADMIN_EMAIL`, and `SUPERADMIN_PASSWORD` from
+  `envs/user-service.env`, only when no superadmin exists. Existing admins and
+  passwords are preserved. Missing/invalid settings or a username/email collision
+  stop startup. See root `COMPOSE.md` for details.
+
+  No existing accounts are automatically promoted. To promote an existing testing account, run
   `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.
   The script reads the database settings from `.env`, preserves the password, and is
   safe to rerun. Register the account first if it does not exist. The role guard

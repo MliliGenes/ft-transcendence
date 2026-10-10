@@ -626,6 +626,36 @@ input::file-selector-button {
   font-size: 10px;
   color: var(--muted);
 }
+.directory-user-id {
+  font-size: 10px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.social .form-actions {
+  flex-wrap: wrap;
+}
+.social-list {
+  margin: 24px 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.social-users {
+  list-style: none;
+  padding: 0;
+}
+.social-users li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.social code {
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.social pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
 .empty-state {
   padding: 15px 0;
 }

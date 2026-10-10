@@ -39,6 +39,21 @@ expiry; logout does not revoke JWT signatures.
 
 ## Verification and deployment
 
+The account page includes a **Friends & blocks** endpoint tester. Copy a user
+UUID from **People here** to send a request or block/unblock them. Incoming
+requests support accept/reject; sent requests support cancellation. Friends,
+incoming requests, sent requests, and blocked users reload after each successful
+action. Use **Refresh lists** after taking an action in another browser/account.
+API errors and the last successful action's JSON response are displayed.
+
+To test both sides, sign in to two accounts in separate browser profiles. Send
+a request, refresh the recipient's lists, accept it, then refresh the sender's
+lists. Block the friend and check that the friendship disappears and the blocked
+user appears; unblock them to clear the block. Also try rejecting and cancelling
+requests. The friends endpoint returns user IDs only, so deleting an accepted or
+declined friendship uses the manual **Friendship ID to delete** field; copy that
+ID from the request or action response first.
+
 ```sh
 npm test
 npm run build

@@ -37,7 +37,11 @@ docker compose up --build -d
 docker compose logs -f user-service
 ```
 
-Postgres initializes fresh storage, then its health check allows user-service to start. The service's Dockerfile generates Prisma Client and compiles during build; its CMD runs `prisma migrate deploy` before starting Node. Superadmin creation is not wired yet.
+Postgres initializes fresh storage, then its health check allows user-service to start. The service's Dockerfile generates Prisma Client and compiles during build. At runtime it applies migrations, bootstraps the initial superadmin, then starts Node. A failed migration or bootstrap prevents the API from starting.
+
+Set `SUPERADMIN_USERNAME`, `SUPERADMIN_EMAIL`, and `SUPERADMIN_PASSWORD` in `envs/user-service.env` before the first startup. The username must be 3–30 characters and the password 8–32 characters (at most 72 UTF-8 bytes). Use a valid email. Passwords are bcrypt-hashed with cost 12. Keep these settings in the ignored local env file, never in the Docker image or committed examples. Single-quote values containing `$` to prevent Compose interpolation.
+
+The bootstrap runs after migrations on every service start, but creates an account only when no superadmin exists. Existing superadmins and their credentials remain unchanged, even if the env settings change. It does not automatically promote a regular account with a matching username or email: that conflict stops startup. The manual promotion command remains available: `docker compose exec user-service npm run bootstrap:superadmin -- existing-user@example.com` (use `docker compose run --rm --no-deps user-service npm run bootstrap:superadmin -- existing-user@example.com` if the service cannot start). Changing the env password does not reset an existing account's password.
 
 The consolidated initial migration requires a fresh database. This stack uses a new `volumes/user-db/` directory and does not reuse or reset the previous testing database.
 
