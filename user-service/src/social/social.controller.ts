@@ -12,6 +12,7 @@ import {
 import { AccessTokenGuard } from '../auth/guards/access-token.guard.js';
 import { Request } from 'express';
 import { FriendshipsService } from './friendships.service.js';
+import { BlocksService } from './blocks.service.js';
 
 type GetFriendshipsRequest = Request & {
   user: {
@@ -23,8 +24,30 @@ type GetFriendshipsRequest = Request & {
 @UseGuards(AccessTokenGuard)
 export class SocialController {
   constructor(
-    private readonly friendshipsService: FriendshipsService
+    private readonly friendshipsService: FriendshipsService,
+    private readonly blocksService: BlocksService,
   ) {}
+
+  @Post('blocks/:userId')
+  blockUser(
+    @Req() request: GetFriendshipsRequest,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+  ) {
+    return this.blocksService.blockUser(request.user.sub, userId);
+  }
+
+  @Delete('blocks/:userId')
+  unblockUser(
+    @Req() request: GetFriendshipsRequest,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+  ) {
+    return this.blocksService.unblockUser(request.user.sub, userId);
+  }
+
+  @Get('blocks')
+  getBlocks(@Req() request: GetFriendshipsRequest) {
+    return this.blocksService.getBlocks(request.user.sub);
+  }
 
   @Post('friendships/:id')
   createFriendship(

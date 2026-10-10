@@ -58,6 +58,22 @@ export class FriendshipsService {
     }
 
     return this.withUserPairLock(requesterId, addresseeId, async (tx) => {
+      const existingBlock = await tx.block.findFirst({
+        where: {
+          OR: [
+            { blockerId: requesterId, blockedId: addresseeId },
+            { blockerId: addresseeId, blockedId: requesterId },
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (existingBlock) {
+        throw new ForbiddenException(
+          'You cannot send a friendship request to a blocked user',
+        );
+      }
+
       const addressee = await tx.user.findUnique({
         where: { id: addresseeId },
         select: { id: true },
