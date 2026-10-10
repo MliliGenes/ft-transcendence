@@ -1,0 +1,16 @@
+export {
+  TeamChat,
+  type TeamChatAck,
+  type TeamChatResult,
+  type TeamChatContext,
+  type ResolveChatContextFn,
+  type AcceptMessageInput,
+  type AcceptPingInput,
+  type TeamChatOptions,
+  MAX_HISTORY_PER_ROOM,
+  MAX_TEXT_LENGTH,
+  MSG_RATE_WINDOW_MS,
+  MSG_RATE_LIMIT,
+  PING_RATE_WINDOW_MS,
+  PING_RATE_LIMIT,
+} from "./lib/team-chat-module.js";

@@ -1,0 +1,20 @@
+# Local agent/tool state
+.superpowers/
+.trigger-tree/
+
+# Dependencies, builds, coverage, and test output
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+frontend/test-results/
+
+# Local secrets and generated development certificates
+.env
+infra/nginx/certs/
+
+# Editor and operating-system files
+.DS_Store
+.vscode/
+*.swp

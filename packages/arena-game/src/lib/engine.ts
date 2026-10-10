@@ -1,0 +1,1297 @@
+import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
+import {
+  type ArenaEvent,
+  type MatchMode,
+  type PlayerStatus,
+  type TeamChatAuthContext,
+  canRun,
+  canSideRun,
+  canSideSubmit,
+  canSideTransition,
+  canSubmit,
+} from "arena-model";
+import {
+  type DriverKind,
+  type GameJudge,
+  type JudgeLimits,
+  SPIKE_LIMITS,
+  type SupportedLanguage,
+  ValidationError,
+  assertSupportedLanguage,
+} from "./judge-types.js";
+import type { AuthenticatedPrincipal } from "./principal.js";
+import { IllegalStateError, MatchAuthority, NotMemberError, type MatchLockOptions } from "./match-authority.js";
+import type { MatchPersistence } from "./persistence-types.js";
+import { inMemoryPersistence } from "./persistence-module.js";
+import { RoundLifecycle, type SealedVerdict } from "./round-lifecycle.js";
+import { TeamCollaboration, type TeamSnapshot } from "./team-collaboration.js";
+import {
+  EvaluationOrchestrator,
+} from "./evaluation-orchestration.js";
+import type { EvaluationTelemetry } from "./evaluation-telemetry.js";
+export type { SealedVerdict } from "./round-lifecycle.js";
+export type { TeamMemberSnapshot, TeamSnapshot } from "./team-collaboration.js";
+import type {
+  DocumentRevision,
+  ForfeitRecord,
+  MatchRecord,
+  Participant,
+  RevealSnapshot,
+  RoundState,
+  SideId,
+  SubmissionRecord,
+} from "./records.js";
+import {
+  DuplicateError,
+  MatchRevisionConflictError,
+} from "./store.js";
+
+export const MATCH_DURATION_MS = 30 * 60 * 1000;
+
+export function teamChatRoomId(matchId: string, sideId: string): string {
+  return `arena:${matchId}:team:${sideId}`;
+}
+
+export interface BankProblem {
+  problemVersionId: string;
+  hiddenSuiteId: string;
+  /** Bank-declared execution driver; absent falls back to snippet-for-Python/stdio (05 declares it everywhere). */
+  driver?: DriverKind;
+  entrypoint?: string;
+  visible: Array<{ id: string; input: string; expected: string }>;
+  hidden: Array<{ name: string; weight: number; tests: Array<{ id: string; input: string; expected: string }> }>;
+  statement: { title: string; description: string; examples: Array<{ id: string; input: string; expected: string }> };
+  starters: Partial<Record<SupportedLanguage, string>>;
+}
+
+export interface ProblemBank {
+  loadProblem(problemVersionId: string): BankProblem;
+}
+
+export interface RatePolicy {
+  maxRunsPerWindow: number;
+  windowMs: number;
+}
+
+/** Judge verdict groups for one sealed evaluation (judge output, game-scored). */
+export interface EngineOptions {
+  judge: GameJudge;
+  bank: ProblemBank;
+  /** Domain-shaped durable Match persistence module. Defaults to in-memory persistence. */
+  persistence?: MatchPersistence;
+  clock?: () => number;
+  uuid?: () => string;
+  limits?: JudgeLimits;
+  telemetry?: EvaluationTelemetry;
+  maxSourceBytes?: number;
+  rate?: RatePolicy;
+  revealGraceMs?: number;
+  /**
+   * Disconnect grace (ticket 11 §11): an offline side may resume seamlessly
+   * while offlineSinceMs + grace > now; past it the side forfeits (1v1).
+   * Default 90s per the Code Arena spec window (60–90, configurable).
+   */
+  reconnectGraceMs?: number;
+}
+
+export { IllegalStateError, NotMemberError } from "./match-authority.js";
+
+export class RateLimitedError extends Error {
+  readonly code = 429;
+  constructor(message: string) {
+    super(message);
+    this.name = "RateLimitedError";
+  }
+}
+
+export class ExpiredError extends Error {
+  readonly code = 410;
+  constructor() {
+    super("match clock expired");
+    this.name = "ExpiredError";
+  }
+}
+
+function driverFor(language: SupportedLanguage): DriverKind {
+  // ponytail: bank declares no driver/entrypoint yet (05 follow-up); Python
+  // snippet convention covers the reference bank, stdio covers I/O programs.
+  return language === "Python" ? "snippet" : "stdio";
+}
+
+export class ArenaEngine {
+  private readonly judge: GameJudge;
+  private readonly bank: ProblemBank;
+  private readonly persistence: MatchPersistence;
+  private readonly authority: MatchAuthority;
+  private readonly roundLifecycle: RoundLifecycle;
+  private readonly teamCollaboration: TeamCollaboration;
+  private readonly clock: () => number;
+  private readonly uuid: () => string;
+  private readonly limits: JudgeLimits;
+  private readonly maxSourceBytes: number;
+  private readonly rate: RatePolicy;
+  private readonly revealGraceMs: number;
+  private readonly reconnectGraceMs: number;
+  private readonly deadlineByMatch = new Map<string, number>();
+  private readonly listeners = new Set<(event: ArenaEvent, payload: unknown) => void>();
+  private readonly eventCommand = new AsyncLocalStorage<{ matchId: string; events: Array<{ event: ArenaEvent; payload: unknown }> }>();
+  private readonly runStamps = new Map<string, number[]>();
+  private readonly evaluation: EvaluationOrchestrator;
+
+  private async withMatchLock<T>(matchId: string, fn: () => Promise<T>, options?: MatchLockOptions): Promise<T> {
+    const command = { matchId, events: [] as Array<{ event: ArenaEvent; payload: unknown }> };
+    const result = await this.eventCommand.run(command, () => this.authority.withLock(matchId, fn, options));
+    for (const queued of command.events) this.deliverEvent(queued.event, queued.payload, result.revision);
+    return result.value;
+  }
+
+  /**
+   * Snapshot/grace reads and boot recovery are idempotent background work. If
+   * another Game process commits the same Match between their load and save,
+   * reload once more instead of leaking an optimistic-write conflict through a
+   * GET or abandoning recovery. Gameplay commands intentionally do not use
+   * this helper: their 409 conflicts must remain visible to the caller.
+   */
+  private async withRevisionRetry<T>(matchId: string, fn: () => Promise<T>, options?: MatchLockOptions): Promise<T> {
+    let attempts = 0;
+    while (true) {
+      try {
+        return await this.withMatchLock(matchId, fn, options);
+      } catch (error) {
+        if (!(error instanceof MatchRevisionConflictError) || attempts >= 2) throw error;
+        attempts += 1;
+      }
+    }
+  }
+
+  constructor(options: EngineOptions) {
+    this.judge = options.judge;
+    this.bank = options.bank;
+    this.persistence = options.persistence ?? inMemoryPersistence();
+    this.authority = new MatchAuthority(this.persistence, (match) => this.retireMatchResources(match));
+    this.roundLifecycle = new RoundLifecycle();
+    this.clock = options.clock ?? (() => Date.now());
+    this.teamCollaboration = new TeamCollaboration({
+      persistence: {
+        saveMatch: (match) => this.authority.saveMatch(match),
+        loadTeamDocument: (matchId, roundId, sideId) => this.persistence.loadTeamDocument(matchId, roundId, sideId),
+        commitMatchAndTeamDocuments: (match, rows) => this.authority.saveMatchAndTeamDocuments(match, rows),
+      },
+      bank: this.bank,
+      clock: this.clock,
+    });
+    this.uuid = options.uuid ?? randomUUID;
+    this.limits = options.limits ?? SPIKE_LIMITS;
+    this.maxSourceBytes = options.maxSourceBytes ?? 100 * 1024;
+    this.rate = options.rate ?? { maxRunsPerWindow: 10, windowMs: 60000 };
+    this.revealGraceMs = options.revealGraceMs ?? 2000;
+    this.reconnectGraceMs = options.reconnectGraceMs ?? 90000;
+    this.evaluation = new EvaluationOrchestrator({
+      judge: this.judge,
+      bank: this.bank,
+      persistence: this.persistence,
+      roundLifecycle: this.roundLifecycle,
+      clock: this.clock,
+      deadlineGraceMs: this.revealGraceMs,
+      limits: this.limits,
+      telemetry: options.telemetry,
+      host: {
+        revisionFor: (matchId) => this.authority.revisionFor(matchId),
+        withMatchLock: (matchId, fn, lockOptions) => this.withMatchLock(matchId, fn, lockOptions),
+        loadMatchOrThrow: (matchId) => this.loadMatchOrThrow(matchId),
+        currentRound: (match) => this.currentRound(match),
+        activityOf: (round, side) => this.activityOf(round, side),
+        transitionActivity: (match, round, side, next) => this.transitionActivity(match, round, side, next),
+        emit: (event, payload) => this.emit(event, payload),
+      },
+    });
+  }
+
+  on(listener: (event: ArenaEvent, payload: unknown) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private emit(event: ArenaEvent, payload: unknown): void {
+    const matchId = (payload as { matchId?: string } | null)?.matchId;
+    const command = this.eventCommand.getStore();
+    if (command && command.matchId === matchId) {
+      command.events.push({ event, payload });
+      return;
+    }
+    const revision = typeof matchId === "string" ? this.authority.revisionFor(matchId) : undefined;
+    this.deliverEvent(event, payload, revision);
+  }
+
+  private deliverEvent(event: ArenaEvent, payload: unknown, revision?: number): void {
+    const matchId = (payload as { matchId?: string } | null)?.matchId;
+    const stamped =
+      payload !== null &&
+      typeof payload === "object" &&
+      typeof matchId === "string" &&
+      revision !== undefined
+        ? { ...(payload as Record<string, unknown>), revision }
+        : payload;
+    for (const listener of this.listeners) {
+      try {
+        listener(event, stamped);
+      } catch (error) {
+        console.error(`Arena event listener failed after ${event} committed`, error);
+      }
+    }
+  }
+
+  async createMatch(input: {
+    mode: MatchMode;
+    participants: Participant[];
+    problemVersionIds: string[];
+    durationMs?: number;
+    now?: number;
+  }, save: (match: MatchRecord) => Promise<void> = (match) => this.persistence.saveMatch(match)): Promise<string> {
+    if (input.mode !== "1v1" && input.mode !== "2v2") throw new ValidationError("unknown match mode");
+    if (input.problemVersionIds.length === 0) throw new ValidationError("at least one round required");
+    const bySide = new Map<SideId, string[]>();
+    for (const p of input.participants) {
+      const list = bySide.get(p.sideId) ?? [];
+      list.push(p.userId);
+      bySide.set(p.sideId, list);
+    }
+    if (input.mode === "1v1") {
+      if (bySide.size !== 2 || input.participants.length !== 2) {
+        throw new ValidationError("1v1 requires exactly two participants on two sides");
+      }
+    } else {
+      // ponytail: teams ARE sides — one team = one competitive side, so the
+      // sideId is the team identity and participants[] is the membership
+      // relation. No parallel team table, no fixed player columns.
+      if (input.participants.length !== 4 || bySide.size !== 2) {
+        throw new ValidationError("2v2 requires exactly four participants on two sides");
+      }
+      for (const [side, users] of bySide) {
+        if (users.length !== 2) throw new ValidationError(`2v2 side ${side} requires exactly two members`);
+      }
+      const distinct = new Set(input.participants.map((p) => p.userId));
+      if (distinct.size !== 4) throw new ValidationError("2v2 requires four distinct users");
+    }
+    const teams = input.mode === "2v2";
+    const now = input.now ?? this.clock();
+    const matchId = this.uuid();
+    const sideIds = [...bySide.keys()];
+    const match: MatchRecord = {
+      id: matchId,
+      mode: input.mode,
+      roundPhase: "MATCH_FOUND",
+      currentRound: 1,
+      totalRounds: input.problemVersionIds.length,
+      durationMs: input.durationMs ?? MATCH_DURATION_MS,
+      startedAt: now,
+      participants: input.participants.map((p) => ({ ...p })),
+      rounds: input.problemVersionIds.map((problemVersionId) => {
+        const problem = this.bank.loadProblem(problemVersionId);
+        const activities: Partial<Record<SideId, PlayerStatus>> = {};
+        for (const p of input.participants) activities[p.sideId] = "coding";
+        return {
+          roundId: this.uuid(),
+          problemVersionId: problem.problemVersionId,
+          hiddenSuiteId: problem.hiddenSuiteId,
+          counted: {},
+          attempts: {},
+          activities,
+          runTests: {},
+          // 2v2 only: fresh shared-doc identity per team side (revision 1).
+          teamDocs: teams ? Object.fromEntries(sideIds.map((s) => [s, { revision: 1, language: "Python" }])) : undefined,
+          readiness: teams ? {} : undefined,
+          reveal: null,
+          closing: false,
+          cutoffPassed: false,
+          superseded: [],
+        };
+      }),
+      failures: [],
+      revision: 0,
+      presence: {},
+      offlineSinceMs: {},
+      forfeit: null,
+    };
+    await save(match);
+    this.rememberDeadline(match);
+    return matchId;
+  }
+
+  async startRound(principal: AuthenticatedPrincipal, matchId: string): Promise<void> {
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      this.requireUnexpired(match);
+      this.roundLifecycle.startRound(match);
+      await this.authority.saveMatch(match);
+      this.emit("phase.changed", { matchId: match.id, phase: match.roundPhase, round: match.currentRound });
+    });
+  }
+  async beginCoding(principal: AuthenticatedPrincipal, matchId: string): Promise<void> {
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      this.requireUnexpired(match);
+      this.roundLifecycle.beginCoding(match);
+      await this.authority.saveMatch(match);
+      this.emit("phase.changed", { matchId: match.id, phase: match.roundPhase, round: match.currentRound });
+    });
+  }
+
+  /** Team readiness remains a facade operation; collaboration owns its rules. */
+  async setReady(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+    input: { ready: boolean; documentRevision?: DocumentRevision },
+  ): Promise<void> {
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      this.requireUnexpired(match);
+      if (match.mode !== "2v2") return;
+      const result = await this.teamCollaboration.setReady(match, principal.userId, input);
+      await this.authority.saveMatch(match);
+      this.emit("readiness.changed", {
+        matchId: match.id,
+        side: result.side,
+        userId: principal.userId,
+        ready: result.ready,
+        documentRevision: result.documentRevision,
+      });
+    });
+  }
+
+  async applyCollabUpdate(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+    input: { roundId: string; updateB64: string },
+  ): Promise<{ revision: DocumentRevision; changed: boolean; source: string }> {
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      this.requireUnexpired(match);
+      const result = await this.teamCollaboration.applyUpdate(match, principal.userId, input);
+      if (result.changed) {
+        this.emit("readiness.changed", {
+          matchId: match.id,
+          side: result.side,
+          invalidated: true,
+          documentRevision: result.revision,
+        });
+      }
+      return { revision: result.revision, changed: result.changed, source: result.source };
+    });
+  }
+
+  async collabSync(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+  ): Promise<{ roomId: string; roundId: string; side: SideId; stateB64: string; source: string; revision: DocumentRevision; language: string }> {
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      return this.teamCollaboration.sync(match, principal.userId);
+    });
+  }
+
+  /**
+   * Team chat context resolution (ticket 16):
+   * Game-owned authority boundary for the /chat namespace.
+   * Rejects strangers (throws NotMemberError), 1v1 matches (throws IllegalStateError),
+   * and inactive/forfeited matches.
+   * Resolves caller's side and returns the isolated team room id.
+   */
+  async resolveTeamChatContext(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+  ): Promise<TeamChatAuthContext> {
+    const match = await this.requireMember(principal, matchId);
+    if (match.mode !== "2v2") {
+      throw new IllegalStateError("no team chat in 1v1");
+    }
+    const side = this.sideOf(match, principal);
+    const active = match.roundPhase !== "MATCH_COMPLETE" && !match.forfeit;
+    return {
+      matchId: match.id,
+      sideId: side,
+      userId: principal.userId,
+      displayName: principal.userId,
+      roomId: teamChatRoomId(match.id, side),
+      active,
+      phase: match.roundPhase,
+    };
+  }
+
+  async setTeamLanguage(principal: AuthenticatedPrincipal, matchId: string, language: string): Promise<DocumentRevision | null> {
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      this.requireUnexpired(match);
+      const result = await this.teamCollaboration.setLanguage(match, principal.userId, language);
+      if (!result) return null;
+      this.emit("readiness.changed", {
+        matchId: match.id,
+        side: result.side,
+        invalidated: true,
+        documentRevision: result.revision,
+      });
+      return result.revision;
+    });
+  }
+  async run(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+    input: { code: string; language: string },
+  ): Promise<{ runId: string; tests: Array<{ id: string; passed: boolean; output: string; runtimeMs: number }> }> {
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
+    const setup = await this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      const side = this.sideOf(match, principal);
+      const round = this.currentRound(match);
+      this.requireUnexpired(match);
+      if (!canRun(match.roundPhase)) throw new IllegalStateError(`run rejected in ${match.roundPhase}`);
+      if (!canSideRun(this.activityOf(round, side))) {
+        throw new IllegalStateError(`run rejected for side while ${this.activityOf(round, side)}`);
+      }
+      assertSupportedLanguage(input.language);
+      this.validateSource(input.code);
+      this.checkRate(matchId, side);
+      const runId = this.uuid();
+      await this.setActivity(match, round, side, "running");
+      const problem = this.bank.loadProblem(round.problemVersionId);
+      return {
+        runId,
+        side,
+        roundId: round.roundId,
+        visible: problem.visible.map((t) => ({ id: t.id, input: t.input, expected: t.expected })),
+        driver: problem.driver ?? driverFor(input.language as SupportedLanguage),
+      };
+    });
+    try {
+      // Visible tests only. Runs outside the match lock: the other side stays free.
+      const verdicts = await this.judge.runVisible(input.language as SupportedLanguage, setup.driver, input.code, setup.visible, this.limits);
+      await this.withMatchLock(matchId, async () => {
+        const match = await this.requireMember(principal, matchId);
+        const round = match.rounds.find((r) => r.roundId === setup.roundId) ?? this.currentRound(match);
+        this.emit("tests.updated", {
+          matchId: match.id,
+          side: setup.side,
+          tests: verdicts.map((v) => ({ id: v.id, status: v.passed ? "passed" : "failed" })),
+        });
+        round.runTests[setup.side] = verdicts.map((v) => ({
+          id: v.id,
+          status: v.passed ? "passed" : "failed",
+          output: v.output,
+          ms: v.runtimeMs,
+        }));
+        await this.authority.saveMatch(match);
+        if (this.activityOf(round, setup.side) === "running") {
+          await this.setActivity(match, round, setup.side, "coding");
+        }
+      });
+      return {
+        runId: setup.runId,
+        tests: verdicts.map((v) => ({ id: v.id, passed: v.passed, output: v.output, runtimeMs: v.runtimeMs })),
+      };
+    } catch (error) {
+      await this.withMatchLock(matchId, async () => {
+        const match = await this.requireMember(principal, matchId);
+        const round = match.rounds.find((r) => r.roundId === setup.roundId) ?? this.currentRound(match);
+        await this.recordFailure(match, `run: ${error instanceof Error ? error.message : String(error)}`);
+        delete round.runTests[setup.side];
+        await this.authority.saveMatch(match);
+        if (this.activityOf(round, setup.side) === "running") {
+          await this.setActivity(match, round, setup.side, "coding");
+        }
+      });
+      throw error;
+    }
+  }
+
+  async submit(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+    input: { code: string; language: string; submissionId?: string; evaluationId?: string; documentRevision?: DocumentRevision },
+  ): Promise<{ ok: true; round: number; submissionId: string; evaluationId: string }> {
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
+    // Phase 1 (locked): gates, ids, pending record, activity dispatch.
+    return this.evaluation.submit(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      const side = this.sideOf(match, principal);
+      const round = this.currentRound(match);
+      this.requireUnexpired(match);
+      // 1v1 keeps the legacy gate (phase only). 2v2 additionally requires
+      // both teammates ready via the arena-model gate AND both approvals
+      // bound to the current document revision — stale R1 readiness can
+      // never authorize an R2 submission. The lock makes the gate + record
+      // atomic, so a concurrent edit deterministically wins or loses whole.
+      const readiness = match.mode === "2v2" ? this.teamCollaboration.readinessFor(match, side) : { you: false, mate: false };
+      if (!canSubmit(match.roundPhase, match.mode, readiness)) {
+        throw new IllegalStateError(`submit rejected in ${match.roundPhase} (team not both ready)`);
+      }
+      if (round.closing) throw new IllegalStateError("submit rejected while reveal is closing the round");
+      assertSupportedLanguage(input.language);
+      // 2v2 frozen source (ticket 15 §11): the judge receives the immutable
+      // authoritative Y.Text snapshot, never the client payload. The client
+      // language must equal the team language (no split-language document).
+      let submitCode = input.code;
+      let submitDocRevision: DocumentRevision | null = null;
+      if (match.mode === "2v2") {
+        const document = await this.teamCollaboration.submissionDocument(match, side, input.language, input.documentRevision);
+        submitCode = document.source;
+        submitDocRevision = document.documentRevision;
+      }
+      this.validateSource(submitCode);
+      const submissionId = input.submissionId ?? this.uuid();
+      const evaluationId = input.evaluationId ?? this.uuid();
+      const sourceHash = createHash("sha256").update(submitCode, "utf8").digest("hex");
+      return {
+        matchId,
+        roundNo: match.currentRound,
+        roundId: round.roundId,
+        sideId: side,
+        submissionId,
+        evaluationId,
+        problemVersionId: round.problemVersionId,
+        hiddenSuiteId: round.hiddenSuiteId,
+        language: input.language,
+        sourceHash,
+        documentRevision: submitDocRevision,
+        acceptPending: async (existing: SubmissionRecord | undefined) => {
+          const resumed = existing?.status === "pending";
+          if (!resumed && !canSideSubmit(this.activityOf(round, side))) {
+            throw new IllegalStateError(`submit rejected for side while ${this.activityOf(round, side)}`);
+          }
+          const now = this.clock();
+          let record = existing;
+          if (!record) {
+            record = {
+              submissionId,
+              evaluationId,
+              matchId,
+              roundId: round.roundId,
+              sideId: side,
+              problemVersionId: round.problemVersionId,
+              language: input.language,
+              source: submitCode,
+              sourceHash,
+              documentRevision: submitDocRevision,
+              submittedAt: now,
+              elapsedMatchMs: now - match.startedAt,
+              status: "pending",
+              score: null,
+              scoreBp: null,
+              groups: null,
+              testStatuses: null,
+              failureCode: null,
+            };
+            await this.persistence.recordSubmission(record);
+          }
+          if (!resumed) {
+            await this.setActivity(match, round, side, "submitted");
+            await this.setActivity(match, round, side, "evaluating");
+          }
+          return record;
+        },
+      };
+    });
+  }
+
+  async publishReveal(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+    options: { graceMs?: number } = {},
+  ): Promise<RevealSnapshot> {
+    if (this.deadlineHasElapsedOrUnknown(matchId) && await this.closeExpiredMatch(matchId)) {
+      const match = await this.requireMember(principal, matchId);
+      const reveal = this.currentRound(match).reveal;
+      if (reveal) return JSON.parse(JSON.stringify(reveal)) as RevealSnapshot;
+      throw new IllegalStateError("expired Match has no current Reveal");
+    }
+    const existingReveal = await this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      if (match.roundPhase === "MATCH_COMPLETE" && this.currentRound(match).reveal) {
+        return JSON.parse(JSON.stringify(this.currentRound(match).reveal)) as RevealSnapshot;
+      }
+      this.roundLifecycle.beginReveal(match);
+      await this.authority.saveMatch(match);
+      return null;
+    });
+    if (existingReveal) return existingReveal;
+    const first = await this.requireMember(principal, matchId);
+    const firstRound = this.currentRound(first);
+    const graceMs = options.graceMs ?? this.revealGraceMs;
+    const pending = this.evaluation.forRound(matchId, firstRound.roundId);
+    if (pending.length > 0 && graceMs > 0) {
+      await Promise.race([
+        Promise.allSettled(pending.map((p) => p.promise)),
+        new Promise((resolve) => setTimeout(resolve, graceMs)),
+      ]);
+    }
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      const round = this.currentRound(match);
+      this.roundLifecycle.prepareReveal(
+        match,
+        new Set(
+          (await this.persistence.listRoundSubmissions(matchId, round.roundId))
+            .filter((s) => s.status === "completed")
+            .map((s) => s.evaluationId),
+        ),
+        this.evaluation.forRound(matchId, round.roundId).map((entry) => entry.evaluationId),
+      );
+      const snapshot = await this.createRevealSnapshot(match, round, this.clock());
+      try {
+        await this.persistence.publishReveal(match.id, round.roundId, snapshot);
+      } catch (error) {
+        if (error instanceof DuplicateError) throw new IllegalStateError("reveal already published");
+        throw error;
+      }
+      this.roundLifecycle.commitReveal(match, snapshot);
+      for (const side of Object.keys(round.activities)) {
+        if (this.activityOf(round, side) !== "locked") await this.setActivity(match, round, side, "locked");
+      }
+      await this.authority.saveMatch(match);
+      this.emit("reveal.published", { matchId: match.id, round: match.currentRound });
+      return JSON.parse(JSON.stringify(snapshot)) as RevealSnapshot;
+    });
+  }
+
+  async nextRound(principal: AuthenticatedPrincipal, matchId: string): Promise<void> {
+    if (this.deadlineHasElapsedOrUnknown(matchId) && await this.closeExpiredMatch(matchId)) return;
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      const plan = this.roundLifecycle.advance(match);
+      if (plan.completed) {
+        await this.authority.saveMatch(match);
+        this.emit("match.ended", { matchId: match.id, result: "pending-final" });
+        return;
+      }
+      const oldRound = match.rounds.find((round) => round.roundId === plan.previousRoundId) ?? this.currentRound(match);
+      const round = this.currentRound(match);
+      if (match.mode === "2v2") {
+        // New round = new team document identity (revision restarts at 1;
+        // the new roundId scopes old approvals invalid regardless), all
+        // readiness cleared, team language carried over like 1v1 clients do.
+        // Old Y.Docs are destroyed: late old-round frames carry the old
+        // roundId and are rejected at the gate, never applied here.
+        this.teamCollaboration.destroyRound(match, oldRound);
+      }
+      for (const side of plan.activityResets) await this.setActivity(match, round, side, "coding");
+      await this.authority.saveMatch(match);
+      this.emit("round.advanced", { matchId: match.id, round: match.currentRound });
+    });
+  }
+  async finalResult(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+  ): Promise<{ scores: Partial<Record<SideId, number>>; outcome: "left" | "right" | "draw"; winner: SideId | null; forfeit: ForfeitRecord | null }> {
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
+    const match = await this.requireMember(principal, matchId);
+    if (match.roundPhase !== "MATCH_COMPLETE") throw new IllegalStateError("match not complete");
+    return this.roundLifecycle.computeFinal(match);
+  }
+
+  /** Sides holding a counted result in the current round (reveal-condition input). */
+  async roundCountedSides(principal: AuthenticatedPrincipal, matchId: string): Promise<SideId[]> {
+    const match = await this.requireMember(principal, matchId);
+    return Object.keys(this.currentRound(match).counted);
+  }
+
+  /** All competing side ids of the current round. */
+  async roundSides(principal: AuthenticatedPrincipal, matchId: string): Promise<SideId[]> {
+    const match = await this.requireMember(principal, matchId);
+    return Object.keys(this.currentRound(match).activities);
+  }
+
+  async snapshot(principal: AuthenticatedPrincipal, matchId: string): Promise<SealedSnapshot> {
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
+    return this.withRevisionRetry(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      this.applyGraceToMatch(match);
+      await this.authority.saveMatch(match);
+      const side = this.sideOf(match, principal);
+      const round = this.currentRound(match);
+      const problem = this.bank.loadProblem(round.problemVersionId);
+      const now = this.clock();
+      const remainingMs = Math.max(0, match.durationMs - (now - match.startedAt));
+      const sides: Record<SideId, { status: PlayerStatus; submissions: number; presence: "online" | "offline" }> = {};
+      for (const [sideId, status] of Object.entries(round.activities)) {
+        const sidePresence =
+          match.mode === "2v2"
+            ? this.teamCollaboration.hasOnlineMember(match, sideId)
+              ? ("online" as const)
+              : ("offline" as const)
+            : (match.presence[sideId] ?? "offline");
+        sides[sideId] = {
+          status: status ?? "coding",
+          submissions: round.attempts[sideId] ?? 0,
+          presence: sidePresence,
+        };
+      }
+      const pending = (await this.persistence.listRoundSubmissions(matchId, round.roundId)).some(
+        (s) => s.sideId === side && s.status === "pending",
+      );
+      return {
+        matchId: match.id,
+        mode: match.mode,
+        roundPhase: match.roundPhase,
+        round: match.currentRound,
+        totalRounds: match.totalRounds,
+        remainingMs,
+        expired: remainingMs <= 0,
+        mySide: side,
+        revision: match.revision,
+        pendingEvaluation: pending,
+        final: match.roundPhase === "MATCH_COMPLETE" ? this.roundLifecycle.computeFinal(match) : null,
+        teams: match.mode === "2v2" ? this.teamCollaboration.snapshots(match, round, side) : undefined,
+        problem: {
+        problemVersionId: problem.problemVersionId,
+        title: problem.statement.title,
+        description: problem.statement.description,
+        examples: problem.statement.examples.map((e) => ({ ...e })),
+        starters: { ...problem.starters },
+      },
+      visibleTests: problem.visible.map((t) => ({ id: t.id, input: t.input, expected: t.expected })),
+      tests:
+        round.runTests[side] ??
+        problem.visible.map((t) => ({ id: t.id, status: "idle" as const, output: null, ms: null })),
+      sides,
+      reveal: round.reveal ? JSON.parse(JSON.stringify(round.reveal)) : null,
+      failures: [...match.failures],
+    };
+    });
+  }
+
+  /**
+   * Side resolution for the service layer (socket attach, presence mapping).
+   * Membership-verified; never trusts client-supplied sides.
+   */
+  async participantSide(userId: string, matchId: string): Promise<SideId> {
+    const match = await this.loadMatchOrThrow(matchId);
+    const found = match.participants.find((p) => p.userId === userId);
+    if (!found) throw new NotMemberError(matchId);
+    return found.sideId;
+  }
+
+  /** Match mode for service-layer branching (presence path, validation). */
+  async modeOf(matchId: string): Promise<MatchMode> {
+    return (await this.loadMatchOrThrow(matchId)).mode;
+  }
+
+  /**
+   * Presence attach/detach (ticket 11 §1/§12): the service calls this when a
+   * socket opens/closes for a side. Presence NEVER rewrites side activity.
+   * Going offline stamps offlineSinceMs (grace starts); rejoining online
+   * clears it. Terminal matches ignore presence changes. Returns presence.
+   */
+  async setPresence(matchId: string, side: SideId, presence: "online" | "offline"): Promise<"online" | "offline"> {
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.loadMatchOrThrow(matchId);
+      if (!match.participants.some((p) => p.sideId === side)) throw new NotMemberError(matchId);
+      return this.applySidePresence(match, side, presence);
+    });
+  }
+
+  /** Lock-free side-presence core (ticket 11 §1/§12), shared by both presence paths. Caller holds the match lock. */
+  private async applySidePresence(match: MatchRecord, side: SideId, presence: "online" | "offline"): Promise<"online" | "offline"> {
+    if (match.roundPhase === "MATCH_COMPLETE" || match.forfeit) return match.presence[side] ?? "offline";
+    if (presence === "online") {
+      match.presence[side] = "online";
+      delete match.offlineSinceMs[side];
+    } else {
+      match.presence[side] = "offline";
+      // First drop starts grace; repeated disconnects never extend it.
+      match.offlineSinceMs[side] ??= this.clock();
+    }
+    await this.authority.saveMatch(match);
+    this.emit("player.presenceChanged", { matchId: match.id, side, presence: match.presence[side] });
+    return match.presence[side]!;
+  }
+
+  /**
+   * Per-member presence (2v2): two members share one side, so side-keyed
+   * presence cannot represent them. Membership-verified (strangers throw);
+   * never rewrites team activity; terminal matches ignore changes. 1v1
+   * delegates to the unchanged side path.
+   */
+  async setMemberPresence(matchId: string, userId: string, presence: "online" | "offline"): Promise<"online" | "offline"> {
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.loadMatchOrThrow(matchId);
+      const participant = match.participants.find((p) => p.userId === userId);
+      if (!participant) throw new NotMemberError(matchId);
+      if (match.roundPhase === "MATCH_COMPLETE" || match.forfeit) {
+        return match.memberPresence?.[userId] ?? match.presence[participant.sideId] ?? "offline";
+      }
+      if (match.mode !== "2v2") return this.applySidePresence(match, participant.sideId, presence);
+      match.memberPresence ??= {};
+      if (presence === "online") {
+        match.memberPresence[userId] = "online";
+        if (match.memberOfflineSinceMs) delete match.memberOfflineSinceMs[userId];
+      } else {
+        match.memberPresence[userId] = "offline";
+        match.memberOfflineSinceMs ??= {};
+        match.memberOfflineSinceMs[userId] ??= this.clock();
+      }
+      await this.authority.saveMatch(match);
+      this.emit("player.presenceChanged", { matchId: match.id, side: participant.sideId, userId, presence: match.memberPresence[userId] });
+      return match.memberPresence[userId]!;
+    });
+  }
+
+  /**
+   * Grace sweep entry (ticket 11 §11): forfeit sides past the grace window.
+   * Explicit server logic — never called from socket callbacks directly; the
+   * service drives it on an interval, and snapshot/actions apply it lazily.
+   * Returns true when a forfeit was recorded.
+   */
+  async applyGraceIfExpired(matchId: string): Promise<boolean> {
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.loadMatchOrThrow(matchId);
+      const changed = this.applyGraceToMatch(match);
+      if (changed) await this.authority.saveMatch(match);
+      return changed;
+    });
+  }
+
+  /** Sweep every known match (service interval). Per-match failures never abort the sweep. */
+  async sweepGrace(): Promise<string[]> {
+    const forfeited: string[] = [];
+    for (const id of await this.persistence.listMatchIds()) {
+      try {
+        if (await this.applyGraceIfExpired(id)) forfeited.push(id);
+      } catch {
+        // Unknown/gone match: skip.
+      }
+    }
+    return forfeited;
+  }
+
+  /** Close expired Matches on the server, including after a process restart. */
+  async sweepExpiredMatches(): Promise<string[]> {
+    const ids = await this.persistence.listMatchIds();
+    const outcomes = await Promise.all(ids.map(async (id) => {
+      try {
+        return (await this.closeExpiredMatch(id)) ? id : null;
+      } catch {
+        // A failed Match commit is retried by the next sweep or player snapshot.
+        return null;
+      }
+    }));
+    return outcomes.filter((id): id is string => id !== null);
+  }
+
+  private async closeExpiredMatch(matchId: string): Promise<boolean> {
+    const decision = await this.withRevisionRetry(matchId, async () => {
+      const match = await this.loadMatchOrThrow(matchId);
+      if (match.roundPhase === "MATCH_COMPLETE" || !this.isExpired(match)) {
+        return { status: "idle" as const };
+      }
+
+      const round = this.currentRound(match);
+      if (match.roundPhase === "CODING") {
+        const persistedReveal = await this.persistence.findReveal(match.id, round.roundId);
+        if (persistedReveal) {
+          await this.finishExpiredRound(match, round, persistedReveal);
+          return { status: "completed" as const };
+        }
+        const matchDeadline = match.startedAt + match.durationMs;
+        const pendingEvaluationIds = (await this.persistence.listRoundSubmissions(match.id, round.roundId))
+          .filter((submission) => submission.status === "pending" && submission.submittedAt < matchDeadline)
+          .map((submission) => submission.evaluationId);
+        if (!round.closing) {
+          this.roundLifecycle.beginReveal(match);
+          await this.authority.saveMatch(match);
+        }
+        return {
+          status: "waiting" as const,
+          roundId: round.roundId,
+          cutoffPassed: round.cutoffPassed,
+          pendingEvaluationIds,
+          graceDeadline: matchDeadline + this.revealGraceMs,
+        };
+      }
+
+      if (match.roundPhase === "MATCH_FOUND" || match.roundPhase === "ROUND_INTRO") {
+        await this.finishExpiredRound(match, round);
+        return { status: "completed" as const };
+      }
+
+      if (match.roundPhase === "SCORE_REVEAL" || match.roundPhase === "ROUND_COMPLETE") {
+        await this.finishExpiredRound(match, round, round.reveal ?? undefined);
+        return { status: "completed" as const };
+      }
+
+      return { status: "idle" as const };
+    });
+
+    if (decision.status === "idle") return false;
+    if (decision.status === "completed") return true;
+
+    if (!decision.cutoffPassed && decision.pendingEvaluationIds.length > 0) {
+      await this.waitForDeadlineEvaluations(
+        matchId,
+        decision.roundId,
+        decision.pendingEvaluationIds,
+        decision.graceDeadline,
+      );
+    }
+
+    return this.withRevisionRetry(matchId, async () => {
+      const match = await this.loadMatchOrThrow(matchId);
+      if (match.roundPhase === "MATCH_COMPLETE" || !this.isExpired(match)) return false;
+      const round = this.currentRound(match);
+      if (match.roundPhase === "CODING") {
+        const persistedReveal = await this.persistence.findReveal(match.id, round.roundId);
+        await this.finishExpiredRound(match, round, persistedReveal);
+        return true;
+      }
+      if (match.roundPhase === "SCORE_REVEAL" || match.roundPhase === "ROUND_COMPLETE") {
+        await this.finishExpiredRound(match, round, round.reveal ?? undefined);
+        return true;
+      }
+      return false;
+    });
+  }
+
+  private async waitForDeadlineEvaluations(
+    matchId: string,
+    roundId: string,
+    evaluationIds: readonly string[],
+    graceDeadline: number,
+  ): Promise<void> {
+    while (true) {
+      const submissions = await Promise.all(
+        evaluationIds.map((evaluationId) => this.persistence.findSubmissionByEvaluationId(evaluationId)),
+      );
+      if (!submissions.some((submission) => submission?.matchId === matchId && submission.roundId === roundId && submission.status === "pending")) {
+        return;
+      }
+
+      const remainingGraceMs = graceDeadline - this.clock();
+      if (remainingGraceMs <= 0) return;
+      await new Promise<void>((resolve) => setTimeout(resolve, Math.min(50, remainingGraceMs)));
+    }
+  }
+
+  private async finishExpiredRound(
+    match: MatchRecord,
+    round: RoundState,
+    existingReveal?: RevealSnapshot,
+  ): Promise<void> {
+    const phase = match.roundPhase;
+    const wasRevealed = round.reveal !== null;
+    let reveal = round.reveal ?? existingReveal ?? (await this.persistence.findReveal(match.id, round.roundId));
+
+    if (phase === "CODING") {
+      const submissions = await this.persistence.listRoundSubmissions(match.id, round.roundId);
+      this.roundLifecycle.prepareReveal(
+        match,
+        new Set(submissions.filter((submission) => submission.status === "completed").map((submission) => submission.evaluationId)),
+        this.evaluation.forRound(match.id, round.roundId).map((entry) => entry.evaluationId),
+      );
+    } else if (phase === "MATCH_FOUND" || phase === "ROUND_INTRO") {
+      this.roundLifecycle.prepareDeadlineReveal(match, new Set(), []);
+    }
+
+    if (!reveal) {
+      reveal = await this.createRevealSnapshot(match, round);
+      await this.persistence.publishReveal(match.id, round.roundId, reveal);
+    }
+
+    if (!round.reveal) {
+      if (phase === "CODING" || phase === "MATCH_FOUND" || phase === "ROUND_INTRO") {
+        this.roundLifecycle.commitReveal(match, reveal, "MATCH_DEADLINE");
+      } else {
+        round.reveal = reveal;
+      }
+    }
+
+    round.closing = false;
+    round.cutoffPassed = true;
+    for (const side of Object.keys(round.activities)) {
+      if (this.activityOf(round, side) !== "locked") {
+        await this.setActivity(match, round, side, "locked");
+      }
+    }
+    this.roundLifecycle.finishAtDeadline(match);
+    await this.authority.saveMatch(match);
+    if (!wasRevealed) this.emit("reveal.published", { matchId: match.id, round: match.currentRound });
+    const final = this.roundLifecycle.computeFinal(match);
+    this.emit("match.ended", { matchId: match.id, result: "deadline", winner: final.winner ?? undefined });
+  }
+
+  private async createRevealSnapshot(match: MatchRecord, round: RoundState, publishedAt?: number): Promise<RevealSnapshot> {
+    const groups: RevealSnapshot["groups"] = {};
+    for (const side of Object.keys(round.activities)) {
+      const latest = await this.latestCompleted(match.id, round.roundId, side);
+      groups[side] = latest?.groups ?? [];
+    }
+    return this.roundLifecycle.createReveal(match, { groups, publishedAt: publishedAt ?? this.clock() });
+  }
+
+  /**
+   * Caller holds the lock and a loaded match. Records a grace forfeit when an
+   * offline side (previously online, never rejoined) exhausts the window.
+   * Both sides past grace: earliest-offline side forfeits, deterministically.
+   */
+  private applyGraceToMatch(match: MatchRecord): boolean {
+    // ponytail: no 2v2 grace-forfeit rules exist yet (ticket 14 §20) — member
+    // offline windows are presence display only. 1v1 path below untouched.
+    if (match.mode === "2v2") return false;
+    if (match.roundPhase === "MATCH_COMPLETE" || match.forfeit || this.isExpired(match)) return false;
+    const now = this.clock();
+    const expired = Object.entries(match.offlineSinceMs)
+      .filter(([, since]) => since !== undefined && since + this.reconnectGraceMs <= now)
+      .sort((a, b) => a[1]! - b[1]!);
+    if (expired.length === 0) return false;
+    const loser = expired[0]![0];
+    const winner = match.participants.find((p) => p.sideId !== loser)?.sideId ?? loser;
+    this.recordForfeit(match, winner, loser, "grace-expired");
+    return true;
+  }
+
+  /**
+   * Deliberate leave (ticket 11 §15): immediate forfeit, never grace. Socket
+   * loss must never route here — only an explicit leave action.
+   */
+  async leaveMatch(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+  ): Promise<{ winner: SideId; loser: SideId }> {
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      if (match.roundPhase === "MATCH_COMPLETE" || match.forfeit) {
+        throw new IllegalStateError("match already complete");
+      }
+      const loser = this.sideOf(match, principal);
+      const winner = match.participants.find((p) => p.sideId !== loser)?.sideId ?? loser;
+      this.recordForfeit(match, winner, loser, "leave");
+      await this.authority.saveMatch(match);
+      return { winner, loser };
+    });
+  }
+
+  private recordForfeit(match: MatchRecord, winner: SideId, loser: SideId, reason: ForfeitRecord["reason"]): void {
+    match.forfeit = { winner, loser, at: this.clock(), reason };
+    match.roundPhase = "MATCH_COMPLETE";
+    this.emit("match.ended", { matchId: match.id, result: "forfeit", winner, loser, reason });
+  }
+
+  /**
+   * Boot recovery (ticket 11 §10). The service awaits this before serving.
+   * Per known match: presence goes offline with a fresh grace window (sockets
+   * die with the process); transient activities in the live round are
+   * repaired (`running`/`submitted` back to `coding`; `evaluating` kept only
+   * when its pending submission still exists); an interrupted reveal flip is
+   * finished from the persisted immutable reveal or unwound. Then every
+   * pending submission is re-driven through the judge EXACTLY once under its
+   * original ids (idempotent retry): live round → normal commit (counted or
+   * superseded by the shared rule); stale round or dead match → superseded
+   * without judging; judge failure → explicit failed, never fabricated.
+   */
+  async recover(): Promise<{ matches: number; retried: number; failed: number }> {
+    let retried = 0;
+    let failed = 0;
+    const ids = await this.persistence.listMatchIds();
+    for (const id of ids) {
+      await this.withRevisionRetry(id, async () => {
+        const match = await this.loadMatchOrThrow(id);
+        const now = this.clock();
+        for (const p of match.participants) {
+          match.presence[p.sideId] = "offline";
+          match.offlineSinceMs[p.sideId] = now;
+        }
+        if (match.mode === "2v2") {
+          match.memberPresence ??= {};
+          match.memberOfflineSinceMs ??= {};
+          for (const p of match.participants) {
+            match.memberPresence[p.userId] = "offline";
+            match.memberOfflineSinceMs[p.userId] = now;
+          }
+        }
+        if (match.roundPhase !== "MATCH_COMPLETE") {
+          const round = this.currentRound(match);
+          const pendingSides = new Set(
+            (await this.persistence.listRoundSubmissions(id, round.roundId))
+              .filter((s) => s.status === "pending")
+              .map((s) => s.sideId),
+          );
+          for (const side of Object.keys(round.activities)) {
+            const activity = this.activityOf(round, side);
+            if (activity === "running" || activity === "submitted") {
+              round.activities[side] = "coding";
+            } else if (activity === "evaluating" && !pendingSides.has(side)) {
+              round.activities[side] = "coding";
+              await this.recordFailure(match, "recover: evaluating without a pending submission");
+            }
+          }
+          if (round.closing || round.cutoffPassed) {
+            const published = await this.persistence.findReveal(id, round.roundId);
+            if (published && !round.reveal) {
+              round.reveal = published;
+              round.closing = false;
+              match.roundPhase = "SCORE_REVEAL";
+              for (const side of Object.keys(round.activities)) {
+                if (this.activityOf(round, side) !== "locked") round.activities[side] = "locked";
+              }
+              await this.authority.saveMatch(match);
+              this.emit("reveal.published", { matchId: match.id, round: match.currentRound });
+            } else if (!published) {
+              round.closing = false;
+              round.cutoffPassed = false;
+              round.superseded = [];
+            }
+          }
+        }
+        await this.authority.saveMatch(match);
+      });
+    }
+    const recovery = await this.evaluation.recoverPending();
+    retried = recovery.retried;
+    failed = recovery.failed;
+    await this.sweepExpiredMatches();
+    return { matches: ids.length, retried, failed };
+  }
+
+  private async requireMember(principal: AuthenticatedPrincipal, matchId: string): Promise<MatchRecord> {
+    const match = await this.authority.requireMember(principal, matchId);
+    this.rememberDeadline(match);
+    return match;
+  }
+
+  private async loadMatchOrThrow(matchId: string): Promise<MatchRecord> {
+    const match = await this.authority.loadOrThrow(matchId);
+    this.rememberDeadline(match);
+    return match;
+  }
+
+  private rememberDeadline(match: MatchRecord): void {
+    if (match.roundPhase === "MATCH_COMPLETE") this.deadlineByMatch.delete(match.id);
+    else this.deadlineByMatch.set(match.id, match.startedAt + match.durationMs);
+  }
+
+  private retireMatchResources(match: MatchRecord): void {
+    if (match.roundPhase !== "MATCH_COMPLETE") return;
+    this.deadlineByMatch.delete(match.id);
+    for (const side of new Set(match.participants.map((participant) => participant.sideId))) {
+      this.runStamps.delete(`${match.id}:${side}`);
+    }
+    for (const round of match.rounds) this.teamCollaboration.destroyRound(match, round);
+  }
+
+  private deadlineHasElapsedOrUnknown(matchId: string): boolean {
+    const deadline = this.deadlineByMatch.get(matchId);
+    return deadline === undefined || this.clock() >= deadline;
+  }
+
+  private sideOf(match: MatchRecord, principal: AuthenticatedPrincipal): SideId {
+    return this.authority.sideOf(match, principal);
+  }
+
+  private currentRound(match: MatchRecord): RoundState {
+    return this.authority.currentRound(match);
+  }
+
+  private activityOf(round: RoundState, side: SideId): PlayerStatus {
+    return round.activities[side] ?? "coding";
+  }
+
+  private async setActivity(match: MatchRecord, round: RoundState, side: SideId, next: PlayerStatus): Promise<void> {
+    this.transitionActivity(match, round, side, next);
+    await this.authority.saveMatch(match);
+    this.emit("player.statusChanged", { matchId: match.id, side, status: next });
+  }
+
+  private transitionActivity(match: MatchRecord, round: RoundState, side: SideId, next: PlayerStatus): void {
+    const from = this.activityOf(round, side);
+    if (!canSideTransition(from, next)) {
+      throw new IllegalStateError(`illegal side transition ${side} ${from} -> ${next}`);
+    }
+    round.activities[side] = next;
+  }
+
+  private requireUnexpired(match: MatchRecord): void {
+    if (this.isExpired(match)) throw new ExpiredError();
+  }
+
+  private isExpired(match: MatchRecord): boolean {
+    return this.clock() >= match.startedAt + match.durationMs;
+  }
+
+  private validateSource(code: string): void {
+    if (code.length === 0) throw new ValidationError("empty source");
+    if (code.length > this.maxSourceBytes) {
+      throw new ValidationError(`source exceeds ${this.maxSourceBytes} bytes`);
+    }
+  }
+
+  private checkRate(matchId: string, side: SideId): void {
+    const key = `${matchId}:${side}`;
+    const now = this.clock();
+    const stamps = (this.runStamps.get(key) ?? []).filter((t) => now - t < this.rate.windowMs);
+    if (stamps.length >= this.rate.maxRunsPerWindow) {
+      throw new RateLimitedError(`run rate exceeded for ${side}`);
+    }
+    stamps.push(now);
+    this.runStamps.set(key, stamps);
+  }
+
+  private async latestCompleted(matchId: string, roundId: string, side: SideId): Promise<SubmissionRecord | undefined> {
+    const all = (await this.persistence.listRoundSubmissions(matchId, roundId)).filter(
+      (s) => s.sideId === side && s.status === "completed",
+    );
+    return all[all.length - 1];
+  }
+
+  private async recordFailure(match: MatchRecord, message: string): Promise<void> {
+    match.failures.push(message);
+    await this.authority.saveMatch(match);
+  }
+}
+
+export interface SealedSnapshot {
+  matchId: string;
+  mode: MatchMode;
+  roundPhase: MatchRecord["roundPhase"];
+  round: number;
+  totalRounds: number;
+  remainingMs: number;
+  expired: boolean;
+  mySide: SideId;
+  /** Monotonic mutation counter (§3): clients drop events/responses below this. */
+  revision: number;
+  /** Caller side has a judge evaluation still in flight (survives restart). */
+  pendingEvaluation: boolean;
+  /** Terminal result once MATCH_COMPLETE (score sums + forfeit override). */
+  final: {
+    scores: Partial<Record<SideId, number>>;
+    outcome: "left" | "right" | "draw";
+    winner: SideId | null;
+    forfeit: ForfeitRecord | null;
+  } | null;
+  problem: {
+    problemVersionId: string;
+    title: string;
+    description: string;
+    examples: Array<{ id: string; input: string; expected: string }>;
+    starters: Partial<Record<SupportedLanguage, string>>;
+  };
+  visibleTests: Array<{ id: string; input: string; expected: string }>;
+  /** Requesting side's last visible-run results (idle before the first run). */
+  tests: Array<{ id: string; status: "idle" | "running" | "passed" | "failed"; output: string | null; ms: number | null }>;
+  sides: Record<SideId, { status: PlayerStatus; submissions: number; presence: "online" | "offline" }>;
+  /**
+   * 2v2 only: per-team competitive state. Never carries opponent source
+   * (the server stores none), hidden tests, sealed scores, or the opponent's
+   * document revision. Absent in 1v1.
+   */
+  teams?: TeamSnapshot[];
+  reveal: RevealSnapshot | null;
+  failures: string[];
+}

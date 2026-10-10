@@ -1,0 +1,39 @@
+{
+  "name": "nook-code-arena",
+  "version": "0.1.0",
+  "description": "Code Arena, the first-game implementation baseline for Nook's ft_transcendence project.",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "workspaces": [
+    "packages/arena-game",
+    "packages/arena-harness",
+    "packages/arena-model",
+    "services/game",
+    "services/judge-worker",
+    "frontend"
+  ],
+  "scripts": {
+    "check:repository": "node scripts/check-repository-boundary.mjs",
+    "build:packages": "npm run build --workspace arena-model && npm run build --workspace arena-game-engine",
+    "pretest": "npm run build:packages",
+    "test": "npm test --workspaces --if-present && npm run test:example",
+    "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present && npm run typecheck:example",
+    "lint": "npm run lint --workspaces --if-present",
+    "build": "npm run build:packages && npm run build --workspace arena-game && npm run build --workspace arena-judge-worker && npm run build --workspace arena-frontend",
+    "certs": "bash scripts/gen-dev-certs.sh",
+    "play": "bash scripts/play.sh",
+    "up": "docker compose up --build",
+    "down": "docker compose down",
+    "lint:boundaries": "depcruise --config .dependency-cruiser.cjs packages services frontend scripts",
+    "check": "npm run check:repository && npm run lint:boundaries && npm run typecheck && npm run lint && npm run test:example",
+    "test:example": "vitest run packages/example/test/example.test.ts",
+    "typecheck:example": "tsc --noEmit --strict --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext packages/example/src/index.ts packages/example/test/example.test.ts"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "dependency-cruiser": "^18.5.0"
+  }
+}

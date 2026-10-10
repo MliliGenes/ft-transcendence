@@ -1,8 +1,8 @@
 # Nook — Project Context
 
-Updated: 2026-09-20  
+Updated: 2026-10-01
 Purpose: Shared product context for teammates, backlog planning, design, and future implementation discussions.  
-Stage: Product definition. Implementation status has not been audited in this conversation.
+Stage: Product definition with Code Arena imported as the first-game implementation baseline. Module completion remains subject to verification and team sign-off.
 
 ## 1. Nook in one paragraph
 
@@ -30,7 +30,7 @@ This document consolidates product context. It does not replace the authoritativ
 | Rich messaging | File attachments and audio/voice notes are part of the desired experience |
 | Group identity | Nicknames and titles alongside channels |
 | Personal expression | Customizable profiles with avatar, banner, gradients, display-name fonts, and optional gaming interests |
-| Game direction | **Multiple games over time**; the first title and first-release game count remain open |
+| Game direction | **Code Arena is the first-game implementation baseline**; multiple games may follow after the 42 submission |
 | Reuse | Chat capabilities should later support multiple interfaces, including embedded in-game chat |
 | Team planning | Separate backlog cards for the major areas, with comments and proposals from teammates |
 
@@ -112,11 +112,9 @@ Feature intent:
 
 Desired formats discussed: solo practice, solo vs AI, 1v1, 2v2, 3v3, and tournaments. These are candidates across the platform, not a promise that every game supports all formats.
 
-**Existing game concept:** the supplied compliance matrix describes Campus Puzzle Race, a team game with three ordered stages, role-specific information/controls, equal 2v2 or 3v3 teams, authoritative outcomes, and recovery behavior.
+**First-game implementation baseline:** Code Arena provides invitation-based 1v1 and 2v2 coding matches, a shared problem sequence, visible example runs, sealed hidden judging, score reveals, reconnect handling, and match-scoped team collaboration/chat. Its rules and boundaries are documented in `CONTEXT.md` and `docs/adr/`.
 
-**Latest direction:** multiple games are planned. Campus Puzzle Race remains the documented candidate, not a newly confirmed exclusive choice. Solo/AI/1v1 would require suitable rules rather than simply changing a player-count setting.
-
-Open: first game, number of games for submission, final rules, allowed team sizes, AI behavior, tournament format, scheduling, no-shows, ties, disconnects, and result disputes.
+Multiple games remain a longer-term direction. Solo/AI play, 3v3, tournaments, scheduling, no-shows, and result disputes are not part of the imported first-game baseline.
 
 ### 5.4 Profile — identity and self-expression
 
@@ -185,14 +183,14 @@ A notification service is part of the discussed system direction. Its boundaries
 
 The product is modular: the same chat capabilities should support the full Chat interface and embedded game interfaces. The game service may coordinate chat lifecycle/access through a defined interface. Whether player messages connect directly to Chat or are proxied through Game is an implementation decision still to make.
 
-Existing planned stack from the compliance matrix:
+Current game baseline and integration direction:
 
 - React/Vite frontend and Tailwind styling.
-- NestJS core, game, and chat services.
-- PostgreSQL, with separate core/game/chat data ownership.
+- NestJS Game service in this branch; teammate-owned user service and platform chat remain separate integration inputs.
+- PostgreSQL with a game-owned database in this snapshot; future services retain their own data ownership.
 - Docker Compose and Nginx; HTTPS/WSS externally.
 
-These are inherited plans, not evidence of a running implementation. Feed and notifications broaden the earlier scope; their service placement is open. A UI route does not automatically require its own microservice. Global profiles should have one owner even when displayed inside Chat.
+Imported code and tests are implementation evidence only for their exercised behavior, not proof of a completed subject module. Feed and notifications broaden the earlier scope; their service placement is open. A UI route does not automatically require its own microservice. Global profiles should have one owner even when displayed inside Chat.
 
 Do not infer settled endpoints, database schemas, event names, message brokers, storage providers, or additional infrastructure from this context document.
 
@@ -200,7 +198,7 @@ Do not infer settled endpoints, database schemas, event names, message brokers, 
 
 **Confirmed priority: complete the 42 submission before expanding the full vision.**
 
-The supplied `42-subject-compliance.md` references ft_transcendence v21.2 as authoritative. The PDF itself was not supplied here; subject statements below are inherited from that matrix.
+The authoritative ft_transcendence v21.2 PDF is stored at `requirements/ft_transcendence-v21.2.pdf`; `docs/42-subject-compliance.md` maps the current game snapshot without awarding points.
 
 ### Existing planned module set
 
@@ -225,7 +223,7 @@ A release with only 1v1 cannot demonstrate the planned more-than-two-player modu
 
 ### Proposed release approach
 
-1. Confirm the first game, first supported mode, module evidence, owners, and deadline.
+1. Confirm Code Arena's release modes, module evidence, owners, and deadline.
 2. Complete an end-to-end path: account/profile → friend/DM → invitation → multiplayer match → result → return to conversation.
 3. Add a minimal publishing/following path to establish the four-space identity if delivery capacity allows.
 4. Expand attachments, voice notes, articles, customization, tournaments, and additional games in an explicit priority order.
@@ -261,7 +259,7 @@ These images are mood and presentation references. Their decorative text, statis
 
 | Priority | Decision | Why it matters |
 | --- | --- | --- |
-| 1 | What is the first game, and what is its smallest complete multiplayer mode? | Determines gameplay work and module evidence |
+| 1 | Which Code Arena modes are submission-critical: 1v1, 2v2, or both? | Determines gameplay work and module evidence |
 | 1 | What is the submission date, who is building, and what already works? | Determines an achievable release boundary |
 | 1 | Which social features must ship for submission? | Prevents the product wishlist from becoming the deadline scope |
 | 2 | Is access school-only, or is the school merely the first audience? | Changes signup, discovery, and visibility |
@@ -284,10 +282,12 @@ These are open questions, not reasons to stall work that is already well defined
 
 ## 13. Source and decision history
 
-- `42-subject-compliance.md`: inherited requirements mapping and prototype evidence, reviewed there on 2026-09-18. Its PDF reference remains authoritative for compliance.
-- `social-platform-ideas.md`: standalone chat brainstorm; profiles there are product surfaces, not a confirmed backend ownership assignment.
-- `platform-concept.md`: prior global concept. Its Lamma naming proposal is superseded by the user's explicit Nook choice.
-- This conversation: confirmed four-space direction, name, desired features, and intent for modular reuse.
+- `docs/42-subject-compliance.md`: current requirements mapping for the imported Code Arena baseline; the linked v21.2 PDF remains authoritative.
+- Earlier standalone-chat and global-concept notes were consolidated here rather
+  than imported as separate historical files. Their service assignments and
+  earlier naming proposals are not current decisions.
+- Product decisions: confirmed four-space direction, name, desired features, and intent for modular reuse.
 - Clarifications on 2026-09-20: school community first, 42 submission first, multiple games planned.
+- Decision on 2026-10-01: Code Arena is the first-game implementation baseline; teammate services remain unmerged integration inputs.
 
 When a decision changes, update its status and affected backlog cards. When scope or evidence changes, also review the compliance matrix as required by that project's documented maintenance rule.
