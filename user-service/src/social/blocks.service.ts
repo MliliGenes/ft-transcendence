@@ -56,6 +56,9 @@ export class BlocksService {
   }
 
   unblockUser(blockerId: string, blockedId: string) {
+    if (blockerId === blockedId) {
+      throw new BadRequestException('You cannot unblock yourself');
+    }
     return this.prisma.block.deleteMany({
       where: { blockerId, blockedId },
     });

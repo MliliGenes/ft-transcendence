@@ -76,13 +76,13 @@ export function Social() {
           </div>
         </fieldset>
       </form>
-      <p className="field-hint">Blocking also removes friendships and requests between the two accounts.</p>
+      <p className="field-hint">Block/unblock uses /social/blocks/:userId with the target user's ID. Blocking also removes friendships and requests between the two accounts.</p>
       <Notice error={error} />
       {response && (
         <div role="status">
           <p className="field-hint">Succeeded: {response.endpoint}</p>
           <details>
-            <summary>Response JSON (includes friendship ID)</summary>
+            <summary>Response JSON</summary>
             <pre>{JSON.stringify(response.data, null, 2)}</pre>
           </details>
         </div>
@@ -100,6 +100,7 @@ export function Social() {
               <ul className="social-users">
                 {items.map((item) => {
                   const user = path === 'friendships/requests' ? item.requester : path === 'friendships/sent' ? item.addressee : item;
+                  const targetUserId = path === 'friendships/requests' ? item.requesterId : path === 'friendships/sent' ? item.addresseeId : user.id;
                   return (
                     <li key={item.id}>
                       <strong>{user.displayName || user.username}</strong> <span className="muted">@{user.username}</span>
@@ -111,7 +112,7 @@ export function Social() {
                           <button className="button button-small button-secondary" disabled={disabled} onClick={() => act('PATCH', `friendships/${item.id}/reject`)}>Reject</button>
                         </>}
                         {path === 'friendships/sent' && <button className="button button-small button-secondary" disabled={disabled} onClick={() => act('DELETE', `friendships/${item.id}`)}>Cancel request</button>}
-                        <button className="button button-small button-secondary" disabled={disabled} onClick={() => act(path === 'blocks' ? 'DELETE' : 'POST', `blocks/${user.id}`)}>
+                        <button type="button" className="button button-small button-secondary" disabled={disabled} title={`User ID: ${targetUserId}`} onClick={() => act(path === 'blocks' ? 'DELETE' : 'POST', `blocks/${encodeURIComponent(targetUserId)}`)}>
                           {path === 'blocks' ? 'Unblock' : 'Block'}
                         </button>
                       </div>

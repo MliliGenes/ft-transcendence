@@ -4,7 +4,7 @@ services:
   nginx:
     build: ./nginx
     ports:
-      - "127.0.0.1:443:443"
+      - "443:443"
     volumes:
       - ./volumes/nginx/certs:/etc/nginx/certs
     depends_on:
@@ -22,6 +22,37 @@ services:
       timeout: 5s
       start_period: 10s
       retries: 12
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    hostname: rabbitmq
+    env_file: ./envs/rabbitmq.env
+    ports:
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - ./volumes/rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  minio:
+    build: ./minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    env_file: ./envs/minio.env
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - ./volumes/minio:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
 
   user-service:
     build: ./user-service
