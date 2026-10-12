@@ -89,15 +89,21 @@ export class FriendshipsService {
             { requesterId: addresseeId, addresseeId: requesterId },
           ],
         },
-        select: { status: true },
+        select: { id: true, status: true },
       });
 
       if (existingFriendship) {
-        throw new ConflictException(
-          existingFriendship.status === 'DECLINED'
-            ? 'This friendship request was declined'
-            : 'A friendship already exists between these users',
-        );
+        // TODO: conflict should only happen when the status is still pending of theere is already a firnedship
+        if (existingFriendship.status === 'DECLINED') {
+          return tx.friendship.update({
+            where: { id: existingFriendship.id },
+            data: { status: 'PENDING' },
+          });
+        }
+        if (existingFriendship.status === 'ACCEPTED')
+          throw new ConflictException('A friendship already exists between these users');
+        if (existingFriendship.status === 'PENDING')
+          throw new ConflictException('A request is still pending')
       }
 
       return tx.friendship.create({

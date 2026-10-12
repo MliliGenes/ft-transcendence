@@ -7,7 +7,6 @@ import {
   useState,
 } from 'react';
 import { api, sessionStore } from '../lib/runtime.js';
-import { TOKEN_KEY } from '../lib/session.js';
 import { ApiError } from '../lib/api-client.js';
 import { navigate } from '../lib/navigation.js';
 
@@ -22,21 +21,27 @@ export function AuthProvider({ children, initialNotice }) {
   const [revision, setRevision] = useState(0);
   const load = useRef({ sequence: 0, controller: null });
   const mutation = useRef(false);
+  const sessionChannel = useRef(null);
 
   const restore = useCallback(async () => {
     load.current.controller?.abort();
     const controller = new AbortController();
     const sequence = ++load.current.sequence;
     load.current.controller = controller;
-    const session = sessionStore.read();
+    let session = sessionStore.read();
+    let hadSession = Boolean(session);
     setLoadError(null);
     setProfile(null);
-    if (!session) {
-      setStatus('anonymous');
-      return;
-    }
     setStatus('loading');
     try {
+      if (!session) {
+        session = await api.restoreSession();
+        hadSession = Boolean(session);
+      }
+      if (!session) {
+        setStatus('anonymous');
+        return;
+      }
       const user = await api.request('/accounts/me', {
         signal: controller.signal,
       });
@@ -51,7 +56,8 @@ export function AuthProvider({ children, initialNotice }) {
       if (controller.signal.aborted || sequence !== load.current.sequence)
         return;
       if (error.status === 401) {
-        setNotice({ type: 'error', text: error.message });
+        if (hadSession)
+          setNotice({ type: 'error', text: error.message });
         setStatus('anonymous');
       } else {
         setLoadError(error);
@@ -61,21 +67,40 @@ export function AuthProvider({ children, initialNotice }) {
   }, []);
 
   useEffect(() => {
-    let sessionKey = sessionStore.read()?.sessionKey;
     const unsubscribe = sessionStore.subscribe((session, reason) => {
       if (reason) setNotice({ type: 'error', text: reason });
-      if (session?.sessionKey === sessionKey) return; // Rotation keeps the current profile.
-      sessionKey = session?.sessionKey;
-      void restore();
+      if (!session) {
+        setProfile(null);
+        setStatus('anonymous');
+      }
     });
+    const channel =
+      typeof BroadcastChannel === 'undefined'
+        ? null
+        : new BroadcastChannel('fieldnote-auth-session');
+    sessionChannel.current = channel;
     const sync = (event) => {
-      if (event.key === TOKEN_KEY || event.key === null) sessionStore.sync();
+      if (event.data === 'signed-out') sessionStore.clear();
+      if (event.data === 'signed-in') {
+        void api
+          .restoreSession(true)
+          .then(() => restore())
+          .catch((error) => {
+            if (error.status === 401) sessionStore.clear();
+            else {
+              setLoadError(error);
+              setStatus('error');
+            }
+          });
+      }
     };
-    window.addEventListener('storage', sync);
+    channel?.addEventListener('message', sync);
     void restore();
     return () => {
       unsubscribe();
-      window.removeEventListener('storage', sync);
+      channel?.removeEventListener('message', sync);
+      channel?.close();
+      sessionChannel.current = null;
       load.current.controller?.abort();
       load.current.sequence++;
     };
@@ -84,25 +109,27 @@ export function AuthProvider({ children, initialNotice }) {
   const signIn = async (mode, values) => {
     const tokens = await api.request(`/auth/${mode}`, {
       auth: false,
+      cookieSession: true,
       method: 'POST',
       json: values,
     });
     setNotice(null);
     sessionStore.replace(tokens);
+    sessionChannel.current?.postMessage('signed-in');
+    void restore();
     navigate('/account', { replace: true });
   };
 
   const signOut = async () => {
-    const session = sessionStore.read();
     sessionStore.clear();
+    sessionChannel.current?.postMessage('signed-out');
     setNotice(null);
     navigate('/login', { replace: true });
-    if (!session) return;
     try {
       await api.request('/auth/logout', {
         auth: false,
+        cookieSession: true,
         method: 'POST',
-        json: { refreshToken: session.refreshToken },
       });
     } catch {
       if (!sessionStore.read())

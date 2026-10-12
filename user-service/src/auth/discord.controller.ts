@@ -15,6 +15,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { DiscordStrategy } from './strategies/discord.strategy.js';
 import { AuthService } from './auth.service.js';
+import { publicSession, setRefreshCookie } from './session-cookie.js';
 import {
   AccessTokenGuard,
   type AuthenticatedRequest,
@@ -104,16 +105,13 @@ export class DiscordController {
   ) {
     try {
       const profile = await this.discord.authenticate(request, response);
-      const tokens = await this.auth.loginWithDiscord(profile);
+      const session = await this.auth.loginWithDiscord(profile);
+      setRefreshCookie(response, this.config, session.refreshToken);
       if (request.headers.accept?.includes('text/html')) {
         const redirect = this.frontendUrl();
-        redirect.hash = new URLSearchParams({
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-        }).toString();
         return response.redirect(redirect.toString());
       }
-      return tokens;
+      return publicSession(session);
     } catch (error) {
       return this.oauthError(error, request, response, 'login');
     }

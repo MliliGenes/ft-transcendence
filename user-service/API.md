@@ -6,7 +6,7 @@
 
   ## Authentication
 
-  Successful registration, login, Discord callback, and refresh responses return an access/refresh token pair:
+  Successful registration, login, OAuth callback, and refresh responses return an access token. The refresh token is set in an HttpOnly cookie and is never returned in JSON:
 
   ```json
   {
@@ -16,19 +16,17 @@
       "username": "player1"
     },
     "accessToken": "<JWT>",
-    "refreshToken": "<refresh-id>.<refresh-secret>",
     "tokenType": "Bearer",
-    "expiresIn": 900,
-    "refreshExpiresIn": 604800
+    "expiresIn": 900
   }
   ```
 
   - Access tokens are RS256 JWTs and expire after 15 minutes.
   - Send access tokens as `Authorization: Bearer <accessToken>`.
   - Refresh tokens expire after 7 days and are rotated after every successful refresh.
-  - The client must replace both stored tokens after refresh. Each replacement has a new seven-day lifetime.
+  - The frontend keeps the access token in memory and uses the HttpOnly cookie to restore the session after reload or refresh the access token.
   - Reusing a revoked, unexpired refresh token revokes the remaining refresh tokens in that login session; other login sessions remain active. Coordinate concurrent refresh attempts in the client.
-  - Logout revokes all refresh tokens in the submitted token's login session. The current access token remains valid until it expires.
+  - Logout revokes the refresh-token session in the cookie. The current access token remains valid until it expires.
 
   ## Endpoints
 
@@ -55,7 +53,7 @@
 
   Responses:
 
-  - `201 Created`: user and token pair
+  - `201 Created`: user and access token; refresh token is set in an HttpOnly cookie
   - `400 Bad Request`: invalid body
   - `409 Conflict`: email or username is already in use
 
@@ -74,7 +72,7 @@
 
   Responses:
 
-  - `200 OK`: user and token pair
+  - `200 OK`: user and access token; refresh token is set in an HttpOnly cookie
   - `400 Bad Request`: invalid body
   - `401 Unauthorized`: invalid credentials
 
@@ -83,11 +81,12 @@
   `GET /auth/discord` starts authorization with a `302` redirect to Discord.
 
   `GET /auth/discord/callback` receives Discord's authorization code and state,
-  checks the temporary browser cookie, and returns the user and token pair with
-  `200 OK` for JSON clients. Browser requests accepting `text/html` redirect to
-  `AUTH_FRONTEND_URL` (default `http://localhost:5173`) with our tokens in the URL
-  fragment. Neither endpoint requires an existing application access token or a
-  JSON body. Start the flow in a browser; Discord supplies the callback parameters.
+  checks the temporary browser cookie, exchanges the code with Discord, and
+  returns the user and access token with `200 OK` for JSON clients. Browser
+  requests accepting `text/html` receive the refresh token in an HttpOnly cookie
+  and redirect to a clean `AUTH_FRONTEND_URL` (default `http://localhost:5173`).
+  Neither endpoint requires an existing application access token or a JSON body.
+  Start the flow in a browser; Discord supplies the callback parameters.
 
   See [Discord OAuth login](#discord-oauth-login) for configuration, account rules,
   and error responses, or [the strategy walkthrough](DISCORD_AUTH.md) for a
@@ -159,40 +158,25 @@
 
   `POST /auth/refresh`
 
-  No access token is required. Send the refresh token in the body:
-
-  ```json
-  {
-    "refreshToken": "2f1c2d1e-3c5a-4d6a-8b1c-123456789abc.<43-character-base64url-secret>"
-  }
-  ```
-
-  A successful request revokes the submitted refresh token, creates a new refresh token, and returns a new token pair.
+  No access token or request body is required. The browser sends the HttpOnly
+  `auth-refresh` cookie. Success rotates the cookie and returns a new access token.
 
   Responses:
 
-  - `200 OK`: new user and token pair
-  - `400 Bad Request`: malformed body or token
+  - `200 OK`: user and new access token; new refresh token is set in the cookie
   - `401 Unauthorized`: unknown, expired, revoked, or incorrect refresh token
 
   ### Logout
 
   `POST /auth/logout`
 
-  Send the refresh token that should be revoked:
-
-  ```json
-  {
-    "refreshToken": "2f1c2d1e-3c5a-4d6a-8b1c-123456789abc.<43-character-base64url-secret>"
-  }
-  ```
-
-  The endpoint returns success without revealing whether the token was already invalid. The client should discard both the access and refresh tokens locally.
+  No request body is required. The endpoint revokes the session identified by
+  the HttpOnly `auth-refresh` cookie and clears it. The frontend discards its
+  in-memory access token.
 
   Responses:
 
   - `204 No Content`: logout request accepted
-  - `400 Bad Request`: malformed body or token
 
   ### Verify Email
 
@@ -463,15 +447,15 @@
   ## Example Flow
 
   ```bash
-  # Register or login and save the returned accessToken and refreshToken.
+  # Login, save the returned accessToken, and store the HttpOnly cookie.
   curl -X POST http://localhost:3000/auth/login \
     -H "Content-Type: application/json" \
+    -c cookies.txt \
     -d '{"email":"user@example.com","password":"correct horse battery staple"}'
 
-  # Refresh. Replace both tokens with the pair returned by this request.
+  # Refresh the access token; curl updates the refresh cookie.
   curl -X POST http://localhost:3000/auth/refresh \
-    -H "Content-Type: application/json" \
-    -d '{"refreshToken":"<refresh-id>.<refresh-secret>"}'
+    -b cookies.txt -c cookies.txt
 
   # Access a protected endpoint.
   curl http://localhost:3000/accounts/me \
@@ -482,10 +466,9 @@
     -H "Authorization: Bearer <accessToken>" \
     -F "file=@avatar.png"
 
-  # Logout using the current refresh token.
+  # Logout using the refresh cookie.
   curl -i -X POST http://localhost:3000/auth/logout \
-    -H "Content-Type: application/json" \
-    -d '{"refreshToken":"<refresh-id>.<refresh-secret>"}'
+    -b cookies.txt -c cookies.txt
   ```
 
   ## Discord OAuth login
@@ -493,7 +476,7 @@
   | Method | Endpoint               | Purpose                                                     |
   | ------ | ---------------------- | ----------------------------------------------------------- |
   | GET    | /auth/discord          | Start Discord authorization (302 redirect)                  |
-  | GET    | /auth/discord/callback | Validate callback, log in/register, return token JSON (200) |
+  | GET    | /auth/discord/callback | Validate callback, set refresh cookie, return access token (200) |
   | POST   | /auth/discord/link | Start linking for the authenticated user (200 URL JSON) |
   | GET    | /auth/discord/link/callback | Complete linking (200 JSON or 302 frontend redirect) |
 
@@ -545,14 +528,13 @@
     cookie and atomically consumes the unexpired state record before exchanging the code.
   4. The strategy exchanges the code and fetches Discord's user profile. Provider
     errors and secrets are not forwarded to the browser.
-  5. The callback returns our usual user/accessToken/refreshToken/tokenType/expiresIn/
-    refreshExpiresIn JSON. Use those tokens with existing protected, refresh, and
-    logout endpoints. For requests accepting `text/html`, the service instead
-    redirects to the frontend with accessToken/refreshToken in its URL fragment.
+  5. The callback creates the local session. JSON clients receive the user and
+    access token while the refresh token is set in an HttpOnly cookie. Browser
+    requests accepting `text/html` receive the same cookie and a clean redirect
+    to the frontend.
 
-  The testing frontend reads those tokens and removes the fragment. Fragments are
-  readable by page JavaScript; they are not encryption or a secure token store.
-  Begin in the same browser that receives the callback; a copied callback URL in
+  The frontend keeps the access token in memory and calls `/auth/refresh` after
+  reload. Begin in the same browser that receives the callback; a copied callback URL in
   Postman will lack the browser cookie. Only the latest started flow in one browser
   can complete; start again after cancellation, expiry, failure, or a lost callback
   response. The state is consumed once and expires after ten minutes; expired rows
@@ -760,7 +742,7 @@
     and password recovery endpoints exist; verification resend and pending-registration
     cleanup are not implemented yet.
   - Ban/unban, API keys, MQ events, provider unlinking, and other OAuth providers are not implemented.
-  - Rate limiting is planned for the Nginx integration phase.
+  - Nginx currently applies per-IP rate limits to API requests, with stricter limits for selected authentication endpoints.
   - JWTs remain cryptographically valid until expiry after logout or account deletion.
     This service's account reads fail for deleted users, but other services must
     enforce account deletion separately when MQ integration is added.

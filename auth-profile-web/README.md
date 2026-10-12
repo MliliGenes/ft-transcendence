@@ -24,8 +24,8 @@ credentials. Configure `AUTH_FRONTEND_URL` there and register both Discord redir
 ## How it fits together
 
 - `src/auth/AuthProvider.jsx` restores the session and owns account state.
-- `src/lib/session.js` consumes OAuth fragments before React mounts, removes
-  them from the URL, and replaces stale credentials with the newly issued pair.
+- `src/lib/session.js` keeps the access token in memory and removes legacy
+  script-readable tokens from local storage. OAuth callbacks return without tokens in the URL.
 - `src/lib/api-client.js` retries a protected request once after a 401. Concurrent
   requests share a refresh; Web Locks coordinate tabs when available. A failed
   or ambiguous refresh requires signing in again, avoiding reuse of a consumed token.
@@ -33,9 +33,11 @@ credentials. Configure `AUTH_FRONTEND_URL` there and register both Discord redir
   uploads save separately, so partial success does not masquerade as a full save.
 - `src/lib/navigation.js` handles internal navigation and browser back/forward.
 
-Logout clears the local session immediately and attempts server revocation. A
-failed revocation is reported. Existing access tokens retain their backend-defined
-expiry; logout does not revoke JWT signatures.
+The refresh token stays in an HttpOnly cookie. The access token stays in memory,
+so a page reload restores the session through `/auth/refresh`. Logout clears the
+local session immediately and attempts server revocation. A failed revocation is
+reported. Existing access tokens retain their backend-defined expiry; logout
+does not revoke JWT signatures.
 
 ## Verification and deployment
 
@@ -64,13 +66,6 @@ Serve the generated `dist` directory over HTTPS. Configure an SPA fallback to
 `index.html` for frontend routes such as `/login`, `/register`, and `/account`;
 keep API routes outside that fallback. Configure the backend CORS allowlist for
 the real frontend origin if using separate origins.
-
-This is an improved MVP interface, not a completed production security review.
-Tokens still use localStorage and OAuth returns them in a URL fragment (removed
-immediately). An HttpOnly-cookie or one-time-code handoff is a future hardening
-step. Cross-tab refresh coordination requires Web Locks (HTTPS or localhost);
-without it, only requests within a single tab are coordinated. If storage is
-blocked, the session lasts only in memory. Never log credentials.
 
 Dependencies and build output are ignored by Git. Reinstall with `npm ci` after
 cloning. Automated tests cover session races and update payloads; live visual

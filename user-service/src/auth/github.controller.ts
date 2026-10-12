@@ -15,6 +15,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { GithubStrategy } from './strategies/github.strategy.js';
 import { AuthService } from './auth.service.js';
+import { publicSession, setRefreshCookie } from './session-cookie.js';
 import {
   AccessTokenGuard,
   type AuthenticatedRequest,
@@ -101,18 +102,15 @@ export class GithubController {
     @Res({ passthrough: true }) response: Response,
   ) {
     try {
-      const tokens = await this.auth.loginWithGithub(
+      const session = await this.auth.loginWithGithub(
         await this.github.authenticate(request, response),
       );
+      setRefreshCookie(response, this.config, session.refreshToken);
       if (request.headers.accept?.includes('text/html')) {
         const redirect = this.frontendUrl();
-        redirect.hash = new URLSearchParams({
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-        }).toString();
         return response.redirect(redirect.toString());
       }
-      return tokens;
+      return publicSession(session);
     } catch (error) {
       return this.oauthError(error, request, response, 'login');
     }

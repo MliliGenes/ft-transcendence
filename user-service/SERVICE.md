@@ -85,9 +85,9 @@ BlocksService is an empty class and is not registered in SocialModule. It provid
 
 ## Authentication and authorization
 
-Registration/login and successful OAuth login issue `user`, `accessToken`, `refreshToken`, `tokenType`, `expiresIn`, and `refreshExpiresIn`. Access tokens use RS256, issuer `user-service`, audience `ft-transcendence-api`, and a 15-minute lifetime. Protected requests send `Authorization: Bearer <accessToken>`.
+Registration/login and successful OAuth login return `user`, `accessToken`, `tokenType`, and `expiresIn`. The seven-day refresh token is set only in an HttpOnly cookie. Access tokens use RS256, issuer `user-service`, audience `ft-transcendence-api`, and a 15-minute lifetime. Protected requests send `Authorization: Bearer <accessToken>`.
 
-Refresh tokens have a seven-day lifetime and rotate on every refresh. Replace both stored tokens after success. Reuse of an unexpired revoked token revokes remaining refresh tokens in that login session. Logout revokes a session's refresh tokens; access tokens remain cryptographically valid until expiry. Password reset revokes all active refresh tokens for the user. The authenticated password set/change endpoints currently do not revoke refresh sessions.
+Refresh tokens have a seven-day lifetime and rotate on every refresh. The frontend keeps only the access token in memory and restores sessions through the refresh endpoint. Reuse of an unexpired revoked token revokes remaining refresh tokens in that login session. Logout revokes a session's refresh tokens; access tokens remain cryptographically valid until expiry. Password reset revokes all active refresh tokens for the user. The authenticated password set/change endpoints currently do not revoke refresh sessions.
 
 The access guard validates signature, expiry, issuer/audience, and UUID subject; it does not universally check account existence. Individual handlers perform their own database checks. Superadmin endpoints additionally check the user's current database role; changing the role affects subsequent admin requests without needing a new JWT.
 
@@ -163,7 +163,7 @@ The checked-in Dockerfile has dependencies/build/production stages, but its buil
 
 ## Current limitations
 
-Local registration activates accounts before email ownership is verified. Verification and password recovery routes exist, but pending registration, verification resend, and email-change verification/password confirmation are deferred. Ban/unban, API keys, live presence, two-factor routes, blocking, and FORTYTWO OAuth are not implemented. Rate limiting is planned rather than configured in the Nest bootstrap. The separate RabbitMQ consumer is not wired into AppModule.
+Local registration activates accounts before email ownership is verified. Verification and password recovery routes exist, but pending registration, verification resend, and email-change verification/password confirmation are deferred. Ban/unban, API keys, live presence, two-factor routes, blocking, and FORTYTWO OAuth are not implemented. Nginx currently applies per-IP limits to API requests; there is no Nest-level rate limiter. The separate RabbitMQ consumer is not wired into AppModule.
 
 Root GET returns a static development message; it is not a readiness check. Images are public and use no-store. There is no individual image deletion route. Access JWTs remain valid until expiry after logout/deletion; other services need their own account-deletion enforcement.
 

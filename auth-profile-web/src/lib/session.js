@@ -1,102 +1,61 @@
-export const TOKEN_KEY = 'auth-profile-tokens';
+export const LEGACY_TOKEN_KEY = 'auth-profile-tokens';
 
-export function validTokens(value) {
-  return (
-    value &&
-    typeof value.accessToken === 'string' &&
-    value.accessToken.length > 0 &&
-    typeof value.refreshToken === 'string' &&
-    value.refreshToken.length > 0
-  );
+function validAccessToken(value) {
+  return typeof value?.accessToken === 'string' && value.accessToken.length > 0;
 }
 
-export function createSessionStore(storage) {
+export function createSessionStore() {
   const listeners = new Set();
   let memory = null;
-  let persistent = true;
-  const read = () => {
-    if (!persistent) return memory;
-    let raw;
-    try {
-      raw = storage.getItem(TOKEN_KEY);
-    } catch {
-      persistent = false;
-      return memory;
-    }
-    try {
-      const value = JSON.parse(raw);
-      memory = validTokens(value)
-        ? {
-            accessToken: value.accessToken,
-            refreshToken: value.refreshToken,
-            sessionKey: value.sessionKey || value.refreshToken.split('.')[0],
-          }
-        : null;
-    } catch {
-      memory = null;
-    }
-    return memory;
-  };
   const write = (value, reason) => {
     memory = value;
-    try {
-      if (value) storage.setItem(TOKEN_KEY, JSON.stringify(value));
-      else storage.removeItem(TOKEN_KEY);
-    } catch {
-      persistent = false;
-      try {
-        storage.removeItem(TOKEN_KEY);
-      } catch {
-        /* Storage is unavailable. */
-      }
-    }
     listeners.forEach((listener) => listener(value, reason));
     return value;
   };
   return {
-    read,
+    read: () => memory,
     replace(tokens) {
-      if (!validTokens(tokens))
+      if (!validAccessToken(tokens))
         throw new Error('The server returned an incomplete session.');
       return write({
         accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
         sessionKey: crypto.randomUUID(),
       });
     },
     rotate(tokens, expected) {
-      const current = read();
+      const current = memory;
       if (
         !current ||
         current.sessionKey !== expected.sessionKey ||
-        current.refreshToken !== expected.refreshToken
+        current.accessToken !== expected.accessToken
       )
         return null;
-      if (!validTokens(tokens))
+      if (!validAccessToken(tokens))
         throw new Error('The server returned an incomplete session.');
-      return write({
-        ...current,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      });
+      return write({ ...current, accessToken: tokens.accessToken });
     },
     clear(sessionKey, reason) {
-      if (sessionKey && read()?.sessionKey !== sessionKey) return;
+      if (sessionKey && memory?.sessionKey !== sessionKey) return;
       write(null, reason);
     },
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    sync() {
-      const value = read();
-      listeners.forEach((listener) => listener(value));
-    },
   };
 }
 
-// Consume callback data once, before React mounts (including StrictMode).
-export function consumeOAuthReturn(location, history, store) {
+// Remove the old script-readable credentials when the app starts.
+export function clearLegacySession() {
+  try {
+    window.localStorage.removeItem(LEGACY_TOKEN_KEY);
+  } catch {
+    // Storage may be disabled; the app no longer depends on it.
+  }
+}
+
+// OAuth callbacks now use an HttpOnly cookie; only safe status fragments remain.
+export function consumeOAuthReturn(location, history) {
   const fragment = new URLSearchParams(location.hash.slice(1));
   const hasTokens = fragment.has('accessToken') || fragment.has('refreshToken');
   const linked = fragment.get('providerLinked');
@@ -105,6 +64,11 @@ export function consumeOAuthReturn(location, history, store) {
     fragment.get('oauthProvider') === 'github' ? 'GitHub' : 'Discord';
   if (!hasTokens && !linked && !error) return null;
   history.replaceState(null, '', location.pathname + location.search);
+  if (hasTokens)
+    return {
+      type: 'error',
+      text: 'Your session format changed. Please sign in again.',
+    };
   if (error) {
     const messages = {
       conflict:
@@ -116,19 +80,6 @@ export function consumeOAuthReturn(location, history, store) {
       unavailable: `${provider} connection could not be completed. Please try again later.`,
     };
     return { type: 'error', text: messages[error] || messages.unavailable };
-  }
-  if (hasTokens) {
-    const tokens = {
-      accessToken: fragment.get('accessToken'),
-      refreshToken: fragment.get('refreshToken'),
-    };
-    if (!validTokens(tokens))
-      return {
-        type: 'error',
-        text: 'Sign-in could not be completed. Please try again.',
-      };
-    store.replace(tokens); // A fresh callback always takes precedence over an old session.
-    return { type: 'success', text: 'You are signed in.' };
   }
   return linked
     ? {

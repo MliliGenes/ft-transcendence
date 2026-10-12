@@ -5,48 +5,96 @@ import {
   Header,
   HttpCode,
   HttpStatus,
+  UnauthorizedException,
   Get,
   Param,
+  Req,
+  Res,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
-import { RefreshDto } from './dto/refresh.dto.js';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto.js';
 import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto.js';
+import { assertTrustedBrowserOrigin } from './browser-origin.js';
+import {
+  clearRefreshCookie,
+  publicSession,
+  readRefreshCookie,
+  setRefreshCookie,
+} from './session-cookie.js';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly config: ConfigService,
   ) {}
 
   @Post('register')
   @Header('Cache-Control', 'no-store')
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    assertTrustedBrowserOrigin(request, this.config);
+    const session = await this.authService.register(dto);
+    setRefreshCookie(response, this.config, session.refreshToken);
+    return publicSession(session);
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(
+    @Body() dto: LoginDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    assertTrustedBrowserOrigin(request, this.config);
+    const session = await this.authService.login(dto);
+    setRefreshCookie(response, this.config, session.refreshToken);
+    return publicSession(session);
   }
 
-  // The refresh token authenticates this request; no access-token guard is needed.
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
-  refresh(@Body() dto: RefreshDto) {
-    return this.authService.refresh(dto);
+  async refresh(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    assertTrustedBrowserOrigin(request, this.config);
+    try {
+      const session = await this.authService.refresh({
+        refreshToken: readRefreshCookie(request),
+      });
+      setRefreshCookie(response, this.config, session.refreshToken);
+      return publicSession(session);
+    } catch (error) {
+      if (error instanceof UnauthorizedException)
+        clearRefreshCookie(response, this.config);
+      throw error;
+    }
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   @Header('Cache-Control', 'no-store')
-  async logout(@Body() dto: RefreshDto): Promise<void> {
-    await this.authService.logout(dto);
+  async logout(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    assertTrustedBrowserOrigin(request, this.config);
+    try {
+      const refreshToken = readRefreshCookie(request);
+      if (refreshToken) await this.authService.logout({ refreshToken });
+    } finally {
+      clearRefreshCookie(response, this.config);
+    }
   }
 
   @Get('verify-email/:token')

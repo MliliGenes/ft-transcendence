@@ -16,6 +16,7 @@ export function createApiClient({
   timeoutMs = 20000,
 }) {
   let renewal = null;
+  const lockName = 'auth-profile-session-refresh';
   const changedSession = () =>
     new ApiError(
       'Your session changed. Please try again.',
@@ -24,9 +25,12 @@ export function createApiClient({
       'SESSION_CHANGED',
     );
 
+  const withSessionLock = (work) =>
+    locks?.request ? locks.request(lockName, work) : work();
+
   async function send(
     path,
-    { method = 'GET', json, body, signal, credentials = 'same-origin' } = {},
+    { method = 'GET', json, body, signal, credentials = 'include' } = {},
     accessToken,
   ) {
     const controller = new AbortController();
@@ -38,6 +42,8 @@ export function createApiClient({
       const headers = { Accept: 'application/json' };
       if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
       if (json !== undefined) headers['Content-Type'] = 'application/json';
+      if (path.startsWith('/auth/') && method !== 'GET')
+        headers['X-Requested-With'] = 'XMLHttpRequest';
       const response = await fetchImpl(`${baseUrl}${path}`, {
         method,
         headers,
@@ -83,30 +89,32 @@ export function createApiClient({
     }
   }
 
+  async function restoreSession(force = false) {
+    return withSessionLock(async () => {
+      if (!force && store.read()) return store.read();
+      const tokens = await send('/auth/refresh', { method: 'POST', auth: false });
+      return store.replace(tokens);
+    });
+  }
+
   async function renew(failedSession) {
     const current = store.read();
     if (!current || current.sessionKey !== failedSession.sessionKey)
       throw changedSession();
-    if (current.refreshToken !== failedSession.refreshToken) return current;
+    if (current.accessToken !== failedSession.accessToken) return current;
     if (renewal?.sessionKey === current.sessionKey) return renewal.promise;
     const work = async () => {
-      // Another tab may have renewed while this one waited for the browser lock.
       const latest = store.read();
       if (!latest || latest.sessionKey !== failedSession.sessionKey)
         throw changedSession();
-      if (latest.refreshToken !== failedSession.refreshToken) return latest;
+      if (latest.accessToken !== failedSession.accessToken) return latest;
       try {
-        const tokens = await send('/auth/refresh', {
-          method: 'POST',
-          json: { refreshToken: latest.refreshToken },
-        });
+        const tokens = await send('/auth/refresh', { method: 'POST', auth: false });
         const updated = store.rotate(tokens, latest);
         if (!updated) throw changedSession();
         return updated;
       } catch (error) {
         if (error.code === 'SESSION_CHANGED') throw error;
-        // A lost refresh response is ambiguous: retrying the old credential can
-        // revoke the family. Require a new login instead of replaying it.
         const message =
           error.status === 401
             ? 'Your session expired. Please sign in again.'
@@ -115,9 +123,7 @@ export function createApiClient({
         throw new ApiError(message, 401, undefined, 'SESSION_EXPIRED');
       }
     };
-    const promise = locks?.request
-      ? locks.request('auth-profile-session-refresh', work)
-      : work();
+    const promise = withSessionLock(work);
     renewal = { sessionKey: current.sessionKey, promise };
     try {
       return await promise;
@@ -135,8 +141,9 @@ export function createApiClient({
         undefined,
         'SESSION_EXPIRED',
       );
+    const work = () => send(path, options, session?.accessToken);
     try {
-      return await send(path, options, session?.accessToken);
+      return await (options.cookieSession ? withSessionLock(work) : work());
     } catch (error) {
       if (error.status !== 401 || !session || options.signal?.aborted)
         throw error;
@@ -156,5 +163,6 @@ export function createApiClient({
       }
     }
   }
-  return { request };
+
+  return { request, restoreSession };
 }

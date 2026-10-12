@@ -30,7 +30,7 @@ import {
   REFRESH_TOKEN_TTL_SECONDS,
 } from './token.constants.js';
 
-type AuthResult = {
+export type AuthResult = {
   user: { id: string; email: string; username: string };
   accessToken: string;
   refreshToken: string;
