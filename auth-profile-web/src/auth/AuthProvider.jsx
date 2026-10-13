@@ -21,6 +21,7 @@ export function AuthProvider({ children, initialNotice }) {
   const [mutating, setMutating] = useState(false);
   const [revision, setRevision] = useState(0);
   const load = useRef({ sequence: 0 });
+  const lastAuthProfile = useRef(null);
   const mutation = useRef(false);
   const signingOut = useRef(false);
   const wasAuthenticated = useRef(false);
@@ -36,6 +37,7 @@ export function AuthProvider({ children, initialNotice }) {
       if (sequence !== load.current.sequence) return;
       if (snapshot.status === 'authenticated') {
         wasAuthenticated.current = true;
+        lastAuthProfile.current = snapshot.profile;
         setProfile(snapshot.profile);
         setStatus('authenticated');
       } else {
@@ -68,21 +70,31 @@ export function AuthProvider({ children, initialNotice }) {
         });
       if (snapshot.status === 'authenticated') {
         wasAuthenticated.current = true;
-        setProfile(snapshot.profile);
+        // Token-only snapshots carry the previous SDK profile. Keep successful
+        // consumer edits until the SDK publishes a freshly fetched profile.
+        if (snapshot.profile !== lastAuthProfile.current) {
+          lastAuthProfile.current = snapshot.profile;
+          setProfile(snapshot.profile);
+        }
         setStatus('authenticated');
         setLoadError(null);
         setNotice((current) => current?.text === EXPIRED_NOTICE ? null : current);
       } else if (snapshot.status === 'unavailable') {
-        setProfile(snapshot.profile);
+        if (snapshot.profile !== lastAuthProfile.current) {
+          lastAuthProfile.current = snapshot.profile;
+          setProfile(snapshot.profile);
+        }
         setLoadError(new ApiError('Authentication is unavailable. Please try again.', 503));
         setStatus('error');
       } else if (snapshot.status === 'loading') {
         // A remote sign-in replaces the identity. Retire the old profile
         // until the shared client verifies the replacement account.
+        lastAuthProfile.current = null;
         setProfile(null);
         setStatus('loading');
       }
       if (snapshot.status === 'anonymous') {
+        lastAuthProfile.current = null;
         if (wasAuthenticated.current && !signingOut.current)
           setNotice({ type: 'error', text: EXPIRED_NOTICE });
         wasAuthenticated.current = false;

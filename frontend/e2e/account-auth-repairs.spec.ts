@@ -59,3 +59,21 @@ test("Account shows replacement verification outage and retries the new identity
   await page.getByRole("button", { name: "Try again", exact: true }).click();
   await expect(page.locator(".signed-in-as")).toHaveText("@account-b");
 });
+
+test("same-user renewal preserves saved profile changes until a fresh profile arrives", async ({ page }) => {
+  await fixture(page);
+  await page.route("**/api/accounts/me", (route) => route.fulfill({ json: { ...profile("account-a"), displayName: "saved display" } }));
+  await page.getByLabel("Display name", { exact: true }).fill("saved display");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "saved display", exact: true })).toBeVisible();
+  let renewals = 0;
+  await page.route("**/api/auth/refresh", (route) => { renewals++; return route.fulfill({ json: { accessToken: "renewed-access" } }); });
+  await page.route("**/api/social/friendships", (route) => route.fulfill({ status: 401, json: { error: "expired" } }));
+  await page.getByRole("button", { name: "Refresh lists", exact: true }).click();
+  await expect.poll(() => renewals).toBe(1);
+  await expect(page.getByRole("alert").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "saved display", exact: true })).toBeVisible({ timeout: 3000 });
+  await page.route("**/api/accounts/me", (route) => route.fulfill({ json: { ...profile("account-a"), displayName: "fresh verified profile" } }));
+  await page.evaluate(() => { const channel = new BroadcastChannel("fieldnote-auth-session"); channel.postMessage("token-renewed"); channel.close(); });
+  await expect(page.getByRole("heading", { name: "fresh verified profile", exact: true })).toBeVisible();
+});

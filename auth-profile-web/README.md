@@ -18,8 +18,8 @@ are public build-time configuration; never put private keys or client secrets he
 Use `http://localhost:5173` consistently. The backend allows this origin with
 credentials. Configure `AUTH_FRONTEND_URL` there and register both Discord redirects:
 
-- `http://localhost:3000/auth/discord/callback`
-- `http://localhost:3000/auth/discord/link/callback`
+- `http://localhost:5173/api/auth/discord/callback`
+- `http://localhost:5173/api/auth/discord/link/callback`
 
 ## How it fits together
 
@@ -45,7 +45,10 @@ revoke JWT signatures.
 The account page follows verified sign-in and sign-out from other tabs. It clears
 the old profile while the replacement account is verified. Dev and production
 proxies keep the refresh cookie at `/api/auth/`. The service clears old HttpOnly
-root cookies through `Set-Cookie`; JavaScript cannot delete them.
+root cookies through `Set-Cookie`; JavaScript cannot delete them. The dev proxy
+also maps provider state cookies to `/api/auth/github` and `/api/auth/discord`
+so the browser sends them to the public callback routes. Successful profile edits
+stay visible during token-only renewal; a fresh verified profile can replace them.
 
 ## Verification and deployment
 

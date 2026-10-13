@@ -14,7 +14,12 @@ export default defineConfig(({ mode }) => {
           // Canonical dev mapping for the server's Path=/auth/ refresh
           // cookie: the browser matches cookie paths against the pre-proxy
           // URL (/api/…), so without this rewrite the cookie is never sent.
-          cookiePathRewrite: { '/auth/': '/api/auth/', '/': '/' },
+          cookiePathRewrite: {
+            '/auth/': '/api/auth/',
+            '/auth/github': '/api/auth/github',
+            '/auth/discord': '/api/auth/discord',
+            '/': '/',
+          },
         },
       },
     },
