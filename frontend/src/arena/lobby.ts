@@ -279,6 +279,7 @@ export class LobbyClient {
     const token = this.getAccessToken?.();
     if (tokenNearExpiry(token ?? null) && this.onAuthExpired) await this.renewAuth();
     this.assertActive(lifetime);
+    if (this.getAccessToken && !this.getAccessToken()) throw new Error("Session expired. Please sign in again.");
     if (this.socket && this.attachedToken !== this.getAccessToken?.()) await this.renewSocket();
     await this.ready;
     this.assertActive(lifetime);

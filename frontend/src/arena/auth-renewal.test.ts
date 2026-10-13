@@ -685,4 +685,45 @@ describe("authenticated Game wiring (no transport recreation)", () => {
     } finally { now.mockRestore(); lobby.disconnect(); }
   });
 
+  it("definitively expired idle Match renewal cannot reconnect or send a mutation", async () => {
+    const harness = authHarness();
+    const transport = new SocketArenaTransport({ apiBase: "https://auth.test", socketBase: "http://arena.test", matchId: "match-1",
+      getAccessToken: harness.getAccessToken, onAuthExpired: async () => { harness.setToken(null); } });
+    const connecting = transport.connect();
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    harness.sockets[0]!.server("snapshot", serverSnapshot());
+    await connecting;
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3600_000 + 1000);
+    try {
+      harness.sockets[0]!.server("disconnect", "io server disconnect");
+      for (let n = 0; n < 200; n++) await Promise.resolve();
+      expect(transport.connection()).toBe("offline");
+      expect(harness.sockets).toHaveLength(1);
+      expect(transport.snapshot().revision).toBe(7);
+      await expect(transport.submit({ code: "retained", language: "Python" })).rejects.toThrow();
+      expect(harness.fetchMock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST")).toHaveLength(0);
+    } finally { now.mockRestore(); transport.disconnect(); }
+  });
+
+  it("definitively expired passive Lobby renewal cannot reconnect or replay Ready", async () => {
+    let token: string | null = jwt(Date.now() + 3600_000);
+    const sockets: TestSocket[] = [];
+    vi.mocked(io).mockImplementation(() => { const socket = new TestSocket(); sockets.push(socket); return socket as unknown as ReturnType<typeof io>; });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const lobby = new LobbyClient({ apiBase: "https://auth.test", socketBase: "http://arena.test", getAccessToken: () => token,
+      onAuthExpired: async () => { token = null; } });
+    lobby.connectSocket({ onConnect: () => {} });
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3600_000 + 1000);
+    try {
+      sockets[0]!.server("disconnect", "io server disconnect");
+      for (let n = 0; n < 200; n++) await Promise.resolve();
+      expect(sockets).toHaveLength(1);
+      await expect(lobby.setReady("room-1", true)).rejects.toThrow(/Session expired/);
+      expect(sockets).toHaveLength(1);
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally { now.mockRestore(); lobby.disconnect(); }
+  });
+
 });
