@@ -29,9 +29,9 @@ export class RabbitMqEventsService implements OnModuleInit, OnModuleDestroy {
     const brokerUrl = new URL(
       `amqp://${this.config.getOrThrow<string>('RABBITMQ_HOST')}`,
     );
-    brokerUrl.port = this.config.getOrThrow<string>('RABBITMQ_PORT');
-    brokerUrl.username = this.config.getOrThrow<string>('RABBITMQ_USER');
-    brokerUrl.password = this.config.getOrThrow<string>('RABBITMQ_PASS');
+    brokerUrl.port = this.config.get<string>('RABBITMQ_PORT', '5672');
+    brokerUrl.username = this.config.getOrThrow<string>('RABBITMQ_DEFAULT_USER');
+    brokerUrl.password = this.config.getOrThrow<string>('RABBITMQ_DEFAULT_PASS');
 
     this.connection = amqp.connect(brokerUrl.toString(), {
       heartbeatIntervalInSeconds: 30,
