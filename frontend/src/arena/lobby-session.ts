@@ -32,7 +32,7 @@ export class LobbySession {
   private readonly listeners = new Set<() => void>();
   private requestVersion = 0;
   private currentRefresh: Promise<void> | null = null;
-  private recoveringSocket = false;
+  private socketRecovery: Promise<void> | null = null;
   private lifetimeVersion = 0;
   private socketCleanup?: () => void;
   private active = false;
@@ -60,16 +60,17 @@ export class LobbySession {
       const lifetimeVersion = ++this.lifetimeVersion;
       const refresh = () => {
         if (this.isCurrentLifetime(lifetimeVersion))
-          void this.refresh(this.recoveringSocket, this.recoveringSocket).catch(() => {});
+          void this.refresh(this.socketRecovery !== null, this.socketRecovery !== null).catch(() => {});
       };
       this.socketCleanup = this.client.connectSocket({
         onConnect: () => {
           if (!this.isCurrentLifetime(lifetimeVersion)) return;
           this.joinedRoomId = null;
-          this.recoveringSocket = true;
-          return this.refresh(true, true).finally(() => {
-            if (this.isCurrentLifetime(lifetimeVersion)) this.recoveringSocket = false;
+          const recovery = this.refresh(true, true).finally(() => {
+            if (this.socketRecovery === recovery) this.socketRecovery = null;
           });
+          this.socketRecovery = recovery;
+          return recovery;
         },
         onRoomUpdated: refresh,
         onMatchFound: refresh,
@@ -87,7 +88,7 @@ export class LobbySession {
     this.socketCleanup = undefined;
     this.joinedRoomId = null;
     this.currentRefresh = null;
-    this.recoveringSocket = false;
+    this.socketRecovery = null;
   }
 
   setMode(mode: MatchMode): void {
@@ -128,7 +129,11 @@ export class LobbySession {
           // Publish the baseline first. Cleanup is a mutation and waits for socket recovery.
           this.applyRoom(null);
           const lifetime = this.lifetimeVersion;
-          queueMicrotask(() => { if (this.isCurrentLifetime(lifetime)) void this.refresh(); });
+          // Cleanup waits for the whole socket baseline, not only this read.
+          // Tracking a cleanup read earlier creates a recovery -> cleanup -> recovery cycle.
+          void this.socketRecovery?.then(() => {
+            if (this.isCurrentLifetime(lifetime)) void this.refresh();
+          }).catch(() => {});
           return;
         }
         const cancelled = await this.client.cancelQueue();

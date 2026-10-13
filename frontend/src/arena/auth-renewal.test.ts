@@ -429,6 +429,47 @@ describe("authenticated Game wiring (no transport recreation)", () => {
     }
   });
 
+  it("a superseding legacy queue read cannot make Lobby recovery wait on queue cleanup", async () => {
+    let token = "access-1";
+    let delayed = false;
+    let cancelled = false;
+    const reads: Array<(value: unknown) => void> = [];
+    const waiting = { queue: { id: "queue-1", userId: "user-left", mode: "1v1", status: "waiting", joinedAt: 1, matchedMatchId: null }, room: null };
+    const response = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
+    vi.stubGlobal("fetch", async (_input: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") { cancelled = true; return response({ cancelled: true, matched: false }); }
+      if (delayed) return new Promise((resolve) => reads.push(resolve));
+      return response(token === "access-2" && !cancelled ? waiting : { queue: null, room: null });
+    });
+    const sockets: TestSocket[] = [];
+    vi.mocked(io).mockImplementation(() => { const socket = new TestSocket(); sockets.push(socket); return socket as unknown as ReturnType<typeof io>; });
+    const client = new LobbyClient({ apiBase: "https://auth.test", socketBase: "http://arena.test", getAccessToken: () => token, onAuthExpired: async () => {} });
+    const session = new LobbySession(client, vi.fn());
+    await session.start();
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    try {
+      delayed = true;
+      token = "access-2";
+      let recovered = false;
+      const renewal = client.renewSocket();
+      void renewal.then(() => { recovered = true; }, () => {});
+      for (let n = 0; n < 100; n++) await Promise.resolve();
+      sockets[1]!.server("lobby.roomUpdated", {});
+      for (let n = 0; n < 100; n++) await Promise.resolve();
+      reads[1]!(response(waiting));
+      for (let n = 0; n < 100; n++) await Promise.resolve();
+      // Drain any cleanup read which the old implementation started early.
+      for (const resolve of reads.slice(2)) resolve(response(waiting));
+      for (let n = 0; n < 100; n++) await Promise.resolve();
+      delayed = false;
+      reads[0]!(response(waiting));
+      for (let n = 0; n < 200; n++) await Promise.resolve();
+      expect(recovered).toBe(true);
+      await renewal;
+      expect(cancelled).toBe(true);
+    } finally { session.stop(); for (const resolve of reads) resolve(response({ queue: null, room: null })); }
+  });
+
   it("network return shares Match renewal and releases Submit only after its baseline", async () => {
     const browser = new EventTarget();
     vi.stubGlobal("window", browser);
