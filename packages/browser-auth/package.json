@@ -1,0 +1,16 @@
+{
+  "name": "browser-auth",
+  "version": "0.1.0",
+  "description": "Shared memory-only browser auth session client (refresh via HttpOnly auth-refresh cookie).",
+  "private": true,
+  "type": "module",
+  "main": "src/client.js",
+  "types": "src/client.d.ts",
+  "exports": {
+    ".": "./src/client.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "license": "ISC"
+}

@@ -11,6 +11,7 @@
     "packages/arena-game",
     "packages/arena-harness",
     "packages/arena-model",
+    "packages/browser-auth",
     "services/game",
     "services/judge-worker",
     "frontend"
@@ -27,7 +28,7 @@
     "play": "bash scripts/play.sh",
     "up": "docker compose up --build",
     "down": "docker compose down",
-    "lint:boundaries": "depcruise --config .dependency-cruiser.cjs packages services frontend scripts",
+    "lint:boundaries": "depcruise --config .dependency-cruiser.cjs packages services frontend scripts user-service auth-profile-web",
     "check": "npm run check:repository && npm run lint:boundaries && npm run typecheck && npm run lint && npm run test:example",
     "test:example": "vitest run packages/example/test/example.test.ts",
     "typecheck:example": "tsc --noEmit --strict --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext packages/example/src/index.ts packages/example/test/example.test.ts"

@@ -100,7 +100,7 @@ module.exports = {
     doNotFollow: { path: "(^|/)(node_modules|dist)/" },
     // Check type-only imports too; each workspace keeps its own unchanged tsconfig.
     tsPreCompilationDeps: true,
-    exclude: { path: "(^|/)(node_modules|test-results|playwright-report)/" },
+    exclude: { path: "(^|/)(node_modules|test-results|playwright-report)/|user-service/src/generated/" },
     enhancedResolveOptions: {
       extensions: [".ts", ".tsx", ".js", ".jsx", ".json"],
       // Workspace source metadata resolves package imports to the checked sources.
