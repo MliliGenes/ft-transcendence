@@ -13,11 +13,13 @@ describe("LobbyGateway boot ordering and lifecycle subscription", () => {
     // Mock WebSocketServer namespace
     const emittedToUser: Array<{ userChannel: string; event: string; payload: unknown }> = [];
     gateway.server = {
-      to: (channels: string | string[]) => ({
-        emit: (event: string, payload: unknown) => {
-          const list = Array.isArray(channels) ? channels : [channels];
-          for (const ch of list) emittedToUser.push({ userChannel: ch, event, payload });
-        },
+      in: (userChannel: string) => ({
+        fetchSockets: async () => [{
+          id: userChannel,
+          connected: true,
+          data: { arenaPrincipal: { userId: userChannel.slice(5), expiresAt: Number.MAX_SAFE_INTEGER } },
+          emit: (event: string, payload: unknown) => { emittedToUser.push({ userChannel, event, payload }); },
+        }],
       }),
     } as any;
 
@@ -45,7 +47,8 @@ describe("LobbyGateway boot ordering and lifecycle subscription", () => {
     const room = await game.createPrivateRoom(host, "1v1");
     await game.joinPrivateRoom(guest, room.room.code);
 
-    expect(emittedToUser.length).toBeGreaterThan(0);
+    // Recipient inspection is asynchronous; wait for the delivered hint.
+    await vi.waitFor(() => expect(emittedToUser.length).toBeGreaterThan(0));
     expect(emittedToUser).toContainEqual({
       userChannel: `user:${host}`,
       event: "lobby.roomUpdated",
@@ -65,8 +68,10 @@ describe("LobbyGateway boot ordering and lifecycle subscription", () => {
     emittedToUser.length = 0;
     await game.setRoomMemberReady(host, room.room.id, true);
 
-    const matchesForHost = emittedToUser.filter((e) => e.userChannel === `user:${host}` && e.event === "lobby.roomUpdated");
-    expect(matchesForHost).toHaveLength(1);
+    await vi.waitFor(() => {
+      const matchesForHost = emittedToUser.filter((e) => e.userChannel === `user:${host}` && e.event === "lobby.roomUpdated");
+      expect(matchesForHost).toHaveLength(1);
+    });
 
     gateway.onModuleDestroy();
     await game.onModuleDestroy();

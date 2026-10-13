@@ -16,6 +16,7 @@ import { AuthPrincipalClient } from "../auth/auth-principal-client.js";
 import { GameService } from "./game.service.js";
 import {
   authenticateHandshake,
+  clearSocketExpiry,
   authorizeSocketMessage,
   broadcastGated,
   canEmitTo,
@@ -105,6 +106,7 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
+    clearSocketExpiry(client);
     this.chat.releaseConnection(client.id);
   }
 
@@ -145,7 +147,7 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
       if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
 
       if (entry) {
-        await broadcastGated(this.server, roomId, "message", entry, this.game.runtimeReady);
+        await broadcastGated(this.server, roomId, "message", entry, () => this.game.runtimeReady);
       }
       if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
       return ack;
@@ -190,7 +192,7 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
       if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
 
       if (entry) {
-        await broadcastGated(this.server, roomId, "ping", entry, this.game.runtimeReady);
+        await broadcastGated(this.server, roomId, "ping", entry, () => this.game.runtimeReady);
       }
       if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
       return ack;

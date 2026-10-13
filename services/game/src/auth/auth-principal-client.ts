@@ -59,6 +59,9 @@ export class AuthPrincipalClient {
     } catch {
       throw new VerificationUnavailableError("principal body unreadable");
     }
+    if (body === null || typeof body !== "object" || Array.isArray(body)) {
+      throw new VerificationUnavailableError("principal body must be an object");
+    }
     const principal = body as Partial<VerifiedPrincipal>;
     if (
       typeof principal.userId !== "string" ||

@@ -211,11 +211,11 @@ describe("socket namespaces: handshake + per-message verification", () => {
           ],
         }),
       };
-      await broadcastGated(server, ["room-1"], "message", { text: "hi" }, true);
+      await broadcastGated(server, ["room-1"], "message", { text: "hi" }, () => true);
       expect(delivered).toEqual([["room-1", "message", { text: "hi" }]]);
       // Runtime loss also stops emission.
       delivered.length = 0;
-      await broadcastGated(server, ["room-1"], "message", { text: "hi" }, false);
+      await broadcastGated(server, ["room-1"], "message", { text: "hi" }, () => false);
       expect(delivered).toEqual([]);
     }
 

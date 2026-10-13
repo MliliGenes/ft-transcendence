@@ -31,6 +31,35 @@ type SocketDataWithPrincipal = {
 
 const NEVER_EXPIRES = Number.MAX_SAFE_INTEGER;
 
+const expiryTimers = new WeakMap<Socket, { timer: ReturnType<typeof setTimeout>; cleanup: () => void }>();
+
+/** Idle expiry owns only this connection; accepted engine work continues. */
+export function clearSocketExpiry(client: Socket): void {
+  const pending = expiryTimers.get(client);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  client.off?.("disconnect", pending.cleanup);
+  expiryTimers.delete(client);
+}
+
+function scheduleSocketExpiry(client: Socket): void {
+  clearSocketExpiry(client);
+  const principal = socketPrincipal(client);
+  if (!client.connected || !principal || principal.expiresAt === NEVER_EXPIRES) return;
+  const remaining = principal.expiresAt - Date.now();
+  if (remaining <= 0) { client.disconnect(true); return; }
+  const cleanup = () => clearSocketExpiry(client);
+  const timer = setTimeout(() => {
+    clearSocketExpiry(client);
+    // Long deadlines are rearmed, avoiding the platform's 32-bit timer overflow.
+    if (principal.expiresAt > Date.now()) scheduleSocketExpiry(client);
+    else if (client.connected) client.disconnect(true);
+  }, Math.min(remaining, 2_147_483_647));
+  timer.unref?.();
+  expiryTimers.set(client, { timer, cleanup });
+  client.once?.("disconnect", cleanup);
+}
+
 function nonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
@@ -142,7 +171,7 @@ export async function authenticateHandshake(
     if (!verifier || typeof verifier.verify !== "function") throw new Error("authentication required");
     const verified = await verifier.verify(token);
     if (!nonEmptyString(verified?.userId)) throw new Error("authentication required");
-    if (typeof verified.expiresAt !== "number" || verified.expiresAt <= Date.now()) {
+    if (!Number.isSafeInteger(verified.expiresAt) || verified.expiresAt <= Date.now()) {
       throw new Error("expired access token");
     }
     const matchId = handshakeMatchId(client);
@@ -151,6 +180,7 @@ export async function authenticateHandshake(
       ? { userId: verified.userId, expiresAt: verified.expiresAt, matchId }
       : { userId: verified.userId, expiresAt: verified.expiresAt };
     attachSocketPrincipal(client, principal, token);
+    scheduleSocketExpiry(client);
     return principal;
   }
   // No token: explicit dev-suite seam only.
@@ -216,16 +246,16 @@ export async function authorizeSocketMessage(
     throw fail("unauthorized socket");
   }
   if (verified.userId !== stored.userId) throw fail("unauthorized socket");
-  if (typeof verified.expiresAt !== "number" || verified.expiresAt <= Date.now()) throw fail("expired socket session");
-  // Refresh expiry so rolling sessions stay valid without reconnecting.
+  if (!Number.isSafeInteger(verified.expiresAt) || verified.expiresAt <= Date.now()) throw fail("expired socket session");
   stored.expiresAt = verified.expiresAt;
+  scheduleSocketExpiry(client);
   return options.matchIdRequired
     ? { userId: stored.userId, expiresAt: stored.expiresAt, matchId: stored.matchId as string }
     : { userId: stored.userId, expiresAt: stored.expiresAt, ...(stored.matchId ? { matchId: stored.matchId } : {}) };
 }
 
 /** Per-recipient pre-emission gate: connected && unexpired && runtime serving. */
-export function canEmitTo(client: Socket, runtimeReady: boolean): boolean {
+export function canEmitTo(client: { connected: boolean; data?: SocketDataWithPrincipal }, runtimeReady: boolean): boolean {
   if (!runtimeReady) return false;
   if (!client.connected) return false;
   const data = (client.data ?? {}) as SocketDataWithPrincipal;
@@ -247,91 +277,55 @@ type EmittableRemote = {
   emit(event: string, payload: unknown): void;
 };
 
-function readFetchSockets(server: unknown, room: string): Promise<EmittableRemote[] | null> {
+async function readFetchSockets(server: unknown, room: string): Promise<EmittableRemote[] | null> {
   try {
-    const scoped = (server as { in: (room: string) => { fetchSockets: () => Promise<EmittableRemote[]> } }).in?.(room);
-    if (scoped && typeof scoped.fetchSockets === "function") return scoped.fetchSockets().catch(() => null);
-  } catch { /* fall through to broadcast fallback */ }
-  return Promise.resolve(null);
+    const scoped = (server as { in?: (room: string) => { fetchSockets?: () => Promise<EmittableRemote[]> } } | null)?.in?.(room);
+    if (!scoped?.fetchSockets) return null;
+    const sockets = await scoped.fetchSockets();
+    return Array.isArray(sockets) ? sockets : null;
+  } catch { return null; }
 }
 
-/**
- * Per-recipient gated broadcast for engine-driven fan-out (game events,
- * lobby hints, chat/pings, collab peer-left). When the server exposes
- * `in(room).fetchSockets()` each recipient is gated individually; fakes
- * without it fall back to a single runtime-gated `to(...).emit`.
- */
+/** Inspect every recipient; unavailable inspection must never become an ungated broadcast. */
 export async function broadcastGated(
   server: unknown,
   targets: string | string[],
   event: string,
   payload: unknown,
-  runtimeReady: boolean,
+  runtimeReady: () => boolean,
 ): Promise<void> {
-  if (!runtimeReady || !server) return;
+  if (!runtimeReady() || !server) return;
   const rooms = Array.isArray(targets) ? targets : [targets];
-  let inspected = false;
-  try {
-    const seen = new Map<string, EmittableRemote>();
-    for (const room of rooms) {
-      const sockets = await readFetchSockets(server, room);
-      if (!sockets) return fallbackBroadcast(server, rooms, event, payload);
-      inspected = true;
-      for (const s of sockets) seen.set(s.id, s);
-    }
-    if (!inspected) return fallbackBroadcast(server, rooms, event, payload);
-    for (const s of seen.values()) {
-      try {
-        if (!s.connected) continue;
-        const expiresAt = s.data?.arenaPrincipal?.expiresAt;
-        if (typeof expiresAt !== "number" || expiresAt <= Date.now()) continue;
-        s.emit(event, payload);
-      } catch { /* per-recipient best-effort */ }
-    }
-  } catch {
-    return fallbackBroadcast(server, rooms, event, payload);
+  const seen = new Map<string, EmittableRemote>();
+  for (const room of rooms) {
+    const sockets = await readFetchSockets(server, room);
+    if (!sockets) return;
+    for (const client of sockets) seen.set(client.id, client);
+  }
+  for (const client of seen.values()) {
+    if (!canEmitTo(client, runtimeReady())) continue;
+    try { client.emit(event, payload); } catch { /* per-recipient best-effort */ }
   }
 }
 
-function fallbackBroadcast(server: unknown, rooms: string[], event: string, payload: unknown): void {
-  try {
-    (server as { to: (t: string | string[]) => { emit(e: string, p: unknown): void } })
-      .to(rooms.length === 1 ? rooms[0] : rooms)?.emit(event, payload);
-  } catch { /* best-effort */ }
-}
-
-/**
- * Gated relay for sender-scoped fan-out (`client.to(room)` paths: collab
- * remote-update, peer-cursor). The sender must pass the gate; recipients are
- * gated individually when inspectable, otherwise the sender-scoped broadcast
- * is used as-is.
- */
+/** Both sender and recipients must still be authorized when a relay emits. */
 export async function relayGated(
   sender: Socket,
   server: unknown,
   room: string,
   event: string,
   payload: unknown,
-  runtimeReady: boolean,
+  runtimeReady: () => boolean,
 ): Promise<void> {
-  if (!canEmitTo(sender, runtimeReady)) return;
-  if (!server) {
-    try { sender.to(room).emit(event, payload); } catch { /* best-effort */ }
-    return;
-  }
+  if (!canEmitTo(sender, runtimeReady())) return;
   const sockets = await readFetchSockets(server, room);
-  if (!sockets) {
-    try { sender.to(room).emit(event, payload); } catch { /* best-effort */ }
-    return;
-  }
-  for (const s of sockets) {
-    try {
-      if (s.id === sender.id) continue;
-      if (!s.connected) continue;
-      const expiresAt = s.data?.arenaPrincipal?.expiresAt;
-      if (typeof expiresAt !== "number" || expiresAt <= Date.now()) continue;
-      s.emit(event, payload);
-    } catch { /* per-recipient best-effort */ }
+  if (!sockets) return;
+  for (const client of sockets) {
+    if (client.id === sender.id) continue;
+    const ready = runtimeReady();
+    if (!canEmitTo(sender, ready)) return;
+    if (!canEmitTo(client, ready)) continue;
+    try { client.emit(event, payload); } catch { /* per-recipient best-effort */ }
   }
 }
 

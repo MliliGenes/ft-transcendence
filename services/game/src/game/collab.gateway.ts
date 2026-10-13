@@ -14,6 +14,7 @@ import { AuthPrincipalClient } from "../auth/auth-principal-client.js";
 import { GameService } from "./game.service.js";
 import {
   authenticateHandshake,
+  clearSocketExpiry,
   authorizeSocketMessage,
   broadcastGated,
   canEmitTo,
@@ -93,6 +94,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
+    clearSocketExpiry(client);
     if (!this.game.runtimeReady) return;
     // Awareness is ephemeral: tell surviving teammates to drop the cursor.
     // Never touches game presence/forfeit (ticket 11 authority stays put).
@@ -101,7 +103,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const room = client.data?.room;
     const principal = socketPrincipal(client, { matchIdRequired: true });
     if (typeof room === "string" && principal) {
-      await broadcastGated(this.server, room, "peer-left", { userId: principal.userId }, this.game.runtimeReady);
+      await broadcastGated(this.server, room, "peer-left", { userId: principal.userId }, () => this.game.runtimeReady);
     }
   }
 
@@ -161,7 +163,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
         if (expiredStored(client)) try { client.disconnect(true); } catch {}
         return undefined;
       }
-      await relayGated(client, this.server, client.data.room as string, "remote-update", { updateB64: body.updateB64, revision: res.revision, roundId: body.roundId }, this.game.runtimeReady);
+      await relayGated(client, this.server, client.data.room as string, "remote-update", { updateB64: body.updateB64, revision: res.revision, roundId: body.roundId }, () => this.game.runtimeReady);
       if (!canEmitTo(client, this.game.runtimeReady)) {
         if (expiredStored(client)) try { client.disconnect(true); } catch {}
         return undefined;
@@ -203,7 +205,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
         head: typeof body?.head === "number" ? body.head : null,
         displayName: typeof body?.displayName === "string" ? body.displayName.slice(0, 40) : null,
         color: typeof body?.color === "string" ? body.color.slice(0, 16) : null,
-      }, this.game.runtimeReady);
+      }, () => this.game.runtimeReady);
       if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
       return { ok: true as const };
     } catch (error) {

@@ -14,6 +14,7 @@ import { AuthPrincipalClient } from "../auth/auth-principal-client.js";
 import { GameService } from "./game.service.js";
 import {
   authenticateHandshake,
+  clearSocketExpiry,
   authorizeSocketMessage,
   broadcastGated,
   canEmitTo,
@@ -55,7 +56,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     this.game.onEvent((event, matchId, payload) => {
       if (!this.game.runtimeReady) return;
-      if (matchId) void broadcastGated(this.server, roomFor(matchId), event, payload, this.game.runtimeReady);
+      if (matchId) void broadcastGated(this.server, roomFor(matchId), event, payload, () => this.game.runtimeReady);
     });
   }
 
@@ -130,6 +131,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * grace accounting starts. The match, clock, and evaluations continue.
    */
   async handleDisconnect(client: Socket): Promise<void> {
+    clearSocketExpiry(client);
     const principal = socketPrincipal(client, { matchIdRequired: true });
     if (principal?.matchId) {
       await this.game.noteSocketClosed(principal.userId, principal.matchId, client.id);

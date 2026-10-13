@@ -18,9 +18,9 @@ describe("Team chat retry identity during a pending lifecycle lookup", () => {
     }) } as unknown as GameService;
     const gateway = new TeamChatGateway(game);
     const broadcast = vi.fn();
-    gateway.server = { to: vi.fn().mockReturnValue({ emit: broadcast }) } as never;
     const socket = { id: "socket-1", connected: true, data: { roomId: "m1:left:chat", sideId: "left" } } as unknown as Socket;
     attachSocketPrincipal(socket, { userId: "u1", matchId: "m1", expiresAt: Number.MAX_SAFE_INTEGER });
+    gateway.server = { in: () => ({ fetchSockets: async () => [{ id: "recipient", connected: true, data: socket.data, emit: broadcast }] }) } as never;
     const message = { text: "Check the edge case", clientMessageId: "unconfirmed-1" };
     const first = gateway.onMessage(socket, message);
     const retry = gateway.onMessage(socket, message);

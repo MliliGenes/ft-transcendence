@@ -15,6 +15,7 @@ import { AuthPrincipalClient } from "../auth/auth-principal-client.js";
 import { GameService } from "./game.service.js";
 import {
   authenticateHandshake,
+  clearSocketExpiry,
   authorizeSocketMessage,
   broadcastGated,
   canEmitTo,
@@ -60,19 +61,19 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect, O
         if (p?.roomId) {
           const audience = p.audienceUserIds ?? p.members?.map((member) => member.userId) ?? [];
           if (audience.length > 0) {
-            void broadcastGated(this.server, audience.map(userChannel), "lobby.roomUpdated", p, this.game.runtimeReady);
+            void broadcastGated(this.server, audience.map(userChannel), "lobby.roomUpdated", p, () => this.game.runtimeReady);
           }
         }
       } else if (event === "lobby.matchFound") {
         const p = payload as { roomId: string; matchId: string; userIds: string[] };
         if (p?.roomId && Array.isArray(p.userIds)) {
-          void broadcastGated(this.server, p.userIds.map(userChannel), "lobby.matchFound", { roomId: p.roomId, matchId: p.matchId }, this.game.runtimeReady);
+          void broadcastGated(this.server, p.userIds.map(userChannel), "lobby.matchFound", { roomId: p.roomId, matchId: p.matchId }, () => this.game.runtimeReady);
         }
       } else if (event === "lobby.queueMatched") {
         const p = payload as { matchId: string; userIds: string[] };
         if (p?.userIds && Array.isArray(p.userIds)) {
           for (const uid of p.userIds) {
-            void broadcastGated(this.server, userChannel(uid), "lobby.queueMatched", { matchId: p.matchId }, this.game.runtimeReady);
+            void broadcastGated(this.server, userChannel(uid), "lobby.queueMatched", { matchId: p.matchId }, () => this.game.runtimeReady);
           }
         }
       }
@@ -102,6 +103,7 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect, O
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
+    clearSocketExpiry(client);
     // Rooms are automatically cleaned up by Socket.io on disconnect
   }
 
