@@ -10,6 +10,7 @@ import { DiscordController } from './discord.controller.js';
 import { DiscordStrategy } from './strategies/discord.strategy.js';
 import { GithubController } from './github.controller.js';
 import { GithubStrategy } from './strategies/github.strategy.js';
+import { PrincipalController } from './principal.controller.js';
 import { MailService } from '../mail/mail.service.js';
 
 @Module({
@@ -52,7 +53,7 @@ import { MailService } from '../mail/mail.service.js';
       },
     }),
   ],
-  controllers: [AuthController, DiscordController, GithubController],
+  controllers: [AuthController, PrincipalController, DiscordController, GithubController],
   providers: [AuthService, AccessTokenGuard, DiscordStrategy, GithubStrategy, MailService],
   exports: [AccessTokenGuard, JwtModule],
 })
