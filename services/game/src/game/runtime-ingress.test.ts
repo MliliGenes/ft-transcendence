@@ -85,7 +85,8 @@ it("does not relay a cursor or peer-left after the runtime stops", async () => {
     emit: (event: string, body: unknown) => { client.events.push({ event, body }); },
   }) } as unknown as CollabGateway["server"];
   await game.stop();
-  gateway.onCursor(client.socket, { clientId: 7, anchor: 0, head: 1 });
+  // Task 5: runtime loss suppresses the cursor ack (undefined), never relays.
+  await expect(gateway.onCursor(client.socket, { clientId: 7, anchor: 0, head: 1 })).resolves.toBeUndefined();
   await gateway.handleDisconnect(client.socket);
   expect(client.events).toEqual([]);
 });
@@ -145,7 +146,10 @@ it("does not join a Lobby room after delayed authorization and stop", async () =
   });
   const join = gateway.onJoinRoom(client.socket, { roomId: room.room.id });
   await reached; await game.stop(); release();
-  expect((await join).ok).toBe(false);
+  // Task 5: late expiry/runtime loss suppresses the ack (undefined) instead
+  // of {ok:false}; the room must still stay unjoined with zero output.
+  const ack = await join;
+  expect(ack === undefined || (ack as { ok?: boolean }).ok === false).toBe(true);
   expect(client.rooms).toEqual([]); expect(client.events).toEqual([]);
 });
 
@@ -165,8 +169,9 @@ it("does not broadcast a chat acceptance after stop", async () => {
     const value = await accept(...args); entered(); await held; return value;
   });
   const message = gateway.onMessage(client.socket, { text: "held output", clientMessageId: "runtime-held" });
-  const rejected = expect(message).rejects.toBeInstanceOf(ServiceUnavailableException);
-  await reached; await game.stop(); release(); await rejected;
+  // Task 5: late runtime loss suppresses the ack (undefined), never errors.
+  const suppressed = expect(message).resolves.toBeUndefined();
+  await reached; await game.stop(); release(); await suppressed;
   expect(client.events).toEqual([]);
 });
 
@@ -230,4 +235,19 @@ it("keeps an accepted command when stop suppresses its delayed HTTP reply", asyn
   expect(saved.roundPhase).toBe("MATCH_COMPLETE");
   expect(saved.revision).toBeGreaterThan(before.revision);
   expect(saved.final?.forfeit).not.toBeNull();
+});
+
+it("suppresses an expired Game RPC without touching the engine", async () => {
+  const { game, matchId } = await teamGame();
+  const gateway = new GameGateway(game);
+  const client = testSocket(matchId);
+  await gateway.handleConnection(client.socket);
+  expect(client.client.connected).toBe(true);
+  client.events.length = 0;
+  // Expire the stored principal between messages (DEV fixture path).
+  ((client.socket as unknown as { data: { arenaPrincipal: { expiresAt: number } } }).data.arenaPrincipal.expiresAt) = Date.now() - 1000;
+  const ack = await gateway.onRun(client.socket, { code: "1", language: "python" });
+  expect(ack).toBeUndefined();
+  expect(client.events).toEqual([]);
+  expect(client.client.connected).toBe(false);
 });

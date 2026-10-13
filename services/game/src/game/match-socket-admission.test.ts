@@ -50,4 +50,38 @@ describe("Match socket admission", () => {
     expect(baselines).toEqual([]);
     expect(states).toEqual(stage === "Presence" ? ["online", "offline"] : []);
   });
+
+  it("refuses an expired access token before presence with zero baseline", async () => {
+    vi.stubEnv("DEV_PRINCIPAL", "false");
+    const states: string[] = [];
+    const presence = new MatchSocketPresence({
+      participantSide: async () => "left", modeOf: async () => "1v1",
+      setMemberPresence: async () => {},
+      setPresence: async (_, __, state) => { states.push(state); },
+    });
+    const game = { runtimeReady: true, assertServing: () => {},
+      onEvent: () => () => {},
+      snapshot: async () => ({}),
+      noteSocketOpen: (user: string, match: string, socket: string) => presence.noteSocketOpen(user, match, socket),
+      noteSocketClosed: (user: string, match: string, socket: string) => presence.noteSocketClosed(user, match, socket),
+    };
+    const expired = { verify: async () => ({ userId: "alice", expiresAt: Date.now() - 1000 }) };
+    const gateway = new GameGateway(game as unknown as GameService, expired as never);
+    const rooms: string[] = [];
+    const baselines: unknown[] = [];
+    const disconnected: unknown[] = [];
+    const client = {
+      id: "socket", connected: true, data: {},
+      handshake: { auth: { accessToken: "expired-token", matchId: "match" }, query: {} },
+      join: async (room: string) => { rooms.push(room); },
+      emit: (_: string, body: unknown) => { baselines.push(body); },
+      disconnect: (close?: unknown) => { client.connected = false; disconnected.push(close); },
+    };
+    await gateway.handleConnection(client as unknown as Socket);
+    expect(client.connected).toBe(false);
+    expect(disconnected).toEqual([true]);
+    expect(rooms).toEqual([]);
+    expect(baselines).toEqual([]);
+    expect(states).toEqual([]);
+  });
 });
