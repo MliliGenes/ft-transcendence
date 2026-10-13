@@ -96,6 +96,9 @@ export function createBrowserAuthClient({ apiBase, fetchImpl = fetch, locks, cha
       assertCurrent(generation);
     } catch (error) {
       if (error?.code === 'SESSION_CHANGED') throw error;
+      // A confirmed expiry cleared this login's own epoch. A newer login or
+      // logout increments it again, so its state still cannot be overwritten.
+      if (error?.code === 'SESSION_EXPIRED' && !store.read() && store.generation() === generation + 1) generation = store.generation();
       assertCurrent(generation);
       mapStatus(error);
       throw normalize(error);

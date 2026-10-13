@@ -16,6 +16,7 @@ export class ApiError extends Error {
 
 const SESSION_LOCK = 'browser-auth:session';
 const LOGOUT_MARKER = 'browser-auth:logout-pending';
+const LOGOUT_ACKNOWLEDGED = 'browser-auth:logout-acknowledged';
 const RETRIABLE_NETWORK = 0;
 const isSafeMethod = (method) => method === 'GET' || method === 'HEAD';
 const isRetriable = (error) =>
@@ -60,18 +61,28 @@ export function createAuthApi({
   // Non-browser callers may omit storage; browsers share only a credential-free
   // intent marker. The refresh credential remains exclusively in its cookie.
   let localMarker = null;
+  let localAcknowledged = null;
   const readMarker = () => storage ? storage.getItem(LOGOUT_MARKER) : localMarker;
-  const isLogoutPending = () => readMarker() !== null;
+  const isLogoutPending = () => {
+    // Read the acknowledgement first: a later intent always wins. Cookie work
+    // serializes acknowledgements, but synchronous intent writes stay outside
+    // that lock and must never be deleted by a non-atomic compare/remove pair.
+    const acknowledged = storage ? storage.getItem(LOGOUT_ACKNOWLEDGED) : localAcknowledged;
+    const marker = readMarker();
+    return marker !== null && marker !== acknowledged;
+  };
   const markLogoutPending = () => {
     const marker = globalThis.crypto.randomUUID();
     if (storage) storage.setItem(LOGOUT_MARKER, marker);
     else localMarker = marker;
     return marker;
   };
-  const clearMarker = (expected) => {
-    if (expected !== undefined && readMarker() !== expected) return;
-    if (storage) storage.removeItem(LOGOUT_MARKER);
-    else localMarker = null;
+  const acknowledgeMarker = (expected) => {
+    if (expected == null) return;
+    // Acknowledge only our own ID, leaving the intent key untouched. Another
+    // tab can write a newer ID at any storage-operation boundary safely.
+    if (storage) storage.setItem(LOGOUT_ACKNOWLEDGED, expected);
+    else localAcknowledged = expected;
   };
   const assertCurrent = (generation) => {
     if (!isActive() || store.generation() !== generation) throw changedSession();
@@ -308,7 +319,7 @@ export function createAuthApi({
       }
       assertIntent();
       const session = store.replace(tokens);
-      clearMarker(marker);
+      acknowledgeMarker(marker);
       return session;
     });
   }
@@ -316,8 +327,8 @@ export function createAuthApi({
   async function logoutRequest(marker = markLogoutPending()) {
     return withSessionLock(async () => {
       await send('/auth/logout', { method: 'POST' });
-      // A newer logout intent must survive this earlier acknowledgement.
-      clearMarker(marker);
+      // Only this operation's intent ID is acknowledged; a newer ID stays pending.
+      acknowledgeMarker(marker);
     });
   }
 

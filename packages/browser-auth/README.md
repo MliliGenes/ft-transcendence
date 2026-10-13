@@ -21,14 +21,18 @@ injects a `getItem` / `setItem` / `removeItem` adapter; the browser default is
 `localStorage`. Non-browser tests should inject shared storage when exercising
 multiple clients.
 
-The only persistent auth value is a random, credential-free logout intent under
-`browser-auth:logout-pending`. Access tokens stay in memory; the refresh token
+The only persistent auth values are two random, credential-free identifiers:
+the latest logout intent under `browser-auth:logout-pending` and its latest
+acknowledgement under `browser-auth:logout-acknowledged`. Access tokens stay in memory; the refresh token
 stays in the HttpOnly cookie. Snapshots and control messages contain no tokens.
 Logout clears the local session immediately and writes its intent before any
 network work. Failed logout leaves that intent in place across reloads and SPAs.
 Every restore and renewal checks it under the origin lock, including
 `restore(true)`. A matching confirmed logout or a deliberate successful login
-clears it; an older acknowledgement cannot erase a newer intent.
+acknowledges its ID; an older acknowledgement cannot erase a newer intent.
+Restore is blocked whenever the current intent lacks a matching acknowledgement.
+The intent is never deleted by a read/compare/remove sequence; storage contains
+at most these two identifiers, even after many logins and logouts.
 
 A deliberate login or `signed-in` control message begins a new identity
 generation, invalidating older requests and profile callbacks. Those callbacks

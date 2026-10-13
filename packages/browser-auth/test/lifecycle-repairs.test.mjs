@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createBrowserAuthClient } from '../src/client.js';
+import { createBrowserAuthClient, createMemorySession } from '../src/client.js';
 
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
 const tokens = (id) => ({ accessToken: `access-${id}` });
@@ -21,7 +21,7 @@ function storage() {
 function setup(handler, options = {}) {
   const calls = [];
   const control = options.channel ?? channel();
-  const client = createBrowserAuthClient({ apiBase: '', locks: options.locks ?? serialLocks(), channel: control, storage: options.storage ?? storage(), fetchImpl: async (url, init) => { calls.push({ url, init }); return handler(url, init); } });
+  const client = createBrowserAuthClient({ apiBase: '', locks: options.locks ?? serialLocks(), channel: control, storage: options.storage ?? storage(), store: options.store, fetchImpl: async (url, init) => { calls.push({ url, init }); return handler(url, init); } });
   return { client, control, calls };
 }
 
@@ -104,7 +104,7 @@ test('failed logout blocks forced restore across new clients and sibling SPAs', 
   assert.equal(shared.entries.size, 1);
   assert.equal(JSON.stringify([...shared.entries]).includes('access-'), false);
   await b.client.login('login', {});
-  assert.equal(shared.entries.size, 0);
+  assert.equal(b.client.getSnapshot().logoutPending, false);
   await c.client.restore(true);
   b.client.dispose(); c.client.dispose();
 });
@@ -268,11 +268,11 @@ test('a failed sibling logout blocks renewal of a retained token', async () => {
   a.client.dispose(); b.client.dispose();
 });
 
-test('confirmed logout clears its marker and allows a fresh anonymous bootstrap', async () => {
+test('confirmed logout acknowledges its marker and allows a fresh anonymous bootstrap', async () => {
   const shared = storage();
   const a = setup((url) => url === '/auth/logout' ? new Response(null, { status: 204 }) : json(tokens('A')), { storage: shared });
   assert.deepEqual(await a.client.logout(), { serverConfirmed: true });
-  assert.equal(shared.entries.size, 0);
+  assert.equal(a.client.getSnapshot().logoutPending, false);
   const b = setup(() => json({ message: 'Expired' }, 401), { storage: shared });
   assert.equal((await b.client.restore(true)).status, 'anonymous');
   a.client.dispose(); b.client.dispose();
@@ -291,7 +291,7 @@ test('an older confirmed logout cannot erase a newer failed logout marker', asyn
   release.resolve();
   assert.deepEqual(await leavingA, { serverConfirmed: true });
   assert.deepEqual(await leavingB, { serverConfirmed: false });
-  assert.equal(shared.entries.size, 1);
+  assert.equal(a.client.getSnapshot().logoutPending, true);
   await assert.rejects(a.client.restore(true), (error) => error.code === 'LOGOUT_PENDING');
   a.client.dispose(); b.client.dispose();
 });
@@ -325,7 +325,72 @@ for (const confirmed of [true, false]) {
     assert.equal(current.profile.id, 'B');
     assert.equal(current.logoutPending, false);
     assert.equal(client.getAccessToken(), 'access-B');
-    assert.equal(shared.entries.size, 0);
+    assert.ok(shared.entries.size <= 2);
     client.dispose();
   });
 }
+
+
+for (const operation of ['logout-confirmation', 'deliberate-login']) {
+  test(`acknowledging ${operation} cannot erase a logout inserted at the storage boundary`, async () => {
+    const shared = storage();
+    const locks = serialLocks();
+    let armed = false;
+    let interleaved = false;
+    let newerLogout;
+    const originalGet = shared.getItem;
+    const originalSet = shared.setItem;
+    const interleave = () => {
+      if (!armed || interleaved) return;
+      interleaved = true; armed = false;
+      newerLogout = b.client.logout();
+    };
+    shared.getItem = (key) => { const captured = originalGet(key); if (key === 'browser-auth:logout-pending') interleave(); return captured; };
+    shared.setItem = (key, value) => { if (key === 'browser-auth:logout-acknowledged') interleave(); originalSet(key, value); };
+    const b = setup(() => { throw new TypeError('offline'); }, { storage: shared, locks });
+    const a = setup((url) => {
+      if (url === '/auth/logout') { if (operation === 'deliberate-login') throw new TypeError('offline'); armed = true; return new Response(null, { status: 204 }); }
+      return json(url === '/accounts/me' ? me('A') : tokens('A'));
+    }, { storage: shared, locks });
+    if (operation === 'deliberate-login') {
+      await a.client.logout();
+      a.client.subscribe(() => { if (a.client.getAccessToken() && !interleaved) armed = true; });
+      await a.client.login('login', {});
+    } else assert.deepEqual(await a.client.logout(), { serverConfirmed: true });
+    assert.equal(interleaved, true);
+    assert.deepEqual(await newerLogout, { serverConfirmed: false });
+    const fresh = setup((url) => json(url === '/accounts/me' ? me('A') : tokens('A')), { storage: shared, locks });
+    await assert.rejects(fresh.client.restore(true), (error) => error.code === 'LOGOUT_PENDING');
+    assert.equal(fresh.calls.length, 0);
+    a.client.dispose(); b.client.dispose(); fresh.client.dispose();
+  });
+}
+
+test('login profile 401 and refresh 401 settle anonymous with its own expiry', async () => {
+  const { client } = setup((url) => url === '/auth/login' ? json(tokens('A')) : json({ message: 'Expired' }, 401));
+  await assert.rejects(client.login('login', {}), (error) => error.code === 'SESSION_EXPIRED');
+  assert.equal(client.getSnapshot().status, 'anonymous');
+  assert.equal(client.getSnapshot().profile, null);
+  assert.equal(client.getAccessToken(), null);
+  client.dispose();
+});
+
+test('login own expiry superseded synchronously by newer login cannot map its status', async () => {
+  const store = createMemorySession();
+  let logins = 0;
+  const { client } = setup((url, init) => {
+    if (url === '/auth/login') return json(tokens(++logins === 1 ? 'A' : 'B'));
+    if (url === '/auth/refresh' || init.headers.Authorization === 'Bearer access-A') return json({ message: 'Expired' }, 401);
+    return json(me('B'));
+  }, { store });
+  let newer;
+  store.subscribe((_session, reason) => { if (reason && !newer) newer = client.login('login', {}); });
+  await assert.rejects(client.login('login', {}), (error) => error.code === 'SESSION_CHANGED');
+  assert.ok(newer);
+  const expected = await newer;
+  assert.equal(expected.status, 'authenticated');
+  assert.equal(expected.profile.id, 'B');
+  assert.deepEqual(client.getSnapshot(), expected);
+  assert.equal(client.getAccessToken(), 'access-B');
+  client.dispose();
+});
