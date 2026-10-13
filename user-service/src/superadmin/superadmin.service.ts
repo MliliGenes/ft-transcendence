@@ -4,10 +4,12 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { RabbitMqEventsService } from '../events/rabbitmq-events.service.js';
 import type { UpdateAccountDto } from '../accounts/dto/update-account.dto.js';
 import type { UserQueryDto } from './dto/user-query.dto.js';
 import type { CreateUserDto } from './dto/create-user.dto.js';
@@ -30,7 +32,10 @@ const adminUserSelect = {
 
 @Injectable()
 export class SuperadminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly events?: RabbitMqEventsService,
+  ) {}
 
   async getStats() {
     const now = new Date();
@@ -114,7 +119,7 @@ export class SuperadminService {
 
   async createUser(actorId: string, dto: CreateUserDto) {
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    return this.mutate(actorId, (tx) =>
+    const user = await this.mutate(actorId, (tx) =>
       tx.user.create({
         data: {
           username: dto.username,
@@ -125,6 +130,8 @@ export class SuperadminService {
         select: adminUserSelect,
       }),
     );
+    await this.events?.publishCreated(user);
+    return user;
   }
 
   async updateUser(actorId: string, id: string, dto: UpdateAccountDto) {
@@ -132,7 +139,7 @@ export class SuperadminService {
       throw new BadRequestException(
         'Provide at least one user field to update',
       );
-    return this.mutate(actorId, async (tx) => {
+    const user = await this.mutate(actorId, async (tx) => {
       const current = await this.lockUser(tx, id);
       return tx.user.update({
         where: { id },
@@ -149,6 +156,8 @@ export class SuperadminService {
         select: adminUserSelect,
       });
     });
+    await this.events?.publishUpdated(user);
+    return user;
   }
 
   async updateRole(actorId: string, id: string, dto: UpdateRoleDto) {
@@ -173,6 +182,7 @@ export class SuperadminService {
       // Images, two-factor settings, and recovery codes cascade on deletion.
       await tx.user.delete({ where: { id } });
     });
+    await this.events?.publishDeleted(id);
   }
 
   private async lockUser(tx: Prisma.TransactionClient, id: string) {

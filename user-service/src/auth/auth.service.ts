@@ -2,6 +2,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
@@ -15,6 +16,7 @@ import {
 import { AuthTokenPurpose, Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { RabbitMqEventsService } from '../events/rabbitmq-events.service.js';
 
 import type { RegisterDto } from './dto/register.dto.js';
 import type { LoginDto } from './dto/login.dto.js';
@@ -45,6 +47,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly mail: MailService,
+    @Optional() private readonly events?: RabbitMqEventsService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResult> {
@@ -80,15 +83,22 @@ export class AuthService {
           id: true,
           email: true,
           username: true,
+          displayName: true,
+          avatarUrl: true,
+          updatedAt: true,
         },
       });
+      await this.events?.publishCreated(user);
       const verificationToken = await this.createAuthToken(
         user.id,
         AuthTokenPurpose.EMAIL_VERIFICATION,
       );
       await this.mail.sendVerificationEmail(user.email, verificationToken);
 
-      return { user, ...tokens };
+      return {
+        user: { id: user.id, email: user.email, username: user.username },
+        ...tokens,
+      };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -127,15 +137,7 @@ export class AuthService {
   async loginWithDiscord(profile: DiscordProfile): Promise<AuthResult> {
     const linked = await this.findDiscordUser(profile.id);
     if (linked) {
-      if (profile.avatarUrl) {
-        await this.prisma.user.updateMany({
-          where: {
-            id: linked.id,
-            OR: [{ avatarUrl: null }, { avatarUrl: '' }],
-          },
-          data: { avatarUrl: profile.avatarUrl },
-        });
-      }
+      await this.updateMissingProviderAvatar(linked.id, profile.avatarUrl);
       return this.createDiscordSession(linked);
     }
 
@@ -180,9 +182,20 @@ export class AuthService {
           },
           refreshTokens: { create: refreshTokenData },
         },
-        select: { id: true, email: true, username: true },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          updatedAt: true,
+        },
       });
-      return { user, ...tokens };
+      await this.events?.publishCreated(user);
+      return {
+        user: { id: user.id, email: user.email, username: user.username },
+        ...tokens,
+      };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -267,15 +280,7 @@ export class AuthService {
   async loginWithGithub(profile: GithubProfile): Promise<AuthResult> {
     const linked = await this.findProviderUser('GITHUB', profile.id);
     if (linked) {
-      if (profile.avatarUrl) {
-        await this.prisma.user.updateMany({
-          where: {
-            id: linked.id,
-            OR: [{ avatarUrl: null }, { avatarUrl: '' }],
-          },
-          data: { avatarUrl: profile.avatarUrl },
-        });
-      }
+      await this.updateMissingProviderAvatar(linked.id, profile.avatarUrl);
       return this.createProviderSession(linked);
     }
     if (!profile.email || !profile.verified)
@@ -315,9 +320,20 @@ export class AuthService {
           },
           refreshTokens: { create: refreshTokenData },
         },
-        select: { id: true, email: true, username: true },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          updatedAt: true,
+        },
       });
-      return { user, ...tokens };
+      await this.events?.publishCreated(user);
+      return {
+        user: { id: user.id, email: user.email, username: user.username },
+        ...tokens,
+      };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -747,7 +763,11 @@ export class AuthService {
     const resetToken = await this.prisma.$transaction(async (tx) => {
       await this.lockUserSessions(tx, user.id);
       await tx.authToken.deleteMany({
-        where: { userId: user.id, purpose: AuthTokenPurpose.PASSWORD_RESET, usedAt: null },
+        where: {
+          userId: user.id,
+          purpose: AuthTokenPurpose.PASSWORD_RESET,
+          usedAt: null,
+        },
       });
       return this.createAuthToken(user.id, AuthTokenPurpose.PASSWORD_RESET, tx);
     });
@@ -763,7 +783,10 @@ export class AuthService {
     }
   }
 
-  async confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+  async confirmPasswordReset(
+    token: string,
+    newPassword: string,
+  ): Promise<void> {
     const invalidToken = new UnauthorizedException(
       'Password reset token is invalid or expired',
     );
@@ -841,6 +864,31 @@ export class AuthService {
         },
       });
     });
+  }
+
+  private async updateMissingProviderAvatar(
+    userId: string,
+    avatarUrl: string | null,
+  ): Promise<void> {
+    if (!avatarUrl) return;
+
+    const result = await this.prisma.user.updateMany({
+      where: { id: userId, OR: [{ avatarUrl: null }, { avatarUrl: '' }] },
+      data: { avatarUrl },
+    });
+    if (result.count !== 1) return;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        avatarUrl: true,
+        updatedAt: true,
+      },
+    });
+    if (user) await this.events?.publishUpdated(user);
   }
 
   private async createAuthToken(

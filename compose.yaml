@@ -56,9 +56,15 @@ services:
 
   user-service:
     build: ./user-service
-    env_file: ./envs/user-service.env
+    env_file:
+      - ./envs/user-service.env
+      - ./envs/rabbitmq.env
+    environment:
+      RABBITMQ_HOST: rabbitmq
     depends_on:
       user-db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   auth-profile-web:

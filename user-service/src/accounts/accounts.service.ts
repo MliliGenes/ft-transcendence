@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   PayloadTooLargeException,
 } from '@nestjs/common';
 import sharp from 'sharp';
@@ -20,6 +21,7 @@ import {
 import type { UserImageKind } from '../generated/prisma/client.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { RabbitMqEventsService } from '../events/rabbitmq-events.service.js';
 import type { UpdateAccountDto } from './dto/update-account.dto.js';
 
 import type { PaginationDto } from './dto/pagination.dto.js';
@@ -71,7 +73,10 @@ function accountResponse<T extends { passwordHash: string | null }>(
 
 @Injectable()
 export class AccountsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly events?: RabbitMqEventsService,
+  ) {}
 
   async getMe(id: string) {
     const user = await this.prisma.user.findUnique({
@@ -191,30 +196,30 @@ export class AccountsService {
     };
 
     try {
+      let user;
       if (dto.email !== undefined) {
-        return await this.prisma.$transaction(async (tx) => {
+        user = await this.prisma.$transaction(async (tx) => {
           // Keep the comparison and update together, including concurrent edits.
           const users = await tx.$queryRaw<{ email: string }[]>`
             SELECT "email" FROM "User" WHERE "id" = ${id} FOR UPDATE
           `;
           if (!users[0]) throw new NotFoundException('Account not found');
           if (dto.email !== users[0].email) data.emailVerifiedAt = null;
-          return accountResponse(
-            await tx.user.update({
-              where: { id },
-              data,
-              select: accountSelect,
-            }),
-          );
+          return tx.user.update({
+            where: { id },
+            data,
+            select: accountSelect,
+          });
         });
-      }
-      return accountResponse(
-        await this.prisma.user.update({
+      } else {
+        user = await this.prisma.user.update({
           where: { id },
           data,
           select: accountSelect,
-        }),
-      );
+        });
+      }
+      await this.events?.publishUpdated(user);
+      return accountResponse(user);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002')
@@ -244,6 +249,7 @@ export class AccountsService {
       // Two-factor settings and recovery codes already cascade in the schema.
       await tx.user.delete({ where: { id } });
     });
+    await this.events?.publishDeleted(id);
   }
 
   async getImage(id: string, kind: UserImageKind) {
@@ -305,7 +311,7 @@ export class AccountsService {
 
     const url = `/accounts/${id}/${kind.toLowerCase()}`;
     const bytes = new Uint8Array(data);
-    return this.prisma.$transaction(async (tx) => {
+    const user = await this.prisma.$transaction(async (tx) => {
       // Lock the account so replacements and account deletion cannot interleave.
       const users = await tx.$queryRaw<{ id: string }[]>`
         SELECT "id" FROM "User" WHERE "id" = ${id} FOR UPDATE
@@ -319,13 +325,13 @@ export class AccountsService {
         select: { id: true },
       });
       // Store the URL and image together, or roll both changes back.
-      return accountResponse(
-        await tx.user.update({
-          where: { id },
-          data: kind === 'AVATAR' ? { avatarUrl: url } : { bannerUrl: url },
-          select: accountSelect,
-        }),
-      );
+      return tx.user.update({
+        where: { id },
+        data: kind === 'AVATAR' ? { avatarUrl: url } : { bannerUrl: url },
+        select: accountSelect,
+      });
     });
+    if (kind === 'AVATAR') await this.events?.publishUpdated(user);
+    return accountResponse(user);
   }
 }
