@@ -47,7 +47,7 @@ The complete test suite includes Docker-, localhost-, and PostgreSQL-dependent
 checks. Run it on a development host where those capabilities are available:
 
 ```sh
-DATABASE_URL=postgres://postgres:postgres@localhost:5433/arena_test \
+TEST_PG_URL=postgres://postgres:postgres@localhost:5433/arena_test \
   npm test
 ```
 
@@ -74,9 +74,14 @@ npm run up
 ```
 
 Only Nginx exposes host ports. The judge worker is private and is the only
-application container with the Docker socket. The React frontend is currently
-built/previewed separately; joining it to the public Compose entry point is
-still integration work.
+application container with the Docker socket. The gateway image builds the
+account App at `/` and the Game App at `/play/`. Both use the public `/api` base.
+Production requires real sign-in with `DEV_PRINCIPAL=false`.
+
+Set `AUTH_FRONTEND_URL` to the public HTTPS origin. Optional GitHub and Discord
+credentials belong only to User Service. Register each provider's login and link
+callbacks under `/api/auth/`; `.env.example` lists the settings. See the
+[auth contract](docs/auth-game-contract.md) for cookie and session rules.
 
 Game supports one active process per Game database. A duplicate exits before
 recovery. Stop all older unguarded Game processes for the first installation.

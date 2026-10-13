@@ -50,11 +50,11 @@ if [ -f "$CONF" ]; then
   if grep -q "api_all" "$CONF"; then bad "nginx must not reference blanket api_all limits"; else ok "no blanket api_all limit"; fi
   if grep -q '\$request[ ;"]' "$CONF"; then bad "gateway log must omit \$request (query leaks)"; else ok "access log omits \$request"; fi
   if grep -q '\$args\|\$query_string' "$CONF"; then bad "gateway log must omit query args"; else ok "access log omits query args"; fi
-  # Credential limits exist on exact public paths ...
+  # Credential limits exist on equivalent public paths ...
   if [ "$(grep -c "limit_req zone=" "$CONF")" -lt 3 ]; then
-    bad "nginx lacks exact-path credential limits (login/register/reset/refresh)"
+    bad "nginx lacks equivalent-path credential limits (login/register/reset/refresh)"
   else
-    ok "exact-path credential limits present"
+    ok "equivalent-path credential limits present"
   fi
   # ... but NOT on game/socket locations.
   block_has_limit() {

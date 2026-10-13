@@ -28,6 +28,19 @@
   - Reusing a revoked, unexpired refresh token revokes the remaining refresh tokens in that login session; other login sessions remain active. Coordinate concurrent refresh attempts in the client.
   - Logout revokes the refresh-token session in the cookie. The current access token remains valid until it expires.
 
+  Cookie-changing requests (`register`, `login`, `refresh`, `logout`) require
+  `X-Requested-With: XMLHttpRequest` and a trusted `Origin` or `Referer`.
+  A missing or foreign source returns `403`. The trusted production origin is
+  `AUTH_FRONTEND_URL`; local development also permits `http://localhost:5173`.
+  Browsers attach source headers themselves. The public gateway prefixes these
+  paths with `/api`, and applies the same policy and rate limit to case and
+  trailing-slash forms.
+
+  Successful login/registration/refresh, and logout, expire legacy HttpOnly root
+  cookies. The live cookie remains narrow: `/auth/` internally, `/api/auth/`
+  externally. Duplicate cookie names are rejected; sign in again if migration
+  clears two old copies.
+
   ## Endpoints
 
   ### Register
@@ -449,12 +462,16 @@
   ```bash
   # Login, save the returned accessToken, and store the HttpOnly cookie.
   curl -X POST http://localhost:3000/auth/login \
+    -H 'Origin: http://localhost:5173' \
+    -H 'X-Requested-With: XMLHttpRequest' \
     -H "Content-Type: application/json" \
     -c cookies.txt \
     -d '{"email":"user@example.com","password":"correct horse battery staple"}'
 
   # Refresh the access token; curl updates the refresh cookie.
   curl -X POST http://localhost:3000/auth/refresh \
+    -H 'Origin: http://localhost:5173' \
+    -H 'X-Requested-With: XMLHttpRequest' \
     -b cookies.txt -c cookies.txt
 
   # Access a protected endpoint.
@@ -468,6 +485,8 @@
 
   # Logout using the refresh cookie.
   curl -i -X POST http://localhost:3000/auth/logout \
+    -H 'Origin: http://localhost:5173' \
+    -H 'X-Requested-With: XMLHttpRequest' \
     -b cookies.txt -c cookies.txt
   ```
 

@@ -78,6 +78,8 @@ test('registration issues tokens and prepares a nested user/session write', asyn
       const start = Date.now();
       const response = await request(server)
         .post('/auth/register')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
         .send(dto)
         .expect(201);
       const end = Date.now();
@@ -137,6 +139,8 @@ test('registration issues tokens and prepares a nested user/session write', asyn
       assert.equal(JSON.stringify(result).includes(stored.tokenHash), false);
       const next = await request(server)
         .post('/auth/register')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
         .send({ ...dto, username: 'tester2', email: 'test2@example.com' })
         .expect(201);
       const nextCookie = next.headers['set-cookie']?.find((entry) =>
@@ -153,10 +157,17 @@ test('registration issues tokens and prepares a nested user/session write', asyn
       const before = writes.length;
       await request(server)
         .post('/auth/register')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
         .send({ ...dto, password: 'short' })
         .expect(400);
       duplicate = true;
-      await request(server).post('/auth/register').send(dto).expect(409);
+      await request(server)
+        .post('/auth/register')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
+        .send(dto)
+        .expect(409);
       duplicate = false;
       assert.equal(writes.length, before);
     },
@@ -169,6 +180,8 @@ test('registration issues tokens and prepares a nested user/session write', asyn
     });
     const response = await request(server)
       .post('/auth/register')
+      .set('Origin', 'http://localhost:5173')
+      .set('X-Requested-With', 'XMLHttpRequest')
       .send(dto)
       .expect(409);
     assert.equal(response.body.accessToken, undefined);

@@ -25,7 +25,7 @@ URL from `USER_SERVICE_BASE_URL`, default `http://user-service:3000`.
 - Exactly one in-flight fetch per token (dedup map, no result cache).
 - `AbortSignal.timeout(2000)` covers headers **and** body read.
 - `401` → `UnauthorizedError`; anything else (network, 5xx, non-JSON,
-  non-UUID `userId`, non-integer/past `expiresAt`) → `VerificationUnavailableError`.
+  null/array/non-object body, non-UUID `userId`, non-integer/past `expiresAt`) → `VerificationUnavailableError`.
 - **Provider registration lives in `GameModule` only** (factory provider, Task 4);
   gateways inject it, never re-register. Tests use the single
   `createTestAppWithVerifier` helper (Task 3); PG-backed suites need
@@ -54,7 +54,11 @@ URL from `USER_SERVICE_BASE_URL`, default `http://user-service:3000`.
   refresh). Failure → `disconnect(true)` + throw; already-dead/late-expiry
   outputs are suppressed (ack `undefined`), never emitted to expired sockets.
 - All emits are per-recipient gated (`connected && expiresAt > now &&
-  runtimeReady`); broadcasts use `fetchSockets()` filtering where inspectable.
+  runtimeReady`). Broadcasts and relays require `fetchSockets()` inspection.
+  A lookup failure sends nothing. Readiness is checked after lookup and before
+  each emission; relays also recheck the sender and exclude it.
+- A verified-expiry timer closes idle sockets in all four namespaces. Disconnect
+  clears the timer and runs normal Presence cleanup. Accepted evaluations continue.
 - **Renewal = reconnect with the new token** (no token-swap on a live socket).
   A missing ack means renew + reconnect — never a blind retry of the submit.
   Accepted evaluations are untouched by auth failures and complete after expiry.
@@ -67,7 +71,8 @@ URL from `USER_SERVICE_BASE_URL`, default `http://user-service:3000`.
   `retrySafeRead`. `401` → single renew → retry once → confirmed expiry clears
   to anonymous (`SESSION_EXPIRED`); network/5xx/timeout → `UNAVAILABLE`, token
   retained. Late results after logout/login are rejected (`SESSION_CHANGED`).
-  Failed server logout sets `logoutPending`, which blocks bootstrap `restore()`
+  Failed server logout persists a credential-free intent and sets `logoutPending`,
+  which blocks bootstrap `restore()` across reload and entry to another App
   (`LOGOUT_PENDING`). Cross-tab `signed-out`/`signed-in`/`token-renewed` stay
   loop-free (renewed tokens re-verify via profile GET, restore only on 401).
 - Game transports send Bearer HTTP + `auth: { accessToken, matchId }`; player
@@ -95,10 +100,12 @@ With `VITE_API_URL=/api` the Arena uses one `apiBase` for `/accounts/me`
 | `/play/` → Arena SPA, `/` → auth SPA | static | `/play` → `/play/` 301 |
 | `= /health`, `/ready`, `/healthz` | gateway `200 ok` | Exempt from limits/CSRF |
 
-CSRF = `X-Requested-With` present **and** (Origin or Referer present and
-`https:`); missing-both rejected. Access log is query-free
-(`$request_method $uri` — no `$request`/`$args`), so OAuth codes/state never
-land in gateway logs. (Path-segment tokens such as `verify-email/:token` still
+Credential route forms share the same limits, including case and trailing slash.
+The gateway requires `X-Requested-With: XMLHttpRequest` and an HTTPS Origin or
+Referer. User Service also requires the exact custom header and a source from its
+trusted origin set. OAuth GET callbacks and internal principal checks are exempt.
+The access log uses `$request_method $uri` and omits full Referer, `$request` and
+`$args`, so query codes/state are not written to the access log. (Path-segment tokens such as `verify-email/:token` still
 appear in `$uri` by design.)
 
 ## DEV seams (explicit dev suite only; prod `DEV_PRINCIPAL=false`)

@@ -91,6 +91,8 @@ test('GET /accounts/me uses the verified access-token identity', async (t) => {
   const signer = module.get(JwtService);
   const login = await request(server)
     .post('/auth/login')
+    .set('Origin', 'http://localhost:5173')
+    .set('X-Requested-With', 'XMLHttpRequest')
     .send({ email: user.email, password: 'test password' })
     .expect(200);
   const token = login.body.accessToken;

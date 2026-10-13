@@ -28,3 +28,17 @@ Unlike the refresh race suite, it creates a unique `discord_link_test_<uuid>`
 schema, applies all migrations there, and drops only that schema afterward.
 The database role must be allowed to create schemas. Existing application tables
 and records are not modified; no real Discord requests are sent.
+
+## Browser session regressions
+
+`test/browser-session-contract.test.mjs` checks trusted source and custom-header
+requirements, equivalent route forms, root-cookie deletion and duplicate-cookie
+rejection. Existing HTTP auth fixtures send the same browser headers.
+
+Run standalone tests with Node 24. Set explicit fixture mail settings and
+`AUTH_FRONTEND_URL=http://localhost:5173`; no real mail is sent by the unit
+fixtures. For the full PostgreSQL suite, set both `AUTH_TEST_DATABASE_URL` and
+the `POSTGRES_*` fields to your separate migrated test database. Set
+`DOTENV_CONFIG_PATH=/dev/null` and empty `GITHUB_LINK_REDIRECT_URI` and
+`DISCORD_LINK_REDIRECT_URI` for deterministic local provider fixtures. Never use
+the application database for these checks.

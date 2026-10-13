@@ -26,9 +26,10 @@ credentials. Configure `AUTH_FRONTEND_URL` there and register both Discord redir
 - `src/auth/AuthProvider.jsx` restores the session and owns account state.
 - `src/lib/session.js` keeps the access token in memory and removes legacy
   script-readable tokens from local storage. OAuth callbacks return without tokens in the URL.
-- `src/lib/api-client.js` retries a protected request once after a 401. Concurrent
-  requests share a refresh; Web Locks coordinate tabs when available. A failed
-  or ambiguous refresh requires signing in again, avoiding reuse of a consumed token.
+- `src/lib/api-client.js` shares one refresh after a 401. A selected GET or HEAD
+  can retry once with `retrySafeRead: true`. A mutation is never sent again.
+  Network failures retain the session. Confirmed expiry clears it. Web Locks
+  coordinate cookie changes across tabs.
 - `src/components/ProfileForm.jsx` submits only changed, allowed fields. Photo
   uploads save separately, so partial success does not masquerade as a full save.
 - `src/lib/navigation.js` handles internal navigation and browser back/forward.
@@ -36,8 +37,15 @@ credentials. Configure `AUTH_FRONTEND_URL` there and register both Discord redir
 The refresh token stays in an HttpOnly cookie. The access token stays in memory,
 so a page reload restores the session through `/auth/refresh`. Logout clears the
 local session immediately and attempts server revocation. A failed revocation is
-reported. Existing access tokens retain their backend-defined expiry; logout
-does not revoke JWT signatures.
+reported. A persistent marker with no credentials blocks restore after failed
+logout, including reload and entry to Play. A later deliberate sign-in can replace
+that marker. Existing access tokens retain their backend expiry; logout does not
+revoke JWT signatures.
+
+The account page follows verified sign-in and sign-out from other tabs. It clears
+the old profile while the replacement account is verified. Dev and production
+proxies keep the refresh cookie at `/api/auth/`. The service clears old HttpOnly
+root cookies through `Set-Cookie`; JavaScript cannot delete them.
 
 ## Verification and deployment
 
@@ -68,5 +76,7 @@ keep API routes outside that fallback. Configure the backend CORS allowlist for
 the real frontend origin if using separate origins.
 
 Dependencies and build output are ignored by Git. Reinstall with `npm ci` after
-cloning. Automated tests cover session races and update payloads; live visual
-browser verification was unavailable during this refactor.
+cloning. Automated tests cover session races, narrow dev cookies and update payloads.
+The browser regressions in `frontend/e2e/account-auth-repairs.spec.ts` exercise
+the actual account App with mocked HTTP. They require an account web fixture via
+`E2E_ACCOUNT_WEB_URL`. Real HTTPS service proof is a separate repair-plan gate.

@@ -66,6 +66,22 @@ export function AuthProvider({ children, initialNotice }) {
           type: 'warning',
           text: 'You are signed out on this browser. The service could not confirm the session was closed.',
         });
+      if (snapshot.status === 'authenticated') {
+        wasAuthenticated.current = true;
+        setProfile(snapshot.profile);
+        setStatus('authenticated');
+        setLoadError(null);
+        setNotice((current) => current?.text === EXPIRED_NOTICE ? null : current);
+      } else if (snapshot.status === 'unavailable') {
+        setProfile(snapshot.profile);
+        setLoadError(new ApiError('Authentication is unavailable. Please try again.', 503));
+        setStatus('error');
+      } else if (snapshot.status === 'loading') {
+        // A remote sign-in replaces the identity. Retire the old profile
+        // until the shared client verifies the replacement account.
+        setProfile(null);
+        setStatus('loading');
+      }
       if (snapshot.status === 'anonymous') {
         if (wasAuthenticated.current && !signingOut.current)
           setNotice({ type: 'error', text: EXPIRED_NOTICE });

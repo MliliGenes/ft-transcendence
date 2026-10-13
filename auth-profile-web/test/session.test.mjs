@@ -214,9 +214,9 @@ test('simultaneous 401s share one cookie refresh and each request retries only o
     },
   });
   const result = await Promise.all([
-    client.request('/accounts/me'),
-    client.request('/accounts/me'),
-    client.request('/accounts/me'),
+    client.request('/accounts/me', { retrySafeRead: true }),
+    client.request('/accounts/me', { retrySafeRead: true }),
+    client.request('/accounts/me', { retrySafeRead: true }),
   ]);
   assert.deepEqual(result, [{ id: 1 }, { id: 1 }, { id: 1 }]);
   assert.equal(refreshes, 1);
@@ -244,10 +244,10 @@ test('independent in-memory sessions never share a cookie refresh', async () => 
   };
   await Promise.all([
     createApiClient({ baseUrl: '', store: a, fetchImpl, locks }).request(
-      '/accounts/me',
+      '/accounts/me', { retrySafeRead: true },
     ),
     createApiClient({ baseUrl: '', store: b, fetchImpl, locks }).request(
-      '/accounts/me',
+      '/accounts/me', { retrySafeRead: true },
     ),
   ]);
   assert.equal(refreshes, 2);
@@ -282,8 +282,8 @@ test('a rotated session is recognized even if two access-token strings are ident
     },
   });
   await Promise.all([
-    client.request('/accounts/me'),
-    client.request('/accounts/me'),
+    client.request('/accounts/me', { retrySafeRead: true }),
+    client.request('/accounts/me', { retrySafeRead: true }),
   ]);
   assert.equal(refreshes, 1);
 });

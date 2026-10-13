@@ -23,6 +23,9 @@ export function assertTrustedBrowserOrigin(
   request: Request,
   config: ConfigService,
 ): void {
+  if (request.headers['x-requested-with'] !== 'XMLHttpRequest') {
+    throw new ForbiddenException('Browser request header is required');
+  }
   const origin = request.headers.origin;
   const referer = request.headers.referer;
   let sourceOrigin = origin;
@@ -33,7 +36,7 @@ export function assertTrustedBrowserOrigin(
       throw new ForbiddenException('Request origin is not allowed');
     }
   }
-  if (sourceOrigin && !trustedBrowserOrigins(config).has(sourceOrigin)) {
+  if (!sourceOrigin || !trustedBrowserOrigins(config).has(sourceOrigin)) {
     throw new ForbiddenException('Request origin is not allowed');
   }
 }

@@ -135,6 +135,8 @@ test('refresh-token verification and rotation', async (t) => {
       );
       const response = await request(server)
         .post('/auth/refresh')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
         .auth(expiredAccess, { type: 'bearer' })
         .set('Cookie', `auth-refresh=${original.token}`)
         .expect(200);
@@ -184,27 +186,35 @@ test('refresh-token verification and rotation', async (t) => {
         .expect(200);
       await request(server)
         .post('/auth/refresh')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
         .set('Cookie', rotated.split(';')[0])
         .expect(200);
     },
   );
 
-  await t.test('rejects missing or malformed cookies before database access', async () => {
-    const before = lookupCount;
-    const cases = [
-      undefined,
-      'auth-refresh=',
-      'auth-refresh=invalid',
-      `auth-refresh=${randomUUID()}.short`,
-      `auth-refresh=${seed().token}; auth-refresh=${seed().token}`,
-    ];
-    for (const cookie of cases) {
-      const pending = request(server).post('/auth/refresh');
-      if (cookie !== undefined) pending.set('Cookie', cookie);
-      await pending.expect(401);
-    }
-    assert.equal(lookupCount, before);
-  });
+  await t.test(
+    'rejects missing or malformed cookies before database access',
+    async () => {
+      const before = lookupCount;
+      const cases = [
+        undefined,
+        'auth-refresh=',
+        'auth-refresh=invalid',
+        `auth-refresh=${randomUUID()}.short`,
+        `auth-refresh=${seed().token}; auth-refresh=${seed().token}`,
+      ];
+      for (const cookie of cases) {
+        const pending = request(server)
+          .post('/auth/refresh')
+          .set('Origin', 'http://localhost:5173')
+          .set('X-Requested-With', 'XMLHttpRequest');
+        if (cookie !== undefined) pending.set('Cookie', cookie);
+        await pending.expect(401);
+      }
+      assert.equal(lookupCount, before);
+    },
+  );
 
   await t.test('logs out only when the refresh secret is valid', async () => {
     rows.clear();
@@ -213,6 +223,8 @@ test('refresh-token verification and rotation', async (t) => {
 
     const ignored = await request(server)
       .post('/auth/logout')
+      .set('Origin', 'http://localhost:5173')
+      .set('X-Requested-With', 'XMLHttpRequest')
       .set('Cookie', `auth-refresh=${wrong}`)
       .expect(204);
     assert.equal(rows.get(active.id).revokedAt, null);
@@ -225,6 +237,8 @@ test('refresh-token verification and rotation', async (t) => {
 
     const response = await request(server)
       .post('/auth/logout')
+      .set('Origin', 'http://localhost:5173')
+      .set('X-Requested-With', 'XMLHttpRequest')
       .set('Cookie', `auth-refresh=${active.token}`)
       .expect(204);
     assert.equal(response.text, '');
@@ -232,6 +246,8 @@ test('refresh-token verification and rotation', async (t) => {
 
     await request(server)
       .post('/auth/refresh')
+      .set('Origin', 'http://localhost:5173')
+      .set('X-Requested-With', 'XMLHttpRequest')
       .set('Cookie', `auth-refresh=${active.token}`)
       .expect(401);
   });
@@ -253,6 +269,8 @@ test('refresh-token verification and rotation', async (t) => {
       ]) {
         const response = await request(server)
           .post('/auth/refresh')
+          .set('Origin', 'http://localhost:5173')
+          .set('X-Requested-With', 'XMLHttpRequest')
           .set('Cookie', `auth-refresh=${token}`)
           .expect(401);
         assert.equal(
@@ -274,6 +292,8 @@ test('refresh-token verification and rotation', async (t) => {
       const first = await service.refresh({ refreshToken: old.token });
       await request(server)
         .post('/auth/refresh')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
         .set('Cookie', `auth-refresh=${old.token}`)
         .expect(401);
       assert.ok(rows.get(first.refreshToken.split('.')[0]).revokedAt);

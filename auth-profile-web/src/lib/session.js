@@ -10,10 +10,9 @@ const REFRESH_COOKIE = 'auth-refresh';
 
 export const createSessionStore = createMemorySession;
 
-// Expire a legacy root-path `auth-refresh` cookie left by older deployments
-// (the server issues Path=/auth/; a stale Path=/ copy would shadow it).
-// One-shot: dev proxies rewrite the live cookie to Path=/, so this must not
-// run on every startup.
+// Remove only a legacy script-readable root cookie. JavaScript cannot delete
+// HttpOnly cookies: successful login/refresh and logout responses expire those
+// at the server. The live dev and production cookies use /api/auth/.
 export function expireLegacyRootCookie() {
   try {
     if (typeof window === 'undefined' || typeof document === 'undefined') return false;

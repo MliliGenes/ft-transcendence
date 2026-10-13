@@ -93,6 +93,8 @@ test('email and password login', async (t) => {
       const start = Date.now();
       const response = await request(server)
         .post('/auth/login')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
         .send(dto)
         .expect(200);
       const end = Date.now();
@@ -146,6 +148,8 @@ test('email and password login', async (t) => {
       );
       const next = await request(server)
         .post('/auth/login')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
         .send(dto)
         .expect(200);
       assert.notEqual(cookieToken(next), cookieToken(response));
@@ -159,15 +163,21 @@ test('email and password login', async (t) => {
       const count = sessions.length;
       const wrong = await request(server)
         .post('/auth/login')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
         .send({ ...dto, password: dto.password.trim() })
         .expect(401);
       const missing = await request(server)
         .post('/auth/login')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
         .send({ ...dto, email: 'missing@example.com' })
         .expect(401);
       account = { ...storedUser, passwordHash: null };
       const passwordless = await request(server)
         .post('/auth/login')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
         .send(dto)
         .expect(401);
       account = storedUser;
@@ -194,7 +204,12 @@ test('email and password login', async (t) => {
       { ...dto, password: '\u{1f600}'.repeat(19) },
       { ...dto, admin: true },
     ]) {
-      await request(server).post('/auth/login').send(input).expect(400);
+      await request(server)
+        .post('/auth/login')
+        .set('Origin', 'http://localhost:5173')
+        .set('X-Requested-With', 'XMLHttpRequest')
+        .send(input)
+        .expect(400);
     }
     assert.equal(lookupCount, count);
   });

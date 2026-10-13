@@ -29,6 +29,26 @@ See [API.md](API.md) for the user-service endpoint reference, authentication flo
 
 See [SETUP.md](SETUP.md) for local setup, or [postgres/README.md](postgres/README.md) to run the database in Docker instead of using a locally installed PostgreSQL server.
 
+## Browser session contract
+
+Use Node 24 for this standalone service. Login, registration, refresh and logout
+require `X-Requested-With: XMLHttpRequest` and an Origin or Referer from the
+configured `AUTH_FRONTEND_URL`. The service enforces this rule on case and
+trailing-slash route forms too. OAuth GET callbacks and the Bearer principal
+endpoint keep their own checks.
+
+The refresh cookie is HttpOnly. Its internal path is `/auth/`; the gateway and
+dev proxy map it to `/api/auth/`. Successful session responses and logout expire
+the old root-path cookie. Duplicate refresh cookies remain invalid. A user with
+two old copies must sign in again after they are cleared.
+
+Compose passes optional GitHub and Discord credentials only to this service.
+Set each provider's `CLIENT_ID` and `CLIENT_SECRET`. Register both public callback
+URLs with that provider: `/api/auth/<provider>/callback` and
+`/api/auth/<provider>/link/callback`. Empty redirect settings default to those
+paths under `AUTH_FRONTEND_URL`. Empty credentials leave the provider unavailable.
+See [the root environment example](../.env.example) and [API.md](API.md).
+
 ## Project setup
 
 ```bash

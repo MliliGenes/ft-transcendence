@@ -1,6 +1,6 @@
 // Thin adapter over the shared browser-auth core: same `createApiClient`
 // interface (`request`, `restoreSession`) with the shared renewal semantics
-// (single lock, no-replay default, 401→renew→retry once, outage→retain).
+// (single lock, no-replay default, 401→renew, explicit safe reads retry once, outage→retain).
 import { ApiError, createAuthApi } from 'browser-auth';
 
 export { ApiError };

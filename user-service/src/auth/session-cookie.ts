@@ -37,6 +37,7 @@ export function setRefreshCookie(
     refreshToken,
     refreshCookieOptions(config),
   );
+  clearLegacyRootCookie(response, config);
 }
 
 export function clearRefreshCookie(
@@ -45,6 +46,16 @@ export function clearRefreshCookie(
 ): void {
   const { maxAge: _maxAge, ...options } = refreshCookieOptions(config);
   response.clearCookie(REFRESH_COOKIE_NAME, options);
+  clearLegacyRootCookie(response, config);
+}
+
+/** HttpOnly legacy cookies must be deleted by the server at their original path. */
+function clearLegacyRootCookie(
+  response: Response,
+  config: ConfigService,
+): void {
+  const { maxAge: _maxAge, ...options } = refreshCookieOptions(config);
+  response.clearCookie(REFRESH_COOKIE_NAME, { ...options, path: '/' });
 }
 
 export function publicSession<
