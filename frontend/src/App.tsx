@@ -1,5 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { createBrowserAuthClient, type BrowserAuthClient } from "browser-auth";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createBrowserAuthClient, type AuthSnapshot, type BrowserAuthClient } from "browser-auth";
 import { ArenaPage } from "./components/ArenaPage.js";
 import { MockArenaTransport } from "./arena/mock.js";
 import { SocketArenaTransport } from "./arena/socket.js";
@@ -46,161 +46,122 @@ function LiveApp({ baseUrl, userId, matchId }: { baseUrl: string; userId: string
   return <ArenaPage transport={transport} />;
 }
 
-/**
- * /play/ (canonical live entry): session-first, no ?user=/?live=/mock. The
- * player id comes from GET /accounts/me over the shared browser-auth client;
- * the transport is stable per user/match and never recreated on rotation.
- */
+/** Auth is created and disposed by the same effect, including StrictMode restarts. */
 function PlayApp({ initialMatchId }: { initialMatchId: string }) {
-  const auth = useMemo<BrowserAuthClient>(
-    () =>
-      createBrowserAuthClient({
-        apiBase: API_BASE,
-        locks: navigator.locks,
-        channel: new BroadcastChannel("fieldnote-auth-session"),
-      }),
-    [],
-  );
-  useEffect(() => () => auth.dispose(), [auth]);
+  const [auth, setAuth] = useState<BrowserAuthClient | null>(null);
+  useEffect(() => {
+    const channel = new BroadcastChannel("fieldnote-auth-session");
+    const client = createBrowserAuthClient({ apiBase: API_BASE, locks: navigator.locks, channel });
+    setAuth(client);
+    return () => { client.dispose(); channel.close(); };
+  }, []);
+  return auth ? <PlaySession auth={auth} initialMatchId={initialMatchId} /> : <p className="p-4 font-mono text-sm">Restoring session…</p>;
+}
+
+function PlaySession({ auth, initialMatchId }: { auth: BrowserAuthClient; initialMatchId: string }) {
+  const [snapshot, setSnapshot] = useState<AuthSnapshot>(() => auth.getSnapshot());
   const [matchId, setMatchId] = useState(initialMatchId);
-  const [boot, setBoot] = useState<"loading" | "anonymous" | "ready">("loading");
-  const [userId, setUserId] = useState<string | null>(null);
-  const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-  const devUser = params.get("user");
+  const identity = useRef<{ id: string; generation: number } | null>(null);
+  const clients = useRef<{ transport: SocketArenaTransport | null; lobby: LobbyClient | null }>({ transport: null, lobby: null });
+  const devUser = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("user") : null;
+  const profileId = snapshot.profile?.id;
+  const userId = typeof profileId === "string" && profileId && (snapshot.status === "authenticated" || snapshot.status === "unavailable")
+    ? profileId : snapshot.status !== "loading" ? devUser : null;
+  const generation = snapshot.sessionGeneration;
 
   useEffect(() => {
-    let cancelled = false;
-    auth
-      .restore()
-      .then((snapshot) => {
-        if (cancelled) return;
-        const id = (snapshot.profile as { id?: unknown } | null)?.id;
-        if (snapshot.status === "authenticated" && typeof id === "string" && id) {
-          setUserId(id);
-          setBoot("ready");
-        } else if (devUser) {
-          // DEV servers only (x-dev-user-id seam): session-first in prod.
-          setUserId(devUser);
-          setBoot("ready");
-        } else {
-          setBoot("anonymous");
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          if (devUser) {
-            setUserId(devUser);
-            setBoot("ready");
-          } else setBoot("anonymous");
-        }
-      });
-    return () => {
-      cancelled = true;
+    let active = true;
+    let lastRevision = auth.getSnapshot().tokenRevision;
+    const consume = (next: AuthSnapshot) => {
+      if (!active) return;
+      const previous = identity.current;
+      const id = next.profile?.id;
+      const replaced = previous && (next.sessionGeneration !== previous.generation || (typeof id === "string" && id !== previous.id));
+      if (replaced) {
+        // Close immediately: async commands cannot cross the identity boundary.
+        clients.current.transport?.disconnect();
+        clients.current.lobby?.disconnect();
+        identity.current = null;
+        setMatchId("");
+        const url = new URL(window.location.href);
+        url.searchParams.delete("match");
+        window.history.replaceState({}, "", url);
+      }
+      if (next.status === "authenticated" && typeof id === "string" && id) {
+        identity.current = { id, generation: next.sessionGeneration };
+      }
+      if (!replaced && previous && next.sessionGeneration === previous.generation && next.tokenRevision !== lastRevision) {
+        void clients.current.transport?.renewSocket().catch(() => {});
+        void clients.current.lobby?.renewSocket().catch(() => {});
+      }
+      lastRevision = next.tokenRevision;
+      setSnapshot(next);
     };
-  }, [auth, devUser]);
+    const unsubscribe = auth.subscribe(consume);
+    consume(auth.getSnapshot());
+    void auth.restore().then(consume).catch(() => { if (active) consume(auth.getSnapshot()); });
+    return () => { active = false; unsubscribe(); };
+  }, [auth]);
 
-  // Stable per user/match: rotation changes the token, never these keys.
-  const transport = useMemo<SocketArenaTransport | null>(() => {
+  const transport = useMemo(() => {
     if (!userId || !matchId) return null;
-    if (devUser && userId === devUser && auth.getAccessToken() === null)
-      return new SocketArenaTransport({ baseUrl: SOCKET_BASE, userId: devUser, matchId });
-    return new SocketArenaTransport({
-      apiBase: API_BASE,
-      socketBase: SOCKET_BASE,
-      matchId,
-      getAccessToken: () => auth.getAccessToken(),
-      onAuthExpired: () => auth.restore(true),
-    });
-  }, [auth, userId, matchId, devUser]);
+    if (import.meta.env.DEV && devUser === userId && !auth.getAccessToken()) {
+      return new SocketArenaTransport({ baseUrl: SOCKET_BASE, userId, matchId });
+    }
+    return new SocketArenaTransport({ apiBase: API_BASE, socketBase: SOCKET_BASE, matchId,
+      getAccessToken: () => auth.getAccessToken(), onAuthExpired: () => auth.restore(true) });
+  }, [auth, userId, generation, matchId, devUser]);
+  const lobby = useMemo(() => {
+    if (!userId) return null;
+    if (import.meta.env.DEV && devUser === userId && !auth.getAccessToken()) return new LobbyClient(SOCKET_BASE, userId);
+    return new LobbyClient({ apiBase: API_BASE, socketBase: SOCKET_BASE,
+      getAccessToken: () => auth.getAccessToken(), onAuthExpired: () => auth.restore(true) });
+  }, [auth, userId, generation, devUser]);
+  clients.current = { transport, lobby };
+  useEffect(() => () => lobby?.disconnect(), [lobby]);
 
-  // Shared renewal signal: fresh socket in the same transport; logout ends it.
-  useEffect(() => {
+  const subscribeRenewal = useCallback((listener: () => void) => {
     let last = auth.getSnapshot().tokenRevision;
-    return auth.subscribe((snapshot) => {
-      if (snapshot.tokenRevision !== last) {
-        last = snapshot.tokenRevision;
-        if (transport) void transport.renewSocket().catch(() => {});
-      }
-      if (snapshot.status === "anonymous") {
-        transport?.disconnect();
-        setBoot("anonymous");
-        setUserId(null);
-      }
+    return auth.subscribe((next) => {
+      if (next.sessionGeneration === generation && next.tokenRevision !== last) listener();
+      last = next.tokenRevision;
     });
-  }, [auth, transport]);
+  }, [auth, generation]);
 
-  const subscribeRenewal = useCallback(
-    (listener: () => void) => {
-      let last = auth.getSnapshot().tokenRevision;
-      return auth.subscribe((snapshot) => {
-        if (snapshot.tokenRevision !== last) {
-          last = snapshot.tokenRevision;
-          listener();
-        }
-      });
-    },
-    [auth],
-  );
-
-  const [state, setState] = useState<"connecting" | "ready" | "failed">("connecting");
-  const [error, setError] = useState("");
+  const [state, setState] = useState<{ transport: SocketArenaTransport | null; status: "connecting" | "ready" | "failed"; error: string }>({ transport: null, status: "connecting", error: "" });
   useEffect(() => {
     if (!transport) return;
-    let cancelled = false;
-    if (typeof window !== "undefined") {
-      (window as unknown as { __arenaTransport?: SocketArenaTransport }).__arenaTransport = transport;
-    }
-    transport
-      .connect()
-      .then(() => {
-        if (!cancelled) setState("ready");
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "connect failed");
-          setState("failed");
-        }
-      });
+    let active = true;
+    (window as unknown as { __arenaTransport?: SocketArenaTransport }).__arenaTransport = transport;
+    setState({ transport, status: "connecting", error: "" });
+    void transport.connect().then(() => { if (active) setState({ transport, status: "ready", error: "" }); })
+      .catch((error: unknown) => { if (active) setState({ transport, status: "failed", error: error instanceof Error ? error.message : "connect failed" }); });
     return () => {
-      cancelled = true;
+      active = false;
       transport.disconnect();
+      const browser = window as unknown as { __arenaTransport?: SocketArenaTransport };
+      if (browser.__arenaTransport === transport) delete browser.__arenaTransport;
     };
   }, [transport]);
 
-  const onMatchFound = useCallback(
-    (mId: string) => {
-      setMatchId(mId);
-      if (typeof window !== "undefined") {
-        const nextUrl = new URL(window.location.href);
-        nextUrl.searchParams.set("match", mId);
-        window.history.pushState({}, "", nextUrl.toString());
-      }
-    },
-    [],
-  );
+  const onMatchFound = useCallback((id: string) => {
+    setMatchId(id);
+    const url = new URL(window.location.href);
+    url.searchParams.set("match", id);
+    window.history.pushState({}, "", url);
+  }, []);
 
-  if (boot === "loading") return <p className="p-4 font-mono text-sm">Restoring session…</p>;
-  if (boot === "anonymous" || !userId)
-    return (
-      <main className="p-4">
-        <p className="font-mono text-sm">Sign in to play.</p>
-        <button type="button" className="mt-2 rounded border px-2 py-1 font-mono text-xs" onClick={() => void auth.restore()}>
-          Try again
-        </button>
-      </main>
-    );
-  if (!matchId || !transport) {
-    const lobbyClient = new LobbyClient({
-      apiBase: API_BASE,
-      socketBase: SOCKET_BASE,
-      getAccessToken: () => auth.getAccessToken(),
-      onAuthExpired: () => auth.restore(true),
-    });
-    return <LobbyPage client={lobbyClient} userId={userId} initialMode="1v1" onMatchFound={onMatchFound} />;
-  }
-  if (state === "connecting") return <p className="p-4 font-mono text-sm">Connecting to match…</p>;
-  if (state === "failed") return <p role="alert" className="p-4 font-mono text-sm text-red-700">Connection failed: {error}</p>;
-  return <ArenaPage transport={transport} onAuthSignal={subscribeRenewal} />;
+  if (snapshot.status === "loading") return <p className="p-4 font-mono text-sm">Restoring session…</p>;
+  if (!userId) return <main className="p-4">
+    <p role={snapshot.status === "unavailable" ? "alert" : undefined} className="font-mono text-sm">
+      {snapshot.status === "unavailable" ? "Session unavailable. Please try again." : "Sign in to play."}
+    </p>
+    <button type="button" className="mt-2 rounded border px-2 py-1 font-mono text-xs" onClick={() => void auth.restore().catch(() => {})}>Try again</button>
+  </main>;
+  if (!matchId || !transport) return lobby ? <LobbyPage key={`${generation}:${userId}`} client={lobby} userId={userId} initialMode="1v1" onMatchFound={onMatchFound} /> : null;
+  if (state.transport !== transport || state.status === "connecting") return <p className="p-4 font-mono text-sm">Connecting to match…</p>;
+  if (state.status === "failed") return <p role="alert" className="p-4 font-mono text-sm text-red-700">Connection failed: {state.error}</p>;
+  return <ArenaPage key={`${generation}:${userId}:${matchId}`} transport={transport} onAuthSignal={subscribeRenewal} />;
 }
 
 function AppContent() {
@@ -212,11 +173,11 @@ function AppContent() {
   const paramMatchId = params.get("match") ?? "";
   const [liveMatchId, setLiveMatchId] = useState<string>(paramMatchId);
 
-  if (pathname === "/play/" || pathname === "/play") {
+  if (!import.meta.env.DEV || pathname === "/play/" || pathname === "/play") {
     return <PlayApp initialMatchId={paramMatchId} />;
   }
 
-  if (params.get("live") === "1") {
+  if (import.meta.env.DEV && params.get("live") === "1") {
     if (!GAME_URL)
       return <p role="alert" className="p-4 font-mono text-sm">Live mode requested but VITE_GAME_URL is not configured.</p>;
     const userId = params.get("user") ?? "user-a";

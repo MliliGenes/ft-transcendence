@@ -43,6 +43,12 @@ export class LobbyClient {
   private readonly devUserId: string | null;
   private readonly getAccessToken: (() => string | null) | null;
   private readonly onAuthExpired: (() => Promise<unknown>) | null;
+  private callbacks?: Parameters<LobbyClient["connectSocket"]>[0];
+  private lifetime = new AbortController();
+  private attachedToken: string | null = null;
+  private recovery: Promise<void> | null = null;
+  private tokenRenewal: Promise<unknown> | null = null;
+  private ready: Promise<void> = Promise.resolve();
 
   constructor(baseUrl: string, userId: string);
   constructor(options: { apiBase: string; socketBase: string; getAccessToken: () => string | null; onAuthExpired: () => Promise<unknown> });
@@ -51,6 +57,7 @@ export class LobbyClient {
     userId?: string,
   ) {
     if (typeof baseUrlOrOptions === "string") {
+      if (!import.meta.env.DEV) throw new Error("Development Lobby identity is disabled in production");
       this.apiBase = baseUrlOrOptions;
       this.socketBase = baseUrlOrOptions;
       this.devUserId = userId ?? null;
@@ -69,25 +76,38 @@ export class LobbyClient {
     const token = this.getAccessToken?.();
     return {
       "content-type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : this.devUserId ? { "x-dev-user-id": this.devUserId } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : import.meta.env.DEV && this.devUserId ? { "x-dev-user-id": this.devUserId } : {}),
     };
   }
 
   /** Single safe retry on 401-after-renew; mutations are never replayed. */
   private async call<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+    const lifetime = this.lifetime;
+    if (init?.method && init.method !== "GET" && init.method !== "HEAD") await this.prepareCommand(lifetime);
+    this.assertActive(lifetime);
     const send = async (): Promise<Response> =>
       fetch(`${this.apiBase}${path}`, {
         method: init?.method,
         headers: this.headers(),
         body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+        signal: lifetime.signal,
       });
     let res = await send();
+    this.assertActive(lifetime);
     if (res.status === 401 && this.onAuthExpired) {
-      await this.onAuthExpired();
+      await this.renewAuth();
+      this.assertActive(lifetime);
+      if (!this.recovery && this.attachedToken !== this.getAccessToken?.()) await this.renewSocket();
+      this.assertActive(lifetime);
+      if ((init?.method ?? "GET") !== "GET" && init?.method !== "HEAD") {
+        throw new Error("Session renewed. The action was not resent. Check the lobby before retrying.");
+      }
       res = await send();
+      this.assertActive(lifetime);
     }
     const json = (await res.json()) as (T & { error?: string }) | null;
     if (!res.ok || (json && typeof json.error === "string")) throw new Error(json?.error ?? `Lobby request failed (${res.status})`);
+    this.assertActive(lifetime);
     return json as T;
   }
 
@@ -145,48 +165,124 @@ export class LobbyClient {
   }
 
   connectSocket(callbacks: {
-    onConnect?: () => void;
+    onConnect?: () => void | Promise<void>;
     onRoomUpdated?: (data: { roomId: string; room: PrivateRoom; members: PrivateRoomMember[] }) => void;
     onMatchFound?: (data: { roomId: string; matchId: string }) => void;
     onQueueMatched?: (data: { matchId: string }) => void;
   }): () => void {
-    if (this.socket) this.socket.disconnect();
+    this.disconnect();
+    this.lifetime = new AbortController();
+    const lifetime = this.lifetime;
+    this.callbacks = callbacks;
+    this.ready = this.attachSocket(lifetime);
+    void this.ready.catch(() => {});
+    return () => { if (this.lifetime === lifetime) this.disconnect(); };
+  }
 
-    const token = this.getAccessToken?.();
-    this.socket = io(`${this.socketBase}/lobby`, {
-      auth: token ? { accessToken: token } : { userId: this.devUserId },
-      transports: ["websocket"],
-      reconnection: true,
+  /** The same client keeps its callbacks; token rotation replaces only its socket. */
+  renewSocket(): Promise<void> {
+    if (this.recovery) return this.recovery;
+    if (!this.socket || this.lifetime.signal.aborted) return Promise.resolve();
+    const lifetime = this.lifetime;
+    this.socket.removeAllListeners();
+    this.socket.disconnect();
+    const recovery = this.attachSocket(lifetime).then(async () => {
+      // A read during recovery may itself refresh the token. Rejoin with that token too.
+      if (this.attachedToken !== this.getAccessToken?.()) {
+        this.socket?.removeAllListeners();
+        this.socket?.disconnect();
+        await this.attachSocket(lifetime);
+      }
+    }).finally(() => {
+      if (this.recovery === recovery) this.recovery = null;
     });
-
-    if (callbacks.onConnect) this.socket.on("connect", callbacks.onConnect);
-
-    if (callbacks.onRoomUpdated) {
-      this.socket.on("lobby.roomUpdated", callbacks.onRoomUpdated);
-    }
-    if (callbacks.onMatchFound) {
-      this.socket.on("lobby.matchFound", callbacks.onMatchFound);
-    }
-    if (callbacks.onQueueMatched) {
-      this.socket.on("lobby.queueMatched", callbacks.onQueueMatched);
-    }
-
-    return () => {
-      this.socket?.disconnect();
-      this.socket = undefined;
-    };
+    this.ready = recovery;
+    this.recovery = recovery;
+    return recovery;
   }
 
-  joinRoomChannel(roomId: string): void {
-    this.socket?.emit("lobby:join_room", { roomId });
+  private attachSocket(lifetime: AbortController): Promise<void> {
+    this.assertActive(lifetime);
+    const token = this.getAccessToken?.() ?? null;
+    this.attachedToken = token;
+    const socket = io(`${this.socketBase}/lobby`, {
+      auth: token ? { accessToken: token } : import.meta.env.DEV ? { userId: this.devUserId } : {},
+      transports: ["websocket"], reconnection: true, autoConnect: false, forceNew: true,
+    });
+    this.socket = socket;
+    const active = () => this.socket === socket && this.lifetime === lifetime && !lifetime.signal.aborted;
+    for (const [event, callback] of [
+      ["lobby.roomUpdated", this.callbacks?.onRoomUpdated],
+      ["lobby.matchFound", this.callbacks?.onMatchFound],
+      ["lobby.queueMatched", this.callbacks?.onQueueMatched],
+    ] as const) {
+      if (callback) socket.on(event, (data: unknown) => { if (active()) callback(data as never); });
+    }
+    let resolve!: () => void;
+    let reject!: (error: Error) => void;
+    const ready = new Promise<void>((done, fail) => { resolve = done; reject = fail; });
+    const timer = setTimeout(() => reject(new Error("Lobby connection timed out")), 10_000);
+    const cancelled = () => reject(new Error("Lobby connection cancelled"));
+    lifetime.signal.addEventListener("abort", cancelled, { once: true });
+    socket.on("connect", () => {
+      if (!active()) return;
+      const recovery = Promise.resolve().then(() => this.callbacks?.onConnect?.()).then(() => {
+        this.assertActive(lifetime);
+        if (!active() || !socket.connected) throw new Error("Lobby disconnected during recovery");
+      });
+      this.ready = recovery;
+      void recovery.then(resolve, reject);
+    });
+    socket.on("disconnect", () => { if (active()) reject(new Error("Lobby disconnected during recovery")); });
+    socket.on("connect_error", (error: Error) => { if (active() && !socket.active) reject(error); });
+    socket.connect();
+    return ready.finally(() => {
+      clearTimeout(timer);
+      lifetime.signal.removeEventListener("abort", cancelled);
+    });
   }
 
-  leaveRoomChannel(roomId: string): void {
-    this.socket?.emit("lobby:leave_room", { roomId });
+  private async prepareCommand(lifetime: AbortController): Promise<void> {
+    await this.ready;
+    this.assertActive(lifetime);
+    const token = this.getAccessToken?.();
+    let nearExpiry = false;
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/")));
+        nearExpiry = typeof payload.exp === "number" && payload.exp * 1000 - Date.now() < 30_000;
+      } catch { /* Opaque tokens rely on the 401 recovery path. */ }
+    }
+    if (nearExpiry && this.onAuthExpired) await this.renewAuth();
+    this.assertActive(lifetime);
+    if (this.socket && this.attachedToken !== this.getAccessToken?.()) await this.renewSocket();
+    await this.ready;
+    this.assertActive(lifetime);
+    if (this.socket && !this.socket.connected) throw new Error("Lobby is disconnected");
   }
+
+  private renewAuth(): Promise<unknown> {
+    if (this.tokenRenewal) return this.tokenRenewal;
+    const renewal = Promise.resolve().then(() => this.onAuthExpired?.()).finally(() => {
+      if (this.tokenRenewal === renewal) this.tokenRenewal = null;
+    });
+    this.tokenRenewal = renewal;
+    return renewal;
+  }
+
+  private assertActive(lifetime: AbortController): void {
+    if (this.lifetime !== lifetime || lifetime.signal.aborted) throw new Error("Lobby connection cancelled");
+  }
+
+  joinRoomChannel(roomId: string): void { this.socket?.emit("lobby:join_room", { roomId }); }
+  leaveRoomChannel(roomId: string): void { this.socket?.emit("lobby:leave_room", { roomId }); }
 
   disconnect(): void {
+    this.lifetime.abort();
+    this.socket?.removeAllListeners();
     this.socket?.disconnect();
     this.socket = undefined;
+    this.callbacks = undefined;
+    this.recovery = null;
   }
 }

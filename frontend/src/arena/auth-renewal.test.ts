@@ -8,6 +8,7 @@ import { AuthExpiredError, SocketArenaTransport } from "./socket.js";
 import { TeamChatClient } from "./chat.js";
 import { CollabClient } from "./collab.js";
 import { LobbyClient } from "./lobby.js";
+import { LobbySession } from "./lobby-session.js";
 
 const ME = { id: "user-left", username: "left" };
 
@@ -256,4 +257,184 @@ describe("authenticated Game wiring (no transport recreation)", () => {
     expect(authed.length).toBeGreaterThan(0);
     lobby.disconnect();
   });
+  it("a proactive Submit waits for the renewed socket baseline", async () => {
+    const harness = authHarness();
+    const transport = await connectLive(harness);
+    harness.setToken(jwt(Date.now() + 5_000));
+    const action = transport.submit({ code: "pending", language: "Python" });
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    const posts = () => harness.fetchMock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST");
+    expect(posts()).toHaveLength(0);
+    expect(harness.sockets).toHaveLength(2);
+    harness.sockets.at(-1)!.server("snapshot", serverSnapshot());
+    await action;
+    expect(posts()).toHaveLength(1);
+    transport.disconnect();
+  });
+
+  it("a disconnect during proactive renewal prevents the pending Submit", async () => {
+    const harness = authHarness();
+    let release!: () => void;
+    const renewal = new Promise<void>((resolve) => { release = resolve; });
+    const transport = new SocketArenaTransport({
+      apiBase: "https://auth.test", socketBase: "http://arena.test", matchId: "match-1",
+      getAccessToken: harness.getAccessToken,
+      onAuthExpired: async () => { await renewal; await harness.onAuthExpired(); },
+    });
+    const connecting = transport.connect();
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    harness.sockets.at(-1)!.server("snapshot", serverSnapshot());
+    await connecting;
+    harness.setToken(jwt(Date.now() + 5_000));
+    const action = transport.submit({ code: "old", language: "Python" });
+    const rejected = expect(action).rejects.toThrow(/cancelled|disconnected/);
+    transport.disconnect();
+    release();
+    await rejected;
+    expect(harness.fetchMock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST")).toHaveLength(0);
+  });
+
+  it("concurrent commands share renewal and cannot pass a delayed baseline", async () => {
+    const harness = authHarness();
+    const transport = await connectLive(harness);
+    harness.setToken("access-2");
+    const renewing = transport.renewSocket();
+    const secondRenewal = transport.renewSocket();
+    let recovered = false;
+    void secondRenewal.then(() => { recovered = true; });
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    expect(recovered).toBe(false);
+    harness.sockets.at(-1)!.server("snapshot", serverSnapshot());
+    await Promise.all([renewing, secondRenewal]);
+    expect(recovered).toBe(true);
+    transport.disconnect();
+  });
+
+  it("Lobby never replays a rejected Create Room mutation after renewal", async () => {
+    let token = "access-1";
+    const posts: string[] = [];
+    vi.stubGlobal("fetch", async (_input: unknown, init?: RequestInit) => {
+      posts.push(init?.method ?? "GET");
+      return { ok: false, status: 401, json: async () => ({ error: "expired" }) };
+    });
+    const lobby = new LobbyClient({
+      apiBase: "https://auth.test", socketBase: "http://arena.test",
+      getAccessToken: () => token, onAuthExpired: async () => { token = "access-2"; },
+    });
+    await expect(lobby.createRoom("1v1")).rejects.toThrow();
+    expect(posts).toEqual(["POST"]);
+    expect(token).toBe("access-2");
+    lobby.disconnect();
+  });
+
+  it("Lobby renewal waits for active state and room rejoin before sending Ready", async () => {
+    let token = jwt(Date.now() + 3600_000);
+    let release!: () => void;
+    let delay = false;
+    const baseline = new Promise<void>((resolve) => { release = resolve; });
+    const requests: string[] = [];
+    const room = {
+      room: { id: "room-1", code: "ABCDEF", mode: "1v1" as const, ownerUserId: "user-left", status: "open" as const, createdAt: 1, expiresAt: 1000, matchId: null },
+      members: [{ roomId: "room-1", userId: "user-left", sideId: "left" as const, ready: false, joinedAt: 1 }],
+    };
+    vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
+      requests.push(`${init?.method ?? "GET"} ${String(input)}`);
+      if (String(input).endsWith("/active")) {
+        if (delay) await baseline;
+        return { ok: true, status: 200, json: async () => ({ queue: null, room }) };
+      }
+      return { ok: true, status: 200, json: async () => room };
+    });
+    const sockets: TestSocket[] = [];
+    vi.mocked(io).mockImplementation(() => {
+      const socket = new TestSocket(); sockets.push(socket);
+      queueMicrotask(() => socket.connect());
+      return socket as unknown as ReturnType<typeof io>;
+    });
+    const lobby = new LobbyClient({ apiBase: "https://auth.test", socketBase: "http://arena.test", getAccessToken: () => token, onAuthExpired: async () => { token = "access-2"; } });
+    const session = new LobbySession(lobby, vi.fn());
+    await session.start();
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    delay = true;
+    token = jwt(Date.now() + 5_000);
+    const ready = session.setReady(true);
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    expect(sockets).toHaveLength(2);
+    expect(requests.filter((request) => request.startsWith("POST"))).toHaveLength(0);
+    release();
+    await ready;
+    expect(sockets[1]!.outgoing.some((event) => event.event === "lobby:join_room")).toBe(true);
+    expect(requests.filter((request) => request.startsWith("POST"))).toHaveLength(1);
+    session.stop();
+  });
+
+  it.each(["Match", "Lobby"])("production refuses the legacy %s development identity constructor", (kind) => {
+    vi.stubEnv("DEV", false);
+    try {
+      expect(() => kind === "Match"
+        ? new SocketArenaTransport({ baseUrl: "http://arena.test", userId: "forged", matchId: "old" })
+        : new LobbyClient("http://arena.test", "forged")).toThrow(/development/i);
+    } finally { vi.unstubAllEnvs(); }
+  });
+
+  it("concurrent proactive Match commands share one token renewal", async () => {
+    const harness = authHarness();
+    let release!: () => void;
+    let renewals = 0;
+    const renewal = new Promise<void>((resolve) => { release = resolve; });
+    const transport = new SocketArenaTransport({ apiBase: "https://auth.test", socketBase: "http://arena.test", matchId: "match-1",
+      getAccessToken: harness.getAccessToken, onAuthExpired: async () => { renewals++; await renewal; await harness.onAuthExpired(); } });
+    const connect = transport.connect();
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    harness.sockets.at(-1)!.server("snapshot", serverSnapshot());
+    await connect;
+    harness.setToken(jwt(Date.now() + 5_000));
+    const first = transport.beginCoding();
+    const second = transport.submit({ code: "source", language: "Python" });
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    expect(renewals).toBe(1);
+    release();
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    harness.sockets.at(-1)!.server("snapshot", serverSnapshot());
+    await Promise.all([first, second]);
+    transport.disconnect();
+  });
+
+  it("concurrent proactive Lobby commands share one token renewal", async () => {
+    let token = jwt(Date.now() + 5_000);
+    let release!: () => void;
+    let renewals = 0;
+    const renewal = new Promise<void>((resolve) => { release = resolve; });
+    const lobby = new LobbyClient({ apiBase: "https://auth.test", socketBase: "http://arena.test", getAccessToken: () => token,
+      onAuthExpired: async () => { renewals++; await renewal; token = "fresh-token"; } });
+    vi.stubGlobal("fetch", async () => ({ ok: true, status: 200, json: async () => ({ room: {}, members: [] }) }));
+    const first = lobby.createRoom("1v1");
+    const second = lobby.joinRoom("ABCDEF");
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    expect(renewals).toBe(1);
+    release();
+    await Promise.all([first, second]);
+    lobby.disconnect();
+  });
+
+  it("Lobby recovery cancels a legacy waiting queue without waiting on itself", async () => {
+    let cancelled = false;
+    vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        cancelled = true;
+        return { ok: true, status: 200, json: async () => ({ cancelled: true, matched: false }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ room: null, queue: cancelled ? null : {
+        id: "queue-1", userId: "user-left", mode: "1v1", status: "waiting", joinedAt: 1, matchedMatchId: null,
+      } }) };
+    });
+    vi.mocked(io).mockImplementation(() => new TestSocket() as unknown as ReturnType<typeof io>);
+    const lobby = new LobbyClient({ apiBase: "https://auth.test", socketBase: "http://arena.test", getAccessToken: () => "access-1", onAuthExpired: async () => {} });
+    const session = new LobbySession(lobby, vi.fn());
+    await session.start();
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    session.stop();
+    expect(cancelled).toBe(true);
+  });
+
 });

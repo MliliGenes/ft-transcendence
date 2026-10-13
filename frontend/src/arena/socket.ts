@@ -289,6 +289,8 @@ export class SocketArenaTransport implements ArenaTransport {
   private appliedRevision = -1;
   private appliedRound = 0;
   private reopening = false;
+  private recovery: Promise<void> | null = null;
+  private tokenRenewal: Promise<unknown> | null = null;
   /** Browser reported a network outage since the last baseline. */
   private browserOffline = false;
 
@@ -302,6 +304,7 @@ export class SocketArenaTransport implements ArenaTransport {
       this.devUserId = null;
       this.userId = null;
     } else {
+      if (!import.meta.env.DEV) throw new Error("Development Match identity is disabled in production");
       this.socketBase = options.baseUrl;
       this.matchId = options.matchId;
       this.apiBase = null;
@@ -419,32 +422,42 @@ export class SocketArenaTransport implements ArenaTransport {
    * on rotation) with fresh baselines. Command state is preserved —
    * pendingSubmit keeps its ids, no command is resent.
    */
-  async renewSocket(): Promise<void> {
+  renewSocket(): Promise<void> {
+    if (this.recovery) return this.recovery;
     const lifetime = this.lifetime;
-    if (!lifetime || lifetime.signal.aborted) return;
-    if (this.reopening) return;
-    this.reopening = true;
-    try {
-      await this.ensureFreshToken();
+    if (!lifetime || lifetime.signal.aborted) return Promise.resolve();
+    const recovery = (async () => {
+      this.assertActive(lifetime);
       await this.reattach(lifetime);
       await this.refresh(undefined, lifetime);
-    } finally {
-      if (this.lifetime === lifetime) {
-        this.reopening = false;
-        this.emit();
-      }
-    }
+    })().finally(() => {
+      if (this.recovery === recovery) this.recovery = null;
+    });
+    this.recovery = recovery;
+    return recovery;
   }
 
-  /** 401 on a command: renew, fresh socket + baselines in this transport, no resend. */
+  /** 401 renews and reconciles but never replays the rejected command. */
   private async renewAfterAuthLoss(lifetime: AbortController): Promise<never> {
-    if (this.onAuthExpired) await this.onAuthExpired();
+    if (this.onAuthExpired) await this.renewAuth();
     this.assertActive(lifetime);
-    if (this.socket) {
-      await this.reattach(lifetime);
-      await this.refresh(undefined, lifetime);
-    }
+    if (this.socket) await this.renewSocket();
+    this.assertActive(lifetime);
     throw new AuthExpiredError();
+  }
+
+  private async prepareCommand(action: string): Promise<AbortController> {
+    // A command already waiting for renewal may resume; disconnected lifetimes cannot.
+    const lifetime = this.activeLifetime();
+    if (this.recovery) await this.recovery;
+    else this.requireConnected(action);
+    await this.ensureFreshToken();
+    this.assertActive(lifetime);
+    await this.ensureSocketToken(lifetime);
+    if (this.recovery) await this.recovery;
+    this.assertActive(lifetime);
+    this.requireConnected(action);
+    return lifetime;
   }
 
   private attachFreshSocket(lifetime: AbortController): Socket {
@@ -452,7 +465,7 @@ export class SocketArenaTransport implements ArenaTransport {
     const token = this.getAccessToken?.();
     this.attachedToken = token;
     const socket = io(this.socketBase, {
-      auth: token ? { accessToken: token, matchId: this.matchId } : { userId: this.userId, matchId: this.matchId },
+      auth: token ? { accessToken: token, matchId: this.matchId } : import.meta.env.DEV ? { userId: this.userId, matchId: this.matchId } : { matchId: this.matchId },
       forceNew: true,
       autoConnect: false,
     });
@@ -556,6 +569,7 @@ export class SocketArenaTransport implements ArenaTransport {
     this.connected = false;
     this.browserOffline = false;
     this.reopening = false;
+    this.recovery = null;
   }
 
   disconnect(): void {
@@ -599,13 +613,22 @@ export class SocketArenaTransport implements ArenaTransport {
     const token = this.getAccessToken();
     if (!token) return;
     const expiry = tokenExpiryMs(token);
-    if (expiry !== null && expiry - Date.now() < RENEW_SKEW_MS) await this.onAuthExpired();
+    if (expiry !== null && expiry - Date.now() < RENEW_SKEW_MS) await this.renewAuth();
+  }
+
+  private renewAuth(): Promise<unknown> {
+    if (this.tokenRenewal) return this.tokenRenewal;
+    const renewal = Promise.resolve().then(() => this.onAuthExpired?.()).finally(() => {
+      if (this.tokenRenewal === renewal) this.tokenRenewal = null;
+    });
+    this.tokenRenewal = renewal;
+    return renewal;
   }
 
   private authHeaders(): Record<string, string> {
     const token = this.getAccessToken?.();
     if (token) return { Authorization: `Bearer ${token}` };
-    if (this.devUserId) return { "x-dev-user-id": this.devUserId };
+    if (import.meta.env.DEV && this.devUserId) return { "x-dev-user-id": this.devUserId };
     return {};
   }
 
@@ -639,15 +662,13 @@ export class SocketArenaTransport implements ArenaTransport {
   }
 
   async startRound(): Promise<void> {
-    const lifetime = this.requireConnected("start");
-    if (this.getAccessToken) await this.ensureFreshToken();
+    const lifetime = await this.prepareCommand("start");
     await this.post("/start", {}, lifetime);
     await this.refreshAfterCommand(lifetime);
   }
 
   async beginCoding(): Promise<void> {
-    const lifetime = this.requireConnected("begin");
-    if (this.getAccessToken) await this.ensureFreshToken();
+    const lifetime = await this.prepareCommand("begin");
     await this.post("/begin", {}, lifetime);
     await this.refreshAfterCommand(lifetime);
   }
@@ -656,8 +677,7 @@ export class SocketArenaTransport implements ArenaTransport {
     if (this.snap?.mode === "2v2") {
       // Authoritative team switch: bumps the doc revision and invalidates
       // both approvals server-side (the refresh carries the new revision).
-      const lifetime = this.requireConnected("language");
-    if (this.getAccessToken) await this.ensureFreshToken();
+      const lifetime = await this.prepareCommand("language");
       await this.post("/language", { language }, lifetime);
       await this.refreshAfterCommand(lifetime);
       return;
@@ -667,16 +687,14 @@ export class SocketArenaTransport implements ArenaTransport {
   }
 
   async run(input: { code: string; language: string }): Promise<RunReceipt> {
-    const lifetime = this.requireConnected("run");
-    if (this.getAccessToken) await this.ensureFreshToken();
+    const lifetime = await this.prepareCommand("run");
     await this.post("/run", input, lifetime);
     await this.refreshAfterCommand(lifetime);
     return { ok: true };
   }
 
   async submit(input: { code: string; language: string; documentRevision?: number }): Promise<SubmitReceipt> {
-    const lifetime = this.requireConnected("submit");
-    if (this.getAccessToken) await this.ensureFreshToken();
+    const lifetime = await this.prepareCommand("submit");
     const documentRevision = input.documentRevision ?? this.lastDocRevision ?? undefined;
     const request = this.submitRequest(input, documentRevision);
     const receipt = (await this.post("/submit", {
@@ -696,8 +714,7 @@ export class SocketArenaTransport implements ArenaTransport {
    * approval throws and the snapshot (source of truth) corrects the UI.
    */
   async setReady(value: boolean): Promise<void> {
-    const lifetime = this.requireConnected("setReady");
-    if (this.getAccessToken) await this.ensureFreshToken();
+    const lifetime = await this.prepareCommand("setReady");
     await this.ensureSocketToken(lifetime);
     const sock = this.socket;
     if (!sock || lifetime.signal.aborted) throw new Error("Readiness confirmation was lost");
@@ -726,21 +743,21 @@ export class SocketArenaTransport implements ArenaTransport {
 
   /** Reattach when the session token moved on (renewal) since the socket was attached. */
   private async ensureSocketToken(lifetime: AbortController): Promise<void> {
+    this.assertActive(lifetime);
+    if (this.recovery) await this.recovery;
     if (!this.getAccessToken || !this.socket) return;
     if (this.getAccessToken() !== this.attachedToken) await this.renewSocket();
     else this.assertActive(lifetime);
   }
 
   async advance(): Promise<void> {
-    const lifetime = this.requireConnected("advance");
-    if (this.getAccessToken) await this.ensureFreshToken();
+    const lifetime = await this.prepareCommand("advance");
     await this.post("/advance", {}, lifetime);
     await this.refreshAfterCommand(lifetime);
   }
 
   async leave(): Promise<void> {
-    const lifetime = this.requireConnected("leave");
-    if (this.getAccessToken) await this.ensureFreshToken();
+    const lifetime = await this.prepareCommand("leave");
     await this.post("/leave", {}, lifetime);
     await this.refreshAfterCommand(lifetime);
   }

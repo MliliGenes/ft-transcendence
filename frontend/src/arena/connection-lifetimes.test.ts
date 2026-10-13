@@ -230,6 +230,7 @@ describe("Arena transport lifetime", () => {
     vi.mocked(fetch).mockReturnValueOnce(completed.promise as Promise<Response>);
     const action = client.startRound();
     const rejection = expect(action).rejects.toThrow("cancelled");
+    await flush();
     client.disconnect();
     const join = client.connect();
     await flush();
@@ -246,6 +247,7 @@ describe("Arena transport lifetime", () => {
     const { client } = await arena();
     const pending = client.setReady(true);
     const rejection = expect(pending).rejects.toThrow("confirmation");
+    await flush();
     client.disconnect();
     await rejection;
     expect(vi.getTimerCount()).toBe(0);

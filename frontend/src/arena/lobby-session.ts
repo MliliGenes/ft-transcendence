@@ -61,7 +61,7 @@ export class LobbySession {
         onConnect: () => {
           if (!this.isCurrentLifetime(lifetimeVersion)) return;
           this.joinedRoomId = null;
-          void this.refresh();
+          return this.refresh(true, true);
         },
         onRoomUpdated: refresh,
         onMatchFound: refresh,
@@ -85,7 +85,7 @@ export class LobbySession {
     this.update({ mode });
   }
 
-  async refresh(): Promise<void> {
+  async refresh(propagateError = false, recoveringSocket = false): Promise<void> {
     if (!this.active) return;
     const requestVersion = ++this.requestVersion;
     const isCurrent = () => this.active && requestVersion === this.requestVersion;
@@ -103,6 +103,13 @@ export class LobbySession {
       // Public matchmaking is retained by the server for a future release.
       // Clear a persisted waiting entry so this release remains invite-only.
       if (activeState.queue?.status === "waiting") {
+        if (recoveringSocket) {
+          // Publish the baseline first. Cleanup is a mutation and waits for socket recovery.
+          this.applyRoom(null);
+          const lifetime = this.lifetimeVersion;
+          queueMicrotask(() => { if (this.isCurrentLifetime(lifetime)) void this.refresh(); });
+          return;
+        }
         const cancelled = await this.client.cancelQueue();
         if (!isCurrent()) return;
         if (cancelled.matched && cancelled.matchId) {
@@ -121,9 +128,10 @@ export class LobbySession {
       }
 
       const roomData = activeState.room?.room.status === "open" ? activeState.room : null;
-      this.applyRoom(roomData);
+      if (this.applyRoom(roomData)) await this.refresh(propagateError, recoveringSocket);
     } catch (error) {
       if (isCurrent()) this.update({ error: this.message(error, "Failed to recover lobby") });
+      if (propagateError) throw error;
     }
   }
 
@@ -185,7 +193,7 @@ export class LobbySession {
     }
   }
 
-  private applyRoom(roomData: RoomWithMembers | null): void {
+  private applyRoom(roomData: RoomWithMembers | null): boolean {
     const nextRoomId = roomData?.room.id ?? null;
     let joinedRoom = false;
     if (this.joinedRoomId !== nextRoomId) {
@@ -200,12 +208,7 @@ export class LobbySession {
       roomData,
       ...(roomData ? { mode: roomData.room.mode } : {}),
     });
-    if (joinedRoom) {
-      const lifetimeVersion = this.lifetimeVersion;
-      queueMicrotask(() => {
-        if (this.isCurrentLifetime(lifetimeVersion) && this.joinedRoomId === nextRoomId) void this.refresh();
-      });
-    }
+    return joinedRoom;
   }
 
   private handoff(matchId: string): void {
