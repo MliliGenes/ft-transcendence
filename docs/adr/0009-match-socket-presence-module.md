@@ -43,3 +43,13 @@ independent of NestJS and can be tested without booting a gateway or database.
 - `services/game/src/game/game.service.ts`
 - `services/game/src/game/reconnect.test.ts`
 - `CONTEXT.md` glossary
+
+## Runtime stop, 2026-10-13
+
+The current release permits one active Game process per Game database. Presence
+keeps its local first-socket/last-socket policy. When the runtime stops, the
+tracker closes pending admissions and clears its local socket state. Disconnect
+cleanup then cannot save false offline transitions or emit peer events. All four
+Socket.IO namespaces close on ownership loss. See the
+[one-server decision](0004-game-match-persistence-module.md#amendment-2026-10-13-one-active-game-runtime)
+and `services/game/src/game/runtime-lifecycle.test.ts`.

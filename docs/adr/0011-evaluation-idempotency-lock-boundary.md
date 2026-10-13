@@ -95,3 +95,14 @@ frontend refreshes without automatically replaying the command. Only idempotent
 boot recovery and grace-triggered snapshot reads retry by reloading after such
 a conflict. This closes stale overwrites; it does not claim conflict-free
 horizontal command routing or realtime scale-out.
+
+## Runtime owner and recovery, 2026-10-13
+
+The current release blocks a second production Game process before recovery.
+Evaluation claims remain separate from runtime ownership. Pending admission and
+verdict commits also check the current runtime token on their actual transaction
+client. Ownership loss destroys held and waiting claim clients and leaves pending
+Submissions available for an explicit restart under their original IDs. Judge
+work remains outside the short Match lock and runtime guard. A committed command
+stays accepted if its reply is lost. See the
+[one-server decision](0004-game-match-persistence-module.md#amendment-2026-10-13-one-active-game-runtime).

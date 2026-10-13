@@ -10,8 +10,14 @@ login/JWT/OAuth here.
 cp .env.example .env            # create once; never commit real secrets
 npm ci
 npm run typecheck
-DATABASE_URL=postgres://postgres:postgres@localhost:5433/arena_test npm test
+TEST_PG_URL=postgres://postgres:postgres@localhost:5433/arena_test \
+  DATABASE_URL=postgres://postgres:postgres@localhost:5433/arena_test npm test
 ```
+
+Use a disposable test database. PostgreSQL tests clear their fixture tables.
+`TEST_PG_URL` enables the ownership and live-process tests. Set
+`ARENA_DIAGNOSIS_DOCKER=1` to include the real container timeout cleanup check.
+Run `npm run check`, `npm run build`, then `npm test` before delivery.
 
 Live browser (game on :3220, web on :4173):
 

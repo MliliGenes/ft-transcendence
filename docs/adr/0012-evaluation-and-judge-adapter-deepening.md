@@ -123,3 +123,14 @@ infrastructure failure. The execution adapter gives each container a unique name
 stops the client at the host deadline, and awaits a bounded removal attempt.
 Judge0 results are checked against the exact UTF8 byte output cap in trusted code;
 the provider's rounded KiB quota alone does not enforce that boundary.
+
+## Runtime loss and worker waits, 2026-10-13
+
+The current release enforces one active Game process per Game database. Required
+runtime ownership covers ordinary writes and claim-session verdict commits. On
+ownership loss, Game stops local WorkerJudge requests, including a response body
+read after headers arrive. A late verdict cannot save a score or failure. Remote
+Judge jobs retain their existing limits; no worker cancellation endpoint was
+added. The application has an independent 5-second stop deadline after detected
+loss. See the
+[one-server decision](0004-game-match-persistence-module.md#amendment-2026-10-13-one-active-game-runtime).

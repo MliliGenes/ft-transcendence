@@ -93,3 +93,12 @@ the new frame. Any resulting source change receives a new revision and clears
 Ready through the existing atomic commit. Rollback, language reset, and Round
 destruction discard deferred state. A valid row load records its metadata before
 Match reconciliation so a read conflict can retry without losing pending frames.
+
+## Runtime ownership, 2026-10-13
+
+The current release requires one active Game process per Game database. A second
+process stops before recovery, and all production document writes check the
+current runtime owner. The two-engine cache tests use explicit unowned package
+fixtures; they do not permit two production Game servers. Shared Presence and
+events remain future work if multiple active servers are required. See the
+[one-server decision](0004-game-match-persistence-module.md#amendment-2026-10-13-one-active-game-runtime).

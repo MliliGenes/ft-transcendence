@@ -188,6 +188,7 @@ Current game baseline and integration direction:
 - React/Vite frontend and Tailwind styling.
 - NestJS Game service in this branch; teammate-owned user service and platform chat remain separate integration inputs.
 - PostgreSQL with a game-owned database in this snapshot; future services retain their own data ownership.
+- One active Game process per Game database. It can serve many Matches. A second process is blocked before recovery. After a stop, start a replacement explicitly; there is no automatic takeover. See [the Game run instructions](docs/game-local-run.md#one-active-game-server).
 - Docker Compose and Nginx; HTTPS/WSS externally.
 
 Imported code and tests are implementation evidence only for their exercised behavior, not proof of a completed subject module. Feed and notifications broaden the earlier scope; their service placement is open. A UI route does not automatically require its own microservice. Global profiles should have one owner even when displayed inside Chat.
