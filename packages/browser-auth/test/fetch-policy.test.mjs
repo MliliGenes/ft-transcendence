@@ -103,12 +103,12 @@ test('retrySafeRead never replays mutations', async () => {
   client.dispose();
 });
 
-test('401 renews once and retries with the fresh token', async () => {
+test('opted-in safe GET renews once and retries with the fresh token', async () => {
   const { client, fetchImpl, callsBefore } = await loggedIn((url, options) => {
     if (url.endsWith('/auth/refresh')) return json(TOKENS(2));
     return options.headers?.Authorization === 'Bearer access-2' ? json(ME) : unauthorized();
   });
-  const profile = await client.fetch('/accounts/search');
+  const profile = await client.fetch('/accounts/search', { retrySafeRead: true });
   assert.deepEqual(profile, ME);
   const refreshes = fetchImpl.calls.filter((call) => call.url.endsWith('/auth/refresh')).length;
   assert.equal(refreshes, 1);

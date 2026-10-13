@@ -207,7 +207,7 @@ test('confirmed 401 renewal ends the session as anonymous', async () => {
   client.dispose();
 });
 
-test('concurrent login serializes behind in-flight restore; last writer wins', async () => {
+test('concurrent login serializes behind restore and supersedes its stale result', async () => {
   const release = Promise.withResolvers();
   const fetchImpl = scriptFetch((url) => {
     if (url.endsWith('/auth/refresh')) return release.promise.then(() => json(TOKENS(9)));
@@ -215,7 +215,7 @@ test('concurrent login serializes behind in-flight restore; last writer wins', a
     return json(ME);
   });
   const { client } = makeClient(fetchImpl);
-  const stale = client.restore(true);
+  const stale = assert.rejects(client.restore(true), (error) => error.code === 'SESSION_CHANGED');
   await wait(5);
   const logged = client.login('login', {});
   release.resolve();
@@ -295,7 +295,7 @@ test('token rotation bumps tokenRevision so sidecars can renew explicitly', asyn
   const { client } = makeClient(fetchImpl);
   await client.login('login', {});
   const before = client.getSnapshot();
-  await client.fetch('/accounts/search');
+  await client.fetch('/accounts/search', { retrySafeRead: true });
   const after = client.getSnapshot();
   assert.equal(after.sessionGeneration, before.sessionGeneration);
   assert.ok(after.tokenRevision > before.tokenRevision);

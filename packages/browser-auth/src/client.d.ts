@@ -19,6 +19,8 @@ export interface BrowserAuthClientOptions {
   /** BroadcastChannel for session-control (required). */
   channel: Pick<BroadcastChannel, 'postMessage' | 'addEventListener' | 'removeEventListener'>;
   clock?: { now(): number };
+  /** Shared credential-free logout intent; defaults to browser localStorage. */
+  storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
   /** Optional shared memory session (lets app facades share one session). */
   store?: {
     read(): { accessToken: string; sessionKey: string; sessionGeneration: number; tokenRevision: number } | null;
@@ -36,7 +38,9 @@ export interface LogoutReceipt {
 
 export interface AuthFetchOptions extends RequestInit {
   json?: unknown;
-  /** Exactly one retry, safe (GET/HEAD) reads only. Mutations never replay. */
+  /** Exactly one retry, safe (GET/HEAD) reads only, including after a 401 renewal.
+   * Mutations never replay, even when this is true. Other renewed calls reject
+   * with ApiError.code = 'RETRY_REQUIRED' so callers choose whether to retry. */
   retrySafeRead?: boolean;
   /** `false` skips the Bearer attach (cookie-only endpoints like refresh). */
   auth?: boolean;
@@ -47,11 +51,13 @@ export interface AuthFetchOptions extends RequestInit {
 export interface BrowserAuthClient {
   getSnapshot(): AuthSnapshot;
   subscribe(listener: (snapshot: AuthSnapshot) => void): () => void;
+  /** Force refresh never bypasses a pending browser logout. */
   restore(force?: boolean): Promise<AuthSnapshot>;
   login(mode: string, values: unknown): Promise<AuthSnapshot>;
   logout(): Promise<LogoutReceipt>;
   getAccessToken(): string | null;
   fetch(path: string, options?: AuthFetchOptions): Promise<unknown>;
+  /** Invalidates pending work and removes listeners; it does not log out shared sessions. */
   dispose(): void;
 }
 

@@ -1,7 +1,7 @@
 // Cookie-session HTTP layer: one origin-wide lock serializes every
 // session-mutating call; ordinary fetches never replay (a single opt-in
 // retry exists for safe reads only). A 401 renews once under the lock and
-// retries once; a confirmed 401 renewal ends the session, while a network /
+// may retry an opted-in safe read once; a confirmed 401 renewal ends the session, while a network /
 // 5xx / timeout failure retains it as unavailable.
 
 export class ApiError extends Error {
@@ -15,6 +15,7 @@ export class ApiError extends Error {
 }
 
 const SESSION_LOCK = 'browser-auth:session';
+const LOGOUT_MARKER = 'browser-auth:logout-pending';
 const RETRIABLE_NETWORK = 0;
 const isSafeMethod = (method) => method === 'GET' || method === 'HEAD';
 const isRetriable = (error) =>
@@ -50,10 +51,35 @@ export function createAuthApi({
   locks,
   clock = Date,
   timeoutMs = 20000,
+  storage = globalThis.localStorage,
+  isActive = () => true,
 }) {
   void clock;
   const base = String(apiBase ?? '').replace(/\/$/, '');
   let renewal = null;
+  // Non-browser callers may omit storage; browsers share only a credential-free
+  // intent marker. The refresh credential remains exclusively in its cookie.
+  let localMarker = null;
+  const readMarker = () => storage ? storage.getItem(LOGOUT_MARKER) : localMarker;
+  const isLogoutPending = () => readMarker() !== null;
+  const markLogoutPending = () => {
+    const marker = globalThis.crypto.randomUUID();
+    if (storage) storage.setItem(LOGOUT_MARKER, marker);
+    else localMarker = marker;
+    return marker;
+  };
+  const clearMarker = (expected) => {
+    if (expected !== undefined && readMarker() !== expected) return;
+    if (storage) storage.removeItem(LOGOUT_MARKER);
+    else localMarker = null;
+  };
+  const assertCurrent = (generation) => {
+    if (!isActive() || store.generation() !== generation) throw changedSession();
+  };
+  const requireRestoreAllowed = () => {
+    if (isLogoutPending())
+      throw new ApiError('You are signed out on this browser. Please sign in again.', 401, undefined, 'LOGOUT_PENDING');
+  };
 
   const withSessionLock = (work) =>
     locks?.request ? locks.request(SESSION_LOCK, work) : work();
@@ -126,7 +152,10 @@ export function createAuthApi({
   // generation is captured before the network call and a changed epoch (a
   // logout or a newer login) rejects the late result instead of replacing.
   async function restoreSession(force = false) {
+    const invocation = store.generation();
     return withSessionLock(async () => {
+      assertCurrent(invocation);
+      requireRestoreAllowed();
       const before = store.read();
       if (!force && before) return before;
       const generation = store.generation();
@@ -134,11 +163,13 @@ export function createAuthApi({
       try {
         tokens = await send('/auth/refresh', { method: 'POST' });
       } catch (error) {
-        if (store.generation() !== generation) throw changedSession();
+        assertCurrent(generation);
+        requireRestoreAllowed();
         if (error.status === 401 && before) store.clear(before.sessionKey);
         throw error;
       }
-      if (store.generation() !== generation) throw changedSession();
+      assertCurrent(generation);
+      requireRestoreAllowed();
       const after = store.read();
       if (after && after.sessionKey !== before?.sessionKey) return after;
       if (!after) return store.replace(tokens);
@@ -155,6 +186,8 @@ export function createAuthApi({
     if (current.accessToken !== failedSession.accessToken) return current;
     if (renewal?.sessionKey === current.sessionKey) return renewal.promise;
     const work = async () => {
+      requireRestoreAllowed();
+      if (!isActive()) throw changedSession();
       const latest = store.read();
       if (!latest || latest.sessionKey !== failedSession.sessionKey)
         throw changedSession();
@@ -162,13 +195,15 @@ export function createAuthApi({
       const generation = store.generation();
       try {
         const tokens = await send('/auth/refresh', { method: 'POST' });
-        if (store.generation() !== generation) throw changedSession();
+        assertCurrent(generation);
+        requireRestoreAllowed();
         const updated = store.rotate(tokens, latest);
         if (!updated) throw changedSession();
         return updated;
       } catch (error) {
         if (error.code === 'SESSION_CHANGED') throw error;
-        if (store.generation() !== generation) throw changedSession();
+        assertCurrent(generation);
+        requireRestoreAllowed();
         if (error.status === 401) {
           store.clear(latest.sessionKey, 'Your session expired. Please sign in again.');
           throw expiredSession();
@@ -190,29 +225,42 @@ export function createAuthApi({
   }
 
   async function request(path, options = {}) {
-    const method = options.method ?? 'GET';
+    const method = (options.method ?? 'GET').toUpperCase();
+    const generation = store.generation();
+    assertCurrent(generation);
     const session = options.auth === false ? null : store.read();
     if (options.auth !== false && !session)
       throw expiredSession('Please sign in to continue.');
     const attempt = (token) => send(path, options, token);
     const work = () => attempt(session?.accessToken);
     try {
-      return await (options.cookieSession ? withSessionLock(work) : work());
+      const result = await (options.cookieSession ? withSessionLock(work) : work());
+      assertCurrent(generation);
+      return result;
     } catch (error) {
+      assertCurrent(generation);
       if (error.status !== 401 || !session || options.signal?.aborted)
         return retrySafeRead(path, options, session, method, error);
       const refreshed = await renew(session);
+      assertCurrent(generation);
       if (options.signal?.aborted) throw options.signal.reason;
       if (store.read()?.sessionKey !== session.sessionKey)
         throw changedSession();
+      if (!options.retrySafeRead || !isSafeMethod(method))
+        throw new ApiError('Your session was renewed. Please retry this action deliberately.', 401, undefined, 'RETRY_REQUIRED');
       try {
-        return await attempt(refreshed.accessToken);
+        const result = await attempt(refreshed.accessToken);
+        assertCurrent(generation);
+        return result;
       } catch (retryError) {
-        if (retryError.status === 401)
+        assertCurrent(generation);
+        if (retryError.status === 401) {
           store.clear(
             session.sessionKey,
             'Your session expired. Please sign in again.',
           );
+          throw expiredSession();
+        }
         throw retryError;
       }
     }
@@ -228,18 +276,50 @@ export function createAuthApi({
     )
       throw error;
     const token = session ? store.read()?.accessToken ?? session.accessToken : undefined;
-    return send(path, options, token);
+    const generation = store.generation();
+    try {
+      const result = await send(path, options, token);
+      assertCurrent(generation);
+      return result;
+    } catch (retryError) {
+      assertCurrent(generation);
+      throw retryError;
+    }
   }
 
   async function loginRequest(mode, values) {
-    return withSessionLock(() =>
-      send(`/auth/${mode}`, { method: 'POST', json: values }),
-    );
+    const generation = store.generation();
+    const marker = readMarker();
+    const assertIntent = () => {
+      assertCurrent(generation);
+      const currentMarker = readMarker();
+      // A prior logout may finish before this queued deliberate login; only
+      // a newer outstanding intent supersedes the login.
+      if (currentMarker !== null && currentMarker !== marker) throw changedSession();
+    };
+    return withSessionLock(async () => {
+      assertIntent();
+      let tokens;
+      try {
+        tokens = await send(`/auth/${mode}`, { method: 'POST', json: values });
+      } catch (error) {
+        assertIntent();
+        throw error;
+      }
+      assertIntent();
+      const session = store.replace(tokens);
+      clearMarker(marker);
+      return session;
+    });
   }
 
-  async function logoutRequest() {
-    return withSessionLock(() => send('/auth/logout', { method: 'POST' }));
+  async function logoutRequest(marker = markLogoutPending()) {
+    return withSessionLock(async () => {
+      await send('/auth/logout', { method: 'POST' });
+      // A newer logout intent must survive this earlier acknowledgement.
+      clearMarker(marker);
+    });
   }
 
-  return { request, restoreSession, renew, loginRequest, logoutRequest };
+  return { request, restoreSession, renew, loginRequest, logoutRequest, isLogoutPending, markLogoutPending };
 }
