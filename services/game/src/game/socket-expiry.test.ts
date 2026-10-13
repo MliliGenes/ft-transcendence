@@ -335,3 +335,45 @@ describe("socket namespaces: handshake + per-message verification", () => {
 function ackedOk(ack: unknown): unknown {
   return (ack as { ok?: unknown } | undefined)?.ok;
 }
+
+describe("task 5 fix round: admission gate disconnect + provider wiring", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("game admission disconnects when the session expires during the membership check", async () => {
+    vi.stubEnv("DEV_PRINCIPAL", "false");
+    const exp = FUTURE();
+    const good = verifierFor({ "valid-token": { userId: ALICE, expiresAt: exp } });
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let entered!: () => void;
+    const reached = new Promise<void>((r) => { entered = r; });
+    const game = fakeGameBase({
+      snapshot: async () => { entered(); await gate; return {}; },
+      noteSocketOpen: async () => { throw new Error("presence must not open for an expired socket"); },
+      noteSocketClosed: async () => {},
+    });
+    const gw = new GameGateway(game, good as never);
+    const c = testClient({ accessToken: "valid-token", matchId: MATCH });
+    const opening = gw.handleConnection(c.socket);
+    await reached;
+    (c.data.arenaPrincipal as Record<string, unknown>).expiresAt = Date.now() - 1000;
+    release();
+    await opening;
+    expect(c.connected).toBe(false);
+    expect(c.disconnectCalls).toEqual([true]);
+    expect(c.rooms).toEqual([]);
+    expect(c.events).toEqual([]);
+  });
+
+  it("team-chat gateway needs no TeamChat provider (optional default)", async () => {
+    const { MODULE_METADATA } = await import("@nestjs/common/constants.js");
+    const { GameModule } = await import("./game.module.js");
+    const providers = (Reflect.getMetadata(MODULE_METADATA.PROVIDERS, GameModule) ?? []) as unknown[];
+    expect(providers.length).toBeGreaterThan(0);
+    expect(providers).not.toContain(TeamChat);
+    // Direct construction without a chat instance still serves history.
+    vi.stubEnv("DEV_PRINCIPAL", "true");
+    const gw = new TeamChatGateway(fakeGameBase());
+    expect(gw.getRecentHistory("no-room")).toEqual([]);
+  });
+});

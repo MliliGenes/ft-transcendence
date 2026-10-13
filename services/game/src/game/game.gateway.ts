@@ -88,7 +88,10 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const { userId, matchId } = principal;
       await this.game.snapshot(userId, matchId);
       this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) return;
+      if (!canEmitTo(client, this.game.runtimeReady)) {
+        try { client.disconnect(true); } catch { /* best-effort */ }
+        return;
+      }
       await this.game.noteSocketOpen(userId, matchId, client.id);
       opened = true;
       this.game.assertServing();

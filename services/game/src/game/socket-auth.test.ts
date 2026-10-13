@@ -141,6 +141,16 @@ describe("socket authorization context", () => {
     ).rejects.toThrow("authentication required");
   });
 
+  it("tokenless per-message auth fails closed with DEV off", async () => {
+    const client = fakeSocket();
+    attachSocketPrincipal(client, { userId: "alice", expiresAt: Date.now() + 60_000 });
+    let disconnected = false;
+    (client as unknown as Record<string, unknown>).disconnect = () => { disconnected = true; };
+    vi.stubEnv("DEV_PRINCIPAL", "false");
+    await expect(authorizeSocketMessage(client, undefined)).rejects.toThrow("authentication required");
+    expect(disconnected).toBe(true);
+  });
+
   it("expiry gates emission per recipient", async () => {
     const live = fakeSocket();
     attachSocketPrincipal(live, { userId: "a", expiresAt: Date.now() + 60_000 });

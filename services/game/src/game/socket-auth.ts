@@ -201,7 +201,9 @@ export async function authorizeSocketMessage(
   if (options.matchIdRequired && !nonEmptyString(stored.matchId)) throw fail("unauthorized socket");
   const token = typeof data.accessToken === "string" && data.accessToken.length > 0 ? data.accessToken : undefined;
   if (!token) {
-    // DEV fixture: no upstream to re-verify against.
+    // DEV fixture: no upstream to re-verify against. Fail closed with the
+    // seam off (defense in depth: handshake already fails closed first).
+    if (process.env.DEV_PRINCIPAL !== "true") throw fail("authentication required");
     return options.matchIdRequired
       ? { userId: stored.userId, expiresAt: stored.expiresAt, matchId: stored.matchId as string }
       : { userId: stored.userId, expiresAt: stored.expiresAt, ...(stored.matchId ? { matchId: stored.matchId } : {}) };

@@ -49,6 +49,8 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   private readonly chat: TeamChat;
 
+  // @Optional chat: no TeamChat provider is registered in GameModule — the
+  // default below keeps direct construction and Nest DI working without one.
   constructor(
     @Inject(GameService) private readonly game: GameService,
     @Inject(TeamChat) @Optional() chat?: TeamChat,

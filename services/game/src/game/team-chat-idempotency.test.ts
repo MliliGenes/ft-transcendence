@@ -1,11 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Socket } from "socket.io";
 import { TeamChatGateway } from "./team-chat.gateway.js";
 import type { GameService } from "./game.service.js";
 import { attachSocketPrincipal } from "./socket-auth.js";
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe("Team chat retry identity during a pending lifecycle lookup", () => {
   it("broadcasts one message when a retry overlaps the original request", async () => {
+    // DEV-fixture socket (no token): runs behind the DEV_PRINCIPAL seam.
+    vi.stubEnv("DEV_PRINCIPAL", "true");
     let release!: () => void;
     const pending = new Promise<void>((resolve) => { release = resolve; });
     const game = { runtimeReady: true, assertServing: () => {}, resolveTeamChatContext: vi.fn(async () => {
