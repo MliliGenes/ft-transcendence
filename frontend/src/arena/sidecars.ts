@@ -5,6 +5,7 @@ export interface LiveClientConfig {
   baseUrl: string;
   userId: string;
   matchId: string;
+  getAccessToken?: () => string | null;
 }
 
 export interface SidecarScope {
@@ -27,6 +28,8 @@ export interface SidecarFactories {
 export interface ArenaSidecarLifecycle {
   sync(scope: SidecarScope): Promise<SidecarState | null>;
   getState(): SidecarState;
+  /** Explicit renewal after a session rotation: fresh sockets, kept state. */
+  renew(): Promise<void>;
   dispose(): void;
 }
 
@@ -232,9 +235,16 @@ export function createArenaSidecarLifecycle(factories: SidecarFactories = defaul
     identity = null;
   }
 
+  /** Renew both sidecars explicitly: same instances, fresh sockets, kept Yjs/chat state. */
+  async function renew(): Promise<void> {
+    if (disposed) return;
+    await Promise.allSettled([collab?.renewSocket(), chat?.renewSocket()]);
+  }
+
   return {
     sync,
     getState: state,
+    renew,
     dispose,
   };
 }

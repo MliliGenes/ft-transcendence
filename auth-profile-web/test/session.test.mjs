@@ -364,10 +364,31 @@ test('a stale failed refresh cannot clear a newer login', async () => {
   assert.deepEqual(store.read(), next);
 });
 
-test('failed or uncertain refresh ends the local session instead of replaying an old token', async () => {
-  for (const failure of [401, 0]) {
+test('a confirmed 401 refresh ends the local session instead of replaying an old token', async () => {
+  const store = createSessionStore();
+  store.replace(session(1));
+  let refreshes = 0;
+  const client = createApiClient({
+    baseUrl: '',
+    store,
+    fetchImpl: async (url) => {
+      if (url.endsWith('/auth/refresh')) refreshes++;
+      return unauthorized();
+    },
+  });
+  await assert.rejects(
+    client.request('/accounts/me'),
+    (e) => e.code === 'SESSION_EXPIRED',
+  );
+  await assert.rejects(client.request('/accounts/me'));
+  assert.equal(refreshes, 1);
+  assert.equal(store.read(), null);
+});
+
+test('an uncertain refresh retains the session as unavailable instead of expiring it', async () => {
+  for (const failure of [0, 500]) {
     const store = createSessionStore();
-    store.replace(session(1));
+    const original = store.replace(session(1));
     let refreshes = 0;
     const client = createApiClient({
       baseUrl: '',
@@ -376,18 +397,69 @@ test('failed or uncertain refresh ends the local session instead of replaying an
         if (url.endsWith('/auth/refresh')) {
           refreshes++;
           if (!failure) throw new TypeError('response lost');
+          return json({ message: 'boom' }, failure);
         }
         return unauthorized();
       },
     });
     await assert.rejects(
       client.request('/accounts/me'),
-      (e) => e.code === 'SESSION_EXPIRED',
+      (e) => e.code === 'UNAVAILABLE',
     );
-    await assert.rejects(client.request('/accounts/me'));
     assert.equal(refreshes, 1);
-    assert.equal(store.read(), null);
+    assert.deepEqual(store.read()?.accessToken, original.accessToken);
   }
+});
+
+test('restore after logout never revives a cleared session', async () => {
+  const store = createSessionStore();
+  const ready = Promise.withResolvers(),
+    finish = Promise.withResolvers();
+  const client = createApiClient({
+    baseUrl: '',
+    store,
+    locks: browserLocks(),
+    fetchImpl: async (url) => {
+      if (url.endsWith('/auth/refresh')) {
+        ready.resolve();
+        await finish.promise;
+        return json(session(2));
+      }
+      return unauthorized();
+    },
+  });
+  const pending = client.restoreSession(true).catch((error) => error);
+  await ready.promise;
+  store.clear();
+  finish.resolve();
+  const result = await pending;
+  assert.equal(result.code, 'SESSION_CHANGED');
+  assert.equal(store.read(), null);
+});
+
+test('mutations are never replayed; safe reads retry once only with retrySafeRead', async () => {
+  const store = createSessionStore();
+  store.replace(session(1));
+  let calls = 0;
+  const client = createApiClient({
+    baseUrl: '',
+    store,
+    fetchImpl: async () => {
+      calls++;
+      return json({ message: 'boom' }, 500);
+    },
+  });
+  await assert.rejects(client.request('/accounts/me/password', { method: 'PATCH', json: {} }));
+  assert.equal(calls, 1);
+  await assert.rejects(client.request('/accounts/me'));
+  assert.equal(calls, 2);
+  await assert.rejects(client.request('/accounts/me', { retrySafeRead: true }));
+  assert.equal(calls, 4);
+  await assert.rejects(
+    client.request('/accounts/me/password', { method: 'PATCH', json: {}, retrySafeRead: true }),
+  );
+  assert.equal(calls, 5);
+  assert.deepEqual(store.read()?.accessToken, 'access-1');
 });
 
 test('JSON errors preserve all validation messages; 204 and FormData are handled correctly', async () => {

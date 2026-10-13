@@ -36,130 +36,111 @@ export interface RoomWithMembers {
   members: PrivateRoomMember[];
 }
 
-function headers(userId: string): Record<string, string> {
-  return {
-    "content-type": "application/json",
-    "x-dev-user-id": userId,
-  };
-}
-
 export class LobbyClient {
   private socket?: Socket;
+  private readonly apiBase: string;
+  private readonly socketBase: string;
+  private readonly devUserId: string | null;
+  private readonly getAccessToken: (() => string | null) | null;
+  private readonly onAuthExpired: (() => Promise<unknown>) | null;
 
+  constructor(baseUrl: string, userId: string);
+  constructor(options: { apiBase: string; socketBase: string; getAccessToken: () => string | null; onAuthExpired: () => Promise<unknown> });
   constructor(
-    private readonly baseUrl: string,
-    private readonly userId: string,
-  ) {}
+    baseUrlOrOptions: string | { apiBase: string; socketBase: string; getAccessToken: () => string | null; onAuthExpired: () => Promise<unknown> },
+    userId?: string,
+  ) {
+    if (typeof baseUrlOrOptions === "string") {
+      this.apiBase = baseUrlOrOptions;
+      this.socketBase = baseUrlOrOptions;
+      this.devUserId = userId ?? null;
+      this.getAccessToken = null;
+      this.onAuthExpired = null;
+    } else {
+      this.apiBase = baseUrlOrOptions.apiBase;
+      this.socketBase = baseUrlOrOptions.socketBase;
+      this.devUserId = null;
+      this.getAccessToken = baseUrlOrOptions.getAccessToken;
+      this.onAuthExpired = baseUrlOrOptions.onAuthExpired;
+    }
+  }
+
+  private headers(): Record<string, string> {
+    const token = this.getAccessToken?.();
+    return {
+      "content-type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : this.devUserId ? { "x-dev-user-id": this.devUserId } : {}),
+    };
+  }
+
+  /** Single safe retry on 401-after-renew; mutations are never replayed. */
+  private async call<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+    const send = async (): Promise<Response> =>
+      fetch(`${this.apiBase}${path}`, {
+        method: init?.method,
+        headers: this.headers(),
+        body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+      });
+    let res = await send();
+    if (res.status === 401 && this.onAuthExpired) {
+      await this.onAuthExpired();
+      res = await send();
+    }
+    const json = (await res.json()) as (T & { error?: string }) | null;
+    if (!res.ok || (json && typeof json.error === "string")) throw new Error(json?.error ?? `Lobby request failed (${res.status})`);
+    return json as T;
+  }
 
   async joinQueue(mode: MatchMode): Promise<QueueEntry> {
-    const res = await fetch(`${this.baseUrl}/lobby/queue`, {
-      method: "POST",
-      headers: headers(this.userId),
-      body: JSON.stringify({ mode }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error ?? "Failed to join queue");
+    const json = await this.call<{ entry: QueueEntry }>("/lobby/queue", { method: "POST", body: { mode } });
     return json.entry;
   }
 
   async cancelQueue(): Promise<{ cancelled: boolean; matched: boolean; matchId?: string }> {
-    const res = await fetch(`${this.baseUrl}/lobby/queue/cancel`, {
-      method: "POST",
-      headers: headers(this.userId),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error ?? "Failed to cancel queue");
-    return json;
+    return this.call("/lobby/queue/cancel", { method: "POST" });
   }
 
   async getQueueStatus(): Promise<QueueEntry | null> {
-    const res = await fetch(`${this.baseUrl}/lobby/queue/status`, {
-      headers: headers(this.userId),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error ?? "Failed to get queue status");
+    const json = await this.call<{ entry: QueueEntry | null }>("/lobby/queue/status");
     return json.entry;
   }
 
   async createRoom(mode: MatchMode): Promise<RoomWithMembers> {
-    const res = await fetch(`${this.baseUrl}/lobby/rooms`, {
-      method: "POST",
-      headers: headers(this.userId),
-      body: JSON.stringify({ mode }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error ?? "Failed to create room");
+    const json = await this.call<RoomWithMembers>("/lobby/rooms", { method: "POST", body: { mode } });
     return { room: json.room, members: json.members };
   }
 
   async joinRoom(code: string): Promise<RoomWithMembers> {
-    const res = await fetch(`${this.baseUrl}/lobby/rooms/join`, {
-      method: "POST",
-      headers: headers(this.userId),
-      body: JSON.stringify({ code }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error ?? "Failed to join room");
+    const json = await this.call<RoomWithMembers>("/lobby/rooms/join", { method: "POST", body: { code } });
     return { room: json.room, members: json.members };
   }
 
   async getRoom(roomId: string): Promise<RoomWithMembers> {
-    const res = await fetch(`${this.baseUrl}/lobby/rooms/${roomId}`, {
-      headers: headers(this.userId),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error ?? "Failed to get room");
+    const json = await this.call<RoomWithMembers>(`/lobby/rooms/${roomId}`);
     return { room: json.room, members: json.members };
   }
 
   async setSide(roomId: string, sideId: LobbySideId): Promise<RoomWithMembers> {
-    const res = await fetch(`${this.baseUrl}/lobby/rooms/${roomId}/side`, {
-      method: "POST",
-      headers: headers(this.userId),
-      body: JSON.stringify({ sideId }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error ?? "Failed to change side");
+    const json = await this.call<RoomWithMembers>(`/lobby/rooms/${roomId}/side`, { method: "POST", body: { sideId } });
     return { room: json.room, members: json.members };
   }
 
   async setReady(roomId: string, ready: boolean): Promise<RoomWithMembers> {
-    const res = await fetch(`${this.baseUrl}/lobby/rooms/${roomId}/ready`, {
-      method: "POST",
-      headers: headers(this.userId),
-      body: JSON.stringify({ ready }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error ?? "Failed to set ready");
+    const json = await this.call<RoomWithMembers>(`/lobby/rooms/${roomId}/ready`, { method: "POST", body: { ready } });
     return { room: json.room, members: json.members };
   }
 
   async leaveRoom(roomId: string): Promise<{ left: boolean; closed: boolean }> {
-    const res = await fetch(`${this.baseUrl}/lobby/rooms/${roomId}/leave`, {
-      method: "POST",
-      headers: headers(this.userId),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error ?? "Failed to leave room");
-    return json;
+    return this.call(`/lobby/rooms/${roomId}/leave`, { method: "POST" });
   }
 
   async startRoom(roomId: string): Promise<{ matchId: string }> {
-    const res = await fetch(`${this.baseUrl}/lobby/rooms/${roomId}/start`, {
-      method: "POST",
-      headers: headers(this.userId),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error ?? "Failed to start room");
+    const json = await this.call<{ matchId: string }>(`/lobby/rooms/${roomId}/start`, { method: "POST" });
     return { matchId: json.matchId };
   }
 
   async getActive(): Promise<{ queue: QueueEntry | null; room: RoomWithMembers | null }> {
-    const res = await fetch(`${this.baseUrl}/lobby/active`, {
-      headers: headers(this.userId),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error ?? "Failed to get active status");
+    const json = await this.call<{ queue: QueueEntry | null; room: RoomWithMembers | null }>("/lobby/active");
     return { queue: json.queue, room: json.room };
   }
 
@@ -171,8 +152,9 @@ export class LobbyClient {
   }): () => void {
     if (this.socket) this.socket.disconnect();
 
-    this.socket = io(`${this.baseUrl}/lobby`, {
-      auth: { userId: this.userId },
+    const token = this.getAccessToken?.();
+    this.socket = io(`${this.socketBase}/lobby`, {
+      auth: token ? { accessToken: token } : { userId: this.devUserId },
       transports: ["websocket"],
       reconnection: true,
     });

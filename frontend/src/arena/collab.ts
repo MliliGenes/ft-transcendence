@@ -117,6 +117,8 @@ export class CollabClient {
       userId: string;
       matchId: string;
       displayName: string;
+      getAccessToken?: () => string | null;
+      onAuthExpired?: () => Promise<unknown>;
     },
   ) {
     this.currentAwareness = new Awareness(this.doc);
@@ -203,6 +205,24 @@ export class CollabClient {
     this.peerClocks.clear();
     this.currentAwareness = new Awareness(this.doc);
     this.bindDocument();
+  }
+
+  /** Handshake auth: Bearer token when a shared session exists, else DEV identity. */
+  private collabAuth(): Record<string, string> {
+    const token = this.options.getAccessToken?.();
+    return token
+      ? { accessToken: token, matchId: this.options.matchId }
+      : { userId: this.options.userId, matchId: this.options.matchId };
+  }
+
+  /**
+   * Explicit renewal: a fresh socket on the same document — the Yjs doc is
+   * kept (unconfirmed edits fall back to the recovery copy); the server
+   * re-sends the authoritative baseline on connect.
+   */
+  renewSocket(): Promise<CollabSyncPayload> {
+    this.stopSocket();
+    return this.connect();
   }
 
   /** A changed language or a missed accepted frame requires a fresh document baseline. */
@@ -365,7 +385,7 @@ export class CollabClient {
     this.lifetime = lifetime;
     this.setConn("connecting");
     const sock = io(`${this.options.baseUrl}/collab`, {
-      auth: { userId: this.options.userId, matchId: this.options.matchId },
+      auth: this.collabAuth(),
       forceNew: true,
       autoConnect: false,
     });

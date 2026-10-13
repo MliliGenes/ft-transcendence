@@ -33,7 +33,7 @@ function loadDraft(transport: ArenaTransport, round: number, problem: string, la
   }
 }
 
-export function ArenaPage({ transport }: { transport: ArenaTransport }) {
+export function ArenaPage({ transport, onAuthSignal }: { transport: ArenaTransport; onAuthSignal?: (listener: () => void) => () => void }) {
   const snapshot = useArena(transport);
   const starter = snapshot.problem.starters[snapshot.language as "Python"] ?? "";
   const [code, setCode] = useState(() => loadDraft(transport, snapshot.round, snapshot.problem.id, snapshot.language) ?? starter);
@@ -97,6 +97,15 @@ export function ArenaPage({ transport }: { transport: ArenaTransport }) {
   }, [sidecarLifecycle, sidecarScope]);
 
   useEffect(() => () => sidecarLifecycle.dispose(), [sidecarLifecycle]);
+
+  // Shared-session renewal: sidecars re-attach explicitly with the fresh
+  // token (same instances — Yjs doc and chat retry ids are kept).
+  useEffect(() => {
+    if (!onAuthSignal) return;
+    return onAuthSignal(() => {
+      void sidecarLifecycle.renew().catch(() => {});
+    });
+  }, [onAuthSignal, sidecarLifecycle]);
 
   useEffect(() => {
     if (!collab) return;

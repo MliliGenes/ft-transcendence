@@ -16,6 +16,8 @@ export interface TeamChatClientOptions {
   baseUrl: string;
   userId: string;
   matchId: string;
+  getAccessToken?: () => string | null;
+  onAuthExpired?: () => Promise<unknown>;
 }
 
 export type TeamChatStatus = "connecting" | "connected" | "disconnected" | "error";
@@ -99,8 +101,9 @@ export class TeamChatClient {
     this.lastError = null;
     this.notify();
 
+    const token = this.options.getAccessToken?.();
     const socket = io(`${this.options.baseUrl}/chat`, {
-      auth: { userId: this.options.userId, matchId: this.options.matchId },
+      auth: token ? { accessToken: token, matchId: this.options.matchId } : { userId: this.options.userId, matchId: this.options.matchId },
       transports: ["websocket"],
       forceNew: true,
       autoConnect: false,
@@ -247,6 +250,15 @@ export class TeamChatClient {
       this.socket = null;
     }
     this.connecting = null;
+  }
+
+  /**
+   * Explicit renewal: a fresh socket on the same client — retry identities,
+   * history, and dedup state are kept; the server re-sends the baseline.
+   */
+  renewSocket(): Promise<void> {
+    this.stopSocket();
+    return this.connect();
   }
 
   disconnect(): void {

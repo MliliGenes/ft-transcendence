@@ -77,6 +77,9 @@ export function App() {
           {authenticated && (
             <>
               <span className="signed-in-as">@{profile.username}</span>
+              <a className="button button-secondary button-small" href="/play/">
+                Play
+              </a>
               <button
                 className="button button-secondary button-small"
                 onClick={signOut}

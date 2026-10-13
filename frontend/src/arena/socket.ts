@@ -8,6 +8,47 @@ export interface SocketTransportOptions {
   matchId: string;
 }
 
+/** Shared-session wiring: Bearer HTTP + token handshake, stable transport. */
+export interface SocketAuthContext {
+  apiBase: string;
+  socketBase: string;
+  matchId: string;
+  getAccessToken: () => string | null;
+  /** Renew the session (shared client restore), then the transport re-attaches. */
+  onAuthExpired: () => Promise<unknown>;
+}
+
+export type SocketArenaTransportOptions = SocketTransportOptions | SocketAuthContext;
+
+function isAuthContext(options: SocketArenaTransportOptions): options is SocketAuthContext {
+  return typeof (options as SocketAuthContext).getAccessToken === "function";
+}
+
+/** A command lost its auth (or its ack): renewed, reconnected, never resent. Reconcile via snapshot. */
+export class AuthExpiredError extends Error {
+  readonly code = 401;
+
+  constructor(message = "Session renewed. The action was not resent — check the latest snapshot before retrying.") {
+    super(message);
+    this.name = "AuthExpiredError";
+  }
+}
+
+/** Best-effort JWT exp read for proactive renewal (undecodable → skip). */
+function tokenExpiryMs(token: string): number | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const json = JSON.parse(typeof atob === "function" ? atob(payload.replace(/-/g, "+").replace(/_/g, "/")) : "");
+    return typeof json.exp === "number" ? json.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Renew while the token still works: the server checks expiresAt > Date.now(). */
+const RENEW_SKEW_MS = 30_000;
+
 /** A non-idempotent command was rejected against a newer Match snapshot. */
 export class StaleCommandError extends Error {
   readonly code = 409;
@@ -55,6 +96,14 @@ interface ServerSnapshot {
     winner: string | null;
     forfeit: { winner: string; loser: string; reason: string } | null;
   } | null;
+}
+
+/** Internal: a socket ack that never arrived (undefined or suppressed). */
+class AuthLossSignal extends Error {
+  constructor() {
+    super("ack lost");
+    this.name = "AuthLossSignal";
+  }
 }
 
 /** Server terminal result -> viewer-relative final view (score sums + forfeit override). */
@@ -204,7 +253,19 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
  * ever computed client-side.
  */
 export class SocketArenaTransport implements ArenaTransport {
+  private readonly socketBase: string;
+  private readonly matchId: string;
+  private readonly apiBase: string | null;
+  private readonly getAccessToken: (() => string | null) | null;
+  private readonly onAuthExpired: (() => Promise<unknown>) | null;
+  /** Legacy DEV identity (x-dev-user-id seam) when no shared session exists. */
+  private readonly devUserId: string | null;
+  /** Player id: legacy option or resolved once from GET /accounts/me. */
+  private userId: string | null;
+  private userIdPromise: Promise<string> | null = null;
   private socket: Socket | null = null;
+  /** Token the attached socket handshook with (rotation detector). */
+  private attachedToken: string | null | undefined;
   private lifetime: AbortController | null = null;
   private connecting: Promise<void> | null = null;
   private snap: ArenaSnapshot | null = null;
@@ -231,7 +292,25 @@ export class SocketArenaTransport implements ArenaTransport {
   /** Browser reported a network outage since the last baseline. */
   private browserOffline = false;
 
-  constructor(private readonly options: SocketTransportOptions) {}
+  constructor(options: SocketArenaTransportOptions) {
+    if (isAuthContext(options)) {
+      this.socketBase = options.socketBase;
+      this.matchId = options.matchId;
+      this.apiBase = options.apiBase;
+      this.getAccessToken = options.getAccessToken;
+      this.onAuthExpired = options.onAuthExpired;
+      this.devUserId = null;
+      this.userId = null;
+    } else {
+      this.socketBase = options.baseUrl;
+      this.matchId = options.matchId;
+      this.apiBase = null;
+      this.getAccessToken = null;
+      this.onAuthExpired = null;
+      this.devUserId = options.userId;
+      this.userId = options.userId;
+    }
+  }
 
   get connectionError(): string | null {
     return this.connectError;
@@ -246,18 +325,23 @@ export class SocketArenaTransport implements ArenaTransport {
   }
 
   scopeKey(): string {
-    return `live:${this.options.baseUrl}:${this.options.matchId}`;
+    return `live:${this.socketBase}:${this.matchId}`;
   }
 
   /** Identity for the separate collaboration socket (2v2 team document). */
-  collabConfig(): { baseUrl: string; userId: string; matchId: string } {
-    return { baseUrl: this.options.baseUrl, userId: this.options.userId, matchId: this.options.matchId };
+  collabConfig(): { baseUrl: string; userId: string; matchId: string; getAccessToken?: () => string | null } {
+    return { baseUrl: this.socketBase, userId: this.requireUserId(), matchId: this.matchId, ...(this.getAccessToken ? { getAccessToken: this.getAccessToken } : {}) };
   }
 
   /** Identity for the separate team chat socket (2v2 team chat and quick pings). */
-  chatConfig(): { baseUrl: string; userId: string; matchId: string } | null {
+  chatConfig(): { baseUrl: string; userId: string; matchId: string; getAccessToken?: () => string | null } | null {
     if (this.snap?.mode !== "2v2") return null;
-    return { baseUrl: this.options.baseUrl, userId: this.options.userId, matchId: this.options.matchId };
+    return { baseUrl: this.socketBase, userId: this.requireUserId(), matchId: this.matchId, ...(this.getAccessToken ? { getAccessToken: this.getAccessToken } : {}) };
+  }
+
+  private requireUserId(): string {
+    if (!this.userId) throw new Error("Player identity is not resolved yet");
+    return this.userId;
   }
 
   private setConn(next: ConnectionState): void {
@@ -274,6 +358,10 @@ export class SocketArenaTransport implements ArenaTransport {
     this.setConn("connecting");
     this.wireBrowserSignals(lifetime);
     const connecting = (async () => {
+      if (this.getAccessToken) {
+        await this.ensureFreshToken();
+        await this.ensureUserId(lifetime);
+      }
       const snap = (await this.get("/snapshot", lifetime)) as ServerSnapshot;
       this.assertActive(lifetime);
       this.applySnapshot(snap);
@@ -302,13 +390,7 @@ export class SocketArenaTransport implements ArenaTransport {
     if (!lifetime || this.connecting || this.connected || this.reopening || !this.socket) return;
     this.reopening = true;
     try {
-      this.detachSocket();
-      this.browserOffline = false;
-      this.setConn("connecting");
-      const socket = this.attachFreshSocket(lifetime);
-      const baseline = this.awaitBaseline(socket, lifetime);
-      socket.connect();
-      await baseline;
+      await this.reattach(lifetime);
     } catch {
       if (this.lifetime === lifetime && !lifetime.signal.aborted) {
         this.connected = false;
@@ -322,10 +404,55 @@ export class SocketArenaTransport implements ArenaTransport {
     }
   }
 
+  private async reattach(lifetime: AbortController): Promise<void> {
+    this.detachSocket();
+    this.browserOffline = false;
+    this.setConn("connecting");
+    const socket = this.attachFreshSocket(lifetime);
+    const baseline = this.awaitBaseline(socket, lifetime);
+    socket.connect();
+    await baseline;
+  }
+
+  /**
+   * Explicit renewal: a fresh socket in the SAME transport (never recreated
+   * on rotation) with fresh baselines. Command state is preserved —
+   * pendingSubmit keeps its ids, no command is resent.
+   */
+  async renewSocket(): Promise<void> {
+    const lifetime = this.lifetime;
+    if (!lifetime || lifetime.signal.aborted) return;
+    if (this.reopening) return;
+    this.reopening = true;
+    try {
+      await this.ensureFreshToken();
+      await this.reattach(lifetime);
+      await this.refresh(undefined, lifetime);
+    } finally {
+      if (this.lifetime === lifetime) {
+        this.reopening = false;
+        this.emit();
+      }
+    }
+  }
+
+  /** 401 on a command: renew, fresh socket + baselines in this transport, no resend. */
+  private async renewAfterAuthLoss(lifetime: AbortController): Promise<never> {
+    if (this.onAuthExpired) await this.onAuthExpired();
+    this.assertActive(lifetime);
+    if (this.socket) {
+      await this.reattach(lifetime);
+      await this.refresh(undefined, lifetime);
+    }
+    throw new AuthExpiredError();
+  }
+
   private attachFreshSocket(lifetime: AbortController): Socket {
     this.assertActive(lifetime);
-    const socket = io(this.options.baseUrl, {
-      auth: { userId: this.options.userId, matchId: this.options.matchId },
+    const token = this.getAccessToken?.();
+    this.attachedToken = token;
+    const socket = io(this.socketBase, {
+      auth: token ? { accessToken: token, matchId: this.matchId } : { userId: this.userId, matchId: this.matchId },
       forceNew: true,
       autoConnect: false,
     });
@@ -448,17 +575,52 @@ export class SocketArenaTransport implements ArenaTransport {
     if (this.lifetime !== lifetime || lifetime.signal.aborted) throw new Error("Arena connection cancelled");
   }
 
+  /** Player id from GET /accounts/me (Bearer); legacy options already carry it. */
+  private ensureUserId(lifetime: AbortController): Promise<string> {
+    if (this.userId) return Promise.resolve(this.userId);
+    if (!this.userIdPromise) {
+      this.userIdPromise = (async () => {
+        const me = (await this.get("/accounts/me", lifetime, true)) as { id?: unknown };
+        const id = typeof me?.id === "string" && me.id.length > 0 ? me.id : null;
+        if (!id) throw new Error("Could not resolve the signed-in player");
+        this.userId = id;
+        return id;
+      })().catch((error: Error) => {
+        this.userIdPromise = null;
+        throw error;
+      });
+    }
+    return this.userIdPromise;
+  }
+
+  /** Proactive renewal: refresh while the token still verifies (30s skew). */
+  private async ensureFreshToken(): Promise<void> {
+    if (!this.getAccessToken || !this.onAuthExpired) return;
+    const token = this.getAccessToken();
+    if (!token) return;
+    const expiry = tokenExpiryMs(token);
+    if (expiry !== null && expiry - Date.now() < RENEW_SKEW_MS) await this.onAuthExpired();
+  }
+
+  private authHeaders(): Record<string, string> {
+    const token = this.getAccessToken?.();
+    if (token) return { Authorization: `Bearer ${token}` };
+    if (this.devUserId) return { "x-dev-user-id": this.devUserId };
+    return {};
+  }
+
   /** Apply a fetched server snapshot unless provably stale (§3). */
   private applySnapshot(server: ServerSnapshot): boolean {
+    const userId = this.userId ?? this.devUserId ?? "";
     if (!this.snap) {
-      this.snap = adapt(server, this.language, this.options.userId);
+      this.snap = adapt(server, this.language, userId);
       this.appliedRevision = this.snap.revision;
       this.appliedRound = this.snap.round;
       this.lastDocRevision = this.snap.docRevision;
       return true;
     }
     if (server.revision !== undefined && server.revision < this.appliedRevision) return false;
-    this.snap = adapt(server, this.language, this.options.userId);
+    this.snap = adapt(server, this.language, userId);
     this.appliedRevision = this.snap.revision;
     this.appliedRound = this.snap.round;
     this.lastDocRevision = this.snap.docRevision;
@@ -478,12 +640,14 @@ export class SocketArenaTransport implements ArenaTransport {
 
   async startRound(): Promise<void> {
     const lifetime = this.requireConnected("start");
+    if (this.getAccessToken) await this.ensureFreshToken();
     await this.post("/start", {}, lifetime);
     await this.refreshAfterCommand(lifetime);
   }
 
   async beginCoding(): Promise<void> {
     const lifetime = this.requireConnected("begin");
+    if (this.getAccessToken) await this.ensureFreshToken();
     await this.post("/begin", {}, lifetime);
     await this.refreshAfterCommand(lifetime);
   }
@@ -493,6 +657,7 @@ export class SocketArenaTransport implements ArenaTransport {
       // Authoritative team switch: bumps the doc revision and invalidates
       // both approvals server-side (the refresh carries the new revision).
       const lifetime = this.requireConnected("language");
+    if (this.getAccessToken) await this.ensureFreshToken();
       await this.post("/language", { language }, lifetime);
       await this.refreshAfterCommand(lifetime);
       return;
@@ -503,6 +668,7 @@ export class SocketArenaTransport implements ArenaTransport {
 
   async run(input: { code: string; language: string }): Promise<RunReceipt> {
     const lifetime = this.requireConnected("run");
+    if (this.getAccessToken) await this.ensureFreshToken();
     await this.post("/run", input, lifetime);
     await this.refreshAfterCommand(lifetime);
     return { ok: true };
@@ -510,6 +676,7 @@ export class SocketArenaTransport implements ArenaTransport {
 
   async submit(input: { code: string; language: string; documentRevision?: number }): Promise<SubmitReceipt> {
     const lifetime = this.requireConnected("submit");
+    if (this.getAccessToken) await this.ensureFreshToken();
     const documentRevision = input.documentRevision ?? this.lastDocRevision ?? undefined;
     const request = this.submitRequest(input, documentRevision);
     const receipt = (await this.post("/submit", {
@@ -530,28 +697,50 @@ export class SocketArenaTransport implements ArenaTransport {
    */
   async setReady(value: boolean): Promise<void> {
     const lifetime = this.requireConnected("setReady");
-    const sock = this.socket!;
+    if (this.getAccessToken) await this.ensureFreshToken();
+    await this.ensureSocketToken(lifetime);
+    const sock = this.socket;
+    if (!sock || lifetime.signal.aborted) throw new Error("Readiness confirmation was lost");
     const payload = { value, documentRevision: this.lastDocRevision ?? undefined };
-    await new Promise<void>((resolve, reject) => {
-      const cancelled = () => reject(new Error("Readiness confirmation was lost"));
-      lifetime.signal.addEventListener("abort", cancelled, { once: true });
-      sock.timeout(5_000).emit("setReady", payload, (error: Error | null, res?: { ok: boolean; error?: string }) => {
-        lifetime.signal.removeEventListener("abort", cancelled);
-        if (error || lifetime.signal.aborted || this.socket !== sock) reject(new Error("Readiness confirmation was lost"));
-        else if (res?.ok) resolve();
-        else reject(new Error(res?.error ?? "setReady rejected"));
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const cancelled = () => reject(new Error("Readiness confirmation was lost"));
+        lifetime.signal.addEventListener("abort", cancelled, { once: true });
+        sock.timeout(5_000).emit("setReady", payload, (error: Error | null, res?: { ok: boolean; error?: string }) => {
+          lifetime.signal.removeEventListener("abort", cancelled);
+          if (lifetime.signal.aborted || this.socket !== sock) reject(new Error("Readiness confirmation was lost"));
+          else if (res?.ok) resolve();
+          // A missing ack (or a timeout where the server suppressed the ack)
+          // means auth/runtime loss — never a blind retry. The catch below
+          // renews, reconnects, and throws so the UI reconciles via snapshot.
+          else if (res === undefined || error) reject(new AuthLossSignal());
+          else reject(new Error(res?.error ?? "setReady rejected"));
+        });
       });
-    });
+    } catch (error) {
+      if (error instanceof AuthLossSignal && this.onAuthExpired && !lifetime.signal.aborted && this.socket === sock)
+        return this.renewAfterAuthLoss(lifetime);
+      throw error instanceof AuthLossSignal ? new Error("Readiness confirmation was lost") : error;
+    }
+  }
+
+  /** Reattach when the session token moved on (renewal) since the socket was attached. */
+  private async ensureSocketToken(lifetime: AbortController): Promise<void> {
+    if (!this.getAccessToken || !this.socket) return;
+    if (this.getAccessToken() !== this.attachedToken) await this.renewSocket();
+    else this.assertActive(lifetime);
   }
 
   async advance(): Promise<void> {
     const lifetime = this.requireConnected("advance");
+    if (this.getAccessToken) await this.ensureFreshToken();
     await this.post("/advance", {}, lifetime);
     await this.refreshAfterCommand(lifetime);
   }
 
   async leave(): Promise<void> {
     const lifetime = this.requireConnected("leave");
+    if (this.getAccessToken) await this.ensureFreshToken();
     await this.post("/leave", {}, lifetime);
     await this.refreshAfterCommand(lifetime);
   }
@@ -615,13 +804,24 @@ export class SocketArenaTransport implements ArenaTransport {
     this.session.notify();
   }
 
-  private async get(path: string, lifetime = this.activeLifetime()): Promise<unknown> {
+  private async get(path: string, lifetime = this.activeLifetime(), apiBase = false): Promise<unknown> {
     this.assertActive(lifetime);
-    const res = await fetch(`${this.options.baseUrl}/matches/${this.options.matchId}${path}`, {
-      headers: { "x-dev-user-id": this.options.userId },
-      signal: lifetime.signal,
-    });
+    const root = apiBase && this.apiBase ? this.apiBase : this.socketBase;
+    const url = apiBase ? `${root}${path}` : `${root}/matches/${this.matchId}${path}`;
+    const send = async (): Promise<Response> =>
+      fetch(url, {
+        headers: this.authHeaders(),
+        signal: lifetime.signal,
+      });
+    let res = await send();
     this.assertActive(lifetime);
+    if (res.status === 401 && this.onAuthExpired) {
+      await this.onAuthExpired();
+      this.assertActive(lifetime);
+      res = await send();
+      this.assertActive(lifetime);
+      if (res.status === 401) throw new AuthExpiredError();
+    }
     if (!res.ok) throw new Error(`${path} failed with ${res.status}`);
     const payload = await res.json();
     this.assertActive(lifetime);
@@ -630,13 +830,14 @@ export class SocketArenaTransport implements ArenaTransport {
 
   private async post(path: string, body: unknown, lifetime = this.activeLifetime()): Promise<unknown> {
     this.assertActive(lifetime);
-    const res = await fetch(`${this.options.baseUrl}/matches/${this.options.matchId}${path}`, {
+    const res = await fetch(`${this.socketBase}/matches/${this.matchId}${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-dev-user-id": this.options.userId },
+      headers: { "content-type": "application/json", ...this.authHeaders() },
       body: JSON.stringify(body),
       signal: lifetime.signal,
     });
     this.assertActive(lifetime);
+    if (res.status === 401 && this.onAuthExpired) return this.renewAfterAuthLoss(lifetime);
     if (!res.ok) {
       const payload = (await res.json().catch(() => null)) as { error?: string } | null;
       if (res.status === 409) {

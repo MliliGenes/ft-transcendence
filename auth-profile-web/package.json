@@ -10,6 +10,7 @@
     "test": "node --test --test-isolation=none test/*.test.mjs"
   },
   "dependencies": {
+    "browser-auth": "file:../packages/browser-auth",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

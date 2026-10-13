@@ -6,11 +6,12 @@ import {
   useRef,
   useState,
 } from 'react';
-import { api, sessionStore } from '../lib/runtime.js';
+import { api, authClient, sessionStore } from '../lib/runtime.js';
 import { ApiError } from '../lib/api-client.js';
 import { navigate } from '../lib/navigation.js';
 
 const AuthContext = createContext(null);
+const EXPIRED_NOTICE = 'Your session expired. Please sign in again.';
 
 export function AuthProvider({ children, initialNotice }) {
   const [profile, setProfile] = useState(null);
@@ -19,45 +20,35 @@ export function AuthProvider({ children, initialNotice }) {
   const [notice, setNotice] = useState(initialNotice);
   const [mutating, setMutating] = useState(false);
   const [revision, setRevision] = useState(0);
-  const load = useRef({ sequence: 0, controller: null });
+  const load = useRef({ sequence: 0 });
   const mutation = useRef(false);
-  const sessionChannel = useRef(null);
+  const signingOut = useRef(false);
+  const wasAuthenticated = useRef(false);
 
   const restore = useCallback(async () => {
-    load.current.controller?.abort();
-    const controller = new AbortController();
     const sequence = ++load.current.sequence;
-    load.current.controller = controller;
-    let session = sessionStore.read();
-    let hadSession = Boolean(session);
+    const hadSession = authClient.getAccessToken() !== null;
     setLoadError(null);
     setProfile(null);
     setStatus('loading');
     try {
-      if (!session) {
-        session = await api.restoreSession();
-        hadSession = Boolean(session);
-      }
-      if (!session) {
+      const snapshot = await authClient.restore();
+      if (sequence !== load.current.sequence) return;
+      if (snapshot.status === 'authenticated') {
+        wasAuthenticated.current = true;
+        setProfile(snapshot.profile);
+        setStatus('authenticated');
+      } else {
+        wasAuthenticated.current = false;
+        if (hadSession) setNotice({ type: 'error', text: EXPIRED_NOTICE });
         setStatus('anonymous');
-        return;
       }
-      const user = await api.request('/accounts/me', {
-        signal: controller.signal,
-      });
-      if (
-        sequence !== load.current.sequence ||
-        sessionStore.read()?.sessionKey !== session.sessionKey
-      )
-        return;
-      setProfile(user);
-      setStatus('authenticated');
     } catch (error) {
-      if (controller.signal.aborted || sequence !== load.current.sequence)
-        return;
-      if (error.status === 401) {
-        if (hadSession)
-          setNotice({ type: 'error', text: error.message });
+      if (sequence !== load.current.sequence) return;
+      if (error.code === 'SESSION_CHANGED') return;
+      if (error.code === 'LOGOUT_PENDING') {
+        wasAuthenticated.current = false;
+        setNotice({ type: 'error', text: error.message });
         setStatus('anonymous');
       } else {
         setLoadError(error);
@@ -67,77 +58,60 @@ export function AuthProvider({ children, initialNotice }) {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = sessionStore.subscribe((session, reason) => {
-      if (reason) setNotice({ type: 'error', text: reason });
-      if (!session) {
+    // Session-control (logout/renewal fan-out) lives in the shared client;
+    // here we only mirror its snapshot into React state.
+    const unsubscribe = authClient.subscribe((snapshot) => {
+      if (snapshot.logoutPending)
+        setNotice({
+          type: 'warning',
+          text: 'You are signed out on this browser. The service could not confirm the session was closed.',
+        });
+      if (snapshot.status === 'anonymous') {
+        if (wasAuthenticated.current && !signingOut.current)
+          setNotice({ type: 'error', text: EXPIRED_NOTICE });
+        wasAuthenticated.current = false;
         setProfile(null);
         setStatus('anonymous');
       }
     });
-    const channel =
-      typeof BroadcastChannel === 'undefined'
-        ? null
-        : new BroadcastChannel('fieldnote-auth-session');
-    sessionChannel.current = channel;
-    const sync = (event) => {
-      if (event.data === 'signed-out') sessionStore.clear();
-      if (event.data === 'signed-in') {
-        void api
-          .restoreSession(true)
-          .then(() => restore())
-          .catch((error) => {
-            if (error.status === 401) sessionStore.clear();
-            else {
-              setLoadError(error);
-              setStatus('error');
-            }
-          });
-      }
-    };
-    channel?.addEventListener('message', sync);
+    const stopStore = sessionStore.subscribe((session, reason) => {
+      if (reason) setNotice({ type: 'error', text: reason });
+    });
     void restore();
     return () => {
       unsubscribe();
-      channel?.removeEventListener('message', sync);
-      channel?.close();
-      sessionChannel.current = null;
-      load.current.controller?.abort();
+      stopStore();
       load.current.sequence++;
     };
   }, [restore]);
 
   const signIn = async (mode, values) => {
-    const tokens = await api.request(`/auth/${mode}`, {
-      auth: false,
-      cookieSession: true,
-      method: 'POST',
-      json: values,
-    });
+    await authClient.login(mode, values);
     setNotice(null);
-    sessionStore.replace(tokens);
-    sessionChannel.current?.postMessage('signed-in');
     void restore();
     navigate('/account', { replace: true });
   };
 
   const signOut = async () => {
-    sessionStore.clear();
-    sessionChannel.current?.postMessage('signed-out');
-    setNotice(null);
-    navigate('/login', { replace: true });
+    signingOut.current = true;
     try {
-      await api.request('/auth/logout', {
-        auth: false,
-        cookieSession: true,
-        method: 'POST',
-      });
-    } catch {
-      if (!sessionStore.read())
+      const { serverConfirmed } = await authClient.logout();
+      setNotice(null);
+      navigate('/login', { replace: true });
+      if (!serverConfirmed)
         setNotice({
           type: 'warning',
           text: 'You are signed out on this browser. The service could not confirm the session was closed.',
         });
+    } finally {
+      signingOut.current = false;
     }
+  };
+
+  const guard = () => authClient.getSnapshot().sessionGeneration;
+  const changed = (key) => {
+    if (!key || authClient.getSnapshot().sessionGeneration !== key)
+      throw new ApiError('Your session changed. Please sign in again.', 401);
   };
 
   const changePassword = async (values) => {
@@ -145,14 +119,13 @@ export function AuthProvider({ children, initialNotice }) {
       throw new Error('Please wait for your current change to finish.');
     mutation.current = true;
     setMutating(true);
-    const key = sessionStore.read()?.sessionKey;
+    const key = guard();
     try {
       await api.request('/accounts/me/password', {
         method: 'PATCH',
         json: values,
       });
-      if (!key || sessionStore.read()?.sessionKey !== key)
-        throw new ApiError('Your session changed. Please sign in again.', 401);
+      changed(key);
     } finally {
       mutation.current = false;
       setMutating(false);
@@ -164,14 +137,13 @@ export function AuthProvider({ children, initialNotice }) {
       throw new Error('Please wait for your current change to finish.');
     mutation.current = true;
     setMutating(true);
-    const key = sessionStore.read()?.sessionKey;
+    const key = guard();
     try {
       await api.request('/accounts/me/password', {
         method: 'POST',
         json: values,
       });
-      if (!key || sessionStore.read()?.sessionKey !== key)
-        throw new ApiError('Your session changed. Please sign in again.', 401);
+      changed(key);
       setProfile((current) => current && { ...current, hasPassword: true });
     } finally {
       mutation.current = false;
@@ -184,11 +156,10 @@ export function AuthProvider({ children, initialNotice }) {
       throw new Error('Please wait for your current change to finish.');
     mutation.current = true;
     setMutating(true);
-    const key = sessionStore.read()?.sessionKey;
+    const key = guard();
     try {
       await api.request('/auth/discord/link', { method: 'DELETE' });
-      if (!key || sessionStore.read()?.sessionKey !== key)
-        throw new ApiError('Your session changed. Please sign in again.', 401);
+      changed(key);
       setProfile((current) => current && { ...current, hasDiscord: false });
     } finally {
       mutation.current = false;
@@ -201,11 +172,10 @@ export function AuthProvider({ children, initialNotice }) {
       throw new Error('Please wait for your current change to finish.');
     mutation.current = true;
     setMutating(true);
-    const key = sessionStore.read()?.sessionKey;
+    const key = guard();
     try {
       await api.request('/auth/github/link', { method: 'DELETE' });
-      if (!key || sessionStore.read()?.sessionKey !== key)
-        throw new ApiError('Your session changed. Please sign in again.', 401);
+      changed(key);
       setProfile((current) => current && { ...current, hasGithub: false });
     } finally {
       mutation.current = false;
@@ -218,11 +188,10 @@ export function AuthProvider({ children, initialNotice }) {
       throw new Error('Please wait for your current change to finish.');
     mutation.current = true;
     setMutating(true);
-    const key = sessionStore.read()?.sessionKey;
+    const key = guard();
     try {
       const user = await api.request(path, options);
-      if (!key || sessionStore.read()?.sessionKey !== key)
-        throw new ApiError('Your session changed. Please sign in again.', 401);
+      changed(key);
       setProfile(user);
       setRevision((value) => value + 1);
       return user;
