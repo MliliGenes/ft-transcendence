@@ -1,6 +1,6 @@
 # 42 subject compliance matrix
 
-Last reviewed: 2026-10-01, during the clean Code Arena extraction.
+Last reviewed: 2026-10-13, after the auth-game integration (Tasks 1–7).
 
 Authoritative source: [ft_transcendence v21.2](../requirements/ft_transcendence-v21.2.pdf).
 
@@ -24,10 +24,15 @@ readiness, Nginx HTTPS/WSS ingress, a private judge worker, an isolated
 container judge, and tests for 1v1/2v2 gameplay, lobby, reconnect,
 collaboration, judging, and match-scoped chat.
 
-The teammate user service and platform chat branches are deliberately not
-merged. Production authentication, profiles/friends, OAuth, platform chat,
-policy pages, final deployment configuration, contribution records, and final
-module demonstrations therefore remain integration work.
+The teammate user service is integrated as a private Compose service
+(`user-service:3000`, own database) behind the gateway: password
+signup/login, ≤15 min access tokens, narrow refresh cookies, CSRF on cookie
+endpoints, scoped rate limits, and query-free logs are proven by
+`scripts/https-smoke.sh` (30/30) plus a live superadmin login →
+`/play/` → Lobby → Match run with `DEV_PRINCIPAL=false`. OAuth callbacks are
+proxied with cookie rewrites; a full OAuth demonstration remains pending.
+Platform chat, policy pages, final deployment configuration, contribution
+records, and final module demonstrations therefore remain integration work.
 
 ## Status key
 
@@ -52,9 +57,9 @@ module demonstrations therefore remain integration work.
 | Styling solution | Tailwind is used by the frontend. | Imported evidence; final integrated build pending. |
 | Ignored secrets and `.env.example` | Secrets and generated TLS material are ignored; safe variable names are documented. | Imported evidence; secret scan and deployment review required. |
 | Documented database design | Game persistence and least-privilege bootstrap are documented by ADRs and code. | User-service schema integration and final README diagram pending. |
-| Secure signup/login | Game exposes only a verified-principal seam. | Owned by the unmerged user-service branch. |
+| Secure signup/login | Game consumes the verified principal only (no `?user=` in prod); user-service signup/login with ≤15 min tokens, narrow cookies (`httpOnly`, `lax`, `/auth/`), CSRF, and scoped limits is integrated and smoke-proven. | Imported evidence; final clean-machine demonstration pending. |
 | Frontend and backend validation | Game commands validate membership, phase, size, revision, and request identity. | Imported evidence; cross-service validation review pending. |
-| HTTPS for external backend connections | Nginx terminates HTTPS/WSS; only Nginx publishes ports in the game stack. | Local certificate proof exists; production certificate and full-stack proof pending. |
+| HTTPS for external backend connections | Nginx terminates HTTPS/WSS; only Nginx publishes ports in the game stack. | Local certificate + full-stack auth proof exists; production certificate pending. |
 | At least 14 completed module points | Candidate modules are listed below. | No points are awarded by this document. |
 
 ## Candidate module evidence
@@ -64,12 +69,12 @@ module demonstrations therefore remain integration work.
 | Frontend and backend frameworks | 2 | React/Vite and NestJS are the real game implementation. | Demonstrate them in the final integrated application. |
 | Real-time features | 2 | Socket.IO match/lobby events, reconnect, presence, collaboration, and chat tests. | Final remote-client, disconnect, load, and cross-instance demonstration. |
 | User interaction | 2 | Match-scoped 2v2 text chat and quick pings. | Profiles, friends, and the final platform/game chat ownership must be integrated. |
-| Standard user management/authentication | 2 | Game's trusted-principal boundary is documented. | User-service branch must be integrated and demonstrated. |
+| Standard user management/authentication | 2 | Game consumes the verified principal only; user-service signup/login (≤15 min tokens, narrow cookies, CSRF, scoped limits) is integrated and smoke-proven. | Final clean-machine demonstration pending. |
 | Complete web-based game | 2 | Code Arena has defined rounds, Run/Submit, hidden judging, reveal, scoring, tie-breaks, and terminal results. | Clean final-stack 1v1 demonstration and team sign-off. |
 | Remote players | 2 | Socket transport, reconnect, reservation, and browser multi-client journeys exist. | Demonstrate play from separate computers under realistic disconnect/latency conditions. |
 | More-than-two-player multiplayer | 2 | 2v2 supports four principals, team-scoped shared editing/readiness/chat, and one team score. | Clean four-client synchronization/fairness demonstration. |
-| Backend microservices | 2 | Game and the private judge worker use a narrow authenticated boundary. | Integrate the user service and demonstrate loose coupling and independent responsibility from the final stack. |
-| OAuth 2.0 | 1 | No OAuth implementation is imported here. | Integrate and demonstrate the teammate user-service OAuth flow. |
+| Backend microservices | 2 | Game, the private judge worker, and user-service use narrow authenticated boundaries. | User-service integration demonstrated; final loose-coupling review pending. |
+| OAuth 2.0 | 1 | User-service OAuth callbacks are proxied with cookie rewrites (smoke-covered). | Full OAuth login demonstration pending. |
 | **Potential total** | **17** | This is planning capacity, not a score. | Count only complete, functioning, demonstrated modules. |
 
 ## Code Arena rules relevant to evaluation
@@ -93,7 +98,9 @@ module demonstrations therefore remain integration work.
    security tests, and Playwright journeys from a clean clone of the final
    repository.
 2. Demonstrate HTTPS/WSS, the user-service principal flow, 1v1, four-client
-   2v2, reconnect, hidden-data isolation, and match-scoped chat end to end.
+   2v2, reconnect, hidden-data isolation, and match-scoped chat end to end
+   (auth-matrix proof with `DEV_PRINCIPAL=false` recorded in the Task 8
+   report; clean-machine rerun still required).
 3. Inspect the final Compose network and secrets, including proof that only the
    judge worker receives the Docker socket and internal worker token.
 4. Complete policy pages, the subject-required README sections, ownership and

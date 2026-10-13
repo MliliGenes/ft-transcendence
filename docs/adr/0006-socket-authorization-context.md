@@ -48,3 +48,26 @@ Replace `DEV_PRINCIPAL` with the authenticated Core principal and narrow CORS
 origins before production auth integration. Keep the same `SocketPrincipal`
 interface so the gateways and Game service do not need another identity
 refactor.
+
+## Addendum (2026-10-13, auth-game integration)
+
+The follow-up above is done; the seam now carries the verified auth principal:
+
+- **Verify, don't parse**: handshake `auth: { accessToken, matchId? }` is
+  verified per connection via `AuthPrincipalClient.verify` against private
+  `user-service:3000` (`GET /auth/principal` → `{ userId, expiresAt }`, 2s
+  budget, in-flight dedup). Every message re-verifies the stored token; failure
+  disconnects and suppresses the ack. Renewal is reconnect-with-new-token.
+- The old `DEV_PRINCIPAL` handshake parsing (`auth.userId`/query/`?user=`,
+  `x-dev-user-id`) survives only as an explicit dev-suite seam behind
+  `DEV_PRINCIPAL=true`; production (`false`) fails closed.
+- **Architecture**: user-service (Node 24, own `user_db`) and game (Node 22,
+  own `game_db`) are separate Compose services on separate volumes; only the
+  static nginx gateway (1.27-alpine, prebuilt Arena `/play/` + auth `/`
+  SPAs) publishes ports. Routing: `/api/lobby/` + `/api/matches/` → game is
+  canonical (the Arena's single `apiBase` addresses game HTTP as
+  `/api/lobby|matches/*`); `/api/game/` + legacy roots → game; rest of
+  `/api/` → user-service; `/socket.io/` → game. `AuthPrincipalClient`
+  registration is owned by `GameModule` (factory provider); tests share the
+  single `createTestAppWithVerifier` helper. Full contract:
+  `docs/auth-game-contract.md`.

@@ -101,6 +101,12 @@ echo "$body" | grep -q "Fieldnote" && ok "/ serves auth SPA" || bad "/ must serv
 body=$(curl -ks -m 10 "$BASE/play/")
 echo "$body" | grep -q "Code Arena" && ok "/play/ serves game SPA" || bad "/play/ must serve game SPA"
 echo "$body" | grep -q "/play/assets/" && ok "/play/ assets under /play/" || bad "/play/ assets must use /play/ base"
+arena_js=$(echo "$body" | grep -o "/play/assets/[^\"']*\.js" | head -1)
+[ -n "$arena_js" ] && [ "$(curl -ks -o /dev/null -w "%{content_type}" -m 10 "$BASE$arena_js")" = "application/javascript" ] \
+  && ok "/play/ scripts serve application/javascript" || bad "/play/ module scripts must be application/javascript (mime.types)"
+auth_js=$(curl -ks -m 10 "$BASE/" | grep -o "/assets/[^\"']*\.js" | head -1)
+[ -n "$auth_js" ] && [ "$(curl -ks -o /dev/null -w "%{content_type}" -m 10 "$BASE$auth_js")" = "application/javascript" ] \
+  && ok "/ scripts serve application/javascript" || bad "/ module scripts must be application/javascript (mime.types)"
 
 redir=$(curl -ks -o /dev/null -w "%{http_code} %{redirect_url}" -m 10 "$BASE/play")
 echo "$redir" | grep -q "^301 " || bad "/play must 301"

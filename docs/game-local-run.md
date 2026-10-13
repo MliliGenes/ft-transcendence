@@ -38,13 +38,35 @@ E2E_GAME_URL=http://localhost:3220 E2E_WEB_URL=http://localhost:4173 \
   npx playwright test   # from frontend/
 ```
 
+The spawned-server E2E above is the **separate dev suite**: it runs with
+`DEV_PRINCIPAL=true` and the `x-dev-user-id` / `?user=` seams, and never
+touches the Compose auth stack. Auth-matrix proof (real login, renewal,
+outage, logout) runs against Compose with `DEV_PRINCIPAL=false` instead.
+
 ## Production-like stack (Compose + Nginx + HTTPS/WSS)
 
 ```sh
 npm run certs   # self-signed localhost certs (git-ignored); production mounts real ones
-# Set JUDGE_WORKER_TOKEN in .env to a private random value before startup.
+# Fill .env from .env.example first: JWT key pair, SUPERADMIN_* trio,
+# AUTH_FRONTEND_URL, SMTP x4, GAME_DB_*/USER_DB_* passwords, JUDGE_WORKER_TOKEN.
+# Both databases start empty on disposable volumes (pgdata, userpgdata):
+# superadmin is created only when no SUPERADMIN exists; wipe a volume only to
+# reset disposable proof data (never existing data).
 docker compose up --build
+./scripts/https-smoke.sh   # 32 static + live gateway assertions
 ```
+
+Full-stack auth proof (`DEV_PRINCIPAL=false`, the Compose default): password
+login at `https://localhost/` → `{ user, accessToken, expiresIn: 900 }` (no
+refresh in body) → follow the topbar **Play** link to `/play/` → Lobby
+(`/api/lobby/active` 200 with Bearer, 401 without) → private room or queue →
+playable Match over WSS (Bearer HTTP + `auth: { accessToken, matchId }`
+sockets). Game verifies every token against private `user-service:3000`
+(`GET /auth/principal`); `/api/lobby/` + `/api/matches/` route to game as the
+canonical split (see `auth-game-contract.md`), everything else under `/api/`
+to user-service. Game and accounts persist on separate databases
+(`game_db`/`game_user` vs `user_db`/`user_user`).
+
 
 The single-host path has been exercised from a fresh Compose container start:
 worker and Game readiness, HTTPS Run, two concurrent Submits, hidden evaluation,
