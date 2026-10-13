@@ -1,11 +1,12 @@
-import { Injectable, type CallHandler, type ExecutionContext, type NestInterceptor } from "@nestjs/common";
+import { Inject, Injectable, type CallHandler, type ExecutionContext, type NestInterceptor } from "@nestjs/common";
 import { EMPTY, of, throwError, type Observable } from "rxjs";
 import { catchError, mergeMap } from "rxjs/operators";
 import { GameService } from "./game.service.js";
 
 @Injectable()
 export class GameRuntimeInterceptor implements NestInterceptor {
-  constructor(private readonly game: GameService) {}
+  // @Inject: explicit token for vitest/esbuild (drops design:paramtypes).
+  constructor(@Inject(GameService) private readonly game: GameService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const socketMessage = context.getType() === "ws";

@@ -1,6 +1,6 @@
 import { UseInterceptors } from "@nestjs/common";
 import { GameRuntimeInterceptor } from "./runtime-availability.interceptor.js";
-import { BadRequestException, Body, Controller, Get, Param, Post, Req, UseFilters } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Inject, Param, Post, Req, UseFilters } from "@nestjs/common";
 import type { Request } from "express";
 import { EngineErrorFilter } from "./errors.js";
 import { GameService } from "./game.service.js";
@@ -12,7 +12,8 @@ import type { LobbySideId } from "arena-game-engine/lobby";
 @UseFilters(EngineErrorFilter)
 @UseInterceptors(GameRuntimeInterceptor)
 export class LobbyController {
-  constructor(private readonly game: GameService) {}
+  // @Inject: explicit token for vitest/esbuild (drops design:paramtypes).
+  constructor(@Inject(GameService) private readonly game: GameService) {}
 
   @Post("queue")
   async joinQueue(@Req() req: Request, @Body() body: { mode: MatchMode }) {

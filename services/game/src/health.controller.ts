@@ -1,5 +1,5 @@
 import { GameService } from "./game/game.service.js";
-import { Controller, Get, ServiceUnavailableException } from "@nestjs/common";
+import { Controller, Get, Inject, ServiceUnavailableException } from "@nestjs/common";
 import { ALL_ROUND_PHASES } from "arena-model";
 import * as net from "node:net";
 
@@ -21,7 +21,8 @@ function tcp(host: string, port: number, timeoutMs: number): Promise<boolean> {
 
 @Controller()
 export class HealthController {
-  constructor(private readonly game: GameService) {}
+  // @Inject: explicit token for vitest/esbuild (drops design:paramtypes).
+  constructor(@Inject(GameService) private readonly game: GameService) {}
 
   /** Liveness: the process is up and the shared model resolves at runtime. */
 

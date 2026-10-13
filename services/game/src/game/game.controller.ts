@@ -1,6 +1,6 @@
 import { UseInterceptors } from "@nestjs/common";
 import { GameRuntimeInterceptor } from "./runtime-availability.interceptor.js";
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Req, UseFilters } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Inject, NotFoundException, Param, Post, Req, UseFilters } from "@nestjs/common";
 import type { Request } from "express";
 import { EngineErrorFilter } from "./errors.js";
 import { GameService } from "./game.service.js";
@@ -15,7 +15,8 @@ import { requirePrincipal } from "./principal.js";
 @UseFilters(EngineErrorFilter)
 @UseInterceptors(GameRuntimeInterceptor)
 export class GameController {
-  constructor(private readonly game: GameService) {}
+  // @Inject: explicit token for vitest/esbuild (drops design:paramtypes).
+  constructor(@Inject(GameService) private readonly game: GameService) {}
 
   @Post()
   create(@Req() req: Request, @Body() body: { mode: "1v1" | "2v2"; participants: Array<{ userId: string; sideId: string }>; problemVersionIds: string[] }) {
