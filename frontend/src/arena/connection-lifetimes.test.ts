@@ -191,6 +191,39 @@ describe("Arena transport lifetime", () => {
     expect(client.connection()).toBe("offline");
   });
 
+  it("keeps an accepted command successful and pauses commands after refresh failure", async () => {
+    const { client } = await arena();
+    vi.mocked(fetch).mockResolvedValueOnce(response({ ok: true }) as Response)
+      .mockRejectedValueOnce(new Error("snapshot unavailable"));
+
+    await expect(client.leave()).resolves.toBeUndefined();
+    expect(client.snapshot().notice).toContain("Action accepted");
+    expect(client.connection()).not.toBe("connected");
+    await expect(client.run({ code: "source", language: "Python" })).rejects.toThrow("unavailable");
+
+    sockets.at(-1)!.server("snapshot", snapshot(8));
+    await flush();
+    expect(client.connection()).toBe("connected");
+    expect(client.snapshot().notice).toBeNull();
+    expect(client.snapshot().revision).toBe(8);
+  });
+
+  it("clears confirmed Submit identity before a failed refresh", async () => {
+    const { client } = await arena();
+    vi.mocked(fetch).mockResolvedValueOnce(response({ ok: true, round: 1 }) as Response)
+      .mockRejectedValueOnce(new Error("snapshot unavailable"));
+    await expect(client.submit({ code: "source", language: "Python" })).resolves.toMatchObject({ ok: true });
+    const firstBody = JSON.parse(vi.mocked(fetch).mock.calls[1]![1]!.body as string);
+    sockets.at(-1)!.server("snapshot", snapshot(8));
+    await flush();
+    vi.mocked(fetch).mockResolvedValueOnce(response({ ok: true, round: 1 }) as Response);
+    await client.submit({ code: "source", language: "Python" });
+    const posts = vi.mocked(fetch).mock.calls.filter((call) => call[1]?.method === "POST");
+    const secondBody = JSON.parse(posts[1]![1]!.body as string);
+    expect(secondBody.evaluationId).not.toBe(firstBody.evaluationId);
+    expect(secondBody.submissionId).not.toBe(firstBody.submissionId);
+  });
+
   it("cancels an old HTTP command without refreshing or replaying it in a new connection", async () => {
     const { client } = await arena();
     const completed = deferred<ReturnType<typeof response>>();
@@ -320,6 +353,114 @@ describe("Round collaboration lifetime", () => {
     expect(client.getSource()).toBe("starter");
     expect(first.listeners("sync")).toHaveLength(0);
     expect(sockets[1]!.listeners("sync")).toHaveLength(1);
+  });
+
+  it("tracks pending edit confirmation before allowing team actions", async () => {
+    const client = collab();
+    const wait = client.connect();
+    const socket = sockets[0]!;
+    socket.server("sync", sync());
+    await wait;
+    client.ytext.insert(client.ytext.length, " edited");
+    expect(client.hasPendingUpdates).toBe(true);
+    socket.outgoing.at(-1)!.ack({ ok: true, revision: 2, changed: true });
+    expect(client.hasPendingUpdates).toBe(false);
+    expect(client.revision).toBe(2);
+    expect(client.getSource()).toBe("starter edited");
+  });
+
+  it.each(["rejected", "timeout", "disconnect"])("recovers a %s edit from a fresh document and retains its text", async (failure) => {
+    const client = collab();
+    const baseline = sync();
+    const wait = client.connect();
+    const socket = sockets[0]!;
+    socket.server("sync", baseline);
+    await wait;
+    const originalDoc = client.doc;
+    client.ytext.insert(client.ytext.length, " rejected text");
+    if (failure === "rejected") socket.outgoing.at(-1)!.ack({ ok: false, error: "write failed" });
+    else if (failure === "timeout") await vi.advanceTimersByTimeAsync(5_000);
+    else socket.server("disconnect");
+    expect(client.connection()).not.toBe("connected");
+    await flush();
+    sockets.at(-1)!.server("sync", baseline);
+    await flush();
+    expect(client.getSource()).toBe("starter");
+    expect(client.recoverySource).toBe("starter rejected text");
+    expect(client.connection()).toBe("connected");
+    expect(client.hasPendingUpdates).toBe(false);
+    expect(originalDoc.isDestroyed).toBe(true);
+    expect(sockets.at(-1)!.outgoing.filter((entry) => entry.event === "update")).toHaveLength(0);
+  });
+
+  it("loads a fresh language baseline before shared actions can resume", async () => {
+    const client = collab();
+    const baseline = sync();
+    const wait = client.connect();
+    sockets[0]!.server("sync", baseline);
+    await wait;
+    const oldDoc = client.doc;
+    const rejoin = client.reconcile?.(2, "C++");
+    expect(client.connection()).not.toBe("connected");
+    sockets.at(-1)!.server("sync", { ...sync("C++ starter"), language: "C++", revision: 2 });
+    await rejoin;
+    expect(client.getSource()).toBe("C++ starter");
+    expect(client.language).toBe("C++");
+    expect(client.revision).toBe(2);
+    expect(oldDoc.isDestroyed).toBe(true);
+  });
+
+  it("keeps blocked-storage recovery across language changes until explicitly dismissed", async () => {
+    vi.stubGlobal("window", { get localStorage() { throw new Error("storage blocked"); } });
+    const client = collab();
+    const wait = client.connect();
+    sockets[0]!.server("sync", sync());
+    await wait;
+    client.ytext.insert(client.ytext.length, " recover me");
+    sockets[0]!.outgoing.at(-1)!.ack({ ok: false, error: "write failed" });
+    await flush();
+    sockets.at(-1)!.server("sync", sync());
+    await flush();
+    expect(client.recoverySource).toBe("starter recover me");
+    const changeLanguage = client.reconcile(2, "C++");
+    sockets.at(-1)!.server("sync", { ...sync("C++ starter"), language: "C++", revision: 2 });
+    await changeLanguage;
+    expect(client.recoverySource).toBeNull();
+    const returnLanguage = client.reconcile(3, "Python");
+    sockets.at(-1)!.server("sync", { ...sync(), revision: 3 });
+    await returnLanguage;
+    expect(client.recoverySource).toBe("starter recover me");
+    expect(client.getSource()).toBe("starter");
+    client.clearRecovery();
+    client.applySync({ ...sync(), revision: 3 });
+    expect(client.recoverySource).toBeNull();
+  });
+
+  it("restores recovery text after reload only for the same player and Round", async () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal("window", { localStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => { storage.set(key, value); },
+      removeItem: (key: string) => { storage.delete(key); },
+    } });
+    const client = collab();
+    const baseline = sync();
+    const wait = client.connect();
+    sockets[0]!.server("sync", baseline);
+    await wait;
+    client.ytext.insert(client.ytext.length, " recover me");
+    sockets[0]!.outgoing.at(-1)!.ack({ ok: false, error: "write failed" });
+    client.dispose();
+    const reloaded = collab();
+    reloaded.applySync(baseline);
+    expect(reloaded.recoverySource).toBe("starter recover me");
+    expect(reloaded.getSource()).toBe("starter");
+    const other = new CollabClient({ ...config, userId: "other", displayName: "Other" });
+    cleanup.push(() => other.dispose());
+    other.applySync(baseline);
+    expect(other.recoverySource).toBeNull();
+    reloaded.applySync({ ...baseline, roundId: "next-round" });
+    expect(reloaded.recoverySource).toBeNull();
   });
 
   it("releases a retired Round, cancels its join and ignores late frames", async () => {

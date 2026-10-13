@@ -1,6 +1,7 @@
 # Local agent/tool state
 .superpowers/
 .trigger-tree/
+/.scratch/
 
 # Dependencies, builds, coverage, and test output
 node_modules/

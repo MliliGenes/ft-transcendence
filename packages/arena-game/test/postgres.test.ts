@@ -262,7 +262,7 @@ describe.runIf(HAS_PG)("postgres persistence + restart (real database)", () => {
     }
   });
 
-  it("two Game instances judge one shared evaluation exactly once", async () => {
+  it.each(["success", "failure"])("two Game instances share one evaluation %s with one judge call", async (outcome) => {
     const peerStores = new PostgresStores(PG_URL);
     const firstJudge = new ScriptedJudge([{ defer: true }]);
     const secondJudge = new ScriptedJudge([P100]);
@@ -303,9 +303,16 @@ describe.runIf(HAS_PG)("postgres persistence + restart (real database)", () => {
       await tick();
       expect(secondJudge.evalCalls).toBe(0);
 
-      firstJudge.release(P100);
-      const [firstReceipt, secondReceipt] = await Promise.all([first, second]);
-      expect(secondReceipt).toEqual(firstReceipt);
+      if (outcome === "failure") {
+        firstJudge.release({ infra: "judge unavailable" });
+        const results = await Promise.allSettled([first, second]);
+        expect(results.map((result) => result.status)).toEqual(["rejected", "rejected"]);
+        expect((await stores.persistence.findSubmissionByEvaluationId("cross-process-evaluation"))?.status).toBe("failed");
+      } else {
+        firstJudge.release(P100);
+        const [firstReceipt, secondReceipt] = await Promise.all([first, second]);
+        expect(secondReceipt).toEqual(firstReceipt);
+      }
       expect(firstJudge.evalCalls).toBe(1);
       expect(secondJudge.evalCalls).toBe(0);
     } finally {

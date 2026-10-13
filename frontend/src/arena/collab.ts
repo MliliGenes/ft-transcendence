@@ -84,12 +84,12 @@ function encodeRemoteCursor(clientId: number, clock: number, state: unknown): Ui
  * Offline policy (§20, safe default): while disconnected the shared editor
  * goes read-only (see CodeWorkspace) — no unbounded offline CRDT editing
  * that could surprise readiness or frozen-submit semantics. Reconnect
- * re-applies the authoritative baseline; CRDT merge makes it idempotent.
+ * re-applies the authoritative baseline. Unconfirmed edits use a fresh document.
  */
 export class CollabClient {
-  readonly doc = new Y.Doc();
+  private currentDoc = new Y.Doc();
   /** Ephemeral cursor store backing y-codemirror.next remote rendering. */
-  readonly awareness: Awareness;
+  private currentAwareness: Awareness;
   revision: number | null = null;
   language: string | null = null;
   roundId: string | null = null;
@@ -106,6 +106,10 @@ export class CollabClient {
   private readonly peerClocks = new Map<number, number>();
   /** True while applying server frames: suppresses echo back to the server. */
   private applyingRemote = false;
+  private readonly pendingUpdates = new Set<symbol>();
+  private resetOnSync = false;
+  private readonly recoveries = new Map<string, string>();
+  private lastError: string | null = null;
 
   constructor(
     private readonly options: {
@@ -115,18 +119,100 @@ export class CollabClient {
       displayName: string;
     },
   ) {
-    this.awareness = new Awareness(this.doc);
+    this.currentAwareness = new Awareness(this.doc);
+    this.bindDocument();
+  }
+
+  get doc(): Y.Doc { return this.currentDoc; }
+  get awareness(): Awareness { return this.currentAwareness; }
+  get hasPendingUpdates(): boolean { return this.pendingUpdates.size > 0; }
+  get error(): string | null { return this.lastError; }
+  get recoverySource(): string | null {
+    const key = this.recoveryKey();
+    return key ? this.recoveries.get(key) ?? null : null;
+  }
+
+  clearRecovery(): void {
+    const key = this.recoveryKey();
+    if (key) this.recoveries.delete(key);
+    this.lastError = null;
+    try { if (key && typeof window !== "undefined") window.localStorage.removeItem(key); } catch { /* Keep working when storage is blocked. */ }
+    this.emit();
+  }
+
+  private recoveryKey(): string | null {
+    if (!this.roundId || !this.language) return null;
+    return `arena-recovery:${JSON.stringify([this.options.baseUrl, this.options.userId, this.options.matchId, this.roundId, this.language])}`;
+  }
+
+  private saveRecovery(): void {
+    const key = this.recoveryKey();
+    if (!key) return;
+    const source = this.getSource();
+    this.recoveries.set(key, source);
+    try { if (typeof window !== "undefined") window.localStorage.setItem(key, source); } catch { /* The recovery copy remains in memory. */ }
+  }
+
+  private captureUnconfirmed(): void {
+    if (!this.hasPendingUpdates) return;
+    this.saveRecovery();
+    this.resetOnSync = true;
+    this.lastError = "Edit confirmation was lost. Your text is available below.";
+  }
+
+  private bindDocument(): void {
+    const doc = this.doc;
     this.awareness.setLocalStateField("user", {
-      name: options.displayName,
-      color: colorForUser(options.userId),
+      name: this.options.displayName, color: colorForUser(this.options.userId),
     });
-    // Local edits -> incremental frames to the server (skips remote applies).
-    this.doc.on("update", (update: Uint8Array) => {
-      if (this.applyingRemote) return;
+    doc.on("update", (update: Uint8Array) => {
+      if (this.applyingRemote || doc !== this.doc) return;
       const sock = this.socket;
-      if (!sock || this.conn !== "connected" || !this.roundId) return;
-      sock.emit("update", { roundId: this.roundId, updateB64: bytesToB64(update) }, () => {});
+      const lifetime = this.lifetime;
+      if (!sock || !lifetime || this.conn !== "connected" || !this.roundId) {
+        if (this.resetOnSync) this.saveRecovery();
+        return;
+      }
+      const pending = Symbol();
+      this.pendingUpdates.add(pending);
+      this.emit();
+      sock.timeout(5_000).emit("update", { roundId: this.roundId, updateB64: bytesToB64(update) },
+        (error: Error | null, result?: { ok: boolean; revision?: number; error?: string }) => {
+          if (this.socket !== sock || lifetime.signal.aborted) return;
+          this.pendingUpdates.delete(pending);
+          if (error || !result?.ok || !Number.isSafeInteger(result.revision) || result.revision! < 1) {
+            this.saveRecovery();
+            this.resetOnSync = true;
+            this.lastError = error ? "Edit confirmation was lost. Your text is available below." : "The edit was not saved. Your text is available below.";
+            this.stopSocket();
+            this.setConn("reconnecting");
+            void this.connect().catch(() => {});
+            return;
+          }
+          this.revision = Math.max(this.revision ?? 0, result.revision!);
+          this.emit();
+        });
     });
+  }
+
+  private replaceDocument(): void {
+    const previous = this.doc;
+    this.currentDoc = new Y.Doc();
+    previous.destroy();
+    this.peerIds.clear();
+    this.peerClocks.clear();
+    this.currentAwareness = new Awareness(this.doc);
+    this.bindDocument();
+  }
+
+  /** A changed language or a missed accepted frame requires a fresh document baseline. */
+  async reconcile(revision: number | null, language: string): Promise<void> {
+    if (this.disposed || this.connecting || this.conn !== "connected" || this.hasPendingUpdates || revision === null) return;
+    if (this.revision !== null && revision < this.revision) return;
+    if (revision === this.revision && language === this.language) return;
+    this.resetOnSync = true;
+    this.stopSocket();
+    await this.connect();
   }
 
   get ytext(): Y.Text {
@@ -246,12 +332,12 @@ export class CollabClient {
   }
 
   /**
-   * Applies the authoritative baseline (join + reconnect). Plain CRDT merge:
-   * idempotent for reconnects. Round isolation rides per-round remounts
-   * (fresh Y.Doc per round — old content can never merge into a new round),
-   * so no reset logic lives here.
+   * Applies the authoritative baseline. Ordinary rejoins merge idempotently.
+   * Unconfirmed edits and language changes replace the document first.
+   * A new client per Round keeps retired Round content isolated.
    */
   applySync(sync: CollabSyncPayload): void {
+    if (this.resetOnSync) { this.replaceDocument(); this.resetOnSync = false; }
     this.applyingRemote = true;
     try {
       if (sync.stateB64) Y.applyUpdate(this.doc, b64ToBytes(sync.stateB64));
@@ -262,6 +348,11 @@ export class CollabClient {
     this.roundId = sync.roundId;
     this.revision = sync.revision;
     this.language = sync.language;
+    const key = this.recoveryKey();
+    try {
+      const source = key && typeof window !== "undefined" ? window.localStorage.getItem(key) : null;
+      if (key && source !== null) this.recoveries.set(key, source);
+    } catch { /* Use the in-memory recovery copy. */ }
     this.emit();
   }
 
@@ -288,7 +379,7 @@ export class CollabClient {
     sock.on("remote-update", (p: { updateB64: string; revision: number }) => {
       if (!active()) return;
       this.applyRemoteUpdate(p.updateB64);
-      this.revision = p.revision;
+      this.revision = Math.max(this.revision ?? 0, p.revision);
       this.emit();
     });
     sock.on("peer-cursor", (p: PeerCursor) => {
@@ -298,7 +389,7 @@ export class CollabClient {
       if (active() && p && typeof p.userId === "string") this.removePeer(p.userId);
     });
     sock.on("disconnect", () => {
-      if (active()) this.setConn("reconnecting");
+      if (active()) { this.captureUnconfirmed(); this.setConn("reconnecting"); }
     });
     sock.on("connect_error", () => {
       if (active()) this.setConn("reconnecting");
@@ -328,6 +419,7 @@ export class CollabClient {
     const connecting = wait.catch((error: Error) => {
       if (active()) {
         this.stopSocket();
+        this.lastError = error.message;
         this.setConn("offline");
       }
       throw error;
@@ -340,7 +432,9 @@ export class CollabClient {
   }
 
   private stopSocket(): void {
+    this.captureUnconfirmed();
     this.lifetime?.abort();
+    this.pendingUpdates.clear();
     this.lifetime = null;
     if (this.socket) {
       this.socket.removeAllListeners();

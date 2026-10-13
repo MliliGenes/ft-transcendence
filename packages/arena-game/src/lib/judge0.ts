@@ -239,12 +239,21 @@ export class Judge0Adapter implements GameJudge {
     const status = this.statusFrom(response.status?.id);
     if (status === "internal_error") throw new JudgeInfraError("Judge0 returned an internal execution failure");
     const runtimeMs = this.runtimeMs(response.time);
+    const output = this.outputFor(response, driver);
+    const comparison = driver === "snippet" ? this.snippetResult(response.stdout) : output;
+    const outputCap = Math.max(1, Math.floor(limits.runOutputBytes));
+    // Judge0 accepts KiB quotas. Apply Game's exact byte cap in trusted code,
+    // including both display and comparison channels for Python snippets.
+    const outputBytes = Buffer.byteLength(output, "utf8") + Buffer.byteLength(response.stderr ?? "", "utf8")
+      + (driver === "snippet" ? Buffer.byteLength(comparison, "utf8") : 0);
+    if (outputBytes > outputCap) {
+      const captured = Buffer.from(output, "utf8").subarray(0, outputCap).toString("utf8").replace(/\uFFFD$/, "");
+      return { id: test.id, status: "output_limit_exceeded", passed: false, output: captured, runtimeMs };
+    }
     if (status !== "accepted") {
       return { id: test.id, status, passed: false, output: "", runtimeMs };
     }
 
-    const output = this.outputFor(response, driver);
-    const comparison = driver === "snippet" ? this.snippetResult(response.stdout) : output;
     return {
       id: test.id,
       status,

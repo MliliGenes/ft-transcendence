@@ -113,3 +113,13 @@ host supplies revision access without requiring a concrete `MatchAuthority`.
 Registry entries, resolvers, and execution inputs are private. Public receipts,
 claim-owned commits, recovery, persistence schema, and gameplay behavior remain
 as specified above.
+
+
+## Judge failure boundaries, 2026-10-12
+
+Telemetry callbacks are best effort. Their errors cannot replace a valid judge
+verdict or its original infrastructure error. A stopped host Docker client is an
+infrastructure failure. The execution adapter gives each container a unique name,
+stops the client at the host deadline, and awaits a bounded removal attempt.
+Judge0 results are checked against the exact UTF8 byte output cap in trusted code;
+the provider's rounded KiB quota alone does not enforce that boundary.

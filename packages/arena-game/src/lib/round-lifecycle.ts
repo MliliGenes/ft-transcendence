@@ -176,7 +176,7 @@ export class RoundLifecycle {
       round.readiness = {};
       round.teamDocs ??= {};
       for (const side of Object.keys(round.activities)) {
-        round.teamDocs[side] = { revision: 1, language: round.teamDocs[side]?.language ?? "Python" };
+        round.teamDocs[side] = { revision: 1, language: previousRound.teamDocs?.[side]?.language ?? "Python" };
       }
     }
 

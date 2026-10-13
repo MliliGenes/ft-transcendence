@@ -49,6 +49,7 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   private readonly matchSocketPresence: MatchSocketPresence;
   private graceTimer?: NodeJS.Timeout;
   private deadlineTimer?: NodeJS.Timeout;
+  private readonly pendingAutoReveals = new Map<string, { userId: string }>();
 
   constructor() {
     this.matchSocketPresence = new MatchSocketPresence({
@@ -108,7 +109,13 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     this.engine.on((event, payload) => {
       const matchId = (payload as { matchId?: string } | null)?.matchId;
       if (typeof matchId === "string" && matchId) {
-        for (const l of this.listeners) l(event, matchId, payload);
+        for (const listener of this.listeners) {
+          try {
+            listener(event, matchId, payload);
+          } catch (error) {
+            console.error(`[game] live event listener failed for ${event}:`, error);
+          }
+        }
       }
     });
     // Boot recovery BEFORE serving (§10): presence reset, transient repair,
@@ -119,6 +126,9 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     // reaches its saved terminal result without waiting for a player action.
     this.deadlineTimer = setInterval(() => {
       void this.engine.sweepExpiredMatches().catch(() => {});
+      for (const [matchId, pending] of this.pendingAutoReveals) {
+        void this.maybeAutoReveal(pending.userId, matchId).catch(() => {});
+      }
     }, 1000);
     this.deadlineTimer.unref();
     // Reconnect grace and retained queue matchmaking use their slower cadence.
@@ -134,6 +144,7 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     if (this.graceTimer) clearInterval(this.graceTimer);
     if (this.deadlineTimer) clearInterval(this.deadlineTimer);
+    this.pendingAutoReveals.clear();
     await this.stores?.close();
   }
 
@@ -302,15 +313,20 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async maybeAutoReveal(userId: string, matchId: string): Promise<void> {
+    const pending = { userId };
+    this.pendingAutoReveals.set(matchId, pending);
+    const clear = () => {
+      if (this.pendingAutoReveals.get(matchId) === pending) this.pendingAutoReveals.delete(matchId);
+    };
     const principal = this.principalFor(userId);
+    const snapshot = await this.engine.snapshot(principal, matchId);
+    if (snapshot.roundPhase !== "CODING") { clear(); return; }
     const sides = await this.engine.roundSides(principal, matchId);
     const counted = await this.engine.roundCountedSides(principal, matchId);
     if (sides.length > 0 && counted.length >= sides.length) {
-      try {
-        await this.engine.publishReveal(principal, matchId, { graceMs: 1500 });
-      } catch {
-        // Already revealed/advanced by a concurrent path; safe to ignore.
-      }
+      // Keep failed publication pending for the existing server timer.
+      await this.engine.publishReveal(principal, matchId, { graceMs: 1500 });
     }
+    clear();
   }
 }

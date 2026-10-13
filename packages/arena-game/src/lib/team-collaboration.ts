@@ -92,6 +92,7 @@ export class TeamCollaboration {
   private readonly bank: TeamProblemBank;
   private readonly clock: () => number;
   private readonly collab: CollabDocs;
+  private readonly loaded = new Map<string, TeamDocState>();
 
   constructor(options: TeamCollaborationOptions) {
     this.persistence = options.persistence;
@@ -240,7 +241,9 @@ export class TeamCollaboration {
   destroyRound(match: MatchRecord, round: RoundState): void {
     if (match.mode !== "2v2") return;
     for (const side of Object.keys(round.activities)) {
-      this.collab.destroy(collabRoomId(match.id, round.roundId, side));
+      const room = collabRoomId(match.id, round.roundId, side);
+      this.collab.destroy(room);
+      this.loaded.delete(room);
     }
   }
 
@@ -302,20 +305,31 @@ export class TeamCollaboration {
   }
 
   private async ensureLoaded(match: MatchRecord, round: RoundState, side: SideId, room: string): Promise<void> {
-    if (this.collab.has(room)) return;
     const doc = this.teamDocOf(match, side);
+    const cached = this.loaded.get(room);
+    // A fresh Match can reference an edit committed by another Game engine.
+    // Keep same-revision Yjs state, including pending out-of-order frames.
+    if (this.collab.has(room) && cached?.revision === doc.revision && cached.language === doc.language) return;
     const stored = await this.persistence.loadTeamDocument(match.id, round.roundId, side);
     if (stored?.stateB64) {
-      this.collab.restoreState(room, stored.stateB64);
+      if (cached && cached.revision > 1 && cached.language === stored.language) {
+        this.collab.refreshState(room, stored.stateB64);
+      } else {
+        this.collab.restoreState(room, stored.stateB64);
+      }
+      this.loaded.set(room, { revision: stored.appRevision, language: stored.language });
       if (stored.appRevision !== doc.revision || stored.language !== doc.language) {
         doc.revision = stored.appRevision;
         doc.language = stored.language;
         this.invalidate(match, round, side);
         await this.persistence.saveMatch(match);
       }
-      return;
+    } else {
+      if (doc.revision > 1) throw new IllegalStateError("saved team document is unavailable");
+      this.collab.destroy(room);
+      this.collab.seedOnce(room, this.starterFor(round, doc.language));
+      this.loaded.set(room, { ...doc });
     }
-    this.collab.seedOnce(room, this.starterFor(round, doc.language));
   }
 
   private starterFor(round: RoundState, language: string): string {
@@ -354,14 +368,16 @@ export class TeamCollaboration {
 
   private async persist(match: MatchRecord, round: RoundState, side: SideId): Promise<void> {
     const doc = this.teamDocOf(match, side);
+    const room = collabRoomId(match.id, round.roundId, side);
     const row: CollabRow = {
       roundId: round.roundId,
       sideId: side,
       appRevision: doc.revision,
       language: doc.language,
-      stateB64: this.collab.encodeState(collabRoomId(match.id, round.roundId, side)),
+      stateB64: this.collab.encodeState(room),
     };
     await this.persistence.commitMatchAndTeamDocuments(match, [row]);
+    this.loaded.set(room, { ...doc });
   }
 
   private async rollback(
@@ -371,6 +387,7 @@ export class TeamCollaboration {
     room: string,
     pre: { revision: DocumentRevision; language: string; readiness: Record<string, MemberReadiness | undefined> },
   ): Promise<void> {
+    this.loaded.delete(room);
     const stored = await this.persistence.loadTeamDocument(match.id, round.roundId, side).catch(() => undefined);
     if (stored?.stateB64) this.collab.restoreState(room, stored.stateB64);
     else this.collab.destroy(room);

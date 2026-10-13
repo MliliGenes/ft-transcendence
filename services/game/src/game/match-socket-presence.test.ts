@@ -81,6 +81,60 @@ describe("MatchSocketPresence", () => {
     ]);
   });
 
+  it("removes a failed open so a later socket can update Presence", async () => {
+    const target = new RecordingPresenceTarget();
+    addParticipant(target, "match-1", "alice", "left");
+    const original = target.setPresence.bind(target);
+    let fail = true;
+    target.setPresence = async (...args) => {
+      if (fail) { fail = false; throw new Error("Presence save failed"); }
+      await original(...args);
+    };
+    const presence = new MatchSocketPresence(target);
+    await expect(presence.noteSocketOpen("alice", "match-1", "failed")).rejects.toThrow("save failed");
+    await presence.noteSocketOpen("alice", "match-1", "next");
+    await presence.noteSocketClosed("alice", "match-1", "next");
+    expect(target.calls.map((call) => call.presence)).toEqual(["online", "offline"]);
+  });
+
+  it("cancels a pending open when its socket closes during membership lookup", async () => {
+    const target = new RecordingPresenceTarget();
+    let entered!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((done) => { entered = done; });
+    const gate = new Promise<void>((done) => { release = done; });
+    target.participantSide = async () => { entered(); await gate; return "left"; };
+    const presence = new MatchSocketPresence(target);
+    const opening = presence.noteSocketOpen("alice", "match-1", "socket");
+    opening.catch(() => {});
+    await started;
+    const closing = presence.noteSocketClosed("alice", "match-1", "socket");
+    release();
+    await expect(opening).rejects.toThrow("closed");
+    await closing;
+    expect(target.calls).toEqual([]);
+  });
+
+  it("cancels a pending open when its socket closes during mode lookup", async () => {
+    const target = new RecordingPresenceTarget();
+    addParticipant(target, "match-1", "alice", "left");
+    let entered!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((done) => { entered = done; });
+    const gate = new Promise<void>((done) => { release = done; });
+    let calls = 0;
+    target.modeOf = async () => { if (++calls === 1) { entered(); await gate; } return "1v1"; };
+    const presence = new MatchSocketPresence(target);
+    const opening = presence.noteSocketOpen("alice", "match-1", "socket");
+    opening.catch(() => {});
+    await started;
+    const closing = presence.noteSocketClosed("alice", "match-1", "socket");
+    release();
+    await expect(opening).rejects.toThrow("closed");
+    await closing;
+    expect(target.calls).toEqual([]);
+  });
+
   it("tracks 2v2 presence independently for members sharing one side", async () => {
     const target = new RecordingPresenceTarget();
     const presence = new MatchSocketPresence(target);

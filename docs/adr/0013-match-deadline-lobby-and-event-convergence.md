@@ -71,3 +71,41 @@ future release.
 - `frontend/src/arena/lobby-session.test.ts`
 - `frontend/src/components/LobbyPage.tsx`
 - `frontend/e2e/live-lobby.spec.ts`
+
+## Confirmed command completion, 2026-10-12
+
+Ordinary Match writes and claim-session Evaluation commits keep a separate copy
+of the acknowledged Match state and revision inside the command context. A
+successful final revision read remains preferred. If that read fails after the
+command callback succeeds, its confirmed state supplies the result, event
+revision, and resource retirement. A failed initial read, callback, or durable
+write still fails the command. No revision is inferred from a proposed write.
+
+Command exit does not perform an automatic Match save. Ordinary commands save
+explicitly through Match authority; Evaluation commits keep their claim-session
+ownership through the structural command host.
+
+A browser command receipt remains successful when its following snapshot refresh
+fails. The client reports the refresh failure, pauses commands, and rejoins for a
+fresh authorized baseline. It does not replay the confirmed command. Confirmed
+Submission identities are released before refresh; uncertain receipts retain
+only their existing manual retry identity.
+
+
+## Interrupted normal Reveals, 2026-10-12
+
+Normal Reveal publication saves the evaluation cutoff before writing its immutable
+Reveal row. A later Match phase write can fail without letting late evaluations
+change the saved scores. A retry reuses the saved Reveal and its publication time.
+Live events follow the successful Match write.
+
+The Game service keeps failed automatic publications pending. Its existing
+one-second timer retries them until publication succeeds or the current phase
+shows that the work is complete. Each attempt can clear only its own pending
+record. Submission receipts remain successful after durable evaluation acceptance.
+Game event listeners are isolated so one listener failure cannot stop later delivery.
+
+Lobby browser actions and socket callbacks belong to one session lifetime.
+Replies from a stopped lifetime cannot change a restarted session or route it to
+an old Match. A replaced Arena transport supplies a fresh snapshot during render,
+and the subscription reads again after listener registration.

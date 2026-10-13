@@ -27,17 +27,19 @@ export function TeamPanel({
   beta,
   ready,
   onSetReady,
+  disabled,
 }: {
   alpha: TeamView;
   beta: TeamView;
   ready: Readiness;
   onSetReady: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <section aria-label="Teams" className="rounded-md border border-neutral-200 bg-white">
       <TeamBlock title="Your team" team={alpha} />
       <div className="border-t border-neutral-200">
-        <ReadyState ready={ready} onSetReady={onSetReady} />
+        <ReadyState ready={ready} onSetReady={onSetReady} disabled={disabled} />
       </div>
       <div className="border-t border-neutral-200 px-3 py-1 font-mono text-xs text-neutral-400">VS</div>
       <TeamBlock title="Other team" team={beta} />

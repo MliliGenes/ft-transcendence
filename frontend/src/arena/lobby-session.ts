@@ -31,6 +31,7 @@ export class LobbySession {
   private snapshot: LobbySessionSnapshot;
   private readonly listeners = new Set<() => void>();
   private requestVersion = 0;
+  private lifetimeVersion = 0;
   private socketCleanup?: () => void;
   private active = false;
   private joinedRoomId: string | null = null;
@@ -54,14 +55,17 @@ export class LobbySession {
   start(): Promise<void> {
     if (!this.socketCleanup) {
       this.active = true;
+      const lifetimeVersion = ++this.lifetimeVersion;
+      const refresh = () => { if (this.isCurrentLifetime(lifetimeVersion)) void this.refresh(); };
       this.socketCleanup = this.client.connectSocket({
         onConnect: () => {
+          if (!this.isCurrentLifetime(lifetimeVersion)) return;
           this.joinedRoomId = null;
           void this.refresh();
         },
-        onRoomUpdated: () => void this.refresh(),
-        onMatchFound: () => void this.refresh(),
-        onQueueMatched: () => void this.refresh(),
+        onRoomUpdated: refresh,
+        onMatchFound: refresh,
+        onQueueMatched: refresh,
       });
     }
     return this.refresh();
@@ -69,6 +73,7 @@ export class LobbySession {
 
   stop(): void {
     this.active = false;
+    this.lifetimeVersion += 1;
     this.requestVersion += 1;
     this.socketCleanup?.();
     this.socketCleanup = undefined;
@@ -81,6 +86,7 @@ export class LobbySession {
   }
 
   async refresh(): Promise<void> {
+    if (!this.active) return;
     const requestVersion = ++this.requestVersion;
     const isCurrent = () => this.active && requestVersion === this.requestVersion;
     this.update({ error: null });
@@ -149,24 +155,32 @@ export class LobbySession {
 
   async startRoom(): Promise<void> {
     const roomId = this.snapshot.roomData?.room.id;
-    if (!roomId) return;
+    if (!roomId || !this.active) return;
+    const lifetimeVersion = this.lifetimeVersion;
     this.update({ error: null });
     try {
       const result = await this.client.startRoom(roomId);
-      this.handoff(result.matchId);
+      if (this.isCurrentLifetime(lifetimeVersion)) this.handoff(result.matchId);
     } catch (error) {
-      this.update({ error: this.message(error, "Failed to start room") });
+      if (this.isCurrentLifetime(lifetimeVersion)) this.update({ error: this.message(error, "Failed to start room") });
     }
   }
 
+  private isCurrentLifetime(version: number): boolean {
+    return this.active && version === this.lifetimeVersion;
+  }
+
   private async mutate(action: () => Promise<unknown>): Promise<boolean> {
+    if (!this.active) return false;
+    const lifetimeVersion = this.lifetimeVersion;
     this.update({ error: null });
     try {
       await action();
+      if (!this.isCurrentLifetime(lifetimeVersion)) return false;
       await this.refresh();
-      return true;
+      return this.isCurrentLifetime(lifetimeVersion);
     } catch (error) {
-      this.update({ error: this.message(error, "Failed to update lobby") });
+      if (this.isCurrentLifetime(lifetimeVersion)) this.update({ error: this.message(error, "Failed to update lobby") });
       return false;
     }
   }
@@ -187,8 +201,9 @@ export class LobbySession {
       ...(roomData ? { mode: roomData.room.mode } : {}),
     });
     if (joinedRoom) {
+      const lifetimeVersion = this.lifetimeVersion;
       queueMicrotask(() => {
-        if (this.active && this.joinedRoomId === nextRoomId) void this.refresh();
+        if (this.isCurrentLifetime(lifetimeVersion) && this.joinedRoomId === nextRoomId) void this.refresh();
       });
     }
   }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { EditorAdapter, type EditorAdapterHandle } from "./EditorAdapter.js";
 import { EditorToolbar } from "./EditorToolbar.js";
 import { TestPanel } from "./TestPanel.js";
@@ -24,20 +24,12 @@ export function CodeWorkspace({
   const [fontSize, setFontSize] = useState(13);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Re-render on collab sync/connection transitions (read-only + gating).
-  const [collabTick, setCollabTick] = useState(0);
-  useEffect(() => {
-    if (!collab) return;
-    return collab.subscribe(() => setCollabTick((t) => t + 1));
-  }, [collab]);
-  void collabTick;
-
   const isTeam = snapshot.mode === "2v2";
   const canEditBase = snapshot.roundPhase === "CODING" && snapshot.you.status === "coding";
   // Ticket 15 §20: collab disconnected -> shared editor read-only, actions
   // paused. The game socket still owns Run/Submit gating via `connected`.
   const collabLive = !collab || collab.connection() === "connected";
-  const canEdit = canEditBase && collabLive;
+  const canEdit = canEditBase && collabLive && (!collab || collab.recoverySource === null);
   // Ticket 14: team gate needs both approvals bound to the CURRENT team-doc
   // revision (server re-checks; this is UX only). Ticket 15 keeps this gate
   // and binds the revision to real Yjs updates; the editor itself stays a
@@ -49,7 +41,9 @@ export function CodeWorkspace({
   // Ticket 11 §14: actions need a live transport; the editor stays locally
   // editable while offline so no draft is lost, but nothing can succeed.
   // In collab mode the shared doc replaces the draft: paused until synced.
-  const connected = transport.connection() === "connected" && collabLive;
+  const sharedActionsReady = !collab || (!collab.hasPendingUpdates && collab.revision === snapshot.docRevision && collab.language === snapshot.language);
+  const connected = transport.connection() === "connected" && collabLive && sharedActionsReady;
+  const recoverySource = collab?.recoverySource ?? null;
   const canSubmit = canEdit && readyGate;
   // Run/Submit always read the freshest source: shared Y.Text in collab mode.
   const liveCode = collab ? collab.getSource() : code;
@@ -71,7 +65,7 @@ export function CodeWorkspace({
       <EditorToolbar
         language={snapshot.language}
         languages={Object.keys(snapshot.problem.starters)}
-        canEdit={canEdit}
+        canEdit={canEdit && connected}
         canSubmit={canSubmit}
         busy={busy}
         connected={connected}
@@ -96,9 +90,28 @@ export function CodeWorkspace({
       {collab && (
         <p role="status" className="border-b border-neutral-200 px-3 py-1 font-mono text-xs text-neutral-600">
           {collab.connection() === "connected"
-            ? `Shared doc r${collab.revision ?? "?"} · live`
+            ? collab.hasPendingUpdates ? "Saving shared changes — Run and Submit are paused." : `Shared doc r${collab.revision ?? "?"} · live`
             : "Shared doc reconnecting — editing paused until synced."}
         </p>
+      )}
+      {collab?.error && <p role="alert" className="border-b border-neutral-200 px-3 py-1 text-xs text-red-700">{collab.error}</p>}
+      {recoverySource !== null && (
+        <section aria-label="Unsaved edit recovery" className="space-y-2 border-b border-neutral-200 bg-neutral-50 p-3">
+          <p className="text-xs">Your unconfirmed text is kept here. Copy it, then dismiss this copy to resume editing.</p>
+          <textarea aria-label="Recovery text" readOnly value={recoverySource} className="h-24 w-full rounded border border-neutral-300 bg-white p-2 font-mono text-xs" />
+          <div className="flex gap-2">
+            <button type="button" className="rounded border border-neutral-300 px-2 py-1 text-xs"
+              onClick={() => {
+                if (!navigator.clipboard) { setError("Select the recovery text and copy it manually."); return; }
+                void navigator.clipboard.writeText(recoverySource).catch(() => setError("Select the recovery text and copy it manually."));
+              }}>
+              Copy recovery text
+            </button>
+            <button type="button" className="rounded border border-neutral-300 px-2 py-1 text-xs" onClick={() => collab?.clearRecovery()}>
+              Dismiss recovery copy
+            </button>
+          </div>
+        </section>
       )}
       {error && (
         <p role="alert" className="border-b border-neutral-200 px-3 py-1 font-mono text-xs text-red-700">
@@ -110,7 +123,7 @@ export function CodeWorkspace({
           // ponytail: collab binding is round-scoped (fresh team Y.Doc per
           // round) — remount the editor on round change so old-round content
           // can never merge into the new document. Local mode never remounts.
-          key={collab ? `collab-${snapshot.round}` : "local"}
+          key={collab ? `collab-${snapshot.round}-${collab.doc.clientID}` : "local"}
           ref={editorRef}
           language={snapshot.language}
           code={code}

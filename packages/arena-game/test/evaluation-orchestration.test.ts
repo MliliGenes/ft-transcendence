@@ -61,7 +61,10 @@ async function evaluationFixture(judge?: GameJudge, decorate = (store: MatchPers
           return value;
         } finally { locked = false; release(); }
       },
-      revisionFor: () => 1,
+      commitClaimedEvaluation: async (claim: Parameters<MatchPersistence["commitClaimedEvaluation"]>[0], current: MatchRecord, submission?: SubmissionRecord) => {
+        current.revision += 1;
+        await persistence.commitClaimedEvaluation(claim, current, submission);
+      },
       loadMatchOrThrow: async (id: string) => {
         const stored = await persistence.loadMatch(id);
         if (!stored) throw new Error("missing Match");
@@ -207,6 +210,30 @@ describe("Evaluation retry workflow", () => {
     await expect(first).rejects.toBe(failure);
     await expect(retry).rejects.toBe(failure);
     await expect(workflow.submit(f.match.id, async () => f.request())).rejects.toBe(failure);
+    expect(control.calls()).toBe(1);
+    await expect(f.persistence.findSubmissionByEvaluationId("evaluation-1")).resolves.toMatchObject({ status: "failed" });
+  });
+
+  it("replays a stored failure to a second workflow waiting for the same claim", async () => {
+    const control = controlledJudge();
+    const f = await evaluationFixture(control.judge);
+    const entered = deferred<void>();
+    const claim = f.persistence.claimPendingEvaluation.bind(f.persistence);
+    let claims = 0;
+    f.persistence.claimPendingEvaluation = (id) => {
+      if (++claims === 2) entered.resolve();
+      return claim(id);
+    };
+    const first = new EvaluationOrchestrator(f.options).submit(f.match.id, async () => f.request());
+    first.catch(() => {});
+    await control.started;
+    const second = new EvaluationOrchestrator(f.options).submit(f.match.id, async () => f.request());
+    second.catch(() => {});
+    await entered.promise;
+    control.fail(new JudgeInfraError("judge unavailable"));
+
+    await expect(first).rejects.toThrow("judge unavailable");
+    await expect(second).rejects.toBeInstanceOf(JudgeInfraError);
     expect(control.calls()).toBe(1);
     await expect(f.persistence.findSubmissionByEvaluationId("evaluation-1")).resolves.toMatchObject({ status: "failed" });
   });

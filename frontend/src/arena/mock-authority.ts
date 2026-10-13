@@ -34,6 +34,7 @@ export class MockMatchAuthority {
   private countedGroups: RevealView["groups"] | null = null;
   private opponentCounted: number | null = null;
   private reveal: RevealView | null = null;
+  private readonly totals = { you: 0, opponent: 0 };
   private ready = { you: false, mate: false };
   /** 2v2 mock of the server doc revision (production: engine teamDocs). */
   private docRevision = 1;
@@ -231,10 +232,12 @@ export class MockMatchAuthority {
     this.youStatus = "locked";
     this.opponentStatus = "locked";
     this.alphaStatus = ["locked", "locked"];
+    this.totals.you += this.counted;
+    this.totals.opponent += this.opponentCounted ?? 0;
     this.reveal = {
       roundScore: this.counted,
       groups: this.countedGroups.map((group) => ({ ...group })),
-      totals: { you: this.counted, opponent: this.opponentCounted ?? 0 },
+      totals: { ...this.totals },
     };
     this.emit();
   }
@@ -244,10 +247,11 @@ export class MockMatchAuthority {
     if (this.roundPhase !== "SCORE_REVEAL") throw new Error(`cannot advance from ${this.roundPhase}`);
     if (this.round >= 3) {
       this.roundPhase = "MATCH_COMPLETE";
-    } else {
-      this.round += 1;
-      this.roundPhase = "ROUND_INTRO";
+      this.emit();
+      return;
     }
+    this.round += 1;
+    this.roundPhase = "ROUND_INTRO";
     this.reveal = null;
     this.counted = null;
     this.countedGroups = null;
@@ -267,8 +271,8 @@ export class MockMatchAuthority {
 
   private matchFinal(): MatchFinalView | null {
     if (this.roundPhase !== "MATCH_COMPLETE") return null;
-    const you = this.counted ?? 0;
-    const opponent = this.opponentCounted ?? 0;
+    const you = this.totals.you + (this.reveal ? 0 : this.counted ?? 0);
+    const opponent = this.totals.opponent + (this.reveal ? 0 : this.opponentCounted ?? 0);
     return {
       you,
       opponent,

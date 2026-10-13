@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
   type CaseResult,
   type DriverKind,
@@ -277,10 +278,13 @@ export class ContainerJudge implements GameJudge {
     limits: JudgeLimits;
   }): Promise<RawExecution> {
     const image = this.images[input.language];
+    const containerName = `arena-judge-${randomUUID()}`;
     const memory = `${input.limits.runMemoryMb}m`;
     const args = [
       "run",
       "--rm",
+      "--name",
+      containerName,
       "--cap-drop=ALL",
       "--security-opt=no-new-privileges",
       "--network",
@@ -324,12 +328,23 @@ export class ContainerJudge implements GameJudge {
       execFile(
         this.dockerBin,
         args,
-        { timeout: this.outerTimeoutMs, maxBuffer },
-        (error, stdout, stderr) => {
+        { timeout: this.outerTimeoutMs, maxBuffer, killSignal: "SIGKILL" },
+        async (error, stdout, stderr) => {
+          const errorCode = (error as NodeJS.ErrnoException | null)?.code;
+          const captureAborted = errorCode === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+          const clientStopped = Boolean(error?.killed) || errorCode === "ETIMEDOUT";
+          if (captureAborted || clientStopped) {
+            // Killing the Docker client does not stop its daemon-owned job.
+            // Wait for a bounded cleanup attempt before releasing this case.
+            await new Promise<void>((done) => {
+              execFile(this.dockerBin, ["rm", "-f", containerName],
+                { timeout: 5000, maxBuffer: 64 * 1024, killSignal: "SIGKILL" }, () => done());
+            });
+          }
           const code = typeof (error as { code?: unknown } | null)?.code === "number"
             ? (error as { code: number }).code
             : 0;
-          if (error && (error as NodeJS.ErrnoException).code === "ETIMEDOUT") {
+          if (clientStopped && !captureAborted) {
             reject(new JudgeInfraError("judge orchestrator timeout"));
             return;
           }

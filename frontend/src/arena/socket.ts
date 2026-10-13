@@ -479,13 +479,13 @@ export class SocketArenaTransport implements ArenaTransport {
   async startRound(): Promise<void> {
     const lifetime = this.requireConnected("start");
     await this.post("/start", {}, lifetime);
-    await this.refresh(undefined, lifetime);
+    await this.refreshAfterCommand(lifetime);
   }
 
   async beginCoding(): Promise<void> {
     const lifetime = this.requireConnected("begin");
     await this.post("/begin", {}, lifetime);
-    await this.refresh(undefined, lifetime);
+    await this.refreshAfterCommand(lifetime);
   }
 
   async setLanguage(language: string): Promise<void> {
@@ -494,7 +494,7 @@ export class SocketArenaTransport implements ArenaTransport {
       // both approvals server-side (the refresh carries the new revision).
       const lifetime = this.requireConnected("language");
       await this.post("/language", { language }, lifetime);
-      await this.refresh(undefined, lifetime);
+      await this.refreshAfterCommand(lifetime);
       return;
     }
     this.language = language;
@@ -504,7 +504,7 @@ export class SocketArenaTransport implements ArenaTransport {
   async run(input: { code: string; language: string }): Promise<RunReceipt> {
     const lifetime = this.requireConnected("run");
     await this.post("/run", input, lifetime);
-    await this.refresh(undefined, lifetime);
+    await this.refreshAfterCommand(lifetime);
     return { ok: true };
   }
 
@@ -518,8 +518,8 @@ export class SocketArenaTransport implements ArenaTransport {
       submissionId: request.submissionId,
       evaluationId: request.evaluationId,
     }, lifetime)) as SubmitReceipt;
-    await this.refresh(undefined, lifetime);
     if (this.pendingSubmit === request) this.pendingSubmit = null;
+    await this.refreshAfterCommand(lifetime);
     return receipt;
   }
 
@@ -547,13 +547,27 @@ export class SocketArenaTransport implements ArenaTransport {
   async advance(): Promise<void> {
     const lifetime = this.requireConnected("advance");
     await this.post("/advance", {}, lifetime);
-    await this.refresh(undefined, lifetime);
+    await this.refreshAfterCommand(lifetime);
   }
 
   async leave(): Promise<void> {
     const lifetime = this.requireConnected("leave");
     await this.post("/leave", {}, lifetime);
-    await this.refresh(undefined, lifetime);
+    await this.refreshAfterCommand(lifetime);
+  }
+
+  private async refreshAfterCommand(lifetime: AbortController): Promise<void> {
+    try {
+      await this.refresh(undefined, lifetime);
+    } catch {
+      // The command receipt is confirmed. Only state recovery failed.
+      if (this.lifetime !== lifetime || lifetime.signal.aborted) return;
+      if (this.snap) this.snap = { ...this.snap, notice: "Action accepted; state refresh failed. Reconnecting…" };
+      this.connected = false;
+      this.setConn("reconnecting");
+      this.emit();
+      void this.reopen();
+    }
   }
 
   private requireConnected(action: string): AbortController {

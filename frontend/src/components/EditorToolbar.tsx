@@ -62,7 +62,7 @@ export function EditorToolbar(props: EditorToolbarProps) {
         {isTeam ? "Submit Team Solution" : "Submit"}
       </button>
       <p id="submit-warning" role="status" className="w-full border-t border-neutral-300 bg-neutral-100 px-2 py-1 text-sm font-medium text-neutral-900">
-        {!connected && "Connection lost — actions paused, your draft is kept. "}
+        {!connected && "Actions paused until current state is confirmed. Your draft is kept. "}
         {props.submitHint} Submitting again replaces your current scored result for this round.
       </p>
     </div>

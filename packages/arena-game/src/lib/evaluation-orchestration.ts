@@ -2,7 +2,7 @@ import type { ArenaEvent, PlayerStatus } from "arena-model";
 import type { DriverKind, GameJudge, JudgeLimits, SealedGroup, SupportedLanguage } from "./judge-types.js";
 import { JudgeInfraError } from "./judge-types.js";
 import { DuplicateError } from "./store.js";
-import { IllegalStateError, type MatchLockOptions } from "./match-authority.js";
+import { IllegalStateError } from "./match-authority.js";
 import type { EvaluationClaim, MatchPersistence } from "./persistence-types.js";
 import type {
   CountedResult,
@@ -145,8 +145,8 @@ interface EvaluationProblemBank {
 }
 
 export interface EvaluationOrchestrationHost {
-  revisionFor(matchId: string): number | undefined;
-  withMatchLock<T>(matchId: string, fn: () => Promise<T>, options?: MatchLockOptions): Promise<T>;
+  commitClaimedEvaluation(claim: EvaluationClaim, match: MatchRecord, submission?: SubmissionRecord): Promise<void>;
+  withMatchLock<T>(matchId: string, fn: () => Promise<T>): Promise<T>;
   loadMatchOrThrow(matchId: string): Promise<MatchRecord>;
   currentRound(match: MatchRecord): RoundState;
   activityOf(round: RoundState, side: SideId): PlayerStatus;
@@ -274,6 +274,9 @@ export class EvaluationOrchestrator {
         if (!settled || settled.status === "pending") {
           throw new IllegalStateError("evaluation claim disappeared before completion");
         }
+        if (settled.status === "failed") {
+          throw new JudgeInfraError("evaluation previously failed");
+        }
         this.inFlight.settle(input.evaluationId, input.tracked, { ok: true });
         return {
           ok: true,
@@ -324,7 +327,6 @@ export class EvaluationOrchestrator {
                 error,
               );
             },
-            { skipFinalSave: true },
           );
         } catch (failureError) {
           this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error: failureError });
@@ -348,7 +350,6 @@ export class EvaluationOrchestrator {
               this.options.clock(),
             );
           },
-          { skipFinalSave: true },
         );
         return {
           ok: true,
@@ -426,7 +427,6 @@ export class EvaluationOrchestrator {
                 error,
               );
             },
-            { skipFinalSave: true },
           );
           failed++;
           continue;
@@ -437,7 +437,6 @@ export class EvaluationOrchestrator {
           async () => {
             await this.commitStoredEvaluation(claim!, stored.matchId, stored.evaluationId, verdict, this.options.clock());
           },
-          { skipFinalSave: true },
         );
         retried++;
       } catch (error) {
@@ -496,14 +495,19 @@ export class EvaluationOrchestrator {
   private recordTelemetry(evaluationId: string, outcome: EvaluationTelemetryOutcome, startedAt: number): void {
     const telemetry = this.options.telemetry;
     if (!telemetry) return;
-    const metrics = this.options.judge.consumeMetrics?.();
-    telemetry.record({
-      evaluationId,
-      provider: metrics?.provider ?? this.options.judge.provider ?? this.options.judge.constructor.name,
-      queueWaitMs: metrics?.queueWaitMs ?? 0,
-      executionMs: metrics?.executionMs ?? Math.max(0, this.options.clock() - startedAt),
-      outcome,
-    });
+    // Rollout measurements must never replace a judge verdict or its error.
+    try {
+      const metrics = this.options.judge.consumeMetrics?.();
+      telemetry.record({
+        evaluationId,
+        provider: metrics?.provider ?? this.options.judge.provider ?? this.options.judge.constructor.name,
+        queueWaitMs: metrics?.queueWaitMs ?? 0,
+        executionMs: metrics?.executionMs ?? Math.max(0, this.options.clock() - startedAt),
+        outcome,
+      });
+    } catch {
+      // Telemetry is best effort and cannot change competitive Match state.
+    }
   }
 
   private async commitStoredEvaluation(
@@ -515,8 +519,6 @@ export class EvaluationOrchestrator {
   ): Promise<void> {
     const match = structuredClone(await this.options.host.loadMatchOrThrow(matchId));
     const stored = structuredClone(await this.storedSubmission(evaluationId));
-    const lockRevision = this.options.host.revisionFor(matchId);
-    if (lockRevision !== undefined) match.revision = lockRevision;
     if (stored.status !== "pending") return;
     const round = match.rounds.find((candidate) => candidate.roundId === stored.roundId) ?? this.options.host.currentRound(match);
     const side = stored.sideId;
@@ -527,7 +529,7 @@ export class EvaluationOrchestrator {
       match.failures.push("submit: judge returned non-competitive verdict set");
       const activityChanged = this.options.host.activityOf(round, side) === "evaluating";
       if (activityChanged) this.options.host.transitionActivity(match, round, side, "coding");
-      await this.options.persistence.commitClaimedEvaluation(claim, match, stored);
+      await this.options.host.commitClaimedEvaluation(claim, match, stored);
       if (activityChanged) this.options.host.emit("player.statusChanged", { matchId: match.id, side, status: "coding" });
       throw new JudgeInfraError("judge returned non-competitive verdict set");
     }
@@ -559,7 +561,7 @@ export class EvaluationOrchestrator {
     }
     const activityChanged = this.options.host.activityOf(round, side) === "evaluating";
     if (activityChanged) this.options.host.transitionActivity(match, round, side, "coding");
-    await this.options.persistence.commitClaimedEvaluation(claim, match, stored);
+    await this.options.host.commitClaimedEvaluation(claim, match, stored);
     if (activityChanged) this.options.host.emit("player.statusChanged", { matchId: match.id, side, status: "coding" });
   }
 
@@ -578,13 +580,11 @@ export class EvaluationOrchestrator {
       stored.failureCode = error instanceof JudgeInfraError ? "internal_error" : "evaluation_error";
     }
     const match = structuredClone(await this.options.host.loadMatchOrThrow(matchId));
-    const lockRevision = this.options.host.revisionFor(matchId);
-    if (lockRevision !== undefined) match.revision = lockRevision;
     match.failures.push(`submit: ${error instanceof Error ? error.message : String(error)}`);
     const round = match.rounds.find((candidate) => candidate.roundId === roundId) ?? this.options.host.currentRound(match);
     const activityChanged = this.options.host.activityOf(round, side) === "evaluating";
     if (activityChanged) this.options.host.transitionActivity(match, round, side, "coding");
-    await this.options.persistence.commitClaimedEvaluation(claim, match, stored);
+    await this.options.host.commitClaimedEvaluation(claim, match, stored);
     if (activityChanged) this.options.host.emit("player.statusChanged", { matchId: match.id, side, status: "coding" });
   }
 

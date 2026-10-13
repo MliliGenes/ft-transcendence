@@ -22,7 +22,7 @@ import {
   assertSupportedLanguage,
 } from "./judge-types.js";
 import type { AuthenticatedPrincipal } from "./principal.js";
-import { IllegalStateError, MatchAuthority, NotMemberError, type MatchLockOptions } from "./match-authority.js";
+import { IllegalStateError, MatchAuthority, NotMemberError } from "./match-authority.js";
 import type { MatchPersistence } from "./persistence-types.js";
 import { inMemoryPersistence } from "./persistence-module.js";
 import { RoundLifecycle, type SealedVerdict } from "./round-lifecycle.js";
@@ -140,9 +140,9 @@ export class ArenaEngine {
   private readonly runStamps = new Map<string, number[]>();
   private readonly evaluation: EvaluationOrchestrator;
 
-  private async withMatchLock<T>(matchId: string, fn: () => Promise<T>, options?: MatchLockOptions): Promise<T> {
+  private async withMatchLock<T>(matchId: string, fn: () => Promise<T>): Promise<T> {
     const command = { matchId, events: [] as Array<{ event: ArenaEvent; payload: unknown }> };
-    const result = await this.eventCommand.run(command, () => this.authority.withLock(matchId, fn, options));
+    const result = await this.eventCommand.run(command, () => this.authority.withLock(matchId, fn));
     for (const queued of command.events) this.deliverEvent(queued.event, queued.payload, result.revision);
     return result.value;
   }
@@ -154,11 +154,11 @@ export class ArenaEngine {
    * GET or abandoning recovery. Gameplay commands intentionally do not use
    * this helper: their 409 conflicts must remain visible to the caller.
    */
-  private async withRevisionRetry<T>(matchId: string, fn: () => Promise<T>, options?: MatchLockOptions): Promise<T> {
+  private async withRevisionRetry<T>(matchId: string, fn: () => Promise<T>): Promise<T> {
     let attempts = 0;
     while (true) {
       try {
-        return await this.withMatchLock(matchId, fn, options);
+        return await this.withMatchLock(matchId, fn);
       } catch (error) {
         if (!(error instanceof MatchRevisionConflictError) || attempts >= 2) throw error;
         attempts += 1;
@@ -198,8 +198,8 @@ export class ArenaEngine {
       limits: this.limits,
       telemetry: options.telemetry,
       host: {
-        revisionFor: (matchId) => this.authority.revisionFor(matchId),
-        withMatchLock: (matchId, fn, lockOptions) => this.withMatchLock(matchId, fn, lockOptions),
+        commitClaimedEvaluation: (claim, match, submission) => this.authority.commitClaimedEvaluation(claim, match, submission),
+        withMatchLock: (matchId, fn) => this.withMatchLock(matchId, fn),
         loadMatchOrThrow: (matchId) => this.loadMatchOrThrow(matchId),
         currentRound: (match) => this.currentRound(match),
         activityOf: (round, side) => this.activityOf(round, side),
@@ -626,7 +626,7 @@ export class ArenaEngine {
     const firstRound = this.currentRound(first);
     const graceMs = options.graceMs ?? this.revealGraceMs;
     const pending = this.evaluation.forRound(matchId, firstRound.roundId);
-    if (pending.length > 0 && graceMs > 0) {
+    if (!firstRound.cutoffPassed && pending.length > 0 && graceMs > 0) {
       await Promise.race([
         Promise.allSettled(pending.map((p) => p.promise)),
         new Promise((resolve) => setTimeout(resolve, graceMs)),
@@ -644,12 +644,18 @@ export class ArenaEngine {
         ),
         this.evaluation.forRound(matchId, round.roundId).map((entry) => entry.evaluationId),
       );
-      const snapshot = await this.createRevealSnapshot(match, round, this.clock());
-      try {
-        await this.persistence.publishReveal(match.id, round.roundId, snapshot);
-      } catch (error) {
-        if (error instanceof DuplicateError) throw new IllegalStateError("reveal already published");
-        throw error;
+      // Save the cutoff before the immutable Reveal: a failed phase write
+      // must not let a late Evaluation change the saved score.
+      await this.authority.saveMatch(match);
+      const savedReveal = await this.persistence.findReveal(match.id, round.roundId);
+      const snapshot = savedReveal ?? await this.createRevealSnapshot(match, round, this.clock());
+      if (!savedReveal) {
+        try {
+          await this.persistence.publishReveal(match.id, round.roundId, snapshot);
+        } catch (error) {
+          if (error instanceof DuplicateError) throw new IllegalStateError("reveal already published");
+          throw error;
+        }
       }
       this.roundLifecycle.commitReveal(match, snapshot);
       for (const side of Object.keys(round.activities)) {

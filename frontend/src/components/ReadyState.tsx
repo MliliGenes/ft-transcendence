@@ -3,14 +3,16 @@ import type { Readiness } from "../arena/types.js";
 export function ReadyState({
   ready,
   onSetReady,
+  disabled,
 }: {
   ready: Readiness;
   onSetReady: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="px-3 py-2" role="group" aria-label="Team readiness">
       <label className="flex items-center gap-2 text-sm text-neutral-800">
-        <input type="checkbox" checked={ready.you} onChange={(e) => onSetReady(e.target.checked)} />
+        <input type="checkbox" disabled={disabled} checked={ready.you} onChange={(e) => onSetReady(e.target.checked)} />
         You are ready
       </label>
       <p className="mt-1 font-mono text-xs text-neutral-600" role="status">

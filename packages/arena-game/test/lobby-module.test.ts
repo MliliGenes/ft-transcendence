@@ -17,8 +17,7 @@ import {
 
 const pgUrl = process.env.TEST_PG_URL ?? process.env.DATABASE_URL;
 
-describe.each(["memory", "postgres"])("Lobby module (%s adapter)", (adapterKind) => {
-  if (adapterKind === "postgres" && !pgUrl) return;
+describe.each(pgUrl ? ["memory", "postgres"] : ["memory"])("Lobby module (%s adapter)", (adapterKind) => {
 
   const schema = `lobby_mod_${randomUUID().replaceAll("-", "")}`;
   let admin: Pool | undefined;

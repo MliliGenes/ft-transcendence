@@ -1,7 +1,7 @@
 import type { AuthenticatedPrincipal } from "./principal.js";
-import type { MatchPersistence } from "./persistence-types.js";
+import type { EvaluationClaim, MatchPersistence } from "./persistence-types.js";
 import type { CollabRow } from "./collab.js";
-import type { MatchRecord, RoundState, SideId } from "./records.js";
+import type { MatchRecord, RoundState, SideId, SubmissionRecord } from "./records.js";
 
 export class NotMemberError extends Error {
   readonly code = 403;
@@ -19,14 +19,9 @@ export class IllegalStateError extends Error {
   }
 }
 
-export interface MatchLockOptions {
-  /** The callback already durably committed through another ownership seam. */
-  skipFinalSave?: boolean;
-}
-
 export interface MatchLockResult<T> {
   value: T;
-  /** Revision read back after the command's durable writes. */
+  /** Latest revision from a successful read or acknowledged durable write. */
   revision?: number;
 }
 
@@ -41,6 +36,7 @@ export class MatchAuthority {
   private readonly lockBaseRevision = new Map<string, number | undefined>();
   private readonly lockPersisted = new Set<string>();
   private readonly lockLastState = new Map<string, string | null>();
+  private readonly lockSnapshots = new Map<string, MatchRecord>();
 
   constructor(
     private readonly persistence: MatchPersistence,
@@ -54,7 +50,7 @@ export class MatchAuthority {
    * module performs the durable write and this module supplies the revision
    * used by events emitted during the command.
    */
-  async withLock<T>(matchId: string, fn: () => Promise<T>, options: MatchLockOptions = {}): Promise<MatchLockResult<T>> {
+  async withLock<T>(matchId: string, fn: () => Promise<T>): Promise<MatchLockResult<T>> {
     const prev = this.matchLocks.get(matchId) ?? Promise.resolve();
     let release!: () => void;
     const mine = new Promise<void>((resolve) => {
@@ -63,25 +59,26 @@ export class MatchAuthority {
     const tail = prev.then(() => mine);
     this.matchLocks.set(matchId, tail);
     await prev;
-    const beforeRow = await this.persistence.loadMatch(matchId).catch(() => undefined);
-    const beforeText = beforeRow ? JSON.stringify(beforeRow) : null;
-    this.lockBaseRevision.set(matchId, beforeRow?.revision);
-    this.lockRevision.set(matchId, (beforeRow?.revision ?? 0) + 1);
-    this.lockPersisted.delete(matchId);
-    this.lockLastState.set(matchId, beforeRow ? this.stateText(beforeRow) : null);
-    let durable = beforeRow;
+    let durable: MatchRecord | undefined;
     try {
+      const beforeRow = await this.persistence.loadMatch(matchId);
+      this.lockBaseRevision.set(matchId, beforeRow?.revision);
+      this.lockRevision.set(matchId, (beforeRow?.revision ?? 0) + 1);
+      this.lockPersisted.delete(matchId);
+      this.lockLastState.set(matchId, beforeRow ? this.stateText(beforeRow) : null);
+      if (beforeRow) this.lockSnapshots.set(matchId, structuredClone(beforeRow));
       const result = await fn();
-      const fresh = await this.persistence.loadMatch(matchId);
-      if (!options.skipFinalSave && fresh && JSON.stringify(fresh) !== beforeText && !this.lockPersisted.has(matchId)) {
-        fresh.revision = this.lockRevision.get(matchId) ?? fresh.revision + 1;
-        await this.saveMatch(fresh);
+      try {
+        durable = await this.persistence.loadMatch(matchId);
+      } catch (error) {
+        durable = this.lockSnapshots.get(matchId);
+        if (!durable) throw error;
+        console.error("Match revision read failed; using confirmed state", error);
       }
-      durable = fresh;
-      return { value: result, revision: fresh?.revision };
+      return { value: result, revision: durable?.revision };
     } finally {
-      // Failed writes retain the pre-command durable state. Cleanup cannot
-      // invalidate a committed command or run after a queued document read.
+      const confirmed = this.lockSnapshots.get(matchId);
+      if (confirmed && (!durable || confirmed.revision >= durable.revision)) durable = confirmed;
       try {
         if (durable) this.settled?.(durable);
       } catch {
@@ -92,6 +89,7 @@ export class MatchAuthority {
       this.lockBaseRevision.delete(matchId);
       this.lockPersisted.delete(matchId);
       this.lockLastState.delete(matchId);
+      this.lockSnapshots.delete(matchId);
       if (this.matchLocks.get(matchId) === tail) this.matchLocks.delete(matchId);
     }
   }
@@ -118,6 +116,7 @@ export class MatchAuthority {
     this.lockRevision.set(match.id, committedRevision);
     this.lockPersisted.add(match.id);
     this.lockLastState.set(match.id, state);
+    this.lockSnapshots.set(match.id, structuredClone(match));
   }
 
   /** Persist Match + shared-document rows through the active optimistic lock. */
@@ -138,6 +137,17 @@ export class MatchAuthority {
     this.lockRevision.set(match.id, committedRevision);
     this.lockPersisted.add(match.id);
     this.lockLastState.set(match.id, state);
+    this.lockSnapshots.set(match.id, structuredClone(match));
+  }
+
+  /** Keep claim-session commits and their confirmed revision in one command operation. */
+  async commitClaimedEvaluation(claim: EvaluationClaim, match: MatchRecord, submission?: SubmissionRecord): Promise<void> {
+    match.revision = Math.max(this.lockRevision.get(match.id) ?? 0, match.revision + 1);
+    await this.persistence.commitClaimedEvaluation(claim, match, submission);
+    this.lockRevision.set(match.id, match.revision);
+    this.lockPersisted.add(match.id);
+    this.lockLastState.set(match.id, this.stateText(match));
+    this.lockSnapshots.set(match.id, structuredClone(match));
   }
 
   private stateText(match: MatchRecord): string {
@@ -157,6 +167,9 @@ export class MatchAuthority {
   async loadOrThrow(matchId: string): Promise<MatchRecord> {
     const match = await this.persistence.loadMatch(matchId);
     if (!match) throw new NotMemberError(matchId);
+    if (this.lockBaseRevision.has(matchId) && !this.lockPersisted.has(matchId)) {
+      this.lockSnapshots.set(matchId, structuredClone(match));
+    }
     return match;
   }
 

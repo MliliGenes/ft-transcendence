@@ -41,6 +41,7 @@ export function ArenaPage({ transport }: { transport: ArenaTransport }) {
   const [deadlineResultScopeKey, setDeadlineResultScopeKey] = useState<string | null>(null);
   const fixtureControls = transport.fixtureControls?.() ?? null;
   const terminal = snapshot.roundPhase === "MATCH_COMPLETE";
+  const commandsPaused = transport.connection() !== "connected";
   const matchScopeKey = transport.scopeKey();
   const sidecarLifecycle = useMemo(() => createArenaSidecarLifecycle(), []);
 
@@ -175,6 +176,7 @@ export function ArenaPage({ transport }: { transport: ArenaTransport }) {
             <button
               type="button"
               className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs text-neutral-600"
+              disabled={commandsPaused}
               onClick={() => {
                 // Deliberate leave only (§15): immediate forfeit. Socket loss
                 // never routes here.
@@ -196,9 +198,10 @@ export function ArenaPage({ transport }: { transport: ArenaTransport }) {
           <button
             type="button"
             className="rounded bg-teal-700 px-4 py-2 text-sm font-medium text-white"
+            disabled={commandsPaused}
             onClick={act(async () => {
               if (snapshot.roundPhase === "MATCH_FOUND") await transport.startRound();
-              await transport.beginCoding();
+              if (transport.connection() === "connected") await transport.beginCoding();
             })}
           >
             Start round
@@ -236,6 +239,7 @@ export function ArenaPage({ transport }: { transport: ArenaTransport }) {
             <button
               type="button"
               className="rounded bg-teal-700 px-4 py-2 text-sm font-medium text-white"
+              disabled={commandsPaused}
               onClick={act(() => transport.advance())}
             >
               {snapshot.round < snapshot.totalRounds ? "Next round" : "See final result"}

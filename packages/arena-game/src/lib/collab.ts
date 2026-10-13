@@ -56,6 +56,7 @@ export class InMemoryCollabPersist implements CollabPersist {
  */
 export class CollabDocs {
   private readonly docs = new Map<string, Y.Doc>();
+  private readonly deferred = new Map<string, Uint8Array>();
 
   private docFor(roomId: string): Y.Doc {
     let doc = this.docs.get(roomId);
@@ -92,17 +93,26 @@ export class CollabDocs {
     if (bytes.length === 0) throw new Error("malformed collab update");
     const doc = this.docFor(roomId);
     const before = doc.getText(COLLAB_TEXT_KEY).toString();
+    const retained = this.deferred.get(roomId);
+    const beforeState = retained ? Y.encodeStateAsUpdate(doc) : undefined;
     try {
+      if (retained) Y.applyUpdate(doc, retained);
       Y.applyUpdate(doc, bytes);
     } catch {
+      if (retained && beforeState) {
+        this.restoreState(roomId, b64encode(beforeState));
+        this.deferred.set(roomId, retained);
+      }
       throw new Error("malformed collab update");
     }
+    this.deferred.delete(roomId);
     const after = doc.getText(COLLAB_TEXT_KEY).toString();
     return { changed: after !== before, source: after };
   }
 
   /** Atomic source replace (language reset): one Yjs transaction, one revision. */
   setSource(roomId: string, text: string): { changed: boolean } {
+    this.deferred.delete(roomId);
     const doc = this.docFor(roomId);
     const before = doc.getText(COLLAB_TEXT_KEY).toString();
     if (before === text) return { changed: false };
@@ -132,8 +142,31 @@ export class CollabDocs {
   /** Restore persisted state (restart / lazy load). Overwrites memory only. */
   restoreState(roomId: string, stateB64: string): void {
     const doc = new Y.Doc();
-    if (stateB64) Y.applyUpdate(doc, b64decode(stateB64));
+    try {
+      if (stateB64) Y.applyUpdate(doc, b64decode(stateB64));
+    } catch (error) {
+      doc.destroy();
+      throw error;
+    }
+    this.docs.get(roomId)?.destroy();
     this.docs.set(roomId, doc);
+    this.deferred.delete(roomId);
+  }
+
+  /** Reload durable text; replay retained frames only in the next revisioned write. */
+  refreshState(roomId: string, stateB64: string): void {
+    const retained = new Y.Doc();
+    try {
+      const previous = this.docs.get(roomId);
+      if (previous) Y.applyUpdate(retained, Y.encodeStateAsUpdate(previous));
+      const deferred = this.deferred.get(roomId);
+      if (deferred) Y.applyUpdate(retained, deferred);
+      const snapshot = Y.encodeStateAsUpdate(retained);
+      this.restoreState(roomId, stateB64);
+      this.deferred.set(roomId, snapshot);
+    } finally {
+      retained.destroy();
+    }
   }
 
   /** Round advance: detach the old identity so late updates cannot land there. */
@@ -141,5 +174,6 @@ export class CollabDocs {
     const doc = this.docs.get(roomId);
     if (doc) doc.destroy();
     this.docs.delete(roomId);
+    this.deferred.delete(roomId);
   }
 }
