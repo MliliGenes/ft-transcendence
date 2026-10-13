@@ -1,0 +1,142 @@
+// Prisma 7 schema draft. See README.md for constraints and service responsibilities.
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Public profile copy supplied by User service, never by the browser.
+// id is the existing User-service UUID: do NOT generate another identity here.
+// No cross-database relation; all relations below stay inside Chat's database.
+model ChatUser {
+  id              String    @id @db.Uuid
+  username        String?
+  displayName     String?
+  avatarUrl       String?
+  sourceUpdatedAt DateTime
+  deletedAt       DateTime?
+
+  memberships GroupMember[]
+  dmsAsUserA  Conversation[] @relation("DmUserA")
+  dmsAsUserB  Conversation[] @relation("DmUserB")
+  messages    Message[]
+  reactions   Reaction[]
+}
+
+model Group {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(1000)
+  rules       String?  @db.VarChar(4000)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members  GroupMember[]
+  channels Conversation[]
+}
+
+// A user has a role per group, not one chat-wide role.
+model GroupMember {
+  groupId  String    @db.Uuid
+  userId   String    @db.Uuid
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now())
+
+  group Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  ChatUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([groupId, userId])
+  @@index([userId, joinedAt, groupId])
+}
+
+model Conversation {
+  id        String           @id @default(uuid()) @db.Uuid
+  kind      ConversationKind
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // DM ONLY: exactly two different participants in ascending UUID order.
+  // For group channels, BOTH fields are null.
+  dmUserAId String?   @db.Uuid
+  dmUserBId String?   @db.Uuid
+  dmUserA   ChatUser? @relation("DmUserA", fields: [dmUserAId], references: [id], onDelete: Restrict)
+  dmUserB   ChatUser? @relation("DmUserB", fields: [dmUserBId], references: [id], onDelete: Restrict)
+
+  // CHANNEL ONLY: any number of users come through Group.members.
+  // For DMs, all these fields are null.
+  groupId String? @db.Uuid
+  name    String? @db.VarChar(80)
+  topic   String? @db.VarChar(500)
+  group   Group?  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  messages Message[]
+
+  // PostgreSQL permits multiple null pairs, so group channels can coexist.
+  @@unique([dmUserAId, dmUserBId])
+  @@index([dmUserAId, createdAt, id])
+  @@index([dmUserBId, createdAt, id])
+  @@index([groupId, createdAt, id])
+}
+
+model Message {
+  id             String    @id @default(uuid()) @db.Uuid
+  conversationId String    @db.Uuid
+  authorId       String    @db.Uuid
+  content        String?   @db.VarChar(2000)
+  createdAt      DateTime  @default(now())
+  editedAt       DateTime?
+  deletedAt      DateTime?
+
+  // The browser generates this once per logical send and reuses it on retry.
+  clientRequestId String @db.Uuid
+  // Server-computed SHA-256 of the canonical ORIGINAL send payload.
+  // Preserves retry comparison even after content is edited or cleared.
+  requestHash     String @db.Char(64)
+
+  // Increment atomically on edits, deletion and reaction changes.
+  version Int @default(1)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author       ChatUser     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  reactions    Reaction[]
+
+  @@unique([authorId, clientRequestId])
+  @@index([conversationId, createdAt, id])
+}
+
+model Reaction {
+  messageId String        @db.Uuid
+  userId    String        @db.Uuid
+  emoji     ReactionEmoji
+  createdAt DateTime      @default(now())
+
+  message Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    ChatUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([messageId, userId, emoji])
+  @@index([userId])
+}
+
+enum GroupRole {
+  ADMIN
+  MEMBER
+}
+
+enum ConversationKind {
+  DM
+  CHANNEL
+}
+
+// Map these stable API values to emoji glyphs in the frontend.
+enum ReactionEmoji {
+  THUMBS_UP
+  HEART
+  LAUGH
+  SURPRISED
+  SAD
+  FIRE
+}
