@@ -198,6 +198,13 @@ export function ArenaPage({ transport, onAuthSignal }: { transport: ArenaTranspo
             </button>
           )}
         </div>
+        {commandsPaused && transport.connectionError && transport.connect && (
+          <section className="rounded border border-red-700 bg-white p-3" aria-label="Connection recovery">
+            <p role="alert" className="font-mono text-xs text-red-700">{transport.connectionError}</p>
+            <button type="button" className="mt-2 rounded border px-2 py-1 text-sm"
+              onClick={act(() => transport.connect!())}>Try again</button>
+          </section>
+        )}
         {snapshot.notice && (
           <p role="status" className="rounded-md border border-neutral-200 bg-white px-3 py-2 font-mono text-xs">
             {snapshot.notice}

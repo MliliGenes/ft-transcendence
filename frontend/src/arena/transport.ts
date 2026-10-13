@@ -64,6 +64,9 @@ export class TransportSession {
  * the external auth layer; see docs/auth-game-contract.md).
  */
 export interface ArenaTransport {
+  /** Current recovery failure, with an explicit retry on live transports. */
+  readonly connectionError?: string | null;
+  connect?(): Promise<void>;
   snapshot(): ArenaSnapshot;
   subscribe(listener: () => void): () => void;
   /** Transport connectivity (subscribe fires on change). */

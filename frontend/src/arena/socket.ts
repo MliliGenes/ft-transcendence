@@ -291,6 +291,7 @@ export class SocketArenaTransport implements ArenaTransport {
   private reopening = false;
   private recovery: Promise<void> | null = null;
   private tokenRenewal: Promise<unknown> | null = null;
+  private expiryRecovery: Promise<void> | null = null;
   /** Browser reported a network outage since the last baseline. */
   private browserOffline = false;
 
@@ -449,9 +450,34 @@ export class SocketArenaTransport implements ArenaTransport {
     throw new AuthExpiredError();
   }
 
+  private recoverExpiredSocket(lifetime: AbortController): Promise<void> {
+    if (this.expiryRecovery) return this.expiryRecovery;
+    const recovery = (async () => {
+      await this.ensureFreshToken();
+      this.assertActive(lifetime);
+      if (!this.getAccessToken?.()) throw new AuthExpiredError();
+      if (this.attachedToken !== this.getAccessToken()) await this.renewSocket();
+      if (this.recovery) await this.recovery;
+      this.assertActive(lifetime);
+      this.requireConnected("Session recovery");
+    })().catch((error: unknown) => {
+      if (this.lifetime === lifetime && !lifetime.signal.aborted && !this.connected) {
+        this.connectError = error instanceof Error ? error.message : "Session unavailable. Please try again.";
+        this.setConn("offline");
+        this.emit();
+      }
+      throw error;
+    }).finally(() => {
+      if (this.expiryRecovery === recovery) this.expiryRecovery = null;
+    });
+    this.expiryRecovery = recovery;
+    return recovery;
+  }
+
   private async prepareCommand(action: string): Promise<AbortController> {
     // A command already waiting for renewal may resume; disconnected lifetimes cannot.
     const lifetime = this.activeLifetime();
+    if (this.expiryRecovery) await this.expiryRecovery;
     if (this.recovery) await this.recovery;
     else this.requireConnected(action);
     await this.ensureFreshToken();
@@ -500,11 +526,15 @@ export class SocketArenaTransport implements ArenaTransport {
       this.setConn("connected");
       this.emit();
     });
-    socket.on("disconnect", () => {
+    socket.on("disconnect", (reason: string) => {
       if (!active()) return;
       this.connected = false;
       this.setConn("reconnecting");
       this.emit();
+      const expiry = token ? tokenExpiryMs(token) : null;
+      if (reason === "io server disconnect" && expiry !== null && expiry - Date.now() < RENEW_SKEW_MS) {
+        void this.recoverExpiredSocket(lifetime).catch(() => {});
+      }
     });
     socket.on("connect_error", (error: Error) => {
       if (!active()) return;
@@ -573,6 +603,7 @@ export class SocketArenaTransport implements ArenaTransport {
     this.browserOffline = false;
     this.reopening = false;
     this.recovery = null;
+    this.expiryRecovery = null;
   }
 
   disconnect(): void {

@@ -5,6 +5,13 @@ Production code proved by the owned images at `40b24e4`; this evidence and the
 real-service test are the following verification commit. Final review and delivery
 are pending until recorded below.
 
+Final review at `65e666a` found one Important integration gap: natural idle
+expiry could leave Match reconnecting and Lobby missing passive updates. Its
+source fix now passes 121 frontend tests plus build/checks; real App expiry-to-
+recovery proof and scoped re-review remain pending. The four-group HTTPS
+checkpoint below remains valid for its named scenarios and does not close that
+new gate.
+
 ## Results
 
 | Gate | Result |
@@ -100,8 +107,10 @@ Raw logs and generated fixtures stayed in the ignored task workspace during work
 
 Tasks 1–4 each passed independent review after their fix rounds. Task 4's saved
 profile regression and dev provider-cookie mapping were independently re-reviewed
-at `98119fa..40b24e4`. Task 5 and the complete repair diff await the final fresh
-review; do not treat this document as a push/merge approval by itself.
+at `98119fa..40b24e4`. The final fresh review found the idle-expiry interaction above and no other
+Critical, Important or actionable Minor finding. Task 5/final delivery remain
+blocked on that fix's App proof and scoped re-review. Do not treat this document
+as a push/merge approval by itself.
 
 Rulings made during execution:
 

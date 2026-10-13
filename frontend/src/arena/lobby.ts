@@ -36,6 +36,14 @@ export interface RoomWithMembers {
   members: PrivateRoomMember[];
 }
 
+function tokenNearExpiry(token: string | null): boolean {
+  if (!token) return false;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload.exp === "number" && payload.exp * 1000 - Date.now() < 30_000;
+  } catch { return false; }
+}
+
 export class LobbyClient {
   private socket?: Socket;
   private readonly apiBase: string;
@@ -48,6 +56,7 @@ export class LobbyClient {
   private attachedToken: string | null = null;
   private recovery: Promise<void> | null = null;
   private tokenRenewal: Promise<unknown> | null = null;
+  private expiryRecovery: Promise<void> | null = null;
   private ready: Promise<void> = Promise.resolve();
 
   constructor(baseUrl: string, userId: string);
@@ -233,7 +242,13 @@ export class LobbyClient {
       this.ready = recovery;
       void recovery.then(resolve, reject);
     });
-    socket.on("disconnect", () => { if (active()) reject(new Error("Lobby disconnected during recovery")); });
+    socket.on("disconnect", (reason: string) => {
+      if (!active()) return;
+      reject(new Error("Lobby disconnected during recovery"));
+      if (reason === "io server disconnect" && tokenNearExpiry(token)) {
+        void this.recoverExpiredSocket(lifetime).catch(() => {});
+      }
+    });
     socket.on("connect_error", (error: Error) => { if (active() && !socket.active) reject(error); });
     socket.connect();
     return ready.finally(() => {
@@ -242,18 +257,27 @@ export class LobbyClient {
     });
   }
 
+  private recoverExpiredSocket(lifetime: AbortController): Promise<void> {
+    if (this.expiryRecovery) return this.expiryRecovery;
+    const recovery = (async () => {
+      if (tokenNearExpiry(this.getAccessToken?.() ?? null)) await this.renewAuth();
+      this.assertActive(lifetime);
+      if (!this.getAccessToken?.()) throw new Error("Session expired. Please sign in again.");
+      if (this.attachedToken !== this.getAccessToken()) await this.renewSocket();
+      if (this.recovery) await this.recovery;
+      this.assertActive(lifetime);
+    })().finally(() => {
+      if (this.expiryRecovery === recovery) this.expiryRecovery = null;
+    });
+    this.expiryRecovery = recovery;
+    return recovery;
+  }
+
   private async prepareCommand(lifetime: AbortController): Promise<void> {
     await this.ready;
     this.assertActive(lifetime);
     const token = this.getAccessToken?.();
-    let nearExpiry = false;
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/")));
-        nearExpiry = typeof payload.exp === "number" && payload.exp * 1000 - Date.now() < 30_000;
-      } catch { /* Opaque tokens rely on the 401 recovery path. */ }
-    }
-    if (nearExpiry && this.onAuthExpired) await this.renewAuth();
+    if (tokenNearExpiry(token ?? null) && this.onAuthExpired) await this.renewAuth();
     this.assertActive(lifetime);
     if (this.socket && this.attachedToken !== this.getAccessToken?.()) await this.renewSocket();
     await this.ready;
@@ -278,6 +302,7 @@ export class LobbyClient {
   leaveRoomChannel(roomId: string): void { this.socket?.emit("lobby:leave_room", { roomId }); }
 
   disconnect(): void {
+    this.expiryRecovery = null;
     this.lifetime.abort();
     this.socket?.removeAllListeners();
     this.socket?.disconnect();

@@ -17,7 +17,9 @@ found in the original integration. Repair Tasks 1–4 passed independent review.
 Task 8 now has real production HTTPS password login → Account Play → Lobby →
 playable 1v1 and four-player 2v2 proof, plus renewal, expiry, outage, identity
 replacement, cookie migration and logout evidence. Full checks/builds pass.
-Final fresh repair-diff review and delivery are pending. The original step boxes
+Final review found a natural idle-expiry browser recovery gap. Its fix passes
+121 frontend tests and build/checks; App expiry recovery proof and scoped review
+remain before delivery. The original step boxes
 below preserve the original implementation sequence; current verification is in
 [auth repair evidence](../../auth-integration-repair-evidence.md).
 

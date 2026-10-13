@@ -68,6 +68,15 @@ function transportFor(snapshot: ArenaSnapshot): ArenaTransport {
 }
 
 describe("ArenaPage terminal presentation", () => {
+  it("offers a reachable retry when automatic session recovery is unavailable", () => {
+    const snapshot = { ...terminalSnapshot(60), roundPhase: "CODING" as const, reveal: null, matchFinal: null };
+    const transport = { ...transportFor(snapshot), connection: () => "offline" as const,
+      connectionError: "Session unavailable. Please try again.", connect: async () => {} };
+    const html = renderToStaticMarkup(<ArenaPage transport={transport} />);
+    expect(html).toContain("Session unavailable. Please try again.");
+    expect(html).toContain(">Try again</button>");
+  });
+
   it("shows an expired Match Reveal before exposing its final result", () => {
     const html = renderToStaticMarkup(<ArenaPage transport={transportFor(terminalSnapshot(0))} />);
 

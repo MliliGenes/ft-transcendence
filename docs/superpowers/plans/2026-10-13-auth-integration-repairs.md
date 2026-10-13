@@ -5,8 +5,9 @@ Goal: repair every finding in the 2026-10-13 auth review, including the Referer 
 ## Current status — 2026-10-13
 
 Tasks 1–4 passed independent task review. Task 5 real HTTPS proof passed 4/4;
-root and standalone checks/builds passed. The final fresh repair-diff review,
-local visual recap and delivery remain in progress. See
+root and standalone checks/builds passed. Final review found one Important natural idle-expiry browser recovery gap.
+Its fix passes 121 frontend tests and build/checks; real App expiry recovery and
+scoped re-review remain. The local recap renders; delivery remains blocked. See
 [verification evidence](../../auth-integration-repair-evidence.md).
 
 ## Global constraints

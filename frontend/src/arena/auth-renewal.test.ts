@@ -565,4 +565,124 @@ describe("authenticated Game wiring (no transport recreation)", () => {
     expect(cancelled).toBe(true);
   });
 
+  it("idle server expiry renews Match without an application command and waits for its baseline", async () => {
+    const harness = authHarness();
+    const transport = await connectLive(harness);
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3600_000 + 1000);
+    try {
+      harness.sockets[0]!.server("disconnect", "io server disconnect");
+      for (let n = 0; n < 200; n++) await Promise.resolve();
+      expect(harness.renewals).toEqual(["renew"]);
+      expect(harness.sockets).toHaveLength(2);
+      expect(transport.connection()).not.toBe("connected");
+      expect(harness.fetchMock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST")).toHaveLength(0);
+      harness.sockets[1]!.server("snapshot", serverSnapshot());
+      for (let n = 0; n < 200; n++) await Promise.resolve();
+      expect(transport.connection()).toBe("connected");
+      expect(transport.snapshot().revision).toBe(7);
+      expect(harness.fetchMock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST")).toHaveLength(0);
+    } finally { now.mockRestore(); transport.disconnect(); }
+  });
+
+  it("idle Lobby expiry restores passive membership and hints without a Ready action", async () => {
+    let token = jwt(Date.now() + 3600_000);
+    let renewals = 0;
+    let baselines = 0;
+    const sockets: TestSocket[] = [];
+    vi.mocked(io).mockImplementation(() => { const socket = new TestSocket(); sockets.push(socket); return socket as unknown as ReturnType<typeof io>; });
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ queue: null, room: null }) })));
+    const hint = vi.fn();
+    const lobby = new LobbyClient({ apiBase: "https://auth.test", socketBase: "http://arena.test", getAccessToken: () => token,
+      onAuthExpired: async () => { renewals++; token = "new-access"; } });
+    lobby.connectSocket({ onConnect: async () => { baselines++; lobby.joinRoomChannel("room-1"); }, onRoomUpdated: hint });
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3600_000 + 1000);
+    try {
+      sockets[0]!.server("disconnect", "io server disconnect");
+      for (let n = 0; n < 200; n++) await Promise.resolve();
+      expect(renewals).toBe(1);
+      expect(sockets).toHaveLength(2);
+      expect(baselines).toBe(2);
+      expect(sockets[1]!.outgoing.filter(item => item.event === "lobby:join_room")).toHaveLength(1);
+      sockets[1]!.server("lobby.roomUpdated", { roomId: "room-1" });
+      expect(hint).toHaveBeenCalledOnce();
+      expect(vi.mocked(fetch).mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST")).toHaveLength(0);
+    } finally { now.mockRestore(); lobby.disconnect(); }
+  });
+
+  it("disposing during idle-expiry renewal cannot attach a new Match socket", async () => {
+    const harness = authHarness();
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const transport = new SocketArenaTransport({ apiBase: "https://auth.test", socketBase: "http://arena.test", matchId: "match-1",
+      getAccessToken: harness.getAccessToken, onAuthExpired: async () => { await held; await harness.onAuthExpired(); } });
+    const connecting = transport.connect();
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    harness.sockets[0]!.server("snapshot", serverSnapshot());
+    await connecting;
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3600_000 + 1000);
+    try {
+      harness.sockets[0]!.server("disconnect", "io server disconnect");
+      for (let n = 0; n < 100; n++) await Promise.resolve();
+      transport.disconnect();
+      release();
+      for (let n = 0; n < 200; n++) await Promise.resolve();
+      expect(harness.sockets).toHaveLength(1);
+      expect(transport.connection()).toBe("offline");
+      expect(harness.fetchMock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST")).toHaveLength(0);
+    } finally { release(); now.mockRestore(); transport.disconnect(); }
+  });
+
+  it("an unavailable idle-expiry refresh retains Match state and permits explicit connect retry", async () => {
+    const harness = authHarness();
+    let attempts = 0;
+    const transport = new SocketArenaTransport({ apiBase: "https://auth.test", socketBase: "http://arena.test", matchId: "match-1",
+      getAccessToken: harness.getAccessToken, onAuthExpired: async () => { if (++attempts === 1) throw new Error("Authentication unavailable"); await harness.onAuthExpired(); } });
+    const connecting = transport.connect();
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    harness.sockets[0]!.server("snapshot", serverSnapshot());
+    await connecting;
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3600_000 + 1000);
+    try {
+      harness.sockets[0]!.server("disconnect", "io server disconnect");
+      for (let n = 0; n < 200; n++) await Promise.resolve();
+      expect(transport.connection()).toBe("offline");
+      expect(transport.connectionError).toBe("Authentication unavailable");
+      expect(transport.snapshot().revision).toBe(7);
+      const retry = transport.connect();
+      for (let n = 0; n < 200; n++) await Promise.resolve();
+      harness.sockets[1]!.server("snapshot", serverSnapshot());
+      await retry;
+      expect(attempts).toBe(2);
+      expect(transport.connection()).toBe("connected");
+      expect(transport.connectionError).toBeNull();
+      expect(harness.fetchMock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST")).toHaveLength(0);
+    } finally { now.mockRestore(); transport.disconnect(); }
+  });
+
+  it("an unavailable passive Lobby renewal permits deliberate Ready recovery without replay", async () => {
+    let token = jwt(Date.now() + 3600_000);
+    let attempts = 0;
+    let baselines = 0;
+    const sockets: TestSocket[] = [];
+    vi.mocked(io).mockImplementation(() => { const socket = new TestSocket(); sockets.push(socket); return socket as unknown as ReturnType<typeof io>; });
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", async (_url: unknown, init?: RequestInit) => { requests.push(init?.method ?? "GET"); return { ok: true, status: 200, json: async () => ({ room: {}, members: [] }) }; });
+    const lobby = new LobbyClient({ apiBase: "https://auth.test", socketBase: "http://arena.test", getAccessToken: () => token,
+      onAuthExpired: async () => { if (++attempts === 1) throw new Error("Authentication unavailable"); token = "new-access"; } });
+    lobby.connectSocket({ onConnect: () => { baselines++; } });
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3600_000 + 1000);
+    try {
+      sockets[0]!.server("disconnect", "io server disconnect");
+      for (let n = 0; n < 200; n++) await Promise.resolve();
+      expect(attempts).toBe(1);
+      expect(requests).toEqual([]);
+      await lobby.setReady("room-1", true);
+      expect(attempts).toBe(2);
+      expect(baselines).toBe(2);
+      expect(requests).toEqual(["POST"]);
+    } finally { now.mockRestore(); lobby.disconnect(); }
+  });
+
 });
