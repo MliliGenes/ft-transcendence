@@ -78,7 +78,9 @@ export function createAuthApi({
     return marker;
   };
   const acknowledgeMarker = (expected) => {
-    if (expected == null) return;
+    if (expected == null || readMarker() !== expected) return;
+    // Cookie acknowledgements are serialized, so an older queued operation
+    // cannot replace the acknowledgement of the current newer intent.
     // Acknowledge only our own ID, leaving the intent key untouched. Another
     // tab can write a newer ID at any storage-operation boundary safely.
     if (storage) storage.setItem(LOGOUT_ACKNOWLEDGED, expected);

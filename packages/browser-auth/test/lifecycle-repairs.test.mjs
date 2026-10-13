@@ -394,3 +394,24 @@ test('login own expiry superseded synchronously by newer login cannot map its st
   assert.equal(client.getAccessToken(), 'access-B');
   client.dispose();
 });
+
+
+for (const newerConfirmed of [true, false]) {
+  test(`reversed logout cookie queue preserves latest intent outcome (newerConfirmed=${newerConfirmed})`, async () => {
+    const shared = storage();
+    const locks = serialLocks();
+    const order = [];
+    const a = setup(() => { order.push('A'); return new Response(null, { status: 204 }); }, { storage: shared, locks });
+    const b = setup(() => { order.push('B'); if (!newerConfirmed) throw new TypeError('offline'); return new Response(null, { status: 204 }); }, { storage: shared, locks });
+    let leavingB;
+    a.client.subscribe((snapshot) => { if (snapshot.status === 'anonymous' && !leavingB) leavingB = b.client.logout(); });
+    const leavingA = a.client.logout();
+    assert.deepEqual(await leavingA, { serverConfirmed: true });
+    assert.deepEqual(await leavingB, { serverConfirmed: newerConfirmed });
+    assert.deepEqual(order, ['B', 'A']);
+    const fresh = setup((url) => json(url === '/accounts/me' ? me('A') : tokens('A')), { storage: shared, locks });
+    if (newerConfirmed) assert.equal((await fresh.client.restore(true)).status, 'authenticated');
+    else { await assert.rejects(fresh.client.restore(true), (error) => error.code === 'LOGOUT_PENDING'); assert.equal(fresh.calls.length, 0); }
+    a.client.dispose(); b.client.dispose(); fresh.client.dispose();
+  });
+}

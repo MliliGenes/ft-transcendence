@@ -29,7 +29,9 @@ Logout clears the local session immediately and writes its intent before any
 network work. Failed logout leaves that intent in place across reloads and SPAs.
 Every restore and renewal checks it under the origin lock, including
 `restore(true)`. A matching confirmed logout or a deliberate successful login
-acknowledges its ID; an older acknowledgement cannot erase a newer intent.
+acknowledges its ID only while it is still the current intent; an older
+queued operation cannot overwrite a newer confirmed acknowledgement. A racing
+new intent remains pending because acknowledgement never deletes its key.
 Restore is blocked whenever the current intent lacks a matching acknowledgement.
 The intent is never deleted by a read/compare/remove sequence; storage contains
 at most these two identifiers, even after many logins and logouts.
