@@ -368,6 +368,93 @@ describe("authenticated Game wiring (no transport recreation)", () => {
     session.stop();
   });
 
+  it.each([false, true])("Lobby recovery waits for a superseding read (failure=%s)", async (failLatest) => {
+    let token = "access-1";
+    let delayed = false;
+    const reads: Array<{ resolve: (value: unknown) => void; reject: (error: Error) => void }> = [];
+    const posts: string[] = [];
+    const room = {
+      room: { id: "room-1", code: "ABCDEF", mode: "1v1" as const, ownerUserId: "user-left", status: "open" as const, createdAt: 1, expiresAt: 1000, matchId: null },
+      members: [{ roomId: "room-1", userId: "user-left", sideId: "left" as const, ready: false, joinedAt: 1 }],
+    };
+    const response = { ok: true, status: 200, json: async () => ({ queue: null, room }) };
+    vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") { posts.push(String(input)); return response; }
+      if (delayed) return new Promise((resolve, reject) => reads.push({ resolve, reject }));
+      return response;
+    });
+    const sockets: TestSocket[] = [];
+    vi.mocked(io).mockImplementation(() => {
+      const socket = new TestSocket(); sockets.push(socket);
+      return socket as unknown as ReturnType<typeof io>;
+    });
+    const client = new LobbyClient({ apiBase: "https://auth.test", socketBase: "http://arena.test", getAccessToken: () => token, onAuthExpired: async () => {} });
+    const session = new LobbySession(client, vi.fn());
+    await session.start();
+    for (let n = 0; n < 100; n++) await Promise.resolve();
+    try {
+      delayed = true;
+      token = "access-2";
+      let recovered = false;
+      const renewal = client.renewSocket();
+      const outcome = renewal.then(() => { recovered = true; return null; }, (error: Error) => error);
+      for (let n = 0; n < 100; n++) await Promise.resolve();
+      sockets[1]!.server("lobby.roomUpdated", { roomId: "room-1", ...room });
+      for (let n = 0; n < 100; n++) await Promise.resolve();
+      expect(reads).toHaveLength(2);
+      reads[0]!.resolve(response);
+      for (let n = 0; n < 100; n++) await Promise.resolve();
+      const command = client.setReady("room-1", true).then(() => null, (error: Error) => error);
+      for (let n = 0; n < 100; n++) await Promise.resolve();
+      expect(recovered).toBe(false);
+      expect(posts).toHaveLength(0);
+      expect(sockets[1]!.outgoing.filter((event) => event.event === "lobby:join_room")).toHaveLength(0);
+      delayed = false;
+      if (failLatest) reads[1]!.reject(new Error("active unavailable"));
+      else reads[1]!.resolve(response);
+      const result = await outcome;
+      if (failLatest) {
+        expect(result?.message).toBe("active unavailable");
+        expect((await command)?.message).toBe("active unavailable");
+        expect(posts).toHaveLength(0);
+      } else {
+        expect(result).toBeNull();
+        expect(await command).toBeNull();
+        expect(posts).toHaveLength(1);
+        expect(sockets[1]!.outgoing.some((event) => event.event === "lobby:join_room")).toBe(true);
+      }
+    } finally {
+      session.stop();
+      for (const read of reads) read.resolve(response);
+    }
+  });
+
+  it("network return shares Match renewal and releases Submit only after its baseline", async () => {
+    const browser = new EventTarget();
+    vi.stubGlobal("window", browser);
+    const harness = authHarness();
+    const transport = await connectLive(harness);
+    try {
+      await harness.onAuthExpired();
+      let recovered = false;
+      const renewal = transport.renewSocket();
+      void renewal.then(() => { recovered = true; }, () => {});
+      const submit = transport.submit({ code: "source", language: "Python" });
+      void submit.catch(() => {});
+      browser.dispatchEvent(new Event("offline"));
+      browser.dispatchEvent(new Event("online"));
+      for (let n = 0; n < 100; n++) await Promise.resolve();
+      expect(recovered).toBe(false);
+      expect(harness.fetchMock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST")).toHaveLength(0);
+      expect(harness.sockets).toHaveLength(2);
+      harness.sockets.at(-1)!.server("snapshot", serverSnapshot());
+      await Promise.all([renewal, submit]);
+      expect(recovered).toBe(true);
+      expect(transport.connection()).toBe("connected");
+      expect(harness.fetchMock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST")).toHaveLength(1);
+    } finally { transport.disconnect(); }
+  });
+
   it.each(["Match", "Lobby"])("production refuses the legacy %s development identity constructor", (kind) => {
     vi.stubEnv("DEV", false);
     try {

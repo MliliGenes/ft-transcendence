@@ -31,6 +31,8 @@ export class LobbySession {
   private snapshot: LobbySessionSnapshot;
   private readonly listeners = new Set<() => void>();
   private requestVersion = 0;
+  private currentRefresh: Promise<void> | null = null;
+  private recoveringSocket = false;
   private lifetimeVersion = 0;
   private socketCleanup?: () => void;
   private active = false;
@@ -56,12 +58,18 @@ export class LobbySession {
     if (!this.socketCleanup) {
       this.active = true;
       const lifetimeVersion = ++this.lifetimeVersion;
-      const refresh = () => { if (this.isCurrentLifetime(lifetimeVersion)) void this.refresh(); };
+      const refresh = () => {
+        if (this.isCurrentLifetime(lifetimeVersion))
+          void this.refresh(this.recoveringSocket, this.recoveringSocket).catch(() => {});
+      };
       this.socketCleanup = this.client.connectSocket({
         onConnect: () => {
           if (!this.isCurrentLifetime(lifetimeVersion)) return;
           this.joinedRoomId = null;
-          return this.refresh(true, true);
+          this.recoveringSocket = true;
+          return this.refresh(true, true).finally(() => {
+            if (this.isCurrentLifetime(lifetimeVersion)) this.recoveringSocket = false;
+          });
         },
         onRoomUpdated: refresh,
         onMatchFound: refresh,
@@ -78,6 +86,8 @@ export class LobbySession {
     this.socketCleanup?.();
     this.socketCleanup = undefined;
     this.joinedRoomId = null;
+    this.currentRefresh = null;
+    this.recoveringSocket = false;
   }
 
   setMode(mode: MatchMode): void {
@@ -85,14 +95,25 @@ export class LobbySession {
     this.update({ mode });
   }
 
-  async refresh(propagateError = false, recoveringSocket = false): Promise<void> {
+  refresh(propagateError = false, recoveringSocket = false): Promise<void> {
+    const refresh = this.readActive(propagateError, recoveringSocket);
+    this.currentRefresh = refresh;
+    return refresh;
+  }
+
+  private async readActive(propagateError: boolean, recoveringSocket: boolean): Promise<void> {
     if (!this.active) return;
     const requestVersion = ++this.requestVersion;
-    const isCurrent = () => this.active && requestVersion === this.requestVersion;
+    const lifetimeVersion = this.lifetimeVersion;
+    const isCurrent = () => this.isCurrentLifetime(lifetimeVersion) && requestVersion === this.requestVersion;
+    const waitForCurrent = async () => {
+      // An obsolete read is not a completed recovery baseline.
+      if (propagateError && this.isCurrentLifetime(lifetimeVersion)) await this.currentRefresh;
+    };
     this.update({ error: null });
     try {
       let activeState = await this.client.getActive();
-      if (!isCurrent()) return;
+      if (!isCurrent()) { await waitForCurrent(); return; }
 
       if (activeState.queue?.status === "matched" && activeState.queue.matchedMatchId) {
         this.handoff(activeState.queue.matchedMatchId);
@@ -111,14 +132,14 @@ export class LobbySession {
           return;
         }
         const cancelled = await this.client.cancelQueue();
-        if (!isCurrent()) return;
+        if (!isCurrent()) { await waitForCurrent(); return; }
         if (cancelled.matched && cancelled.matchId) {
           this.handoff(cancelled.matchId);
           this.applyRoom(null);
           return;
         }
         activeState = await this.client.getActive();
-        if (!isCurrent()) return;
+        if (!isCurrent()) { await waitForCurrent(); return; }
       }
 
       if (activeState.room?.room.status === "matched" && activeState.room.room.matchId) {
@@ -130,6 +151,7 @@ export class LobbySession {
       const roomData = activeState.room?.room.status === "open" ? activeState.room : null;
       if (this.applyRoom(roomData)) await this.refresh(propagateError, recoveringSocket);
     } catch (error) {
+      if (!isCurrent()) { await waitForCurrent(); return; }
       if (isCurrent()) this.update({ error: this.message(error, "Failed to recover lobby") });
       if (propagateError) throw error;
     }

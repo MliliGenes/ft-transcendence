@@ -393,7 +393,10 @@ export class SocketArenaTransport implements ArenaTransport {
     if (!lifetime || this.connecting || this.connected || this.reopening || !this.socket) return;
     this.reopening = true;
     try {
-      await this.reattach(lifetime);
+      // Renewal already owns a fresh socket and its baseline wait.
+      // Network recovery must join it instead of detaching that socket.
+      if (this.recovery) await this.recovery;
+      else await this.reattach(lifetime);
     } catch {
       if (this.lifetime === lifetime && !lifetime.signal.aborted) {
         this.connected = false;
