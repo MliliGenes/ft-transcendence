@@ -1,3 +1,5 @@
+import { UseInterceptors } from "@nestjs/common";
+import { GameRuntimeInterceptor } from "./runtime-availability.interceptor.js";
 import {
   ConnectedSocket,
   MessageBody,
@@ -32,6 +34,7 @@ import { attachSocketPrincipal, principalFromHandshake, requireSocketPrincipal, 
  * a client-supplied string.
  */
 @WebSocketGateway({ namespace: "/collab", cors: { origin: true } })
+@UseInterceptors(GameRuntimeInterceptor)
 export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Namespace;
@@ -40,21 +43,24 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(client: Socket): Promise<void> {
     try {
+      this.game.assertServing();
       const principal = principalFromHandshake(client, { matchIdRequired: true });
-      const { userId, matchId } = principal;
-      // Throws for strangers, 1v1 participants, unknown matches: no sync, no leak.
-      const sync = await this.game.collabSync(userId, matchId);
+      const sync = await this.game.collabSync(principal.userId, principal.matchId);
+      this.game.assertServing();
+      if (!client.connected) return;
       attachSocketPrincipal(client, principal);
       client.data.room = sync.roomId;
       client.data.roundId = sync.roundId;
       await client.join(sync.roomId);
-      client.emit("sync", sync);
+      this.game.assertServing();
+      if (client.connected) client.emit("sync", sync);
     } catch {
       client.disconnect(true);
     }
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
+    if (!this.game.runtimeReady) return;
     // Awareness is ephemeral: tell surviving teammates to drop the cursor.
     // Never touches game presence/forfeit (ticket 11 authority stays put).
     const room = client.data?.room;
@@ -67,6 +73,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage("update")
   async onUpdate(@ConnectedSocket() client: Socket, @MessageBody() body: { roundId: string; updateB64: string }) {
     try {
+      this.game.assertServing();
       const principal = requireSocketPrincipal(client, { matchIdRequired: true });
       const { userId, matchId } = principal;
       if (!body || typeof body.roundId !== "string" || typeof body.updateB64 !== "string") {
@@ -76,14 +83,18 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
         throw new Error("collab update frame exceeds limit");
       }
       const res = await this.game.applyCollabUpdate(userId, matchId, { roundId: body.roundId, updateB64: body.updateB64 });
+      this.game.assertServing();
       // Round advanced since join: move the socket to the current room so
       // later frames broadcast to the right teammates.
       if (body.roundId !== client.data.roundId) {
         const sync = await this.game.collabSync(userId, matchId);
+        this.game.assertServing();
         await client.leave(client.data.room);
+        this.game.assertServing();
         client.data.room = sync.roomId;
         client.data.roundId = sync.roundId;
         await client.join(sync.roomId);
+        this.game.assertServing();
         client.emit("sync", sync);
       }
       client.to(client.data.room).emit("remote-update", { updateB64: body.updateB64, revision: res.revision, roundId: body.roundId });
@@ -102,6 +113,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // re-check beyond the join-time gate. Ceiling: a compromised teammate
     // could spoof cursor labels; upgrade path is server-signed presence.
     try {
+      this.game.assertServing();
       const room = client.data?.room;
       const principal = requireSocketPrincipal(client, { matchIdRequired: true });
       if (typeof room !== "string") throw new Error("unauthorized");

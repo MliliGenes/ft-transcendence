@@ -5,6 +5,7 @@ describe("Lobby live hint isolation and committed command preservation", () => {
   let game: GameService;
 
   beforeEach(async () => {
+    vi.stubEnv("DATABASE_URL", ""); vi.stubEnv("DEV_PRINCIPAL", "true");
     game = new GameService();
     await game.onModuleInit();
   });
@@ -12,6 +13,7 @@ describe("Lobby live hint isolation and committed command preservation", () => {
   afterEach(async () => {
     vi.restoreAllMocks();
     await game?.onModuleDestroy();
+    vi.unstubAllEnvs();
   });
 
   it("isolates throwing first listener and delivers hints to later listeners for Join, Side, and Ready", async () => {

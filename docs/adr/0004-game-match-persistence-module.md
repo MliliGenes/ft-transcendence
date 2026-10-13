@@ -106,3 +106,25 @@ production wiring now supply a single `MatchPersistence` instance, defaulting to
 in-memory persistence via `inMemoryPersistence()`. `ArenaEngine` retains exactly
 one persistence seam.
 
+
+
+## Amendment 2026-10-13 (one active Game runtime)
+
+The release now permits one active Game process per production Game database.
+Startup recovery and local Presence/events are unsafe with a second active
+process. The user selected one-server operation. PostgreSQL admits startup
+through a dedicated session advisory lock before schema work or recovery.
+Every production write checks a fresh boot UUID under `FOR SHARE` on the
+singleton ownership row, on its actual transaction client. Token rotation uses
+`FOR UPDATE` and waits for already admitted writes. This includes the composed
+Lobby adapter and claimed Evaluation commits; judge work stays outside short
+write transactions. `MatchPersistence` gameplay inputs and Match JSON stay
+unchanged.
+
+Ownership loss is terminal. Game stops admission, output, timers and local
+worker waits; all namespaces close. An independent application deadline stops
+the process within 5 seconds after detected loss. Production PostgreSQL uses
+required ownership by default. Explicit package fixtures use fixture mode;
+only those fixtures expose raw SQL. The first installation stops every older
+unguarded process before starting this version. There is no standby election,
+automatic takeover, new broadcast dependency or distributed Presence system.

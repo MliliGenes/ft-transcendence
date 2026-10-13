@@ -1,3 +1,5 @@
+import { UseInterceptors } from "@nestjs/common";
+import { GameRuntimeInterceptor } from "./runtime-availability.interceptor.js";
 import { BadRequestException, Body, Controller, Get, Param, Post, Req, UseFilters } from "@nestjs/common";
 import type { Request } from "express";
 import { EngineErrorFilter } from "./errors.js";
@@ -8,6 +10,7 @@ import type { LobbySideId } from "arena-game-engine/lobby";
 
 @Controller("lobby")
 @UseFilters(EngineErrorFilter)
+@UseInterceptors(GameRuntimeInterceptor)
 export class LobbyController {
   constructor(private readonly game: GameService) {}
 

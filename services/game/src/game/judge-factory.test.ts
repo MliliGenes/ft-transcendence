@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const modulePath = "./judge-factory.js";
 
@@ -33,4 +33,27 @@ describe("Game judge backend selection", () => {
     const { createGameJudge } = await loadFactory();
     expect(() => createGameJudge({ JUDGE_BACKEND: "unknown" })).toThrow("unsupported JUDGE_BACKEND unknown");
   });
+});
+
+it("passes lifecycle cancellation to the worker provider", async () => {
+  const life = new AbortController(); let entered!: () => void;
+  const started = new Promise<void>((done) => { entered = done; });
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    const signal = init!.signal!; entered();
+    return new Promise<Response>((_resolve, reject) => {
+      if (signal.aborted) reject(signal.reason);
+      else signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+  };
+  vi.stubGlobal("fetch", fetchImpl);
+  try {
+    const { createGameJudge } = await loadFactory();
+    const judge = createGameJudge({ JUDGE_BACKEND: "worker",
+      JUDGE_WORKER_URL: "http://worker.internal", JUDGE_WORKER_TOKEN: "test", JUDGE_WORKER_TIMEOUT_MS: "100" }, life.signal);
+    const request = judge.runVisible("Python", "snippet", "pass", [], {
+      compileWallMs: 1000, runWallMs: 1000, runMemoryMb: 64,
+      runOutputBytes: 1024, runCpus: 1, runPids: 16 });
+    const rejected = expect(request).rejects.toThrow(/stopped/);
+    await started; life.abort(new Error("shutdown")); await rejected;
+  } finally { vi.unstubAllGlobals(); }
 });

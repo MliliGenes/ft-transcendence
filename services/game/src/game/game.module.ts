@@ -1,3 +1,4 @@
+import { GameRuntimeInterceptor } from "./runtime-availability.interceptor.js";
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from "@nestjs/common";
 import { GameController } from "./game.controller.js";
 import { LobbyController } from "./lobby.controller.js";
@@ -10,7 +11,8 @@ import { devPrincipalMiddleware } from "./principal.js";
 
 @Module({
   controllers: [GameController, LobbyController],
-  providers: [GameService, GameGateway, CollabGateway, TeamChatGateway, LobbyGateway],
+  exports: [GameService],
+  providers: [GameService, GameRuntimeInterceptor, GameGateway, CollabGateway, TeamChatGateway, LobbyGateway],
 })
 export class GameModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

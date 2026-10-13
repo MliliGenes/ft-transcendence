@@ -1,6 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GameService } from "./game.service.js";
 import { LobbyGateway } from "./lobby.gateway.js";
+
+beforeEach(() => { vi.stubEnv("DATABASE_URL", ""); vi.stubEnv("DEV_PRINCIPAL", "true"); });
+afterEach(() => { vi.unstubAllEnvs(); });
 
 describe("LobbyGateway boot ordering and lifecycle subscription", () => {
   it("delays subscription to onApplicationBootstrap, registers once, and cleans up onModuleDestroy", async () => {

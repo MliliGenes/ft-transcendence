@@ -52,8 +52,35 @@ Game `/collab`, `/chat`, and `/lobby` WSS namespaces are also routed through
 Nginx. Platform chat is outside this game-only snapshot; first-release match
 chat remains inside Game.
 `DATABASE_URL` for game is wired in `docker-compose.yml` from the
-`GAME_DB_*` vars (least-privilege role per ADR-0002); without it game
-silently falls back to in-memory stores.
+`GAME_DB_*` vars (least-privilege role per ADR-0002). PostgreSQL ownership is
+required whenever DATABASE_URL is set. Without DATABASE_URL, startup requires
+DEV_PRINCIPAL=true to use memory for an explicit local fixture.
+
+## One active Game server
+
+Code Arena supports one active Game process per Game database. One process can
+serve many Matches. Different databases can have independent Game processes.
+A second process using the same database exits before recovery and listen.
+
+For the first installation of this guard, stop every older Game process before
+starting the new version. Do not overlap an older unguarded version with this
+version. For later updates, stop the current Game process, then start the new
+process. Keep the database running and retain the ownership table.
+
+Ownership loss stops admission, event output, timers and local worker request
+waits. All four socket namespaces disconnect. The application has a 5-second
+stop deadline after it detects loss. Start a replacement explicitly; there is
+no standby election or automatic takeover. Remote worker jobs can continue
+until their existing limits.
+
+`/health` reports process liveness. `/ready` also checks the Game runtime and
+its ownership state. TCP reachability alone does not make Game ready. While
+transport remains open, unavailable Game requests receive HTTP 503; a closed
+transport can instead report a connection failure.
+
+A command that committed before its reply was lost stays accepted. Refresh
+saved state after restart. Keep the existing immutable Submit IDs for a retry.
+Do not automatically replay other commands.
 
 ## Required env
 
@@ -63,7 +90,8 @@ silently falls back to in-memory stores.
   localhost fallback: `?live=1` without it renders a visible error
   (pinned by `frontend/test/live-config.test.ts`).
 - `DEV_PRINCIPAL=true` (dev/test only) — enables the `x-dev-user-id`
-  test seam and the dev-only `POST /matches` fixture. Production (real
+  test seam and the dev-only `POST /matches` fixture. It also permits memory
+  startup when DATABASE_URL is absent; it never bypasses PostgreSQL ownership. Production (real
   auth middleware, seam off) returns 401 without a principal and 404
   for the fixture.
 - `RECONNECT_GRACE_MS` (default 90000, spec window 60–90s).
@@ -138,11 +166,10 @@ the `/chat` namespace, no chat in 1v1.
 
 ## Known limitations (first release)
 
-- Single-instance realtime: socket fan-out, collab Y.Docs, Game-owned chat
-  history (25/room), and rate limits are process-local. Cross-instance
-  lobby matching and all HTTP game actions work against shared
-  Postgres; live events need sticky sessions or shared pub/sub before
-  horizontal scale-out.
+- One active Game process per database is enforced. Socket fan-out, live
+  Presence, collab Y.Docs, chat history (25/room), and rate limits stay local.
+  Multiple active Game servers would need shared Match authority, Presence
+  and event delivery. A shared broadcast adapter alone is insufficient.
 - CORS/sockets are permissive (`origin: true`) for local dev behind
   same-origin nginx. AUTH OWNER: when credentialed auth lands, narrow
   to the exact HTTPS origin and require it on all four namespaces.

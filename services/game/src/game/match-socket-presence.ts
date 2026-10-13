@@ -14,6 +14,19 @@ export interface MatchSocketPresenceTarget {
 
 /** Tracks live sockets without knowing about NestJS or Socket.IO. */
 export class MatchSocketPresence {
+    private stopped = false;
+
+  private assertOpen(): void {
+    if (this.stopped) throw new Error("socket presence stopped");
+  }
+
+  stop(): void {
+    if (this.stopped) return;
+    this.stopped = true;
+    for (const pending of this.opening.values()) pending.closed = true;
+    this.sockets.clear(); this.opening.clear(); this.operations.clear();
+  }
+
   private readonly sockets = new Map<string, Set<string>>();
   private readonly operations = new Map<string, Promise<void>>();
   private readonly opening = new Map<string, { closed: boolean }>();
@@ -36,30 +49,32 @@ export class MatchSocketPresence {
 
   /** Admission can be canceled while membership or durable Presence is pending. */
   noteSocketOpen(userId: string, matchId: string, socketId: string): Promise<string> {
+    if (this.stopped) return Promise.reject(new Error("socket presence stopped"));
     const key = this.socketKey(userId, matchId);
     const pendingKey = JSON.stringify([matchId, userId, socketId]);
-    const pending = { closed: false };
-    this.opening.set(pendingKey, pending);
+    const pending = { closed: false }; this.opening.set(pendingKey, pending);
     return this.serialize(key, async () => {
       let added = false;
       try {
+        this.assertOpen();
         const side = await this.target.participantSide(userId, matchId);
+        this.assertOpen();
         const mode = await this.target.modeOf(matchId);
+        this.assertOpen();
         if (pending.closed) throw new Error("socket closed during admission");
         const set = this.sockets.get(key) ?? new Set<string>();
         if (set.has(socketId)) return side;
-        set.add(socketId);
-        added = true;
-        this.sockets.set(key, set);
+        set.add(socketId); added = true; this.sockets.set(key, set);
         if (set.size === 1) {
+          this.assertOpen();
           if (mode === "2v2") await this.target.setMemberPresence(matchId, userId, "online");
           else await this.target.setPresence(matchId, side, "online");
+          this.assertOpen();
         }
         return side;
       } catch (error) {
         if (added) {
-          const set = this.sockets.get(key);
-          set?.delete(socketId);
+          const set = this.sockets.get(key); set?.delete(socketId);
           if (set?.size === 0) this.sockets.delete(key);
         }
         throw error;
@@ -71,22 +86,26 @@ export class MatchSocketPresence {
 
   /** The last close follows any pending write for this player and Match. */
   noteSocketClosed(userId: string, matchId: string, socketId: string): Promise<void> {
+    if (this.stopped) return Promise.resolve();
     const key = this.socketKey(userId, matchId);
     const pending = this.opening.get(JSON.stringify([matchId, userId, socketId]));
     if (pending) pending.closed = true;
     return this.serialize(key, async () => {
+      if (this.stopped) return;
       const set = this.sockets.get(key);
       if (!set || !set.delete(socketId) || set.size > 0) return;
       this.sockets.delete(key);
       try {
-        if ((await this.target.modeOf(matchId)) === "2v2") {
-          await this.target.setMemberPresence(matchId, userId, "offline");
-        } else {
+        const mode = await this.target.modeOf(matchId);
+        if (this.stopped) return;
+        if (mode === "2v2") await this.target.setMemberPresence(matchId, userId, "offline");
+        else {
           const side = await this.target.participantSide(userId, matchId);
+          if (this.stopped) return;
           await this.target.setPresence(matchId, side, "offline");
         }
       } catch {
-        // Match gone or unavailable: a later connection reconciles Presence.
+        // Existing policy: later admission reconciles an unavailable Match.
       }
     });
   }

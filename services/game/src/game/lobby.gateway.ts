@@ -1,3 +1,5 @@
+import { UseInterceptors } from "@nestjs/common";
+import { GameRuntimeInterceptor } from "./runtime-availability.interceptor.js";
 import { OnApplicationBootstrap, OnModuleDestroy } from "@nestjs/common";
 import {
   ConnectedSocket,
@@ -21,6 +23,7 @@ function roomChannel(roomId: string): string {
 }
 
 @WebSocketGateway({ namespace: "/lobby", cors: { origin: true } })
+@UseInterceptors(GameRuntimeInterceptor)
 export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect, OnApplicationBootstrap, OnModuleDestroy {
   @WebSocketServer()
   server!: Namespace;
@@ -31,6 +34,7 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect, O
 
   onApplicationBootstrap(): void {
     this.disposeLobbySub = this.game.onLobbyEvent((event, payload) => {
+      if (!this.game.runtimeReady) return;
       if (event === "lobby.roomUpdated") {
         const p = payload as { roomId: string; room: unknown; members: Array<{ userId: string }>; audienceUserIds?: string[] };
         if (p?.roomId) {
@@ -62,13 +66,13 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect, O
 
   async handleConnection(client: Socket): Promise<void> {
     try {
+      this.game.assertServing();
       const principal = principalFromHandshake(client);
-      const { userId } = principal;
       attachSocketPrincipal(client, principal);
-      await client.join(userChannel(userId));
-    } catch {
-      client.disconnect(true);
-    }
+      await client.join(userChannel(principal.userId));
+      this.game.assertServing();
+      if (!client.connected) return;
+    } catch { client.disconnect(true); }
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
@@ -81,13 +85,17 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect, O
     @MessageBody() body: { roomId: string },
   ): Promise<{ ok: boolean; error?: string }> {
     try {
+      this.game.assertServing();
       const { userId } = requireSocketPrincipal(client);
       if (!body?.roomId) return { ok: false, error: "roomId is required" };
       await this.game.roomForMember(userId, body.roomId);
+      this.game.assertServing();
+      if (!client.connected) return { ok: false };
       await client.join(roomChannel(body.roomId));
+      this.game.assertServing();
       return { ok: true };
-    } catch (e: any) {
-      return { ok: false, error: e?.message ?? "failed to join room" };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "failed to join room" };
     }
   }
 
@@ -97,13 +105,10 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect, O
     @MessageBody() body: { roomId: string },
   ): Promise<{ ok: boolean }> {
     try {
-      requireSocketPrincipal(client);
-      if (body?.roomId) {
-        await client.leave(roomChannel(body.roomId));
-      }
+      this.game.assertServing(); requireSocketPrincipal(client);
+      if (body?.roomId) await client.leave(roomChannel(body.roomId));
+      this.game.assertServing();
       return { ok: true };
-    } catch {
-      return { ok: false };
-    }
+    } catch { return { ok: false }; }
   }
 }

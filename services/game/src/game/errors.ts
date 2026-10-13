@@ -12,7 +12,9 @@ export class EngineErrorFilter implements ExceptionFilter {
     const code = (exception as { code?: unknown }).code;
     const message = exception instanceof Error ? exception.message : "internal error";
     const status =
-      code === 403
+      code === 503
+        ? HttpStatus.SERVICE_UNAVAILABLE
+        : code === 403
         ? HttpStatus.FORBIDDEN
         : code === 409
           ? HttpStatus.CONFLICT

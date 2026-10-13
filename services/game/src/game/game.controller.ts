@@ -1,3 +1,5 @@
+import { UseInterceptors } from "@nestjs/common";
+import { GameRuntimeInterceptor } from "./runtime-availability.interceptor.js";
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Req, UseFilters } from "@nestjs/common";
 import type { Request } from "express";
 import { EngineErrorFilter } from "./errors.js";
@@ -11,6 +13,7 @@ import { requirePrincipal } from "./principal.js";
  */
 @Controller("matches")
 @UseFilters(EngineErrorFilter)
+@UseInterceptors(GameRuntimeInterceptor)
 export class GameController {
   constructor(private readonly game: GameService) {}
 

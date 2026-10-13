@@ -17,7 +17,7 @@ function configuredPositiveInteger(environment: JudgeEnvironment, name: string):
 }
 
 /** Select one GameJudge provider at process startup; provider failures never trigger fallback. */
-export function createGameJudge(environment: JudgeEnvironment = process.env): GameJudge {
+export function createGameJudge(environment: JudgeEnvironment = process.env, signal?: AbortSignal): GameJudge {
   const backend = (environment.JUDGE_BACKEND ?? "container").trim().toLowerCase();
   if (backend === "container") return new ContainerJudge();
   if (backend === "worker") {
@@ -29,6 +29,7 @@ export function createGameJudge(environment: JudgeEnvironment = process.env): Ga
       baseUrl,
       token,
       timeoutMs: configuredPositiveInteger(environment, "JUDGE_WORKER_TIMEOUT_MS"),
+      signal,
     });
   }
   if (backend !== "judge0") throw new Error(`unsupported JUDGE_BACKEND ${backend}`);

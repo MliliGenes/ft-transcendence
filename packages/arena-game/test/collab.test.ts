@@ -383,7 +383,7 @@ async function pgUp(): Promise<boolean> {
     } finally {
       await admin.end();
     }
-    const stores = new PostgresStores(PG_URL);
+    const stores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
     await stores.ensureSchema();
     await stores.close();
     return true;
@@ -396,7 +396,7 @@ if (!HAS_PG) console.warn(`[collab.test] postgres proof skipping: no database at
 
 describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
   it("15. commit persists full Yjs state; reboot restores source + revision", async () => {
-    const stores = new PostgresStores(PG_URL);
+    const stores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
     await stores.ensureSchema();
     await stores.raw.query("TRUNCATE matches, rounds, round_sides, submissions, reveals, match_failures, collab_documents RESTART IDENTITY CASCADE");
     const clock = (): number => 1_000_000;
@@ -457,7 +457,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
   });
 
   it("16. failure injection: failed DB transaction in saveMatchAndCollab rolls back memory and DB", async () => {
-    const stores = new PostgresStores(PG_URL);
+    const stores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
     await stores.ensureSchema();
     await stores.raw.query("TRUNCATE matches, rounds, round_sides, submissions, reveals, match_failures, collab_documents RESTART IDENTITY CASCADE");
     const clock = (): number => 1_000_000;
@@ -536,7 +536,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
   });
 
   it("17. failure injection: language switch rollback restores starter, language, revision and readiness", async () => {
-    const stores = new PostgresStores(PG_URL);
+    const stores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
     await stores.ensureSchema();
     await stores.raw.query("TRUNCATE matches, rounds, round_sides, submissions, reveals, match_failures, collab_documents RESTART IDENTITY CASCADE");
     const clock = (): number => 1_000_000;
@@ -600,7 +600,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
   });
 
   it("18. duplicate replay after lost ack: revision unchanged, readiness not invalidated again", async () => {
-    const stores = new PostgresStores(PG_URL);
+    const stores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
     await stores.ensureSchema();
     await stores.raw.query("TRUNCATE matches, rounds, round_sides, submissions, reveals, match_failures, collab_documents RESTART IDENTITY CASCADE");
     const clock = (): number => 1_000_000;
@@ -667,7 +667,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
   });
 
   it("19. stale document edit rejected by revision check across two coordinated engines", async () => {
-    const stores = new PostgresStores(PG_URL);
+    const stores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
     await stores.ensureSchema();
     await stores.raw.query("TRUNCATE matches, rounds, round_sides, submissions, reveals, match_failures, collab_documents RESTART IDENTITY CASCADE");
     const clock = (): number => 1_000_000;
@@ -777,7 +777,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
   });
 
   it("20. PostgreSQL document-write failure rolls back the preceding Match write", async () => {
-    const stores = new PostgresStores(PG_URL);
+    const stores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
     await stores.ensureSchema();
     await stores.raw.query("TRUNCATE matches, rounds, round_sides, submissions, reveals, match_failures, collab_documents RESTART IDENTITY CASCADE");
     const clock = (): number => 1_000_000;

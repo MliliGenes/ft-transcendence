@@ -1,3 +1,5 @@
+import { UseInterceptors } from "@nestjs/common";
+import { GameRuntimeInterceptor } from "./runtime-availability.interceptor.js";
 import { Optional } from "@nestjs/common";
 import {
   ConnectedSocket,
@@ -27,6 +29,7 @@ import { attachSocketPrincipal, principalFromHandshake, socketPrincipal } from "
  * NEVER increment DocumentRevision, and NEVER toggle game readiness.
  */
 @WebSocketGateway({ namespace: "/chat", cors: { origin: true } })
+@UseInterceptors(GameRuntimeInterceptor)
 export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Namespace;
@@ -45,30 +48,27 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   getRecentHistory(roomId: string): TeamChatEntry[] {
+    this.game.assertServing();
     return this.chat.getRecentHistory(roomId);
   }
 
   async handleConnection(client: Socket): Promise<void> {
     try {
+      this.game.assertServing();
       const principal = principalFromHandshake(client, { matchIdRequired: true });
-      const { userId, matchId } = principal;
-      // Authoritative game resolution: strangers (NotMemberError) and 1v1 (IllegalStateError) fail closed
-      const context = await this.game.resolveTeamChatContext(userId, matchId);
-
+      const context = await this.game.resolveTeamChatContext(principal.userId, principal.matchId);
+      this.game.assertServing();
+      if (!client.connected) return;
       attachSocketPrincipal(client, principal);
-      client.data.sideId = context.sideId;
-      client.data.roomId = context.roomId;
-
+      client.data.sideId = context.sideId; client.data.roomId = context.roomId;
       await client.join(context.roomId);
+      this.game.assertServing();
+      if (!client.connected) return;
       client.emit("authorized", context);
-
       const recent = this.getRecentHistory(context.roomId);
-      if (recent.length > 0) {
-        client.emit("history", recent);
-      }
-    } catch {
-      client.disconnect(true);
-    }
+      this.game.assertServing();
+      if (recent.length > 0 && client.connected) client.emit("history", recent);
+    } catch { client.disconnect(true); }
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
@@ -80,6 +80,7 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { text: unknown; clientMessageId?: unknown },
   ): Promise<{ ok: boolean; id?: string; error?: string }> {
+    this.game.assertServing();
     const sideId = client.data?.sideId as string | undefined;
     const roomId = client.data?.roomId as string | undefined;
     const principal = socketPrincipal(client, { matchIdRequired: true });
@@ -98,6 +99,7 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
       text: body?.text,
       clientMessageId: body?.clientMessageId,
     });
+    this.game.assertServing();
 
     if (entry) {
       this.server?.to(roomId).emit("message", entry);
@@ -110,6 +112,7 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { ping: unknown },
   ): Promise<{ ok: boolean; id?: string; error?: string }> {
+    this.game.assertServing();
     const sideId = client.data?.sideId as string | undefined;
     const roomId = client.data?.roomId as string | undefined;
     const principal = socketPrincipal(client, { matchIdRequired: true });
@@ -127,6 +130,7 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
       roomId,
       ping: body?.ping,
     });
+    this.game.assertServing();
 
     if (entry) {
       this.server?.to(roomId).emit("ping", entry);

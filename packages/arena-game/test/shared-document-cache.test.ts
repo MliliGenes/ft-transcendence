@@ -32,8 +32,8 @@ for (const adapter of ["memory", "postgres"] as const) {
     let otherPersistence: MatchPersistence;
     beforeAll(async () => {
       if (adapter === "postgres") {
-        firstStore = new PostgresStores(pgUrl!);
-        secondStore = new PostgresStores(pgUrl!);
+        firstStore = new PostgresStores(pgUrl!, { runtimeOwnership: "fixture" });
+        secondStore = new PostgresStores(pgUrl!, { runtimeOwnership: "fixture" });
         await firstStore.ensureSchema();
         await secondStore.ensureSchema();
       }

@@ -8,7 +8,7 @@ describe("Team chat retry identity during a pending lifecycle lookup", () => {
   it("broadcasts one message when a retry overlaps the original request", async () => {
     let release!: () => void;
     const pending = new Promise<void>((resolve) => { release = resolve; });
-    const game = { resolveTeamChatContext: vi.fn(async () => {
+    const game = { runtimeReady: true, assertServing: () => {}, resolveTeamChatContext: vi.fn(async () => {
       await pending;
       return { active: true };
     }) } as unknown as GameService;

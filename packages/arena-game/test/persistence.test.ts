@@ -251,7 +251,7 @@ const HAS_POSTGRES = await postgresAvailable();
 
 describe.runIf(HAS_POSTGRES)("MatchPersistence Postgres adapter contract", () => {
   it("matches the in-memory idempotency and durable-state contract", async () => {
-    const stores = new PostgresStores(PG_CONTRACT_URL);
+    const stores = new PostgresStores(PG_CONTRACT_URL, { runtimeOwnership: "fixture" });
     const id = `postgres-${randomUUID()}`;
     try {
       await stores.ensureSchema();

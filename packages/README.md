@@ -35,3 +35,21 @@ packages/<name>/
 | `round-lifecycle.ts` | Focused Round lifecycle interface retained by ADR-0007 |
 | `team-collaboration.ts` | Focused Team collaboration interface retained by ADR-0008 |
 | `evaluation-orchestration.ts` | Focused Evaluation orchestration and telemetry interfaces retained by ADR-0012 |
+
+
+### PostgreSQL runtime ownership
+
+`PostgresStores(connectionString)` requires Game runtime ownership by default.
+Acquire it with `acquireRuntime({ onLost })` before `ensureSchema()` and engine
+recovery. The loss callback is synchronous and terminal; the service closes
+admission and starts bounded application shutdown. `assertRuntimeActive()` and
+`runtimeActive` expose local availability. `close()` invalidates claims
+synchronously, drains pools, and releases normal startup ownership last. Close
+is idempotent. `RuntimeAlreadyOwnedError` and `RuntimeOwnershipLostError` are
+exported from `persistence.ts`, with code 503.
+
+Independent package test fixtures must explicitly use
+`new PostgresStores(connectionString, { runtimeOwnership: "fixture" })`.
+The `raw` pool getter is restricted to that mode. `DEV_PRINCIPAL` and `NODE_ENV`
+do not disable PostgreSQL ownership. The production Game service uses required
+mode, including real-process integration tests.

@@ -1,3 +1,5 @@
+import { UseInterceptors } from "@nestjs/common";
+import { GameRuntimeInterceptor } from "./runtime-availability.interceptor.js";
 import {
   ConnectedSocket,
   MessageBody,
@@ -29,12 +31,14 @@ function roomFor(matchId: string): string {
  * re-resolves the side from the socket principal.
  */
 @WebSocketGateway({ cors: { origin: true } })
+@UseInterceptors(GameRuntimeInterceptor)
 export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
   constructor(private readonly game: GameService) {
     this.game.onEvent((event, matchId, payload) => {
+      if (!this.game.runtimeReady) return;
       if (matchId) this.server?.to(roomFor(matchId)).emit(event, payload);
     });
   }
@@ -52,27 +56,29 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     let opened = false;
     let principal: MatchSocketPrincipal | null = null;
     try {
+      this.game.assertServing();
       principal = principalFromHandshake(client, { matchIdRequired: true });
       const { userId, matchId } = principal;
       await this.game.snapshot(userId, matchId);
+      this.game.assertServing();
       if (!client.connected) return;
       attachSocketPrincipal(client, principal);
       await this.game.noteSocketOpen(userId, matchId, client.id);
       opened = true;
+      this.game.assertServing();
       if (!client.connected) {
         await this.game.noteSocketClosed(userId, matchId, client.id);
         return;
       }
       await client.join(roomFor(matchId));
+      this.game.assertServing();
       const snapshot = await this.game.snapshot(userId, matchId);
+      this.game.assertServing();
       if (client.connected) client.emit("snapshot", snapshot);
     } catch {
-      if (opened) {
-        try {
-          if (principal?.matchId) await this.game.noteSocketClosed(principal.userId, principal.matchId, client.id);
-        } catch {
-          // Best effort only.
-        }
+      if (opened && principal?.matchId) {
+        try { await this.game.noteSocketClosed(principal.userId, principal.matchId, client.id); }
+        catch { /* Existing best-effort cleanup policy. */ }
       }
       client.disconnect(true);
     }
@@ -93,8 +99,10 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage("run")
   async onRun(@ConnectedSocket() client: Socket, @MessageBody() body: { code: string; language: string }) {
     try {
+      this.game.assertServing();
       const principal = requireSocketPrincipal(client, { matchIdRequired: true });
       const result = await this.game.run(principal.userId, principal.matchId, body);
+      this.game.assertServing();
       return { ok: true as const, result };
     } catch (error) {
       return { ok: false as const, error: error instanceof Error ? error.message : "run failed" };
@@ -107,8 +115,10 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() body: { code: string; language: string; submissionId?: string; evaluationId?: string },
   ) {
     try {
+      this.game.assertServing();
       const principal = requireSocketPrincipal(client, { matchIdRequired: true });
       const result = await this.game.submit(principal.userId, principal.matchId, body);
+      this.game.assertServing();
       return { ok: true as const, result };
     } catch (error) {
       return { ok: false as const, error: error instanceof Error ? error.message : "submit failed" };
@@ -120,11 +130,13 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // 2v2: revision-bound per-player readiness (engine-enforced). 1v1 keeps
     // the legacy no-op ack — the engine returns without effect there.
     try {
+      this.game.assertServing();
       const principal = requireSocketPrincipal(client, { matchIdRequired: true });
       await this.game.setReady(principal.userId, principal.matchId, {
         ready: body?.value === true,
         documentRevision: body?.documentRevision,
       });
+      this.game.assertServing();
       return { ok: true as const };
     } catch (error) {
       return { ok: false as const, error: error instanceof Error ? error.message : "setReady failed" };
@@ -136,8 +148,10 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Deliberate leave only: immediate forfeit (§15). Socket loss never lands
     // here — handleDisconnect owns that path and never forfeits.
     try {
+      this.game.assertServing();
       const principal = requireSocketPrincipal(client, { matchIdRequired: true });
       const result = await this.game.leave(principal.userId, principal.matchId);
+      this.game.assertServing();
       return { ok: true as const, result };
     } catch (error) {
       return { ok: false as const, error: error instanceof Error ? error.message : "leave failed" };

@@ -1,3 +1,4 @@
+import { GuardedSql } from "./guarded-sql.js";
 import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { saveMatchTx } from "./match-write.js";
@@ -152,10 +153,11 @@ export class LobbyStore implements ILobbyStore {
     private readonly pool: Pool,
     private readonly clock: () => number = Date.now,
     private readonly uuid: () => string = randomUUID,
+    private readonly sql: GuardedSql = new GuardedSql(pool),
   ) {}
 
   async ensureSchema(): Promise<void> {
-    await this.pool.query(LOBBY_SCHEMA);
+    await this.sql.transaction(async (client) => { await client.query(LOBBY_SCHEMA); });
   }
 
   // ── Queue ──
@@ -164,7 +166,7 @@ export class LobbyStore implements ILobbyStore {
     if (mode !== "1v1" && mode !== "2v2") throw new LobbyError("invalid mode");
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await this.sql.begin(client);
       // Serialize this user's admissions across queue and room tables.
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`lobby:user:${userId}`]);
 
@@ -206,10 +208,10 @@ export class LobbyStore implements ILobbyStore {
         [entry.id, entry.userId, entry.mode, entry.status, entry.joinedAt],
       );
 
-      await client.query("COMMIT");
+      await this.sql.commit(client);
       return entry;
     } catch (error) {
-      await client.query("ROLLBACK");
+      await this.sql.rollback(client);
       throw error;
     } finally {
       client.release();
@@ -219,7 +221,7 @@ export class LobbyStore implements ILobbyStore {
   async cancelQueue(userId: string): Promise<{ cancelled: boolean; matched: boolean; matchId?: string }> {
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await this.sql.begin(client);
 
       const res = await client.query(
         `SELECT id, status, matched_match_id FROM arena_queue_entries
@@ -230,13 +232,13 @@ export class LobbyStore implements ILobbyStore {
       );
 
       if ((res.rowCount ?? 0) === 0) {
-        await client.query("COMMIT");
+        await this.sql.commit(client);
         return { cancelled: false, matched: false };
       }
 
       const row = res.rows[0];
       if (row.status === "matched") {
-        await client.query("COMMIT");
+        await this.sql.commit(client);
         return { cancelled: false, matched: true, matchId: row.matched_match_id };
       }
 
@@ -244,10 +246,10 @@ export class LobbyStore implements ILobbyStore {
         `UPDATE arena_queue_entries SET status = 'cancelled', cancelled_at = $1 WHERE id = $2`,
         [this.clock(), row.id],
       );
-      await client.query("COMMIT");
+      await this.sql.commit(client);
       return { cancelled: true, matched: false };
     } catch (error) {
-      await client.query("ROLLBACK");
+      await this.sql.rollback(client);
       throw error;
     } finally {
       client.release();
@@ -280,7 +282,7 @@ export class LobbyStore implements ILobbyStore {
     const n = capacityFor(mode);
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await this.sql.begin(client);
       // ponytail: one short matcher transaction per mode; shard only if measured contention warrants it.
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`lobby:mode:${mode}`]);
 
@@ -295,7 +297,7 @@ export class LobbyStore implements ILobbyStore {
       );
 
       if ((res.rowCount ?? 0) < n) {
-        await client.query("ROLLBACK");
+        await this.sql.rollback(client);
         return null;
       }
 
@@ -319,7 +321,7 @@ export class LobbyStore implements ILobbyStore {
         [matchId, ids],
       );
 
-      await client.query("COMMIT");
+      await this.sql.commit(client);
 
       return {
         matchId,
@@ -329,7 +331,7 @@ export class LobbyStore implements ILobbyStore {
         })),
       };
     } catch (error) {
-      await client.query("ROLLBACK");
+      await this.sql.rollback(client);
       throw error;
     } finally {
       client.release();
@@ -342,7 +344,7 @@ export class LobbyStore implements ILobbyStore {
     if (mode !== "1v1" && mode !== "2v2") throw new LobbyError("invalid mode");
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await this.sql.begin(client);
       // Serialize this user's admissions across queue and room tables.
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`lobby:user:${userId}`]);
 
@@ -397,10 +399,10 @@ export class LobbyStore implements ILobbyStore {
         [creatorMember.roomId, creatorMember.userId, creatorMember.sideId, creatorMember.ready, creatorMember.joinedAt],
       );
 
-      await client.query("COMMIT");
+      await this.sql.commit(client);
       return { room, members: [creatorMember] };
     } catch (error) {
-      await client.query("ROLLBACK");
+      await this.sql.rollback(client);
       throw error;
     } finally {
       client.release();
@@ -430,7 +432,7 @@ export class LobbyStore implements ILobbyStore {
   async joinPrivateRoom(userId: string, inviteCode: string): Promise<RoomWithMembers & { full: boolean }> {
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await this.sql.begin(client);
       // Serialize this user's admissions across queue and room tables.
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`lobby:user:${userId}`]);
 
@@ -461,7 +463,7 @@ export class LobbyStore implements ILobbyStore {
         // Expiring an invitation is durable even though the admission fails.
         if (lobby.room.status === "expired" && error instanceof LobbyError && error.code === 410) {
           await client.query(`UPDATE arena_private_rooms SET status = 'expired' WHERE id = $1`, [lobby.room.id]);
-          await client.query("COMMIT");
+          await this.sql.commit(client);
         }
         throw error;
       }
@@ -470,10 +472,10 @@ export class LobbyStore implements ILobbyStore {
          VALUES ($1, $2, $3, $4, $5)`,
         [member.roomId, member.userId, member.sideId, member.ready, member.joinedAt],
       );
-      await client.query("COMMIT");
+      await this.sql.commit(client);
       return { ...lobby.snapshot(), full: lobby.full };
     } catch (error) {
-      await client.query("ROLLBACK");
+      await this.sql.rollback(client);
       throw error;
     } finally {
       client.release();
@@ -483,7 +485,7 @@ export class LobbyStore implements ILobbyStore {
   async leavePrivateRoom(userId: string, roomId: string): Promise<LeavePrivateRoomResult> {
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await this.sql.begin(client);
 
       const roomRes = await client.query(
         `SELECT id, code, mode, owner_user_id, status, created_at, expires_at, match_id
@@ -491,7 +493,7 @@ export class LobbyStore implements ILobbyStore {
         [roomId],
       );
       if ((roomRes.rowCount ?? 0) === 0 || roomRes.rows[0].status !== "open") {
-        await client.query("COMMIT");
+        await this.sql.commit(client);
         return { left: false, closed: false };
       }
 
@@ -507,7 +509,7 @@ export class LobbyStore implements ILobbyStore {
 
       const isMember = allMembers.some((m) => m.userId === userId);
       if (!isMember) {
-        await client.query("COMMIT");
+        await this.sql.commit(client);
         return { left: false, closed: false };
       }
 
@@ -537,7 +539,7 @@ export class LobbyStore implements ILobbyStore {
         audienceUserIds = remainingMembers.map((m) => m.userId);
       }
 
-      await client.query("COMMIT");
+      await this.sql.commit(client);
       return {
         left: true,
         closed,
@@ -546,7 +548,7 @@ export class LobbyStore implements ILobbyStore {
         audienceUserIds,
       };
     } catch (error) {
-      await client.query("ROLLBACK");
+      await this.sql.rollback(client);
       throw error;
     } finally {
       client.release();
@@ -556,17 +558,17 @@ export class LobbyStore implements ILobbyStore {
   async setRoomMemberSide(userId: string, roomId: string, sideId: LobbySideId): Promise<RoomWithMembers> {
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await this.sql.begin(client);
       const lobby = await this.loadPrivateLobby(client, roomId);
       const member = lobby.setSide(userId, sideId);
       await client.query(
         `UPDATE arena_private_room_members SET side_id = $1, ready = $2 WHERE room_id = $3 AND user_id = $4`,
         [member.sideId, member.ready, roomId, userId],
       );
-      await client.query("COMMIT");
+      await this.sql.commit(client);
       return lobby.snapshot();
     } catch (error) {
-      await client.query("ROLLBACK");
+      await this.sql.rollback(client);
       throw error;
     } finally {
       client.release();
@@ -576,17 +578,17 @@ export class LobbyStore implements ILobbyStore {
   async setRoomMemberReady(userId: string, roomId: string, ready: boolean): Promise<RoomWithMembers> {
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await this.sql.begin(client);
       const lobby = await this.loadPrivateLobby(client, roomId);
       const member = lobby.setReady(userId, ready);
       await client.query(
         `UPDATE arena_private_room_members SET ready = $1 WHERE room_id = $2 AND user_id = $3`,
         [member.ready, roomId, userId],
       );
-      await client.query("COMMIT");
+      await this.sql.commit(client);
       return lobby.snapshot();
     } catch (error) {
-      await client.query("ROLLBACK");
+      await this.sql.rollback(client);
       throw error;
     } finally {
       client.release();
@@ -601,7 +603,7 @@ export class LobbyStore implements ILobbyStore {
   ): Promise<StartPrivateRoomResult> {
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await this.sql.begin(client);
       const lobby = await this.loadPrivateLobby(client, roomId);
       const input = lobby.start(userId, problemVersionIds);
       // The Match and room linkage still commit together under the room lock.
@@ -609,7 +611,7 @@ export class LobbyStore implements ILobbyStore {
       await client.query(
         `UPDATE arena_private_rooms SET status = 'matched', match_id = $1 WHERE id = $2`, [matchId, roomId],
       );
-      await client.query("COMMIT");
+      await this.sql.commit(client);
       return {
         matchId,
         userIds: lobby.members.map((m) => m.userId),
@@ -617,7 +619,7 @@ export class LobbyStore implements ILobbyStore {
         members: lobby.members.map((m) => ({ ...m })),
       };
     } catch (error) {
-      await client.query("ROLLBACK");
+      await this.sql.rollback(client);
       throw error;
     } finally {
       client.release();

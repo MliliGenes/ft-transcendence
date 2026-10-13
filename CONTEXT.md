@@ -34,6 +34,16 @@ Supersedes the 2026-09-17 campus puzzle-race glossary (room, stage, role, clue c
 
 **Match persistence**: The durable module for Match/Round records, Submissions, Reveals, shared team documents, and failure history. The Match authority decides whether a transition is valid; Match persistence decides how accepted state becomes durable. Presence, transport, Lobby queues, and judge execution remain outside this module. The first implementation preserves the current JSONB schema and uses Postgres and in-memory adapters behind the same interface.
 
+**Game runtime ownership**: One active Game process serves a production Game
+database. Startup uses a dedicated PostgreSQL advisory-lock session. A fresh
+boot UUID is checked under a shared row lock in every write transaction,
+including Lobby writes and claimed Evaluation commits. A second process stops
+before recovery. Known ownership loss is terminal: admission, events, timers
+and local worker waits stop, sockets close, and the process exits within its
+5-second shutdown deadline. PostgreSQL package fixtures explicitly use
+`runtimeOwnership: "fixture"`; production uses the required default. Multiple
+active Game servers remain a separate architecture change.
+
 **Match authority**: The module that guards trusted-principal membership, serializes short Match commands, stamps committed revisions, and exposes the current Round. It is the final authorization point for gameplay commands. A completed Match retires live documents and local deadline/Run bookkeeping under its command lock after durable settlement; persisted results and pending judge work remain available. It does not execute judge work, speak Socket.IO, or know database adapter details; those concerns enter through explicit seams.
 
 **Round lifecycle**: The domain module behind `ArenaEngine` that owns Match/Round phase transitions, reveal preparation and publication state, round resets, Game-side verdict scoring, cumulative totals, and final-result tie-break calculation. The facade supplies the durable deadline closure and event-delivery seams. It does not persist records, execute untrusted code, or emit transport events.
@@ -50,12 +60,12 @@ Supersedes the 2026-09-17 campus puzzle-race glossary (room, stage, role, clue c
 
 **Arena sidecar lifecycle**: The frontend module that creates, replaces, preserves, and disposes live collaboration and team-chat clients around an Arena transport scope. Collaboration is round-scoped; chat is Match-scoped. Arena UI components consume the resulting clients without owning factory cancellation or cleanup policy. Disconnect preserves a Round document for rejoin; permanent disposal releases that document and cursor awareness when the scope is replaced.
 
-**Evaluation orchestration**: The Game workflow that accepts an immutable submission/evaluation request under the short Match lock, claims one pending evaluation through `MatchPersistence`, runs the judge outside that lock, and commits the verdict under a fresh lock on the claim owner's PostgreSQL session. The orchestrator owns immutable identity validation, process-local attachment, and settlement, including acceptance and command-exit failures; the Match facade supplies authorization and pending acceptance through a structural command host. Callers observe completion and receipts without accessing registry entries or resolvers. A same-identity retry waits only after releasing the lock and receives the original success or judge error; a reused identifier with different submission data is rejected. PostgreSQL session advisory locks prevent two live Game processes from owning one pending evaluation concurrently; if a session dies after judge start, takeover may re-drive the row but the stale owner cannot commit. A separate claim pool preserves ordinary persistence capacity and lost claim sessions leave rows reclaimable, while broader cross-process Match mutation coordination remains a follow-up.
+**Evaluation orchestration**: The Game workflow that accepts an immutable submission/evaluation request under the short Match lock, claims one pending evaluation through `MatchPersistence`, runs the judge outside that lock, and commits the verdict under a fresh lock on the claim owner's PostgreSQL session. The orchestrator owns immutable identity validation, process-local attachment, and settlement, including acceptance and command-exit failures; the Match facade supplies authorization and pending acceptance through a structural command host. Callers observe completion and receipts without accessing registry entries or resolvers. A same-identity retry waits only after releasing the lock and receives the original success or judge error; a reused identifier with different submission data is rejected. PostgreSQL session advisory locks prevent two live Game processes from owning one pending evaluation concurrently; if a session dies after judge start, takeover may re-drive the row but the stale owner cannot commit. A separate claim pool preserves ordinary persistence capacity and lost claim sessions leave rows reclaimable. The Game runtime owner now guards every production write; it enforces one active Game process rather than permitting several active writers.
 
 **Judge job**: A provider-side execution of one Evaluation. One Evaluation can have more than one Judge job after recovery, but only the durable Evaluation outcome affects Match state.
 
 **Match revision conflict**: A stale ordinary Match snapshot attempted to save
-after another Game process committed a newer revision. Persistence rejects the
+after another command or recovery step committed a newer revision. Persistence rejects the
 write with a 409-shaped `MatchRevisionConflictError`; the frontend refreshes
 authoritative state and does not replay the command automatically.
 

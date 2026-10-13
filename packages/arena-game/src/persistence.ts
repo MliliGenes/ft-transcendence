@@ -17,3 +17,5 @@ export {
   InMemoryCollabPersist,
   collabRoomId,
 } from "./lib/collab.js";
+
+export { RuntimeOwnershipLostError, RuntimeAlreadyOwnedError } from "./lib/runtime-ownership.js";

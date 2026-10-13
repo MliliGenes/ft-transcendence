@@ -78,6 +78,11 @@ application container with the Docker socket. The React frontend is currently
 built/previewed separately; joining it to the public Compose entry point is
 still integration work.
 
+Game supports one active process per Game database. A duplicate exits before
+recovery. Stop all older unguarded Game processes for the first installation.
+See the [one-server run instructions](docs/game-local-run.md#one-active-game-server)
+for updates, ownership loss and deliberate restart.
+
 ## Team integration seams
 
 - `origin/user-service` owns account, profile, JWT/OAuth, and verified-principal
@@ -96,8 +101,8 @@ No teammate branch was merged or rewritten by this import.
 - Production authentication is not connected; `DEV_PRINCIPAL` is strictly a
   local/test seam.
 - Match-chat history and realtime fan-out are process-local.
-- Horizontal Game scaling still needs shared fan-out and broader command
-  coordination.
+- Multiple active Game servers require shared Match authority, Presence and
+  events. The current release enforces one active server per database.
 - Production certificates, policy pages, final contribution records, and 42
   module demonstrations remain team deliverables.
 - A passing implementation test is evidence for that behavior, not automatic

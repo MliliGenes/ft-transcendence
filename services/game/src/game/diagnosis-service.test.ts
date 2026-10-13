@@ -14,6 +14,7 @@ afterEach(async () => {
 describe("service event delivery contracts", () => {
   it.each([false, true])("delivers a committed phase event past an earlier listener (throws: %s)", async (throws) => {
     vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("DEV_PRINCIPAL", "true");
     vi.spyOn(console, "error").mockImplementation(() => {});
     const game = new GameService();
     services.push(game);
@@ -37,6 +38,7 @@ describe("service event delivery contracts", () => {
 it.each(["closing", "row", "phase"])("retries an automatic Reveal after a failed %s save through the production timer", async (fault) => {
   vi.useFakeTimers({ now: 1000 });
   vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("DEV_PRINCIPAL", "true");
   vi.stubEnv("JUDGE_BACKEND", "container");
   vi.spyOn(ContainerJudge.prototype, "evaluateSealed").mockImplementation(async (request) => ({
     groups: request.groups.map((group) => ({ name: group.name, weight: group.weight,

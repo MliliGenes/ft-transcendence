@@ -15,7 +15,7 @@ const PG_URL = process.env.TEST_PG_URL ?? "postgres://postgres:postgres@localhos
 
 async function pgUp(): Promise<boolean> {
   try {
-    const stores = new PostgresStores(PG_URL);
+    const stores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
     await stores.ensureSchema();
     await stores.close();
     return true;
@@ -49,7 +49,7 @@ describe.runIf(HAS_PG)("postgres persistence + restart (real database)", () => {
   const right = testPrincipal("user-right");
 
   beforeAll(async () => {
-    stores = new PostgresStores(PG_URL);
+    stores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
     await stores.ensureSchema();
   });
 
@@ -59,8 +59,8 @@ describe.runIf(HAS_PG)("postgres persistence + restart (real database)", () => {
   });
 
   it("serializes pending evaluation claims across separate Postgres pools", async () => {
-    const firstStores = new PostgresStores(PG_URL);
-    const secondStores = new PostgresStores(PG_URL);
+    const firstStores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
+    const secondStores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
     const evaluationId = `claim-${Date.now()}-${Math.random()}`;
     const pending: SubmissionRecord = {
       submissionId: `${evaluationId}-submission`,
@@ -263,7 +263,7 @@ describe.runIf(HAS_PG)("postgres persistence + restart (real database)", () => {
   });
 
   it.each(["success", "failure"])("two Game instances share one evaluation %s with one judge call", async (outcome) => {
-    const peerStores = new PostgresStores(PG_URL);
+    const peerStores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
     const firstJudge = new ScriptedJudge([{ defer: true }]);
     const secondJudge = new ScriptedJudge([P100]);
     try {
@@ -321,7 +321,7 @@ describe.runIf(HAS_PG)("postgres persistence + restart (real database)", () => {
   });
 
   it("two recovery workers claim one pending evaluation exactly once", async () => {
-    const peerStores = new PostgresStores(PG_URL);
+    const peerStores = new PostgresStores(PG_URL, { runtimeOwnership: "fixture" });
     const firstJudge = new ScriptedJudge([P100]);
     const secondJudge = new ScriptedJudge([P100]);
     try {

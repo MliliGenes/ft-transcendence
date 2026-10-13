@@ -23,7 +23,7 @@ describe("Match socket admission", () => {
       },
     });
     let reads = 0;
-    const game = {
+    const game = { runtimeReady: true, assertServing: () => {},
       onEvent: () => () => {},
       snapshot: async () => { if (stage === "snapshot" && ++reads === 1) { entered(); await gate; } return {}; },
       noteSocketOpen: (user: string, match: string, socket: string) => presence.noteSocketOpen(user, match, socket),

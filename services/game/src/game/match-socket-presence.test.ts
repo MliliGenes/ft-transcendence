@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MatchSocketPresence, type MatchSocketPresenceTarget } from "./match-socket-presence.js";
 
 type SidePresenceCall = {
@@ -151,5 +151,48 @@ describe("MatchSocketPresence", () => {
       { kind: "member", matchId: "match-2", userId: "bob", presence: "online" },
       { kind: "member", matchId: "match-2", userId: "alice", presence: "offline" },
     ]);
+  });
+});
+
+
+describe("MatchSocketPresence stop", () => {
+  function target() {
+    return { participantSide: vi.fn(async () => "left"),
+      modeOf: vi.fn(async () => "1v1" as const),
+      setPresence: vi.fn(async (_match: string, _side: string, _state: "online" | "offline") => {}),
+      setMemberPresence: vi.fn(async () => {}) };
+  }
+  it("clears sockets without durable offline writes and refuses later open", async () => {
+    const host = target(); const tracker = new MatchSocketPresence(host);
+    await tracker.noteSocketOpen("a", "m", "s"); tracker.stop(); tracker.stop();
+    await tracker.noteSocketClosed("a", "m", "s");
+    await expect(tracker.noteSocketOpen("a", "m", "next")).rejects.toThrow(/stopped/);
+    expect(host.setPresence.mock.calls).toEqual([["m", "left", "online"]]);
+  });
+  it("cancels a queued open and a pending close without writing offline", async () => {
+    const host = target(); let resolve!: () => void;
+    const gate = new Promise<void>((done) => { resolve = done; });
+    host.participantSide.mockImplementationOnce(async () => { await gate; return "left"; });
+    const tracker = new MatchSocketPresence(host);
+    const open = tracker.noteSocketOpen("a", "m", "s");
+    const queued = tracker.noteSocketOpen("a", "m", "next");
+    const closed = tracker.noteSocketClosed("a", "m", "s");
+    const checks = Promise.all([
+      expect(open).rejects.toThrow(), expect(queued).rejects.toThrow(), closed,
+    ]);
+    tracker.stop(); resolve(); await checks;
+    expect(host.setPresence).not.toHaveBeenCalled();
+  });
+  it("cannot return a successful admission after a pending online write finishes", async () => {
+    const host = target(); let resolve!: () => void; let entered!: () => void;
+    const gate = new Promise<void>((done) => { resolve = done; });
+    const reached = new Promise<void>((done) => { entered = done; });
+    host.setPresence.mockImplementationOnce(async () => { entered(); await gate; });
+    const tracker = new MatchSocketPresence(host);
+    const open = tracker.noteSocketOpen("a", "m", "s");
+    const rejected = expect(open).rejects.toThrow(/stopped/);
+    await reached; tracker.stop(); resolve(); await rejected;
+    await tracker.noteSocketClosed("a", "m", "s");
+    expect(host.setPresence).toHaveBeenCalledTimes(1);
   });
 });

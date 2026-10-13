@@ -16,6 +16,7 @@ export interface WorkerJudgeAdapterOptions {
   token: string;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
 }
 
 const STATUSES = new Set<ExecutionStatus>([
@@ -67,11 +68,14 @@ function parseSealedGroup(value: unknown): SealedGroupResult | null {
 
 /** Game-side transport adapter. It has no provider fallback by design. */
 export class WorkerJudgeAdapter implements GameJudge {
+
+
   readonly provider = "worker";
   private readonly endpoint: URL;
   private readonly token: string;
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
+  private readonly signal?: AbortSignal;
 
   constructor(options: WorkerJudgeAdapterOptions) {
     const token = options.token.trim();
@@ -90,6 +94,7 @@ export class WorkerJudgeAdapter implements GameJudge {
     this.timeoutMs = options.timeoutMs ?? 930000;
     if (!Number.isFinite(this.timeoutMs) || this.timeoutMs < 1) throw new Error("worker timeout must be positive");
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.signal = options.signal;
   }
 
   async runVisible(
@@ -132,29 +137,31 @@ export class WorkerJudgeAdapter implements GameJudge {
   }
 
   private async post(path: string, body: unknown): Promise<unknown> {
-    const url = new URL(path, this.endpoint);
+    const signal = this.signal
+      ? AbortSignal.any([this.signal, AbortSignal.timeout(this.timeoutMs)])
+      : AbortSignal.timeout(this.timeoutMs);
+    const canceled = () => new JudgeInfraError(this.signal?.aborted
+      ? "Game runtime stopped" : "judge worker request timed out");
+    if (signal.aborted) throw canceled();
     let response: Response;
     try {
-      response = await this.fetchImpl(url, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${this.token}`,
-          "content-type": "application/json",
-          accept: "application/json",
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(this.timeoutMs),
+      response = await this.fetchImpl(new URL(path, this.endpoint), {
+        method: "POST", headers: { authorization: `Bearer ${this.token}`,
+          "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify(body), signal,
       });
-    } catch (error) {
-      const errorName = error instanceof Error ? error.name : "";
-      throw new JudgeInfraError(errorName === "TimeoutError" || errorName === "AbortError"
-        ? "judge worker request timed out"
-        : "judge worker request failed");
+    } catch {
+      if (signal.aborted) throw canceled();
+      throw new JudgeInfraError("judge worker request failed");
     }
+    if (signal.aborted) throw canceled();
     if (!response.ok) throw new JudgeInfraError(`judge worker returned HTTP ${response.status}`);
     try {
-      return await response.json() as unknown;
+      const result: unknown = await response.json();
+      if (signal.aborted) throw canceled();
+      return result;
     } catch {
+      if (signal.aborted) throw canceled();
       throw new JudgeInfraError("judge worker returned invalid JSON");
     }
   }

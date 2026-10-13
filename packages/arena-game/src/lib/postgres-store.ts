@@ -72,7 +72,67 @@ CREATE TABLE IF NOT EXISTS collab_documents (
  * changes nothing: same ids return the same outcome with no new attempt, and
  * a pending row left by a crash is re-driven under its original ids.
  */
-import { LobbyStore } from "./lobby-store.js";
+import { LobbyStore, LOBBY_SCHEMA } from "./lobby-store.js";
+import { GuardedSql } from "./guarded-sql.js";
+import { RuntimeOwnership, RuntimeOwnershipLostError } from "./runtime-ownership.js";
+import { randomUUID } from "node:crypto";
+
+class ClaimClientHandle {
+  lockHeld = false;
+  private released = false;
+  private failure?: EvaluationClaimLostError | RuntimeOwnershipLostError;
+  private releasePromise?: Promise<void>;
+  private readonly onError: (error: Error) => void;
+
+  constructor(
+    readonly evaluationId: string,
+    readonly client: PoolClient,
+    private readonly assertRuntime: () => void,
+    private readonly forget: () => void,
+  ) {
+    this.onError = (error) => this.destroy(new EvaluationClaimLostError(evaluationId, error));
+    client.on("error", this.onError);
+  }
+
+  assertActive(): void {
+    if (this.failure) throw this.failure;
+    this.assertRuntime();
+    if (this.released) throw new EvaluationClaimLostError(this.evaluationId);
+  }
+
+  destroy(error: EvaluationClaimLostError | RuntimeOwnershipLostError): void {
+    if (this.released) return;
+    this.failure = error;
+    this.released = true;
+    this.forget();
+    // Retain the listener on a destroyed client so a late connection error is handled.
+    this.client.release(true);
+  }
+
+  release(): Promise<void> {
+    if (!this.releasePromise) {
+      this.releasePromise = (async () => {
+        if (this.released) return;
+        let destroy = false;
+        try {
+          if (this.lockHeld) {
+            await this.client.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [this.evaluationId]);
+          }
+        } catch {
+          destroy = true;
+        } finally {
+          if (!this.released) {
+            this.released = true;
+            this.forget();
+            this.client.removeListener("error", this.onError);
+            this.client.release(destroy);
+          }
+        }
+      })();
+    }
+    return this.releasePromise;
+  }
+}
 
 class PostgresEvaluationClaim implements EvaluationClaim {
   constructor(
@@ -92,7 +152,6 @@ class PostgresEvaluationClaim implements EvaluationClaim {
 }
 
 export class PostgresStores {
-  /** One production persistence module consumed by ArenaEngine. */
   readonly persistence: MatchPersistence;
   readonly matches: MatchStore;
   readonly submissions: SubmissionStore;
@@ -100,54 +159,84 @@ export class PostgresStores {
   readonly collab: CollabPersist;
   readonly lobby: LobbyStore;
   private readonly pool: Pool;
-  /** Claims hold sessions through judge/commit; keep them off the write pool. */
   private readonly claimPool: Pool;
+  private readonly runtime?: RuntimeOwnership;
+  private readonly sql: GuardedSql;
+  private readonly fixture: boolean;
+  private closing = false;
+  private closePromise?: Promise<void>;
+  private readonly claimClients = new Set<ClaimClientHandle>();
 
-  constructor(connectionString: string) {
+  constructor(connectionString: string, options: {
+    runtimeOwnership?: "required" | "fixture";
+  } = {}) {
+    this.fixture = options.runtimeOwnership === "fixture";
+    this.runtime = this.fixture ? undefined : new RuntimeOwnership(connectionString);
     this.pool = new Pool({ connectionString });
     this.claimPool = new Pool({ connectionString });
-    this.matches = new PostgresMatchStore(this.pool);
-    this.submissions = new PostgresSubmissionStore(this.pool);
-    this.reveals = new PostgresRevealStore(this.pool);
-    this.collab = new PostgresCollabStore(this.pool);
-    this.lobby = new LobbyStore(this.pool);
+    this.pool.on("error", () => console.error("Game write pool error"));
+    this.claimPool.on("error", () => console.error("Game claim pool error"));
+    this.sql = new GuardedSql(
+      this.pool,
+      () => this.assertRuntimeActive(),
+      async (client) => { await this.runtime?.guard(client); },
+    );
+    this.matches = new PostgresMatchStore(this.pool, this.sql);
+    this.submissions = new PostgresSubmissionStore(this.pool, this.sql);
+    this.reveals = new PostgresRevealStore(this.pool, this.sql);
+    this.collab = new PostgresCollabStore(this.pool, this.sql);
+    this.lobby = new LobbyStore(this.pool, Date.now, randomUUID, this.sql);
     this.persistence = new StoreBackedMatchPersistence({
-      matches: this.matches,
-      submissions: this.submissions,
-      reveals: this.reveals,
-      collab: this.collab,
+      matches: this.matches, submissions: this.submissions,
+      reveals: this.reveals, collab: this.collab,
       commitMatchAndTeamDocuments: (match, rows, expectedRevision) => this.saveMatchAndCollab(match, rows, expectedRevision),
       claimPendingEvaluation: (evaluationId) => this.claimPendingEvaluation(evaluationId),
       commitClaimedEvaluation: (claim, match, submission) => this.commitClaimedEvaluation(claim, match, submission),
     });
   }
 
-  async ensureSchema(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query(GAME_SCHEMA);
-      await this.lobby.ensureSchema();
-    } finally {
-      client.release();
+  async acquireRuntime(options: {
+    onLost?: (error: RuntimeOwnershipLostError) => void;
+  } = {}): Promise<void> {
+    if (this.fixture || this.closing || !this.runtime) {
+      throw new RuntimeOwnershipLostError("This store cannot acquire production runtime ownership");
     }
+    await this.runtime.acquire((error) => {
+      for (const handle of [...this.claimClients]) handle.destroy(error);
+      options.onLost?.(error);
+    });
+  }
+
+  assertRuntimeActive(): void {
+    if (this.closing) throw new RuntimeOwnershipLostError("Game stores are closing");
+    this.runtime?.assertActive();
+  }
+
+  get runtimeActive(): boolean {
+    return !this.closing && (this.fixture || this.runtime?.active === true);
+  }
+
+  get raw(): Pool {
+    if (!this.fixture) throw new Error("Raw SQL requires runtimeOwnership: fixture");
+    return this.pool;
+  }
+
+  async ensureSchema(): Promise<void> {
+    await this.sql.transaction(async (client) => {
+      await client.query(GAME_SCHEMA);
+      await client.query(LOBBY_SCHEMA);
+    });
   }
 
   async recordFailure(matchId: string, message: string): Promise<void> {
-    await this.pool.query("INSERT INTO match_failures (match_id, message) VALUES ($1, $2)", [matchId, message]);
+    await this.sql.transaction(async (client) => {
+      await client.query("INSERT INTO match_failures (match_id, message) VALUES ($1, $2)", [matchId, message]);
+    });
   }
 
-  /**
-   * Ticket 15 closure: ONE database transaction covering the match row
-   * (MatchRecord JSON, round rows, team revision, readiness, game revision)
-   * AND the team collab rows (ydoc_state, app_revision, language). Either
-   * everything commits or nothing does — CASE 1 (match without collab) and
-   * CASE 2 (collab without match) are both impossible as durable state.
-   * Events/acks happen only after this resolves.
-   */
+
   async saveMatchAndCollab(match: MatchRecord, rows: CollabRow[], expectedRevision?: number): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("BEGIN");
+    await this.sql.transaction(async (client) => {
       await saveMatchTx(client, match, expectedRevision);
       for (const row of rows) {
         await client.query(
@@ -159,137 +248,95 @@ export class PostgresStores {
           [match.id, row.roundId, row.sideId, row.appRevision, row.language, row.stateB64, Date.now()],
         );
       }
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 
-  /**
-   * Hold a database-session advisory lock for one pending evaluation. The
-   * checked-out client stays with the claim through judge execution and
-   * commit; a lost process therefore releases ownership automatically when
-   * PostgreSQL closes the session.
-   */
-  async claimPendingEvaluation(evaluationId: string): Promise<EvaluationClaim | undefined> {
-    const client = await this.claimPool.connect();
-    let lockHeld = false;
-    let clientReleased = false;
-    let releasePromise: Promise<void> | undefined;
-    let connectionError: EvaluationClaimLostError | undefined;
-    const lockExpression = "hashtextextended($1, 0)";
-    const onClientError = (error: Error): void => {
-      connectionError ??= new EvaluationClaimLostError(evaluationId, error);
-    };
-    client.on("error", onClientError);
-    const release = (destroy = false): Promise<void> => {
-      if (releasePromise) return releasePromise;
-      releasePromise = (async () => {
-        let destroyClient = destroy || Boolean(connectionError);
-        try {
-          if (lockHeld && !connectionError) {
-            await client.query(`SELECT pg_advisory_unlock(${lockExpression})`, [evaluationId]);
-            lockHeld = false;
-          }
-        } catch {
-          destroyClient = true;
-        } finally {
-          client.removeListener("error", onClientError);
-          clientReleased = true;
-          client.release(destroyClient);
-        }
-      })();
-      return releasePromise;
-    };
 
+  async claimPendingEvaluation(evaluationId: string): Promise<EvaluationClaim | undefined> {
+    this.assertRuntimeActive();
+    const client = await this.claimPool.connect();
+    let handle!: ClaimClientHandle;
+    handle = new ClaimClientHandle(evaluationId, client,
+      () => this.assertRuntimeActive(), () => this.claimClients.delete(handle));
+    this.claimClients.add(handle);
     try {
-      await client.query(`SELECT pg_advisory_lock(${lockExpression})`, [evaluationId]);
-      lockHeld = true;
-      const result = await client.query("SELECT data FROM submissions WHERE evaluation_id = $1", [evaluationId]);
-      const stored = result.rows[0]?.data as SubmissionRecord | undefined;
+      // A close may have happened while pool acquisition was pending.
+      handle.assertActive();
+      await client.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [evaluationId]);
+      handle.lockHeld = true;
+      handle.assertActive();
+      const stored = await this.sql.onClient(client, async (claimedClient) => {
+        const result = await claimedClient.query("SELECT data FROM submissions WHERE evaluation_id = $1", [evaluationId]);
+        return result.rows[0]?.data as SubmissionRecord | undefined;
+      });
+      handle.assertActive();
       if (!stored || stored.status !== "pending") {
-        await release();
+        await handle.release();
         return undefined;
       }
-      return new PostgresEvaluationClaim(
-        evaluationId,
-        client,
-        () => {
-          if (connectionError || clientReleased) {
-            throw connectionError ?? new EvaluationClaimLostError(evaluationId);
-          }
-        },
-        () => release(),
-      );
+      return new PostgresEvaluationClaim(evaluationId, client,
+        () => handle.assertActive(), () => handle.release());
     } catch (error) {
-      await release(true);
-      throw error;
+      // Force-destroy releases waiting/held locks without a pending-row mutation.
+      let failure: EvaluationClaimLostError | RuntimeOwnershipLostError =
+        error instanceof RuntimeOwnershipLostError || error instanceof EvaluationClaimLostError
+          ? error : new EvaluationClaimLostError(evaluationId, error);
+      try { handle.assertActive(); }
+      catch (recorded) {
+        if (recorded instanceof RuntimeOwnershipLostError || recorded instanceof EvaluationClaimLostError) failure = recorded;
+      }
+      handle.destroy(failure);
+      throw failure;
     }
   }
 
-  async commitClaimedEvaluation(
-    claim: EvaluationClaim,
-    match: MatchRecord,
-    submission?: SubmissionRecord,
-  ): Promise<void> {
+  async commitClaimedEvaluation(claim: EvaluationClaim, match: MatchRecord, submission?: SubmissionRecord): Promise<void> {
+    this.assertRuntimeActive();
     if (!(claim instanceof PostgresEvaluationClaim)) {
       throw new Error("Postgres persistence requires a Postgres evaluation claim");
     }
     claim.assertActive();
-    let inTransaction = false;
-    try {
-      await claim.client.query("BEGIN");
-      inTransaction = true;
+    await this.sql.onClient(claim.client, async (client) => {
+      claim.assertActive();
       if (submission) {
-        const updated = await claim.client.query(
+        const updated = await client.query(
           "UPDATE submissions SET data = $2 WHERE evaluation_id = $1 AND data->>'status' = 'pending'",
           [submission.evaluationId, JSON.stringify(submission)],
         );
         if (updated.rowCount !== 1) throw new EvaluationClaimLostError(claim.evaluationId);
       }
-      await saveMatchTx(claim.client, match);
+      await saveMatchTx(client, match);
       claim.assertActive();
-      await claim.client.query("COMMIT");
-      inTransaction = false;
-    } catch (error) {
-      if (inTransaction) {
+    });
+  }
+
+  close(): Promise<void> {
+    if (!this.closePromise) {
+      this.closing = true;
+      this.runtime?.stopAdmission();
+      const reason = new RuntimeOwnershipLostError("Game stores were closed");
+      for (const handle of [...this.claimClients]) handle.destroy(reason);
+      this.closePromise = (async () => {
         try {
-          await claim.client.query("ROLLBACK");
-        } catch {
-          // The claim session may already be gone; the database rolls back the session.
+          const outcomes = await Promise.allSettled([this.pool.end(), this.claimPool.end()]);
+          const failed = outcomes.find((result) => result.status === "rejected");
+          if (failed?.status === "rejected") throw failed.reason;
+        } finally {
+          // Normal stop holds startup admission while ordinary writes drain.
+          await this.runtime?.close();
         }
-      }
-      throw error;
+      })();
     }
+    return this.closePromise;
   }
 
-  async close(): Promise<void> {
-    await Promise.all([this.pool.end(), this.claimPool.end()]);
-  }
-
-  get raw(): Pool {
-    return this.pool;
-  }
 }
 
 class PostgresMatchStore implements MatchStore {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly sql: GuardedSql) {}
 
   async save(match: MatchRecord, expectedRevision?: number): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("BEGIN");
-      await saveMatchTx(client, match, expectedRevision);
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    await this.sql.transaction((client) => saveMatchTx(client, match, expectedRevision));
   }
 
   async load(matchId: string): Promise<MatchRecord | undefined> {
@@ -305,21 +352,22 @@ class PostgresMatchStore implements MatchStore {
 }
 
 class PostgresSubmissionStore implements SubmissionStore {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly sql: GuardedSql) {}
 
   async append(record: SubmissionRecord): Promise<void> {
-    await this.pool.query(
-      `INSERT INTO submissions (submission_id, evaluation_id, match_id, round_id, data)
-       VALUES ($1, $2, $3, $4, $5) ON CONFLICT (submission_id) DO NOTHING`,
-      [record.submissionId, record.evaluationId, record.matchId, record.roundId, JSON.stringify(record)],
-    );
+    await this.sql.transaction(async (client) => {
+      await client.query(
+        `INSERT INTO submissions (submission_id, evaluation_id, match_id, round_id, data)
+         VALUES ($1, $2, $3, $4, $5) ON CONFLICT (submission_id) DO NOTHING`,
+        [record.submissionId, record.evaluationId, record.matchId, record.roundId, JSON.stringify(record)],
+      );
+    });
   }
 
   async update(record: SubmissionRecord): Promise<void> {
-    await this.pool.query("UPDATE submissions SET data = $2 WHERE submission_id = $1", [
-      record.submissionId,
-      JSON.stringify(record),
-    ]);
+    await this.sql.transaction(async (client) => {
+      await client.query("UPDATE submissions SET data = $2 WHERE submission_id = $1", [record.submissionId, JSON.stringify(record)]);
+    });
   }
 
   async getBySubmissionId(submissionId: string): Promise<SubmissionRecord | undefined> {
@@ -349,17 +397,19 @@ class PostgresSubmissionStore implements SubmissionStore {
 }
 
 class PostgresCollabStore implements CollabPersist {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly sql: GuardedSql) {}
 
   async save(matchId: string, roundId: string, sideId: string, appRevision: number, language: string, stateB64: string): Promise<void> {
-    await this.pool.query(
-      `INSERT INTO collab_documents (match_id, round_id, side_id, app_revision, language, ydoc_state, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (match_id, round_id, side_id) DO UPDATE SET
-         app_revision = EXCLUDED.app_revision, language = EXCLUDED.language,
-         ydoc_state = EXCLUDED.ydoc_state, updated_at = EXCLUDED.updated_at`,
-      [matchId, roundId, sideId, appRevision, language, stateB64, Date.now()],
-    );
+    await this.sql.transaction(async (client) => {
+      await client.query(
+        `INSERT INTO collab_documents (match_id, round_id, side_id, app_revision, language, ydoc_state, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (match_id, round_id, side_id) DO UPDATE SET
+           app_revision = EXCLUDED.app_revision, language = EXCLUDED.language,
+           ydoc_state = EXCLUDED.ydoc_state, updated_at = EXCLUDED.updated_at`,
+        [matchId, roundId, sideId, appRevision, language, stateB64, Date.now()],
+      );
+    });
   }
 
   async load(matchId: string, roundId: string, sideId: string) {
@@ -374,16 +424,14 @@ class PostgresCollabStore implements CollabPersist {
 }
 
 class PostgresRevealStore implements RevealStore {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly sql: GuardedSql) {}
 
   async record(matchId: string, roundId: string, snapshot: RevealSnapshot): Promise<void> {
     try {
-      await this.pool.query("INSERT INTO reveals (match_id, round_id, published_at, data) VALUES ($1, $2, $3, $4)", [
-        matchId,
-        roundId,
-        snapshot.publishedAt,
-        JSON.stringify(snapshot),
-      ]);
+      await this.sql.transaction(async (client) => {
+        await client.query("INSERT INTO reveals (match_id, round_id, published_at, data) VALUES ($1, $2, $3, $4)",
+          [matchId, roundId, snapshot.publishedAt, JSON.stringify(snapshot)]);
+      });
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {
         throw new DuplicateError(`reveal already published for round ${roundId}`);

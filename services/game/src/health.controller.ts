@@ -1,3 +1,4 @@
+import { GameService } from "./game/game.service.js";
 import { Controller, Get, ServiceUnavailableException } from "@nestjs/common";
 import { ALL_ROUND_PHASES } from "arena-model";
 import * as net from "node:net";
@@ -20,7 +21,11 @@ function tcp(host: string, port: number, timeoutMs: number): Promise<boolean> {
 
 @Controller()
 export class HealthController {
+  constructor(private readonly game: GameService) {}
+
   /** Liveness: the process is up and the shared model resolves at runtime. */
+
+
   @Get("health")
   health() {
     return { status: "ok", service: SERVICE, modelPhases: ALL_ROUND_PHASES.length };
@@ -29,9 +34,12 @@ export class HealthController {
   /** Readiness: dependencies reachable over the compose network. No gameplay here. */
   @Get("ready")
   async ready() {
+    this.game.assertServing();
     const postgres = await tcp(process.env.POSTGRES_HOST ?? "postgres", 5432, 500);
     const redis = await tcp(process.env.REDIS_HOST ?? "redis", 6379, 500);
-    const result = { ready: postgres && redis, checks: { postgres, redis } };
+    this.game.assertServing();
+    const runtime = this.game.runtimeReady;
+    const result = { ready: postgres && redis && runtime, checks: { postgres, redis, runtime } };
     if (!result.ready) throw new ServiceUnavailableException(result);
     return result;
   }
