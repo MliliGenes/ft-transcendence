@@ -2,6 +2,13 @@
 
 Goal: repair every finding in the 2026-10-13 auth review, including the Referer logging issue, and record real verification. Base: 99a493ec2ae81928cb2413496fd86a43a4c8e843 on Aimane.
 
+## Current status — 2026-10-13
+
+Tasks 1–4 passed independent task review. Task 5 real HTTPS proof passed 4/4;
+root and standalone checks/builds passed. The final fresh repair-diff review,
+local visual recap and delivery remain in progress. See
+[verification evidence](../../auth-integration-repair-evidence.md).
+
 ## Global constraints
 
 - Preserve tokens in memory only. A persistent logout marker must contain no credential or user profile.

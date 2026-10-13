@@ -10,6 +10,17 @@
 
 **Spec:** User message "Connect Saad's login to Game" (2026-10-13) plus read-only review corrections (2026-10-13, 4 corrections + minimum tests + 10 recommended defaults). This plan argues from both; executors read all three.
 
+## Current status — 2026-10-13
+
+Tasks 1–7 are implemented. The subsequent auth repair plan corrects the faults
+found in the original integration. Repair Tasks 1–4 passed independent review.
+Task 8 now has real production HTTPS password login → Account Play → Lobby →
+playable 1v1 and four-player 2v2 proof, plus renewal, expiry, outage, identity
+replacement, cookie migration and logout evidence. Full checks/builds pass.
+Final fresh repair-diff review and delivery are pending. The original step boxes
+below preserve the original implementation sequence; current verification is in
+[auth repair evidence](../../auth-integration-repair-evidence.md).
+
 ## Global Constraints
 
 - Base integration checkout on `Aimane`; user-service version `ac325b3`; `user-service-test` branch is older test reference only.

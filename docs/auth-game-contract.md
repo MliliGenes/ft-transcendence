@@ -10,7 +10,8 @@ Authoritative wiring: Tasks 1–7 of `connect-saads-login-to-game`
   gateway proxies it). Guarded by `AccessTokenGuard`; returns
   `{ userId: <uuid>, expiresAt: <unix ms> }` with `Cache-Control: no-store`.
 - `expiresAt` is `exp * 1000` from the JWT; the row is re-read from the DB, so
-  forged / expired / revoked / deleted accounts all yield **401**.
+  forged or expired tokens, and deleted accounts, yield **401**. Logout revokes
+  refresh sessions; an already issued access JWT retains its expiry.
 - Access tokens live ≤15 min (`ACCESS_TOKEN_TTL_SECONDS = 900`). Refresh
   travels only in the `auth-refresh` cookie: `httpOnly`, `secure` (prod/https),
   `sameSite: lax`, `path: /auth/` (gateway rewrites to `/api/auth/`).
@@ -68,7 +69,8 @@ URL from `USER_SERVICE_BASE_URL`, default `http://user-service:3000`.
 - `createBrowserAuthClient` **requires** Web Locks + BroadcastChannel (throws
   otherwise). Memory-only tokens; one origin-wide lock (`browser-auth:session`).
 - `fetch` never replays mutations; at most one retry for safe reads with
-  `retrySafeRead`. `401` → single renew → retry once → confirmed expiry clears
+  `retrySafeRead`. A rejected mutation renews but returns `RETRY_REQUIRED`.
+  Selected safe reads: `401` → single renew → retry once → confirmed expiry clears
   to anonymous (`SESSION_EXPIRED`); network/5xx/timeout → `UNAVAILABLE`, token
   retained. Late results after logout/login are rejected (`SESSION_CHANGED`).
   Failed server logout persists a credential-free intent and sets `logoutPending`,
@@ -126,9 +128,18 @@ single-line `\n`), `SUPERADMIN_USERNAME`/`_EMAIL`/`_PASSWORD`,
 ## Expected cross-boundary tests (auth owner + game owner together)
 
 - Authenticated HTTP request reaches game with the correct `userId`.
-- Forged/expired/revoked token never yields a game principal (rejected before game logic).
+- Forged/expired tokens and deleted accounts never yield a Game principal.
+  Refresh-session revocation does not invalidate an already issued access JWT.
 - Authenticated socket carries the principal; game authorizes room/match from it.
 - Two different users receive different `userId`s; one user cannot act as another
   (game-side membership tests cover the rest).
 - Renewal in every namespace: reconnect-with-new-token keeps the match alive;
   missing-ack resubmits reuse immutable Submit ids (no double counting).
+
+## Verification evidence
+
+The 2026-10-13 repairs have real HTTPS password-login, Lobby, playable 1v1 and
+four-player 2v2 evidence, including renewal, idle expiry, outage, identity
+replacement, HttpOnly migration and logout. See
+[auth integration repair evidence](auth-integration-repair-evidence.md) for exact
+counts, fixture boundaries and external provider limits.

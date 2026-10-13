@@ -51,6 +51,8 @@ TEST_PG_URL=postgres://postgres:postgres@localhost:5433/arena_test \
   npm test
 ```
 
+Auth integration results are in [docs/auth-integration-repair-evidence.md](docs/auth-integration-repair-evidence.md).
+
 See [docs/game-local-run.md](docs/game-local-run.md) for host-mode, Compose,
 judge-worker, and browser-test instructions.
 
