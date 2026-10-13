@@ -29,6 +29,59 @@ services:
       timeout: 3s
       retries: 10
 
+  # Standalone accounts database on separate storage (userpgdata). No import
+  # of Saad's root compose.yaml; this stack defines its own user-service.
+  user-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      USER_DB_NAME: ${USER_DB_NAME}
+      USER_DB_USER: ${USER_DB_USER}
+      USER_DB_PASSWORD: ${USER_DB_PASSWORD}
+    volumes:
+      - userpgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Standalone accounts service (own lockfile + Node 24 install, private
+  # user-service:3000; only Nginx is public).
+  user-service:
+    build:
+      context: ./user-service
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      POSTGRES_HOST: user-db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${USER_DB_USER}
+      POSTGRES_PASSWORD: ${USER_DB_PASSWORD}
+      POSTGRES_DB: ${USER_DB_NAME}
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?set JWT_PRIVATE_KEY in .env}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?set JWT_PUBLIC_KEY in .env}
+      SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME}
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD}
+      AUTH_FRONTEND_URL: ${AUTH_FRONTEND_URL}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+    depends_on:
+      user-db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
   judge-worker:
     build:
       context: .
@@ -88,7 +141,10 @@ services:
       retries: 5
 
   nginx:
-    image: nginx:1.27-alpine
+    build:
+      context: .
+      dockerfile: infra/gateway/Dockerfile
+    image: ft-transcendence-gateway:local
     ports:
       - "80:80"
       - "443:443"
@@ -98,9 +154,12 @@ services:
     depends_on:
       game:
         condition: service_healthy
+      user-service:
+        condition: service_healthy
 
 volumes:
   pgdata:
+  userpgdata:
   redisdata:
 
 networks:

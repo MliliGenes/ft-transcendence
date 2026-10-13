@@ -1,0 +1,18 @@
+# Keep repo-root Docker contexts (gateway, game, judge-worker) small.
+.git
+node_modules
+*/node_modules
+dist
+*/dist
+coverage
+frontend/test-results
+playwright-report
+test-results
+.env
+infra/nginx/certs/
+.superpowers
+.scratch
+.trigger-tree
+.vscode
+.DS_Store
+*.swp
