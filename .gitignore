@@ -1,0 +1,7 @@
+# Local credentials; commit only examples.
+/envs/*.env
+
+# Persistent container data; keep directory placeholders.
+/volumes/**
+!/volumes/**/
+!/volumes/**/.gitkeep
