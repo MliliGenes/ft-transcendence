@@ -16,9 +16,9 @@ Tasks 1–7 are implemented. Repair Tasks 1–4 passed independent review. Task 
 now has 5/5 real HTTPS proof groups: password login → Account Play → Lobby →
 playable 1v1/four-player 2v2, normal 900-second idle App expiry and automatic
 recovery, passive Lobby updates, renewal, outage, identity replacement, cookie
-migration and logout. Frontend 123/123 and root 762 passed; all checks/builds pass.
-The final Important idle-expiry fix awaits scoped independent review before
-safe delivery. The original boxes preserve the implementation sequence; current
+migration and logout. Frontend 125/125 and root 764 passed; all checks/builds pass.
+The scoped review found a remaining slow-browser-clock recovery fault. Its fix
+passes 125 frontend tests; real slow-clock proof passed 5/5. Bounded clock-fix re-review remains before delivery. The original boxes preserve the implementation sequence; current
 verification is in [auth repair evidence](../../auth-integration-repair-evidence.md).
 
 ## Global Constraints

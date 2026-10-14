@@ -1,32 +1,32 @@
 # Auth integration repair evidence — 2026-10-13
 
 Branch: `Aimane`. Repair base: `99a493ec2ae81928cb2413496fd86a43a4c8e843`.
-Latest verification: 2026-10-14. The owned User Service, Game and Judge images
-remain at `40b24e4`. Only the gateway was rebuilt with `d8bcdb0` and the definitive-
-expiry guard committed as `d352d37`. Existing application services/data were
-preserved. The remaining gate is the independent scoped fix review and delivery.
+Latest verification: 2026-10-14. Owned User Service, Game and Judge images
+remain at `40b24e4`. Only the gateway was rebuilt with the client fixes through
+`9ceebad`. Existing application services/data were preserved.
 
-Final review at `65e666a` found one Important natural idle-expiry interaction.
-The fix and missing-token guard pass 123 frontend tests, all root checks/builds,
-and 5/5 real HTTPS groups in 16.1 minutes, including normal 900-second App expiry
-and automatic Match/Lobby recovery. Scoped re-review remains pending.
+The original whole repair review found an idle-expiry recovery gap. Its scoped
+review then found a slow-browser-clock condition. Both fixes now pass 125 frontend
+cases, 764 root cases, checks/builds and 5/5 real HTTPS groups in 16.1 minutes with
+a browser clock 60 seconds slow. The earlier normal-clock five-group proof also
+passed. The remaining gate is the bounded clock-fix re-review and delivery.
 
 ## Results
 
 | Gate | Result |
 | --- | --- |
-| Full Node 22 root workspace suite | 762 passed; 19 optional cases skipped by default |
+| Full Node 22 root workspace suite | 764 passed; 19 optional cases skipped by default |
 | All 19 optional cases with owned PostgreSQL/Docker fixtures | Passed in a 47-case run; no skips in that run |
 | Standalone Node 24 User Service | 108/108, zero skips, including real transaction tests |
 | Standalone Account | 23/23, zero skips; production build passed |
 | Actual Account App browser regressions | 4/4: identity replacement, mutation no-replay, unavailable retry, saved-profile renewal/fresh-profile acceptance |
-| Real production HTTPS proof | 5/5 groups, 16.1 minutes; observed pages reported no exceptions |
+| Real production HTTPS proof | 5/5 groups, 16.1 minutes, with a browser clock 60 seconds slow; earlier normal-clock run also 5/5 |
 | Root production builds | Passed for packages, Game, Judge worker and Arena |
 | Repository, dependency boundaries, type checks and lint | Passed |
 
 Root counts include engine 339, harness 19, model 68, shared auth 48, Game 141,
-Judge/config/gateway 22, frontend 123 and example 2. The optional run has 28 cases
-that overlap the default suite plus the 19 previously skipped cases: 781 distinct
+Judge/config/gateway 22, frontend 125 and example 2. The optional run has 28 cases
+that overlap the default suite plus the 19 previously skipped cases: 783 distinct
 root cases were exercised successfully. The 47-case optional-fixture run is the earlier checkpoint at `65e666a`; its
 engine fixtures did not change during the frontend idle-recovery fix. One final
 root attempt reached Match complete in the restart/in-flight-evaluation case
@@ -72,13 +72,17 @@ query identity and a development HTTP header while anonymous.
 4. The actual App waits for normal signed 900-second access tokens to expire.
    Match and a separate private Lobby remain idle. Incoming server disconnects
    and successful real cookie refreshes are observed without a button, reload,
-   synthetic expiry clock, or baseline request from the test. Match, Collaboration
+   expiry acceleration, or baseline request from the test. The final run sets
+   an advancing browser clock 60 seconds slow before the wait; signed token age
+   and host/server time remain normal. Match, Collaboration
    and Chat have new handshakes/baselines, the same client objects and Match ID,
    retained code/chat, and enabled Run. Lobby has a new handshake and active-state
    baseline. Neither idle page sends an HTTP mutation during recovery. A sixth
    normal guest then joins the same room; the waiting host receives the passive
    room hint and updated member UI with no host action. Earlier proactive-clock
-   tests restore an advancing system clock before this normal expiry case.
+   tests restore an advancing system clock before this natural expiry case.
+   The slow-clock run confirms server expiry starts recovery without relying on
+   the browser wall clock; both Match/Lobby unit regressions failed before the fix.
 5. Only the owned User Service stops. A real Game request and Run return 503;
    Game shows unavailable and keeps code. Account bootstrap reaches its unavailable
    state after the existing 20-second SDK deadline, then Try again verifies the
@@ -126,8 +130,8 @@ Raw logs and generated fixtures stayed in the ignored task workspace during work
 Tasks 1–4 each passed independent review after their fix rounds. Task 4's saved
 profile regression and dev provider-cookie mapping were independently re-reviewed
 at `98119fa..40b24e4`. The final fresh review found the idle-expiry interaction above and no other
-Critical, Important or actionable Minor finding. Task 5 has now passed its actual normal-expiry App proof; final delivery remains
-blocked on the scoped fix review. Do not treat this document
+Critical, Important or actionable Minor finding. Task 5 has passed normal-clock and slow-clock actual expiry proofs; final delivery
+remains blocked on the bounded clock-fix re-review. Do not treat this document
 as a push/merge approval by itself.
 
 Rulings made during execution:
@@ -166,6 +170,11 @@ Final review boundaries and costs if these rulings are wrong:
 - Keep runtime code and grace unchanged after a timing-sensitive restart fixture
   failure. The exact case and the full suite passed on rerun. The cost is that a
   future failure can need further diagnosis; resource contention is unconfirmed.
+
+- Recover from an authenticated server disconnect without using the browser's
+  clock to decide if the token expired. Reuse an already rotated token. The cost
+  is one extra auth refresh after a forced disconnect for a different reason;
+  HTTP mutations are still never replayed.
 
 No actionable Minor finding was deferred by the whole repair-diff review.
 

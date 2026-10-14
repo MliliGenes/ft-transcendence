@@ -535,7 +535,7 @@ test("same-user renewal keeps the 2v2 document and chat; all four namespaces dis
   expect(errors).toEqual([]);
 });
 
-test("natural idle expiry recovers the actual Match and passive Lobby without an action", async ({ browser }) => {
+test("natural idle expiry recovers Match and passive Lobby with a slow browser clock", async ({ browser }) => {
   test.setTimeout(1_020_000);
   const matchPage = pages[0]!;
   // Earlier clock-only renewal cases restore a moving system clock. This case
@@ -569,12 +569,17 @@ test("natural idle expiry recovers the actual Match and passive Lobby without an
   const priorMutations = [mutations[0]!, mutations[4]!];
   const claims = [0, 4].map(index => JSON.parse(Buffer.from(tokens[index]!.split('.')[1]!, 'base64url').toString()));
   for (const claim of claims) expect(claim.exp - claim.iat).toBe(900);
+  // Simulate a normal browser clock lag, not early signed-token expiry.
+  // Server/host time and the real 900-second JWT lifetime are unchanged.
+  await matchPage.clock.setSystemTime(new Date(Date.now() - 60_000));
+  await lobbyPage.clock.setSystemTime(new Date(Date.now() - 60_000));
+  expect(Math.abs(Date.now() - await matchPage.evaluate(() => Date.now()) - 60_000)).toBeLessThan(2000);
   const expiresAt = Math.max(...claims.map(claim => claim.exp * 1000));
   const deadline = expiresAt - Date.now() + 60_000;
   expect(deadline).toBeGreaterThan(0);
   expect(deadline).toBeLessThan(960_000);
   // Read only counters while both pages are idle. No button, navigation,
-  // baseline request, or synthetic clock action can trigger their renewal.
+  // baseline request, or further clock action can trigger their renewal.
   await expect.poll(() =>
     (disconnects[0]!['/'] ?? 0) > priorDisconnects[0]! &&
     (disconnects[4]!['/lobby'] ?? 0) > priorDisconnects[1]! &&

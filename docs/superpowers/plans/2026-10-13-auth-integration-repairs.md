@@ -6,10 +6,11 @@ Goal: repair every finding in the 2026-10-13 auth review, including the Referer 
 
 Tasks 1–4 passed independent task review. Task 5 real HTTPS proof passed 5/5 in
 16.1 minutes, including normal 900-second idle App expiry, automatic Match/Lobby
-recovery and passive room updates. Final root suite: 762 passed; the 19 optional
-cases have the earlier unchanged-fixture evidence. Frontend: 123/123. Checks and
+recovery and passive room updates. Final root suite: 764 passed; the 19 optional
+cases have the earlier unchanged-fixture evidence. Frontend: 125/125. Checks and
 production builds pass. Final review's Important idle-expiry fix is committed;
-scoped re-review is the remaining delivery gate. See
+a scoped review found a remaining slow-browser-clock recovery fault. The fix
+passes 125 frontend tests; real slow-clock proof passed 5/5. Bounded clock-fix re-review remains. See
 [verification evidence](../../auth-integration-repair-evidence.md).
 
 ## Global constraints
