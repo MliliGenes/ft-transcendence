@@ -245,7 +245,7 @@ export class LobbyClient {
     socket.on("disconnect", (reason: string) => {
       if (!active()) return;
       reject(new Error("Lobby disconnected during recovery"));
-      if (reason === "io server disconnect" && tokenNearExpiry(token)) {
+      if (reason === "io server disconnect" && token) {
         void this.recoverExpiredSocket(lifetime).catch(() => {});
       }
     });
@@ -260,7 +260,9 @@ export class LobbyClient {
   private recoverExpiredSocket(lifetime: AbortController): Promise<void> {
     if (this.expiryRecovery) return this.expiryRecovery;
     const recovery = (async () => {
-      if (tokenNearExpiry(this.getAccessToken?.() ?? null)) await this.renewAuth();
+      // Trust the server disconnect, not the browser clock's expiry estimate.
+      const token = this.getAccessToken?.();
+      if (token && token === this.attachedToken) await this.renewAuth();
       this.assertActive(lifetime);
       if (!this.getAccessToken?.()) throw new Error("Session expired. Please sign in again.");
       if (this.attachedToken !== this.getAccessToken()) await this.renewSocket();

@@ -565,10 +565,10 @@ describe("authenticated Game wiring (no transport recreation)", () => {
     expect(cancelled).toBe(true);
   });
 
-  it("idle server expiry renews Match without an application command and waits for its baseline", async () => {
+  it.each([1000, -60_000])("idle server expiry renews Match at browser clock offset %ims without a command and waits for its baseline", async (clockOffset) => {
     const harness = authHarness();
     const transport = await connectLive(harness);
-    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3600_000 + 1000);
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3600_000 + clockOffset);
     try {
       harness.sockets[0]!.server("disconnect", "io server disconnect");
       for (let n = 0; n < 200; n++) await Promise.resolve();
@@ -584,7 +584,7 @@ describe("authenticated Game wiring (no transport recreation)", () => {
     } finally { now.mockRestore(); transport.disconnect(); }
   });
 
-  it("idle Lobby expiry restores passive membership and hints without a Ready action", async () => {
+  it.each([1000, -60_000])("idle Lobby expiry restores passive membership at browser clock offset %ims without Ready", async (clockOffset) => {
     let token = jwt(Date.now() + 3600_000);
     let renewals = 0;
     let baselines = 0;
@@ -596,7 +596,7 @@ describe("authenticated Game wiring (no transport recreation)", () => {
       onAuthExpired: async () => { renewals++; token = "new-access"; } });
     lobby.connectSocket({ onConnect: async () => { baselines++; lobby.joinRoomChannel("room-1"); }, onRoomUpdated: hint });
     for (let n = 0; n < 100; n++) await Promise.resolve();
-    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3600_000 + 1000);
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3600_000 + clockOffset);
     try {
       sockets[0]!.server("disconnect", "io server disconnect");
       for (let n = 0; n < 200; n++) await Promise.resolve();

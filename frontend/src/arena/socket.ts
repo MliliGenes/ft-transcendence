@@ -453,7 +453,10 @@ export class SocketArenaTransport implements ArenaTransport {
   private recoverExpiredSocket(lifetime: AbortController): Promise<void> {
     if (this.expiryRecovery) return this.expiryRecovery;
     const recovery = (async () => {
-      await this.ensureFreshToken();
+      // Server expiry is authoritative even when the browser clock is slow.
+      // Reuse an already rotated token; otherwise refresh once from this signal.
+      const token = this.getAccessToken?.();
+      if (token && token === this.attachedToken) await this.renewAuth();
       this.assertActive(lifetime);
       if (!this.getAccessToken?.()) throw new AuthExpiredError();
       if (this.attachedToken !== this.getAccessToken()) await this.renewSocket();
@@ -531,8 +534,7 @@ export class SocketArenaTransport implements ArenaTransport {
       this.connected = false;
       this.setConn("reconnecting");
       this.emit();
-      const expiry = token ? tokenExpiryMs(token) : null;
-      if (reason === "io server disconnect" && expiry !== null && expiry - Date.now() < RENEW_SKEW_MS) {
+      if (reason === "io server disconnect" && token) {
         void this.recoverExpiredSocket(lifetime).catch(() => {});
       }
     });
