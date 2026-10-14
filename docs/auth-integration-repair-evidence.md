@@ -9,7 +9,10 @@ The original whole repair review found an idle-expiry recovery gap. Its scoped
 review then found a slow-browser-clock condition. Both fixes now pass 125 frontend
 cases, 764 root cases, checks/builds and 5/5 real HTTPS groups in 16.1 minutes with
 a browser clock 60 seconds slow. The earlier normal-clock five-group proof also
-passed. The remaining gate is the bounded clock-fix re-review and delivery.
+passed. The bounded independent clock-fix review passed at `bf540d0`: no Critical,
+Important or actionable Minor finding remains. All repair/verification gates
+passed. Safe delivery to Aimane is authorized; public deployment is not part of
+this completion. [Independent sign-off](superpowers/reviews/2026-10-14-auth-integration-signoff.md).
 
 ## Results
 
@@ -130,8 +133,11 @@ Raw logs and generated fixtures stayed in the ignored task workspace during work
 Tasks 1–4 each passed independent review after their fix rounds. Task 4's saved
 profile regression and dev provider-cookie mapping were independently re-reviewed
 at `98119fa..40b24e4`. The final fresh review found the idle-expiry interaction above and no other
-Critical, Important or actionable Minor finding. Task 5 has passed normal-clock and slow-clock actual expiry proofs; final delivery
-remains blocked on the bounded clock-fix re-review. Do not treat this document
+Critical, Important or actionable Minor finding. Task 5 passed normal-clock and slow-clock actual expiry proofs. The bounded
+independent re-review passed at `bf540d0`, including 33/33 affected checks and a
+replacement-refusal reproduction that terminates without a refresh loop. The
+repair gate is complete. Read the [sign-off](superpowers/reviews/2026-10-14-auth-integration-signoff.md)
+for the independent versus executor verification boundary. Do not treat this document
 as a push/merge approval by itself.
 
 Rulings made during execution:
@@ -176,7 +182,14 @@ Final review boundaries and costs if these rulings are wrong:
   is one extra auth refresh after a forced disconnect for a different reason;
   HTTP mutations are still never replayed.
 
-No actionable Minor finding was deferred by the whole repair-diff review.
+- Keep independent task/fix review gates under the user's approval. The cost is
+  extra review time; the full audit was not repeated. Long real/root checks remain
+  executor evidence, while the reviewer independently runs affected checks. The
+  cost of that boundary is less duplicated verification.
+- Use the existing approval for a safe normal push to Aimane. The cost is that
+  the branch receives the reviewed commits; merge/public deployment remain separate.
+
+No actionable Minor finding was deferred by the whole or bounded reviews.
 
 ## External limits
 

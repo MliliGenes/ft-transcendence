@@ -12,14 +12,16 @@
 
 ## Current status — 2026-10-14
 
-Tasks 1–7 are implemented. Repair Tasks 1–4 passed independent review. Task 8
-now has 5/5 real HTTPS proof groups: password login → Account Play → Lobby →
-playable 1v1/four-player 2v2, normal 900-second idle App expiry and automatic
-recovery, passive Lobby updates, renewal, outage, identity replacement, cookie
-migration and logout. Frontend 125/125 and root 764 passed; all checks/builds pass.
-The scoped review found a remaining slow-browser-clock recovery fault. Its fix
-passes 125 frontend tests; real slow-clock proof passed 5/5. Bounded clock-fix re-review remains before delivery. The original boxes preserve the implementation sequence; current
-verification is in [auth repair evidence](../../auth-integration-repair-evidence.md).
+Tasks 1–8 and the subsequent auth repair plan are complete. Independent task
+reviews, the fresh whole repair review and bounded fix reviews passed. Real HTTPS
+proof passed five groups with normal clock and five with a browser clock 60 seconds
+slow: login → Account Play → Lobby → playable 1v1/four-player 2v2, normal idle expiry
+and automatic recovery, passive Lobby hints, renewal, outage/retry, identity,
+cookie migration and logout. Frontend 125/125; root 764 passed; checks/builds pass.
+Safe delivery to Aimane is authorized. Original boxes preserve the implementation
+sequence; current verification and external limits are in
+[auth repair evidence](../../auth-integration-repair-evidence.md) and
+[independent sign-off](../reviews/2026-10-14-auth-integration-signoff.md).
 
 ## Global Constraints
 

@@ -4,14 +4,15 @@ Goal: repair every finding in the 2026-10-13 auth review, including the Referer 
 
 ## Current status — 2026-10-14
 
-Tasks 1–4 passed independent task review. Task 5 real HTTPS proof passed 5/5 in
-16.1 minutes, including normal 900-second idle App expiry, automatic Match/Lobby
-recovery and passive room updates. Final root suite: 764 passed; the 19 optional
-cases have the earlier unchanged-fixture evidence. Frontend: 125/125. Checks and
-production builds pass. Final review's Important idle-expiry fix is committed;
-a scoped review found a remaining slow-browser-clock recovery fault. The fix
-passes 125 frontend tests; real slow-clock proof passed 5/5. Bounded clock-fix re-review remains. See
-[verification evidence](../../auth-integration-repair-evidence.md).
+Tasks 1–5 are complete. Tasks 1–4 passed independent task reviews. Task 5 passed
+five real HTTPS groups in 16.1 minutes with an advancing browser clock 60 seconds
+slow through normal 900-second expiry; the earlier normal-clock proof also passed.
+The final whole review and bounded fix reviews are closed: no Critical, Important
+or actionable Minor finding remains. Frontend 125/125; root 764 passed, with all
+19 default skips covered by earlier unchanged optional-fixture evidence. Checks
+and production builds pass. Safe delivery to Aimane is authorized. See
+[verification evidence](../../auth-integration-repair-evidence.md) and
+[independent sign-off](../reviews/2026-10-14-auth-integration-signoff.md).
 
 ## Global constraints
 
