@@ -10,18 +10,16 @@
 
 **Spec:** User message "Connect Saad's login to Game" (2026-10-13) plus read-only review corrections (2026-10-13, 4 corrections + minimum tests + 10 recommended defaults). This plan argues from both; executors read all three.
 
-## Current status — 2026-10-13
+## Current status — 2026-10-14
 
-Tasks 1–7 are implemented. The subsequent auth repair plan corrects the faults
-found in the original integration. Repair Tasks 1–4 passed independent review.
-Task 8 now has real production HTTPS password login → Account Play → Lobby →
-playable 1v1 and four-player 2v2 proof, plus renewal, expiry, outage, identity
-replacement, cookie migration and logout evidence. Full checks/builds pass.
-Final review found a natural idle-expiry browser recovery gap. Its fix passes
-121 frontend tests and build/checks; App expiry recovery proof and scoped review
-remain before delivery. The original step boxes
-below preserve the original implementation sequence; current verification is in
-[auth repair evidence](../../auth-integration-repair-evidence.md).
+Tasks 1–7 are implemented. Repair Tasks 1–4 passed independent review. Task 8
+now has 5/5 real HTTPS proof groups: password login → Account Play → Lobby →
+playable 1v1/four-player 2v2, normal 900-second idle App expiry and automatic
+recovery, passive Lobby updates, renewal, outage, identity replacement, cookie
+migration and logout. Frontend 123/123 and root 762 passed; all checks/builds pass.
+The final Important idle-expiry fix awaits scoped independent review before
+safe delivery. The original boxes preserve the implementation sequence; current
+verification is in [auth repair evidence](../../auth-integration-repair-evidence.md).
 
 ## Global Constraints
 

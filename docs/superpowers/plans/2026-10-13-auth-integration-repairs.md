@@ -2,12 +2,14 @@
 
 Goal: repair every finding in the 2026-10-13 auth review, including the Referer logging issue, and record real verification. Base: 99a493ec2ae81928cb2413496fd86a43a4c8e843 on Aimane.
 
-## Current status — 2026-10-13
+## Current status — 2026-10-14
 
-Tasks 1–4 passed independent task review. Task 5 real HTTPS proof passed 4/4;
-root and standalone checks/builds passed. Final review found one Important natural idle-expiry browser recovery gap.
-Its fix passes 121 frontend tests and build/checks; real App expiry recovery and
-scoped re-review remain. The local recap renders; delivery remains blocked. See
+Tasks 1–4 passed independent task review. Task 5 real HTTPS proof passed 5/5 in
+16.1 minutes, including normal 900-second idle App expiry, automatic Match/Lobby
+recovery and passive room updates. Final root suite: 762 passed; the 19 optional
+cases have the earlier unchanged-fixture evidence. Frontend: 123/123. Checks and
+production builds pass. Final review's Important idle-expiry fix is committed;
+scoped re-review is the remaining delivery gate. See
 [verification evidence](../../auth-integration-repair-evidence.md).
 
 ## Global constraints

@@ -21,6 +21,9 @@ if (fixture && fixture.origin !== "https://localhost:18443")
   throw new Error("Use the owned auth proof HTTPS origin only");
 const handshakes: Array<Record<string, number>> = [];
 const baselines: Array<Record<string, number>> = [];
+const disconnects: Array<Record<string, number>> = [];
+const refreshes: number[] = [];
+const mutations: number[] = [];
 const contexts: BrowserContext[] = [];
 const pages: Page[] = [];
 const tokens: string[] = [];
@@ -118,7 +121,7 @@ async function createRoom(mode: "1v1" | "2v2", indices: number[]) {
           .click();
         await renewed;
       } finally {
-        await host.clock.setFixedTime(new Date());
+        await host.clock.setSystemTime(new Date());
       }
       await expect
         .poll(() => handshakes[0]!["/lobby"] ?? 0)
@@ -169,6 +172,79 @@ async function leave(index: number) {
   ).toBeVisible();
 }
 
+function observePage(page: Page, i: number) {
+  handshakes[i] = {};
+  baselines[i] = {};
+  disconnects[i] = {};
+  refreshes[i] = 0;
+  mutations[i] = 0;
+  const sentPacket = (payload: string) => {
+    for (const packet of payload.split("\x1e")) {
+      const match = /^40(\/[^,]+)?(?:,|\{)/.exec(packet);
+      if (match) {
+        const namespace = match[1] ?? "/";
+        handshakes[i]![namespace] = (handshakes[i]![namespace] ?? 0) + 1;
+      }
+    }
+  };
+  const receivedPacket = (payload: string) => {
+    for (const packet of payload.split("\x1e")) {
+      const disconnected = /^41(\/[^,]+)?(?:,|$)/.exec(packet);
+      if (disconnected) {
+        const namespace = disconnected[1] ?? "/";
+        disconnects[i]![namespace] = (disconnects[i]![namespace] ?? 0) + 1;
+      }
+      const match = /^42(?:\/[^,]+,)?\["(snapshot|sync|authorized|lobby.roomUpdated)"/.exec(
+        packet,
+      );
+      if (match)
+        baselines[i]![match[1]!] = (baselines[i]![match[1]!] ?? 0) + 1;
+    }
+  };
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (request.method() === "POST" && /^\/api\/(matches|lobby)\//.test(url.pathname)) mutations[i]++;
+    if (
+      url.pathname === "/socket.io/" &&
+      url.searchParams.get("transport") === "polling" &&
+      request.method() === "POST"
+    )
+      sentPacket(request.postData() ?? "");
+  });
+  page.on("websocket", (socket) => {
+    socket.on("framesent", ({ payload }) => {
+      if (typeof payload !== "string") return;
+      sentPacket(payload);
+    });
+    socket.on("framereceived", ({ payload }) => {
+      if (typeof payload !== "string") return;
+      receivedPacket(payload);
+    });
+  });
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("response", async (response) => {
+    const url = new URL(response.url());
+    if (url.pathname === "/api/lobby/active" && response.ok())
+      baselines[i]!.lobbyActive = (baselines[i]!.lobbyActive ?? 0) + 1;
+    if (
+      url.pathname === "/socket.io/" &&
+      url.searchParams.get("transport") === "polling" &&
+      response.ok()
+    )
+      receivedPacket(await response.text().catch(() => ""));
+    if (
+      ["/api/auth/login", "/api/auth/refresh"].includes(
+        new URL(response.url()).pathname,
+      ) &&
+      response.ok()
+    ) {
+      if (url.pathname === "/api/auth/refresh") refreshes[i]++;
+      const body = await response.json().catch(() => null);
+      if (body?.accessToken) tokens[i] = body.accessToken;
+    }
+  });
+}
+
 test.beforeAll(async ({ browser }) => {
   const anonymous = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
@@ -195,64 +271,7 @@ test.beforeAll(async ({ browser }) => {
     const page = await context.newPage();
     pages.push(page);
     page.setDefaultTimeout(15000);
-    handshakes[i] = {};
-    baselines[i] = {};
-    const sentPacket = (payload: string) => {
-      for (const packet of payload.split("\x1e")) {
-        const match = /^40(\/[^,]+)?(?:,|\{)/.exec(packet);
-        if (match) {
-          const namespace = match[1] ?? "/";
-          handshakes[i]![namespace] = (handshakes[i]![namespace] ?? 0) + 1;
-        }
-      }
-    };
-    const receivedPacket = (payload: string) => {
-      for (const packet of payload.split("\x1e")) {
-        const match = /^42(?:\/[^,]+,)?\["(snapshot|sync|authorized)"/.exec(
-          packet,
-        );
-        if (match)
-          baselines[i]![match[1]!] = (baselines[i]![match[1]!] ?? 0) + 1;
-      }
-    };
-    page.on("request", (request) => {
-      const url = new URL(request.url());
-      if (
-        url.pathname === "/socket.io/" &&
-        url.searchParams.get("transport") === "polling" &&
-        request.method() === "POST"
-      )
-        sentPacket(request.postData() ?? "");
-    });
-    page.on("websocket", (socket) => {
-      socket.on("framesent", ({ payload }) => {
-        if (typeof payload !== "string") return;
-        sentPacket(payload);
-      });
-      socket.on("framereceived", ({ payload }) => {
-        if (typeof payload !== "string") return;
-        receivedPacket(payload);
-      });
-    });
-    page.on("pageerror", (error) => errors.push(error.message));
-    page.on("response", async (response) => {
-      const url = new URL(response.url());
-      if (
-        url.pathname === "/socket.io/" &&
-        url.searchParams.get("transport") === "polling" &&
-        response.ok()
-      )
-        receivedPacket(await response.text().catch(() => ""));
-      if (
-        ["/api/auth/login", "/api/auth/refresh"].includes(
-          new URL(response.url()).pathname,
-        ) &&
-        response.ok()
-      ) {
-        const body = await response.json().catch(() => null);
-        if (body?.accessToken) tokens[i] = body.accessToken;
-      }
-    });
+    observePage(page, i);
     await login(page, i);
     await play(page);
   }
@@ -377,7 +396,7 @@ test("same-user renewal keeps the 2v2 document and chat; all four namespaces dis
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await refreshed;
   } finally {
-    await page.clock.setFixedTime(new Date());
+    await page.clock.setSystemTime(new Date());
   }
   await expect(
     page.getByRole("button", { name: "Run", exact: true }),
@@ -513,6 +532,89 @@ test("same-user renewal keeps the 2v2 document and chat; all four namespaces dis
   } finally {
     sockets.forEach((socket) => socket.close());
   }
+  expect(errors).toEqual([]);
+});
+
+test("natural idle expiry recovers the actual Match and passive Lobby without an action", async ({ browser }) => {
+  test.setTimeout(1_020_000);
+  const matchPage = pages[0]!;
+  // Earlier clock-only renewal cases restore a moving system clock. This case
+  // waits for the real signed 900-second lifetime; no auth or timer is shortened.
+  expect(Math.abs(await matchPage.evaluate(() => Date.now()) - Date.now())).toBeLessThan(2000);
+  const lobbyContext = await browser.newContext({ ignoreHTTPSErrors: true });
+  contexts.push(lobbyContext);
+  const lobbyPage = await lobbyContext.newPage();
+  pages[4] = lobbyPage;
+  observePage(lobbyPage, 4);
+  await login(lobbyPage, 4);
+  await play(lobbyPage);
+  const previousRoom = lobbyPage.getByRole("button", { name: "Leave Room", exact: true });
+  if (await previousRoom.isVisible()) await previousRoom.click();
+  await lobbyPage.getByRole("button", { name: "Create 1v1 Room", exact: true }).click();
+  const roomCode = lobbyPage.locator("span.font-mono.text-base.font-bold");
+  await expect(roomCode).toBeVisible();
+  const invite = (await roomCode.textContent())!.trim();
+  await expect(matchPage.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  await expect(matchPage.getByText(/Shared doc r2 · live/)).toBeVisible();
+  await matchPage.evaluate(() => {
+    const g = window as unknown as { __arenaTransport: object; __arenaCollab: object; __arenaChat: object; __idleProofClients: object[] };
+    g.__idleProofClients = [g.__arenaTransport, g.__arenaCollab, g.__arenaChat];
+  });
+  const priorHandshakes = { ...handshakes[0] };
+  const priorBaselines = { ...baselines[0] };
+  const priorLobbyHandshake = handshakes[4]!['/lobby'] ?? 0;
+  const priorLobbyBaseline = baselines[4]!.lobbyActive ?? 0;
+  const priorDisconnects = [disconnects[0]!['/'] ?? 0, disconnects[4]!['/lobby'] ?? 0];
+  const priorRefreshes = [refreshes[0]!, refreshes[4]!];
+  const priorMutations = [mutations[0]!, mutations[4]!];
+  const claims = [0, 4].map(index => JSON.parse(Buffer.from(tokens[index]!.split('.')[1]!, 'base64url').toString()));
+  for (const claim of claims) expect(claim.exp - claim.iat).toBe(900);
+  const expiresAt = Math.max(...claims.map(claim => claim.exp * 1000));
+  const deadline = expiresAt - Date.now() + 60_000;
+  expect(deadline).toBeGreaterThan(0);
+  expect(deadline).toBeLessThan(960_000);
+  // Read only counters while both pages are idle. No button, navigation,
+  // baseline request, or synthetic clock action can trigger their renewal.
+  await expect.poll(() =>
+    (disconnects[0]!['/'] ?? 0) > priorDisconnects[0]! &&
+    (disconnects[4]!['/lobby'] ?? 0) > priorDisconnects[1]! &&
+    refreshes[0]! > priorRefreshes[0]! && refreshes[4]! > priorRefreshes[1]!,
+    { timeout: deadline, intervals: [1000] },
+  ).toBe(true);
+  expect(Date.now()).toBeGreaterThanOrEqual(expiresAt);
+  for (const namespace of ['/', '/collab', '/chat'])
+    await expect.poll(() => handshakes[0]![namespace] ?? 0).toBeGreaterThan(priorHandshakes[namespace] ?? 0);
+  for (const event of ['snapshot', 'sync', 'authorized'])
+    await expect.poll(() => baselines[0]![event] ?? 0).toBeGreaterThan(priorBaselines[event] ?? 0);
+  await expect.poll(() => handshakes[4]!['/lobby'] ?? 0).toBeGreaterThan(priorLobbyHandshake);
+  await expect.poll(() => baselines[4]!.lobbyActive ?? 0).toBeGreaterThan(priorLobbyBaseline);
+  await expect(matchPage.getByRole('button', { name: 'Run', exact: true })).toBeEnabled();
+  await expect(matchPage.getByLabel(/Solution editor/)).toContainText('retained through real renewal');
+  await expect(pages[1]!.getByLabel(/Solution editor/)).toContainText('retained through real renewal');
+  await expect(matchPage.getByLabel('Team chat').getByRole('listitem').filter({ hasText: 'after-real-renewal' })).toBeVisible();
+  await expect(roomCode).toHaveText(invite);
+  expect(new URL(matchPage.url()).searchParams.get('match')).toBe(teamMatch);
+  expect([mutations[0]!, mutations[4]!]).toEqual(priorMutations);
+  expect(await matchPage.evaluate(() => {
+    const g = window as unknown as { __arenaTransport: object; __arenaCollab: object; __arenaChat: object; __idleProofClients: object[] };
+    return g.__idleProofClients[0] === g.__arenaTransport && g.__idleProofClients[1] === g.__arenaCollab && g.__idleProofClients[2] === g.__arenaChat;
+  })).toBe(true);
+  const hintCount = baselines[4]!['lobby.roomUpdated'] ?? 0;
+  // A sixth normal account joins later. The idle host receives its passive hint
+  // and member baseline without Ready, reload, or any other host action.
+  const guestContext = await browser.newContext({ ignoreHTTPSErrors: true });
+  contexts.push(guestContext);
+  const guest = await guestContext.newPage();
+  await login(guest, 5);
+  await play(guest);
+  await guest.getByPlaceholder('INVITE CODE').fill(invite);
+  await guest.getByRole('button', { name: 'Join', exact: true }).click();
+  await expect(guest.getByRole('button', { name: 'Ready Up', exact: true })).toBeVisible();
+  await expect.poll(() => baselines[4]!['lobby.roomUpdated'] ?? 0).toBeGreaterThan(hintCount);
+  await expect(lobbyPage.getByRole('heading', { name: 'Right Side (1/1)', exact: true })).toBeVisible();
+  expect(mutations[4]).toBe(priorMutations[1]);
+  await guestContext.close();
+  await lobbyContext.close();
   expect(errors).toEqual([]);
 });
 
