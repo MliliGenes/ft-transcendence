@@ -4,6 +4,10 @@ Scope: game-side only (1v1/2v2 Code Arena matches, lobby, judging, collab,
 team chat). Auth is external — see `auth-game-contract.md`. Do not implement
 login/JWT/OAuth here.
 
+The [manual testing guide](manual-game-testing.md) is the current command and
+fixture reference, including the repeatable 20-stage wizard. In particular,
+development query identities need a DEV Vite server, not production preview.
+
 ## Local run (host services + real judging)
 
 ```sh
@@ -19,23 +23,25 @@ Use a disposable test database. PostgreSQL tests clear their fixture tables.
 `ARENA_DIAGNOSIS_DOCKER=1` to include the real container timeout cleanup check.
 Run `npm run check`, `npm run build`, then `npm test` before delivery.
 
-Live browser (game on :3220, web on :4173):
+Live browser (game on :3220, web on :4173): Game binds `0.0.0.0`, even
+when Vite binds loopback. Run this dev-identity fixture only inside the
+[disconnected VM described in the manual guide](manual-game-testing.md#b-development-only-game-identity-and-mock-ui),
+with dependencies/images cached first. Use real-auth Compose for normal play on
+a connected workstation.
 
 ```sh
-# one command (uses Postgres on :5433 when available, otherwise in-memory)
-npm run play
-
-# or run the processes separately after a dependency-aware build
-npm run build
-# terminal 1 — needs Postgres at 5433 and Docker for judging
-PORT=3220 DATABASE_URL=postgres://postgres:postgres@localhost:5433/arena_test \
-  DEV_PRINCIPAL=true node services/game/dist/main.js
-# terminal 2
-VITE_GAME_URL=http://localhost:3220 npm run build --workspace arena-frontend
-npm run preview --workspace arena-frontend -- --port 4173 --strictPort
-# terminal 3
+npm run build:packages
+npm run build --workspace arena-game
+# terminal 1 — explicitly selected disposable DB, or empty URL for in-memory dev
+PORT=3220 DATABASE_URL= DEV_PRINCIPAL=true JUDGE_BACKEND=container \
+  node services/game/dist/main.js
+# terminal 2 — DEV Vite is required for ?live=1&user=... fixtures
+VITE_GAME_URL=http://localhost:3220 npm run dev --workspace arena-frontend -- \
+  --host 127.0.0.1 --port 4173 --strictPort
+# terminal 3 — select dev journeys; do not mix all fixture types in one bare run
 E2E_GAME_URL=http://localhost:3220 E2E_WEB_URL=http://localhost:4173 \
-  npx playwright test   # from frontend/
+  npx playwright test e2e/live-lobby.spec.ts e2e/live-1v1.spec.ts e2e/live-2v2.spec.ts
+# Run the browser command from frontend/. Select Node 22 in each terminal.
 ```
 
 The spawned-server E2E above is the **separate dev suite**: it runs with
@@ -53,7 +59,7 @@ npm run certs   # self-signed localhost certs (git-ignored); production mounts r
 # superadmin is created only when no SUPERADMIN exists; wipe a volume only to
 # reset disposable proof data (never existing data).
 docker compose up --build
-./scripts/https-smoke.sh   # 32 static + live gateway assertions
+./scripts/https-smoke.sh   # legacy smoke; read current cookie/origin limits in manual guide
 ```
 
 Full-stack auth proof (`DEV_PRINCIPAL=false`, the Compose default): password
@@ -73,7 +79,8 @@ worker and Game readiness, HTTPS Run, two concurrent Submits, hidden evaluation,
 and score reveal over WSS, twice in the live 1v1 browser scenario. Both players
 used the Nginx HTTPS origin; the browser checked that hidden-marker values were
 absent after reveal. Nginx has no judge-worker upstream or route, and a public
-request to `/v1/run-visible` returns 404. This proof used the dev identity
+GET to `/v1/run-visible` reaches the Account HTML fallback (HTTP 200), not a
+Judge endpoint. Do not use a 404 expectation as the privacy test. This older proof used the dev identity
 fixture and a local self-signed certificate; it is not external-auth or
 production-certificate evidence. HTTPS health, HTTP→HTTPS redirect, and the
 Game `/collab`, `/chat`, and `/lobby` WSS namespaces are also routed through

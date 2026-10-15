@@ -5,22 +5,27 @@ Code Arena is Nook's first-game implementation baseline for the 42
 matches, visible example runs, sealed hidden judging, score reveals,
 reconnection, shared 2v2 editing, readiness, and match-scoped team chat.
 
-This branch is intentionally game-only. The teammate user service and
-standalone chat experiments remain on their own branches until their contracts
-and ownership are reviewed together.
+This branch includes the Account frontend and User Service integrated with Code
+Arena under one HTTPS origin. Real password login, Account Play, Lobby and
+playable 1v1/four-player 2v2 have local service-backed proof with
+`DEV_PRINCIPAL=false`. Platform chat and final team-wide acceptance remain
+separate integration work.
 
 ## Repository map
 
 | Path | Responsibility |
 | --- | --- |
+| `auth-profile-web/` | Account frontend: login, profile and Play entry to Arena |
+| `user-service/` | Account, JWT/OAuth, verified-principal API and separate account database schema |
 | `frontend/` | React/Vite arena, lobby, editor, reconnect, collaboration, and chat UI |
+| `packages/browser-auth/` | Shared browser session lifecycle, token renewal and cross-tab coordination |
 | `packages/arena-model/` | Shared match types, phases, events, and scoring vocabulary |
 | `packages/arena-game/` | Authoritative game engine, persistence, lobby, judge adapters, and collaboration |
 | `packages/arena-harness/` | Lightweight lifecycle proof harness |
 | `packages/problem-bank/` | Validated problem definitions and hidden suites |
 | `services/game/` | NestJS HTTP and Socket.IO adapter over the game engine |
 | `services/judge-worker/` | Private worker that executes untrusted code through isolated containers |
-| `infra/` | Nginx TLS/WSS ingress and game-database bootstrap |
+| `infra/` | Nginx TLS/WSS ingress, both static frontends and separate database bootstrap |
 | `docs/` | Runbook, architecture, contracts, ADRs, references, and compliance evidence |
 
 The game rules and domain language live in [CONTEXT.md](CONTEXT.md). The wider
@@ -28,7 +33,7 @@ Nook product direction remains in [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).
 
 ## Prerequisites
 
-- Node.js 22 and npm
+- Node.js 22 and npm for the root workspace; Node.js 24 for standalone Account/User Service builds
 - Docker Engine or Docker Desktop with Compose
 - OpenSSL for local development certificates
 - Modern Chrome for Playwright journeys
@@ -51,20 +56,43 @@ TEST_PG_URL=postgres://postgres:postgres@localhost:5433/arena_test \
   npm test
 ```
 
-Auth integration results are in [docs/auth-integration-repair-evidence.md](docs/auth-integration-repair-evidence.md).
+Auth integration was verified on 2026-10-14: 764 root tests passed; all 19
+optional cases also passed in an earlier unchanged 47-case fixture run, for 783
+distinct root cases. The real HTTPS suite passed five groups with a normal
+browser clock and five with a clock 60 seconds slow, including automatic
+recovery after the normal 900-second token lifetime. Root checks/builds and the
+independent repair reviews passed. These are recorded results, not a new test
+run or public-deployment proof.
+
+See the [auth integration evidence](docs/auth-integration-repair-evidence.md)
+and [independent sign-off](docs/superpowers/reviews/2026-10-14-auth-integration-signoff.md)
+for commands, checkpoints, review boundaries and remaining limits.
 
 See [docs/game-local-run.md](docs/game-local-run.md) for host-mode, Compose,
 judge-worker, and browser-test instructions.
 
-## Local play
+## Manual testing and test commands
 
-For a quick development game using the explicit test identity seam:
+Run the repeatable 20-stage human test wizard:
 
 ```sh
-npm run play
+bash scripts/manual-game-test.sh
+# Inspect stages without opening a browser:
+bash scripts/manual-game-test.sh --list
 ```
 
-Use `npm run play -- lan` to expose the local preview on your LAN.
+The [manual testing guide](docs/manual-game-testing.md) includes setup, expected
+results, code samples, API probes, automated suites, browser debugging, isolated
+failure tests and known fixture limits. Results stay in ignored local reports;
+the wizard does not run service mutations or capture credentials.
+
+## Local play
+
+For development-identity gameplay in an isolated VM, use the two-terminal DEV Vite procedure in
+[the manual testing guide](docs/manual-game-testing.md#b-development-only-game-identity-and-mock-ui).
+The current `npm run play` wrapper serves a production preview, which correctly
+rejects query identities; it is not the supported dev-identity path. Use the
+normal HTTPS login flow below for Account/Game integration tests.
 
 For the HTTPS/WSS stack:
 
@@ -92,21 +120,27 @@ for updates, ownership loss and deliberate restart.
 
 ## Team integration seams
 
-- `origin/user-service` owns account, profile, JWT/OAuth, and verified-principal
-  work. Game consumes only the principal contract documented in
-  [docs/auth-game-contract.md](docs/auth-game-contract.md).
+- Account and User Service were integrated from Saad's `origin/user-service`
+  reference at `ac325b3`; `user-service-test` was an older test reference. The
+  imported code is present in this branch. Compare later teammate changes before
+  final integration; this document does not claim a fresh remote-branch review.
+  Game consumes the [verified-principal contract](docs/auth-game-contract.md).
 - `origin/amal` contains a standalone chat UI and mock WebSocket server. Code
   Arena already owns its match-scoped `/chat` namespace, so platform-chat and
   match-chat ownership must be reconciled before those branches are combined.
-- Package versions differ across the branches. A future unified workspace must
-  explicitly reconcile NestJS, React, Vite, TypeScript, and test-tool versions.
+- Account/User Service keep their own lockfiles and Node 24 builds; the root
+  Game workspace uses Node 22. Any later dependency unification must explicitly
+  reconcile NestJS, React, Vite, TypeScript and test-tool versions.
 
-No teammate branch was merged or rewritten by this import.
+The original game extraction and subsequent auth integration used selected source
+imports; no complete teammate branch merge or rewrite is claimed.
 
 ## Known limitations
 
-- Production authentication is not connected; `DEV_PRINCIPAL` is strictly a
-  local/test seam.
+- Password authentication is connected and proved locally with
+  `DEV_PRINCIPAL=false`. Live GitHub/Discord OAuth and external SMTP delivery
+  remain unproved; local callback/cookie/configuration tests do not replace
+  those provider checks. `DEV_PRINCIPAL=true` is strictly a local/test seam.
 - Match-chat history and realtime fan-out are process-local.
 - Multiple active Game servers require shared Match authority, Presence and
   events. The current release enforces one active server per database.
