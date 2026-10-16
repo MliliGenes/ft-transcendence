@@ -57,7 +57,7 @@ services:
   user-service:
     build: ./user-service
     env_file:
-      - ./envs/user-service.env
+      - ./envs/user-service.env 
       - ./envs/rabbitmq.env
     depends_on:
       user-db:
