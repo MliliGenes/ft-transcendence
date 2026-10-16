@@ -14,9 +14,12 @@ describe('AppController', () => {
     appController = app.get<AppController>(AppController);
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+  describe('health', () => {
+    it('should identify the running chat service', () => {
+      expect(appController.getHealth()).toEqual({
+        service: 'chat-service',
+        status: 'ok',
+      });
     });
   });
 });
