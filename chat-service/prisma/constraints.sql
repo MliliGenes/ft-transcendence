@@ -1,26 +1,6 @@
--- Draft additions to append AFTER table creation in the initial migration.
--- Prisma 7 does not express these CHECK constraints in schema.prisma.
--- This file is not automatically applied. No migration has been run.
-
+-- Included in the initial migration, after Prisma creates the tables.
 ALTER TABLE "Conversation"
-ADD CONSTRAINT "Conversation_valid_shape" CHECK (
-  (
-    "kind" = 'DM'
-    AND "dmUserAId" IS NOT NULL AND "dmUserBId" IS NOT NULL
-    AND "dmUserAId" < "dmUserBId"
-    AND "groupId" IS NULL AND "name" IS NULL AND "topic" IS NULL
-  )
-  OR
-  (
-    "kind" = 'CHANNEL'
-    AND "dmUserAId" IS NULL AND "dmUserBId" IS NULL
-    AND "groupId" IS NOT NULL AND "name" IS NOT NULL
-    AND length(btrim("name")) > 0
-  )
-);
-
-ALTER TABLE "Group"
-ADD CONSTRAINT "Group_nonempty_name" CHECK (length(btrim("name")) > 0);
+ADD CONSTRAINT "Conversation_canonical_pair" CHECK ("dmUserAId" < "dmUserBId");
 
 ALTER TABLE "Message"
 ADD CONSTRAINT "Message_content_or_tombstone" CHECK (

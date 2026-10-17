@@ -1,6 +1,6 @@
 # Chat service implementation plan
 
-Status: proposed scope, not implemented or earned points. Updated: 2026-10-12.
+Status: staged implementation in progress; no module points claimed. The private-DM authentication/database foundation is implemented; the remaining checklist is still proposed scope. See CHECKPOINTS.md for verification and integration limits.
 
 Build a small Discord-like chat: **private 1-to-1 DMs, private groups with text channels, admin/member permissions, persistent messages, and emoji reactions.** Use a basic testing frontend now. Build the complete Next.js frontend later.
 
