@@ -1,6 +1,8 @@
 node_modules
-dist
+.next
+out
 .git
 .env
 .env.*
 *.log
+*.tsbuildinfo

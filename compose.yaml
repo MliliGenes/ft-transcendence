@@ -65,8 +65,8 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  auth-profile-web:
-    build: ./auth-profile-web
+  client:
+    build: ./client
     env_file: ./envs/auth-profile-web.env
     depends_on:
       - user-service
