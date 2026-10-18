@@ -9,7 +9,7 @@ services:
       - ./volumes/nginx/certs:/etc/nginx/certs
     depends_on:
       - user-service
-      - auth-profile-web
+      - client
 
   user-db:
     image: postgres:18-alpine
@@ -67,7 +67,7 @@ services:
 
   client:
     build: ./client
-    env_file: ./envs/auth-profile-web.env
+    env_file: ./envs/client.env
     depends_on:
       - user-service
 
