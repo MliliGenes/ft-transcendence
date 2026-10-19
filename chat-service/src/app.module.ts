@@ -3,12 +3,15 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
-import { DatabaseService } from './database/database.service.js';
+import { ConversationsModule } from './conversations/conversations.module.js';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), AuthModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    AuthModule,
+    ConversationsModule,
+  ],
   controllers: [AppController],
-  providers: [AppService, DatabaseService],
-  exports: [DatabaseService],
+  providers: [AppService],
 })
 export class AppModule {}

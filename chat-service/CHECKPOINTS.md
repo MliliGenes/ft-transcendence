@@ -265,3 +265,33 @@ checks passed. The actual Compose initialization was separately checked in an
 isolated temporary project and cleaned up. Schema validation and build were also
 checked with database/JWT configuration removed; migrations correctly failed
 without database configuration. No real user data was modified.
+
+## CHAT-01 completion work
+
+The authoritative current setup and internal contract are now in [CHAT01.md](CHAT01.md).
+Earlier checkpoint sections describe the previous partial implementation.
+Chat now requires USER_SERVICE_URL and INTERNAL_API_SECRET in real configuration,
+creates/refreshes the signed caller's local profile, and supports shared HTTPS routing.
+Do not run the new migration against real data until configuration and migration
+have been reviewed; the automated tests use isolated databases only.
+
+## User-service ownership correction (2026-10-18)
+
+Removed this branch's User-service internal module/endpoint/tests and its shared
+secret injection into the User-service Compose service. The teammate owns that
+service. Chat keeps its client and expected contract. CHAT-01 integration remains
+pending the teammate's compatible endpoint, URL, public key and shared secret.
+Earlier full-stack acceptance results predate this removal.
+
+## CHAT-02 persistent DMs (2026-10-19)
+
+Added DM open/list, message send/history, current access checks, live block-check
+client, transactional activity updates, retry conflict protection and bounded
+pagination/write attempts. See CHAT02.md for the request/response contract and
+beginner walkthrough. Real User integration remains pending; User code and actual
+.env files were not edited. Realtime/test UI remains CHAT-03.
+
+CHAT-02 debug follow-up: fixed a reproduced metadata timestamp race and cursor
+date validation; removed duplicate caller refresh, parallelized independent
+privacy/status checks, and reduced limiter/retry work. Verification: 55 unit,
+19 HTTP authentication, 20 PostgreSQL TAP tests; build/lint passed.

@@ -4,6 +4,9 @@ import { type INestApplication } from '@nestjs/common';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import { generateKeyPairSync } from 'node:crypto';
 import request from 'supertest';
+import { UserProjectionService } from '../src/users/user-projection.service.js';
+import { UserServiceClient } from '../src/users/user-service.client.js';
+import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { AppModule } from '../src/app.module.js';
 import { DatabaseService } from '../src/database/database.service.js';
 
@@ -47,6 +50,13 @@ describe('Chat HTTP authentication', () => {
     onModuleDestroy: vi.fn(),
   };
 
+  const users = { ensureUsers: vi.fn(async () => [{ id: userId }]) };
+
+  afterEach(() => {
+    users.ensureUsers.mockReset();
+    users.ensureUsers.mockResolvedValue([{ id: userId }]);
+  });
+
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
@@ -58,6 +68,10 @@ describe('Chat HTTP authentication', () => {
           throw new Error('Unexpected test configuration key');
         },
       })
+      .overrideProvider(UserProjectionService)
+      .useValue(users)
+      .overrideProvider(UserServiceClient)
+      .useValue({})
       .overrideProvider(DatabaseService)
       .useValue(database)
       .compile();
@@ -151,5 +165,28 @@ describe('Chat HTTP authentication', () => {
       .get('/session')
       .set('Authorization', 'Bearer ' + forged)
       .expect(401);
+  });
+  it('creates/refreshes the signed caller before allowing the protected route', async () => {
+    await request(app.getHttpServer())
+      .get('/chat/session')
+      .set('Authorization', 'Bearer ' + (await token()))
+      .expect(200);
+    expect(users.ensureUsers).toHaveBeenCalledWith([userId], true);
+  });
+
+  it('rejects a deleted caller even with an otherwise valid token', async () => {
+    users.ensureUsers.mockRejectedValueOnce(new NotFoundException());
+    await request(app.getHttpServer())
+      .get('/session')
+      .set('Authorization', 'Bearer ' + (await token()))
+      .expect(401);
+  });
+
+  it('fails closed when current account status cannot be checked', async () => {
+    users.ensureUsers.mockRejectedValueOnce(new ServiceUnavailableException());
+    await request(app.getHttpServer())
+      .get('/session')
+      .set('Authorization', 'Bearer ' + (await token()))
+      .expect(503);
   });
 });

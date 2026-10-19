@@ -10,14 +10,20 @@ services:
     depends_on:
       - user-service
       - auth-profile-web
+      - chat-service
 
   user-db:
+    networks: [user-data]
     image: postgres:18-alpine
     env_file: ./envs/user-db.env
     volumes:
       - ./volumes/user-db:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      test:
+        [
+          "CMD-SHELL",
+          'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"',
+        ]
       interval: 5s
       timeout: 5s
       start_period: 10s
@@ -48,13 +54,33 @@ services:
     volumes:
       - ./volumes/minio:/data
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9000/minio/health/live"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "-q",
+          "--spider",
+          "http://127.0.0.1:9000/minio/health/live",
+        ]
       interval: 10s
       timeout: 5s
       start_period: 30s
       retries: 5
 
   user-service:
+    networks: [default, user-data]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      start_period: 20s
+      retries: 12
     build: ./user-service
     env_file:
       - ./envs/user-service.env
@@ -67,12 +93,60 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  chat-db:
+    image: postgres:18-alpine
+    networks: [chat-data]
+    env_file: ./envs/chat-db.env
+    volumes:
+      - chat-data:/var/lib/postgresql
+      - ./chat-service/prisma/init-database.sh:/docker-entrypoint-initdb.d/10-chat.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U nook_chat -d nook_chat"]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 12
+
+  chat-service:
+    build: ./chat-service
+    networks: [default, chat-data]
+    env_file:
+      - ./envs/chat-service.env
+      - ./envs/internal-api.env
+    environment:
+      PORT: 3001
+      USER_SERVICE_URL: http://user-service:3000
+    depends_on:
+      chat-db:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      start_period: 20s
+      retries: 12
+
   auth-profile-web:
     build: ./auth-profile-web
     env_file: ./envs/auth-profile-web.env
     depends_on:
       - user-service
 
+volumes:
+  chat-data:
+
 networks:
+  user-data:
+    internal: true
+  chat-data:
+    internal: true
   default:
     driver: bridge

@@ -14,26 +14,37 @@ model ChatUser {
   username        String?
   displayName     String?
   avatarUrl       String?
+  syncedAt        DateTime  @default(now())
   sourceUpdatedAt DateTime
   deletedAt       DateTime?
 
   dmsAsUserA Conversation[] @relation("DmUserA")
   dmsAsUserB Conversation[] @relation("DmUserB")
   messages   Message[]
+  memberships GroupMember[]
 }
 
-// Private DMs only. Groups and reactions get separate migrations later.
+// The database enforces either a canonical DM pair or a group channel.
 model Conversation {
   id        String   @id @default(uuid()) @db.Uuid
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  dmUserAId String   @db.Uuid
-  dmUserBId String   @db.Uuid
+  kind ConversationKind @default(DM)
+  lastMessageAt DateTime?
+  dmUserAId String?   @db.Uuid
+  dmUserBId String?   @db.Uuid
+  groupId String? @db.Uuid
+  name String? @db.VarChar(80)
+  topic String? @db.VarChar(500)
 
-  dmUserA ChatUser @relation("DmUserA", fields: [dmUserAId], references: [id], onDelete: Restrict)
-  dmUserB ChatUser @relation("DmUserB", fields: [dmUserBId], references: [id], onDelete: Restrict)
+  dmUserA ChatUser? @relation("DmUserA", fields: [dmUserAId], references: [id], onDelete: Restrict)
+  dmUserB ChatUser? @relation("DmUserB", fields: [dmUserBId], references: [id], onDelete: Restrict)
   messages Message[]
+  group Group? @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
+  @@index([groupId, createdAt, id])
+  @@index([dmUserAId, lastMessageAt, id])
+  @@index([dmUserBId, lastMessageAt, id])
   @@unique([dmUserAId, dmUserBId])
   @@index([dmUserAId, createdAt, id])
   @@index([dmUserBId, createdAt, id])
@@ -56,4 +67,37 @@ model Message {
 
   @@unique([authorId, clientRequestId])
   @@index([conversationId, createdAt, id])
+}
+
+// Foundation storage only; group management endpoints belong to CHAT-04.
+model Group {
+  id String @id @default(uuid()) @db.Uuid
+  name String @db.VarChar(100)
+  description String? @db.VarChar(1000)
+  rules String? @db.VarChar(4000)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  members GroupMember[]
+  channels Conversation[]
+}
+
+model GroupMember {
+  groupId String @db.Uuid
+  userId String @db.Uuid
+  role GroupRole @default(MEMBER)
+  joinedAt DateTime @default(now())
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user ChatUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@id([groupId, userId])
+  @@index([userId, joinedAt, groupId])
+}
+
+enum GroupRole {
+  ADMIN
+  MEMBER
+}
+
+enum ConversationKind {
+  DM
+  CHANNEL
 }

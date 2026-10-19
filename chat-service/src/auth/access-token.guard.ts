@@ -3,11 +3,13 @@ import {
   Injectable,
   SetMetadata,
   UnauthorizedException,
+  NotFoundException,
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
+import { UserProjectionService } from '../users/user-projection.service.js';
 import { isUUID } from 'class-validator';
 import type { Request } from 'express';
 
@@ -20,6 +22,8 @@ export class AccessTokenGuard implements CanActivate {
   constructor(
     @Inject(JwtService) private readonly jwt: JwtService,
     @Inject(Reflector) private readonly reflector: Reflector,
+    @Inject(UserProjectionService)
+    private readonly users: UserProjectionService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -47,6 +51,7 @@ export class AccessTokenGuard implements CanActivate {
       throw new UnauthorizedException('A Bearer access token is required');
     }
 
+    let userId: string;
     try {
       const payload = await this.jwt.verifyAsync<{
         sub?: unknown;
@@ -62,10 +67,20 @@ export class AccessTokenGuard implements CanActivate {
         throw new Error('Invalid token claims');
       }
 
-      request.userId = payload.sub.toLowerCase();
-      return true;
+      userId = payload.sub.toLowerCase();
     } catch {
       throw new UnauthorizedException('Access token is invalid or expired');
     }
+
+    try {
+      // Account existence is checked live; profile TTL never grants access.
+      await this.users.ensureUsers([userId], true);
+    } catch (error) {
+      if (error instanceof NotFoundException)
+        throw new UnauthorizedException('Account is unavailable');
+      throw error;
+    }
+    request.userId = userId;
+    return true;
   }
 }

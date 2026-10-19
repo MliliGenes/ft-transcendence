@@ -1,7 +1,8 @@
 # Private chat database foundation
 
-The active schema is now limited to private DMs. The earlier groups/reactions
-draft is deferred; add those through later migrations when implementing them.
+The CHAT-01 migration now includes group/channel storage to enforce the agreed
+DM/channel CHECK constraint and safely clean memberships for deleted users.
+Group management APIs and reactions remain later phases. See ../CHAT01.md.
 
 - `ChatUser` stores a public-profile copy using the existing User-service UUID.
   It stores no password, login session, or signing key. Names are nullable and
@@ -26,7 +27,8 @@ The generated client is ignored by Git and regenerated with `npm run build`.
 User service owns identity, current account state, blocks, and public profile
 updates. Chat must obtain those decisions through a trusted service contract;
 the local profile copy is not an authorization source. Never use the User
-service database URL here. No profile synchronization has been implemented yet.
+service database URL here. Profile synchronization is implemented through the authenticated batch REST
+contract described in ../CHAT01.md; no cross-database relation is used.
 
 A foreign key confirms that a referenced row exists. It does not prove that a
 message author belongs to the conversation; the API must enforce membership.

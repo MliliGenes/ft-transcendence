@@ -25,7 +25,8 @@
     "prisma:migrate": "prisma migrate deploy",
     "prebuild": "prisma generate",
     "test:postgres": "node --test test/database.postgres.test.mjs",
-    "pretest:e2e": "prisma generate"
+    "pretest:e2e": "prisma generate",
+    "test:foundation": "node --test test/chat01.compose.test.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

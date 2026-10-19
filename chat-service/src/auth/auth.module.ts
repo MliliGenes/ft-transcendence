@@ -4,10 +4,13 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { AccessTokenGuard } from './access-token.guard.js';
 import { getVerificationKey } from './verification-key.js';
+import { UsersModule } from '../users/users.module.js';
+import { InternalSecretGuard } from './internal-secret.guard.js';
 import { SessionController } from './session.controller.js';
 
 @Module({
   imports: [
+    UsersModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -24,6 +27,10 @@ import { SessionController } from './session.controller.js';
     }),
   ],
   controllers: [SessionController],
-  providers: [{ provide: APP_GUARD, useClass: AccessTokenGuard }],
+  providers: [
+    InternalSecretGuard,
+    { provide: APP_GUARD, useClass: AccessTokenGuard },
+  ],
+  exports: [InternalSecretGuard],
 })
 export class AuthModule {}
