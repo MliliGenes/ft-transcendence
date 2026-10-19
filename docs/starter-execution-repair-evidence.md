@@ -11,8 +11,9 @@ and earn 100/100 on sealed Submit. Double It remains a complete stdin/stdout
 program. The manual guide contains working examples for all three languages.
 
 Baseline: `fb63d346f7010c17280cfac386f94f18a21431ac` on `Aimane`.
-This evidence covers the local source repair, not a rebuilt live Compose stack.
-Existing application services, databases, users and mail fixture were preserved.
+This evidence covers the source repair and the user-approved local Compose
+rollout recorded below. Browser UI and remote deployment are not claimed.
+Database, account, Redis, gateway and mail container identities were preserved.
 
 ## Cause and repair
 
@@ -121,11 +122,52 @@ Rulings on items the reviewer did not execute or judge:
   this repair does not claim maximum-size end-to-end capacity.
 - The reviewer did not duplicate the expensive execution suites. The executor
   ran the recorded Docker, database, root and focused regression commands.
-- Browser UI, certificate trust, and rebuilt live Compose behavior were outside
-  the agreed seams. The running local game retains its old images until a
-  separate controlled rebuild of Game and Judge worker. That step interrupts
-  game sessions and must preserve the local mail override and database volumes.
+- Browser UI and browser certificate trust were outside the agreed test seams.
+  The user subsequently approved a controlled local Game/Judge rebuild. The
+  live HTTPS network proof below validates that rollout; it is not browser UI
+  proof. Existing account/database/mail containers and volumes were retained.
 
 No external OAuth/email delivery, separate-computer UI or new four-browser
 proof is claimed by this repair. Earlier four-player network proof remains a
 separate result; this document does not relabel it as browser proof.
+
+## Applied to the local running game — 2026-10-19
+
+The user approved applying the verified repair after review and verification.
+Only Game and Judge worker were rebuilt and recreated, retaining the existing
+local mail Compose override. The worker became healthy before Game was replaced.
+Nginx passed its configuration test and received a graceful reload to refresh
+backend addresses; its container was not recreated.
+
+Before/after container and mount identities confirm:
+
+- Exactly Game and Judge worker container IDs changed.
+- Both databases, Redis, User Service, Nginx and Mailpit kept their container IDs.
+- All mount/volume identities were retained. All service health checks passed.
+- `DEV_PRINCIPAL=false` remains enforced.
+
+Certificate-validated HTTPS smoke proof used two existing owned normal QA
+accounts through password login, a private 1v1 Lobby, the production Game API,
+real worker HTTP, and one-shot Docker execution. **12 checks passed**:
+all three unchanged Even Ledger starters ran with outputs 0/0/0 and the
+empty-array pass; correct Python/C/C++ snippets passed all visible examples;
+C and C++ sealed submissions earned 100/100 in round1; stdio submissions earned
+100/100 in Double It; Python Solution methods earned 100/100 in round3. Both
+clients recovered the completed three-round 300–300 scores. No browser UI,
+certificate bypass, mock principal/profile, dev identity or hidden-suite
+inspection was used in this live proof.
+
+The local report and scripts are retained in the ignored repair workspace.
+Build-time npm audit reported four development dependency advisories; production
+`npm ci --omit=dev` reported zero. No dependency updates or audit auto-fixes were
+part of this starter repair.
+
+A fresh **16/16-check four-player 2v2 network proof** also passed on the rebuilt
+stack using the four existing owned normal QA accounts. It covered authenticated
+private Lobby formation, the missing-player start gate, shared code convergence
+and opposing-team isolation, isolated chat/pings, readiness invalidation and stale
+approval rejection, reconnect with preserved code/chat, visible Judge execution,
+all three sealed rounds at 100/100 for both teams, and fresh authenticated socket
+recovery of the same final 300–300 scores and outcome. Equal totals are not
+reported as a draw: the normal tie-break policy still applies. These were real
+HTTPS/WSS network clients, not four browser windows or separate computers.
