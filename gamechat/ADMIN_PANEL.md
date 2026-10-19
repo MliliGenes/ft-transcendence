@@ -21,8 +21,7 @@ Validation:
 
 ```sh
 npm run build
-npx eslint src/admin src/App.jsx vite.config.js
+npm run lint
 node --test src/admin/mockService.test.js
 ```
 
-The full-project lint check currently reports an existing unused variable in `src/components/GameChat.jsx`.

@@ -195,7 +195,7 @@ function GameChat({ currentUser, accessToken }) {/* is a React component. */
         socketRef.current.send(JSON.stringify({
             type: newMessage.type,
             message: newMessage.message
-        }));;
+        }));
         setMessages(previous => [...previous, newMessage]);
     }
 
@@ -204,7 +204,7 @@ function GameChat({ currentUser, accessToken }) {/* is a React component. */
             {!matchEnded && (
                 <>
                     {isOpen && (
-                        <div className={`game-chat ${isOpen ? "open" : "closed"}`}>
+                        <div className="game-chat">
                             <ChatHistory messages={messages} />
                             <ChatInput onSendMessage={sendMessage} />
                         </div>
