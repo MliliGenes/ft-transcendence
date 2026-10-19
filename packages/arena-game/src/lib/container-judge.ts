@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { prepareCompiledSnippet } from "./compiled-snippet.js";
 import {
   type CaseResult,
   type DriverKind,
@@ -8,6 +9,7 @@ import {
   type JudgeLimits,
   type SealedEvaluationRequest,
   type SealedGroupResult,
+  type SnippetOptions,
   type SupportedLanguage,
   type VisibleTest,
   type GameJudge,
@@ -82,11 +84,22 @@ def main():
     signal.alarm(0)
     functions = [(name, fn) for name, fn in inspect.getmembers(player, inspect.isfunction)
                  if getattr(fn, "__module__", None) == "player" and not name.startswith("_")]
+    solution_class = getattr(player, "Solution", None)
+    methods = [(name, fn) for name, fn in inspect.getmembers(solution_class, inspect.isfunction)
+               if getattr(fn, "__module__", None) == "player" and not name.startswith("_")] if inspect.isclass(solution_class) else []
+    use_solution = False
     if entry:
         function = getattr(player, entry, None)
-        if not callable(function):
-            _fail("runtime_error", f"missing entrypoint {entry}")
-        functions = [(entry, function)]
+        if callable(function):
+            functions = [(entry, function)]
+        else:
+            functions = [(name, fn) for name, fn in methods if name == entry]
+            use_solution = True
+            if not functions:
+                _fail("runtime_error", f"missing entrypoint {entry}")
+    elif not functions and methods:
+        functions = methods
+        use_solution = True
     if len(functions) != 1:
         _fail("runtime_error", "ambiguous entry")
     values = {}
@@ -97,7 +110,8 @@ def main():
     args = [value for name, value in values.items() if not name.startswith("__")]
     signal.signal(signal.SIGALRM, _alarm_handler); signal.alarm(max(1, bound))
     try:
-        result = functions[0][1](*args)
+        target = getattr(solution_class(), functions[0][0]) if use_solution else functions[0][1]
+        result = target(*args)
     except Timeout:
         _fail("time_limit_exceeded", "execution timed out")
     except Exception as error:
@@ -204,10 +218,11 @@ export class ContainerJudge implements GameJudge {
     source: string,
     tests: VisibleTest[],
     limits: JudgeLimits,
+    snippet?: SnippetOptions,
   ): Promise<CaseResult[]> {
     const results: CaseResult[] = [];
     for (const test of tests) {
-      const verdict = await this.runCase(language, driver, source, undefined, test, limits);
+      const verdict = await this.runCase(language, driver, source, snippet, test, limits);
       results.push({
         id: test.id,
         passed: verdict.passed,
@@ -228,7 +243,7 @@ export class ContainerJudge implements GameJudge {
           request.language,
           request.driver,
           request.source,
-          request.entrypoint,
+          request,
           test,
           request.limits,
         );
@@ -248,15 +263,16 @@ export class ContainerJudge implements GameJudge {
     language: SupportedLanguage,
     driver: DriverKind,
     source: string,
-    entrypoint: string | undefined,
+    snippet: SnippetOptions | undefined,
     test: CaseInput,
     limits: JudgeLimits,
   ): Promise<TrustedVerdict> {
-    if (driver === "snippet" && language !== "Python") {
-      return { id: test.id, passed: false, status: "internal_error", output: "", comparison: "", ms: 0 };
-    }
-
-    const execution = await this.executeOneCase({ language, driver, source, entrypoint, input: test.input, limits });
+    const compiled = driver === "snippet" && language !== "Python"
+      ? prepareCompiledSnippet(language, source, test.input, snippet) : undefined;
+    const execution = await this.executeOneCase({
+      language, driver: compiled ? "stdio" : driver, source: compiled?.source ?? source,
+      entrypoint: snippet?.entrypoint, input: compiled?.input ?? test.input, limits,
+    });
     const passed = execution.status === "accepted"
       && expectedMatches(language, driver, execution.comparison, test.expected);
     return {

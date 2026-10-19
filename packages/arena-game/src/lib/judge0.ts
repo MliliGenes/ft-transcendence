@@ -1,3 +1,4 @@
+import { prepareCompiledSnippet } from "./compiled-snippet.js";
 import {
   type CaseResult,
   type DriverKind,
@@ -7,6 +8,7 @@ import {
   type JudgeLimits,
   type SealedEvaluationRequest,
   type SealedGroupResult,
+  type SnippetOptions,
   type SupportedLanguage,
   type VisibleTest,
   type GameJudge,
@@ -124,12 +126,13 @@ export class Judge0Adapter implements GameJudge {
     source: string,
     tests: VisibleTest[],
     limits: JudgeLimits,
+    snippet?: SnippetOptions,
   ): Promise<CaseResult[]> {
     const results = await this.runCases(
       language,
       driver,
       source,
-      undefined,
+      snippet,
       tests.map((test) => ({ id: test.id, input: test.input, expected: test.expected })),
       limits,
     );
@@ -150,7 +153,7 @@ export class Judge0Adapter implements GameJudge {
       request.language,
       request.driver,
       request.source,
-      request.entrypoint,
+      request,
       cases,
       request.limits,
     );
@@ -177,18 +180,15 @@ export class Judge0Adapter implements GameJudge {
     language: SupportedLanguage,
     driver: DriverKind,
     source: string,
-    entrypoint: string | undefined,
+    snippet: SnippetOptions | undefined,
     cases: CaseInput[],
     limits: JudgeLimits,
   ): Promise<NormalizedCase[]> {
-    if (driver === "snippet" && language !== "Python") {
-      throw new JudgeInfraError("Judge0 snippet driver is only configured for Python");
-    }
     const startedAt = this.clock();
     const results: NormalizedCase[] = [];
     try {
       for (const test of cases) {
-        results.push(await this.runCase(language, driver, source, entrypoint, test, limits));
+        results.push(await this.runCase(language, driver, source, snippet, test, limits));
       }
       return results;
     } finally {
@@ -207,17 +207,20 @@ export class Judge0Adapter implements GameJudge {
     language: SupportedLanguage,
     driver: DriverKind,
     source: string,
-    entrypoint: string | undefined,
+    snippet: SnippetOptions | undefined,
     test: CaseInput,
     limits: JudgeLimits,
   ): Promise<NormalizedCase> {
-    const providerSource = driver === "snippet" ? this.snippetHarness(source, test.input, entrypoint) : source;
+    const compiled = driver === "snippet" && language !== "Python"
+      ? prepareCompiledSnippet(language, source, test.input, snippet) : undefined;
+    const executionDriver = compiled ? "stdio" : driver;
+    const providerSource = compiled?.source ?? (driver === "snippet" ? this.snippetHarness(source, test.input, snippet?.entrypoint) : source);
     let response: Judge0SubmissionResponse;
     try {
       const created = await this.http.createSubmission({
         languageId: this.languageIds[language],
         sourceCode: providerSource,
-        stdin: test.input,
+        stdin: compiled?.input ?? test.input,
         cpuTimeLimitSeconds: Math.max(0.001, limits.runWallMs / 1000),
         wallTimeLimitSeconds: Math.max(0.001, Math.max(limits.compileWallMs, limits.runWallMs) / 1000),
         memoryLimitKb: Math.max(1, limits.runMemoryMb * 1024),
@@ -239,13 +242,13 @@ export class Judge0Adapter implements GameJudge {
     const status = this.statusFrom(response.status?.id);
     if (status === "internal_error") throw new JudgeInfraError("Judge0 returned an internal execution failure");
     const runtimeMs = this.runtimeMs(response.time);
-    const output = this.outputFor(response, driver);
-    const comparison = driver === "snippet" ? this.snippetResult(response.stdout) : output;
+    const output = this.outputFor(response, executionDriver);
+    const comparison = executionDriver === "snippet" ? this.snippetResult(response.stdout) : output;
     const outputCap = Math.max(1, Math.floor(limits.runOutputBytes));
     // Judge0 accepts KiB quotas. Apply Game's exact byte cap in trusted code,
     // including both display and comparison channels for Python snippets.
     const outputBytes = Buffer.byteLength(output, "utf8") + Buffer.byteLength(response.stderr ?? "", "utf8")
-      + (driver === "snippet" ? Buffer.byteLength(comparison, "utf8") : 0);
+      + (executionDriver === "snippet" ? Buffer.byteLength(comparison, "utf8") : 0);
     if (outputBytes > outputCap) {
       const captured = Buffer.from(output, "utf8").subarray(0, outputCap).toString("utf8").replace(/\uFFFD$/, "");
       return { id: test.id, status: "output_limit_exceeded", passed: false, output: captured, runtimeMs };
@@ -323,10 +326,10 @@ export class Judge0Adapter implements GameJudge {
       `__source = ${JSON.stringify(source)}`,
       "exec(__source, globals(), globals())",
       `__entrypoint = ${JSON.stringify(entrypoint ?? "")}`,
-      "if __entrypoint and inspect.isclass(globals().get('Solution')):",
-      "    __target = getattr(globals()['Solution'](), __entrypoint, None)",
-      "elif __entrypoint:",
+      "if __entrypoint:",
       "    __target = globals().get(__entrypoint)",
+      "    if not callable(__target) and inspect.isclass(globals().get('Solution')):",
+      "        __target = getattr(globals()['Solution'](), __entrypoint, None)",
       "else:",
       "    __public = [v for k, v in globals().items() if not k.startswith('_') and callable(v) and getattr(v, '__module__', None) == '__main__']",
       "    __target = __public[0] if len(__public) == 1 else None",

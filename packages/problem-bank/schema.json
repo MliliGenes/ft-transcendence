@@ -27,6 +27,22 @@
     "constraints": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
     "timeLimitMs": { "type": "integer", "minimum": 1 },
     "memoryLimitMb": { "type": "integer", "minimum": 1 },
+    "driver": { "enum": ["snippet", "stdio"] },
+    "entrypoint": { "type": ["string", "null"] },
+    "snippets": {
+      "description": "Trusted language-specific snippet ABI overrides; omitted fields use the problem entrypoint.",
+      "type": "object",
+      "propertyNames": { "enum": ["C", "C++", "Python"] },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entrypoint": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+          "className": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+          "signature": { "enum": ["int64-array"] }
+        }
+      }
+    },
     "starters": {
       "type": "object",
       "required": ["C++", "Python", "C"],

@@ -183,6 +183,20 @@ is a snippet problem; **Double It** is a standard-input/output program. Their
 wrappers differ. These examples use the source-defined public problem contract;
 do not inspect hidden fixtures as part of a player-isolation test.
 
+### Starter execution check
+
+Use the bank's unchanged starter first. In Even Ledger, Run must show outputs
+`0`, `0`, `0`: the first two examples fail and the empty-array example passes.
+That is a normal wrong answer. `ambiguous entry`, blank compiled results, or an
+infrastructure error from these starters is a failure. Complete the function or
+`Solution` method below, then Run must pass all three examples. Submit must earn
+100/100 when the round is revealed.
+
+The source repair requires a rebuilt Game and Judge worker. An already-running
+Compose stack keeps its previous images until it is rebuilt. See the
+[starter execution repair evidence](starter-execution-repair-evidence.md) for the
+verified scope and restart limits.
+
 ### Even Ledger: correct implementations
 
 Python:

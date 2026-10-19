@@ -1,5 +1,5 @@
 import type { ArenaEvent, PlayerStatus } from "arena-model";
-import type { DriverKind, GameJudge, JudgeLimits, SealedGroup, SupportedLanguage } from "./judge-types.js";
+import type { DriverKind, GameJudge, JudgeLimits, SealedGroup, SnippetOptions, SupportedLanguage } from "./judge-types.js";
 import { JudgeInfraError } from "./judge-types.js";
 import { DuplicateError } from "./store.js";
 import { IllegalStateError } from "./match-authority.js";
@@ -94,7 +94,7 @@ class EvaluationInFlightRegistry {
   }
 }
 
-interface EvaluationRunInput {
+interface EvaluationRunInput extends SnippetOptions {
   matchId: string;
   roundNo: number;
   roundId: string;
@@ -136,6 +136,7 @@ interface EvaluationProblemBank {
   loadProblem(problemVersionId: string): {
     driver?: DriverKind;
     entrypoint?: string;
+    snippets?: Partial<Record<SupportedLanguage, SnippetOptions>>;
     hidden: Array<{
       name: string;
       weight: number;
@@ -230,7 +231,8 @@ export class EvaluationOrchestrator {
         problemVersionId: record.problemVersionId, hiddenSuiteId: input.hiddenSuiteId,
         language: record.language as SupportedLanguage,
         driver: problem.driver ?? (record.language === "Python" ? "snippet" : "stdio"),
-        entrypoint: problem.entrypoint, source: record.source,
+        entrypoint: problem.entrypoint,
+        ...problem.snippets?.[record.language as SupportedLanguage], source: record.source,
         groups: problem.hidden.map((group) => ({
           name: group.name, weight: group.weight,
           tests: group.tests.map((test) => ({ id: test.id, input: test.input, expected: test.expected })),
@@ -302,6 +304,8 @@ export class EvaluationOrchestrator {
           language: input.language,
           driver: input.driver,
           entrypoint: input.entrypoint,
+          signature: input.signature,
+          className: input.className,
           source: input.source,
           groups: input.groups,
           limits: this.options.limits,
@@ -463,6 +467,7 @@ export class EvaluationOrchestrator {
       language,
       driver: problem.driver ?? (language === "Python" ? "snippet" : "stdio"),
       entrypoint: problem.entrypoint,
+      ...problem.snippets?.[language],
       source: stored.source,
       groups: problem.hidden.map((group) => ({
         name: group.name,

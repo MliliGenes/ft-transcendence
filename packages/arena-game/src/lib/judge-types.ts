@@ -82,15 +82,22 @@ export function assertSupportedLanguage(language: string): asserts language is S
 }
 
 /**
- * Execution driver: "snippet" evaluates bank-style input snippets against the
- * player's single public function (Python); "stdio" feeds raw input bytes to a
- * complete program over stdin. The game resolves the driver from bank metadata;
- * until the bank declares `driver`/`entrypoint` (05 follow-up), the engine uses
- * snippet for Python and stdio otherwise.
+ * Execution driver: "snippet" calls a bank-declared function or Solution
+ * method; "stdio" feeds raw input bytes to a complete program over stdin.
+ * Python retains single-public-function discovery when no entrypoint is given.
+ * C/C++ snippets require a declared int64-array ABI (at most 100000 elements).
+ * Legacy banks without a driver fall back to Python snippets / compiled stdio.
  */
 export type DriverKind = "snippet" | "stdio";
 
-export interface SealedEvaluationRequest {
+export interface SnippetOptions {
+  entrypoint?: string;
+  /** One integer-array argument, returning a signed 64-bit integer. */
+  signature?: "int64-array";
+  className?: string;
+}
+
+export interface SealedEvaluationRequest extends SnippetOptions {
   evaluationId: string;
   submissionId: string;
   problemVersionId: string;
@@ -119,6 +126,7 @@ export interface GameJudge {
     source: string,
     tests: VisibleTest[],
     limits: JudgeLimits,
+    snippet?: SnippetOptions,
   ): Promise<CaseResult[]>;
   evaluateSealed(request: SealedEvaluationRequest): Promise<{ groups: SealedGroupResult[] }>;
 }

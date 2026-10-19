@@ -5,6 +5,7 @@ import type {
   GameJudge,
   JudgeLimits,
   SealedEvaluationRequest,
+  SnippetOptions,
   SupportedLanguage,
   VisibleTest,
 } from "arena-game-engine/judge";
@@ -66,13 +67,27 @@ function isStringField(record: Record<string, unknown>, key: string): boolean {
   return typeof record[key] === "string";
 }
 
+function parseSnippetOptions(value: Record<string, unknown>): SnippetOptions {
+  const identifier = /^[A-Za-z_][A-Za-z0-9_]*$/;
+  if ((value.entrypoint !== undefined && (typeof value.entrypoint !== "string" || !identifier.test(value.entrypoint)))
+    || (value.className !== undefined && (typeof value.className !== "string" || !identifier.test(value.className)))
+    || (value.signature !== undefined && value.signature !== "int64-array")) {
+    throw new InvalidRequestError();
+  }
+  return {
+    ...(value.entrypoint !== undefined ? { entrypoint: value.entrypoint as string } : {}),
+    ...(value.className !== undefined ? { className: value.className as string } : {}),
+    ...(value.signature !== undefined ? { signature: "int64-array" as const } : {}),
+  };
+}
+
 function parseVisibleRequest(value: unknown): {
   language: SupportedLanguage;
   driver: DriverKind;
   source: string;
   tests: VisibleTest[];
   limits: JudgeLimits;
-} {
+} & SnippetOptions {
   if (!isRecord(value) || !isLanguage(value.language) || !isDriver(value.driver)
     || !isStringField(value, "source") || !isLimits(value.limits) || !Array.isArray(value.tests)) {
     throw new InvalidRequestError();
@@ -87,6 +102,7 @@ function parseVisibleRequest(value: unknown): {
     language: value.language,
     driver: value.driver,
     source: value.source as string,
+    ...parseSnippetOptions(value),
     tests,
     limits: value.limits,
   };
@@ -120,7 +136,7 @@ function parseSealedRequest(value: unknown): SealedEvaluationRequest {
     hiddenSuiteId: value.hiddenSuiteId as string,
     language: value.language,
     driver: value.driver,
-    ...(typeof value.entrypoint === "string" ? { entrypoint: value.entrypoint } : {}),
+    ...parseSnippetOptions(value),
     source: value.source as string,
     groups,
     limits: value.limits,
@@ -238,7 +254,7 @@ export function createJudgeWorkerServer(options: JudgeWorkerServerOptions): Serv
     if (visible) {
       const input = parseVisibleRequest(body);
       const result = await options.queue.run(() => options.judge.runVisible(
-        input.language, input.driver, input.source, input.tests, input.limits,
+        input.language, input.driver, input.source, input.tests, input.limits, { entrypoint: input.entrypoint, signature: input.signature, className: input.className },
       ));
       respond(response, 200, result);
       return;

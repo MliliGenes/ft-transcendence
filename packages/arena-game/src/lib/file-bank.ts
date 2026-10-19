@@ -15,6 +15,7 @@ export class FileBank implements ProblemBank {
       description: string;
       driver?: "snippet" | "stdio";
       entrypoint?: string | null;
+      snippets?: BankProblem["snippets"];
       examples: Array<{ label: string; input: string; output: string; explanation?: string }>;
       starters: Record<string, string>;
       visibleTests: Array<{ id: string; input: string; expected: string }>;
@@ -25,6 +26,7 @@ export class FileBank implements ProblemBank {
       hiddenSuiteId: `${raw.id}:hidden:v1`,
       driver: raw.driver,
       entrypoint: raw.entrypoint ?? undefined,
+      snippets: raw.snippets,
       visible: raw.visibleTests.map((t) => ({ ...t })),
       hidden: raw.hiddenGroups.map((g) => ({ name: g.name, weight: g.weight, tests: g.tests.map((t) => ({ ...t })) })),
       statement: {

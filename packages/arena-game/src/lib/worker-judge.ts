@@ -7,6 +7,7 @@ import {
   type JudgeLimits,
   type SealedEvaluationRequest,
   type SealedGroupResult,
+  type SnippetOptions,
   type SupportedLanguage,
   type VisibleTest,
 } from "./judge-types.js";
@@ -103,8 +104,9 @@ export class WorkerJudgeAdapter implements GameJudge {
     source: string,
     tests: VisibleTest[],
     limits: JudgeLimits,
+    snippet?: SnippetOptions,
   ): Promise<CaseResult[]> {
-    const result = await this.post("/v1/run-visible", { language, driver, source, tests, limits });
+    const result = await this.post("/v1/run-visible", { language, driver, source, tests, limits, ...snippet });
     if (!Array.isArray(result) || result.length !== tests.length) {
       throw new JudgeInfraError("judge worker returned an invalid visible result");
     }

@@ -16,6 +16,7 @@ import {
   type DriverKind,
   type GameJudge,
   type JudgeLimits,
+  type SnippetOptions,
   SPIKE_LIMITS,
   type SupportedLanguage,
   ValidationError,
@@ -60,6 +61,7 @@ export interface BankProblem {
   /** Bank-declared execution driver; absent falls back to snippet-for-Python/stdio (05 declares it everywhere). */
   driver?: DriverKind;
   entrypoint?: string;
+  snippets?: Partial<Record<SupportedLanguage, SnippetOptions>>;
   visible: Array<{ id: string; input: string; expected: string }>;
   hidden: Array<{ name: string; weight: number; tests: Array<{ id: string; input: string; expected: string }> }>;
   statement: { title: string; description: string; examples: Array<{ id: string; input: string; expected: string }> };
@@ -469,11 +471,12 @@ export class ArenaEngine {
         roundId: round.roundId,
         visible: problem.visible.map((t) => ({ id: t.id, input: t.input, expected: t.expected })),
         driver: problem.driver ?? driverFor(input.language as SupportedLanguage),
+        snippet: { entrypoint: problem.entrypoint, ...problem.snippets?.[input.language as SupportedLanguage] },
       };
     });
     try {
       // Visible tests only. Runs outside the match lock: the other side stays free.
-      const verdicts = await this.judge.runVisible(input.language as SupportedLanguage, setup.driver, input.code, setup.visible, this.limits);
+      const verdicts = await this.judge.runVisible(input.language as SupportedLanguage, setup.driver, input.code, setup.visible, this.limits, setup.snippet);
       await this.withMatchLock(matchId, async () => {
         const match = await this.requireMember(principal, matchId);
         const round = match.rounds.find((r) => r.roundId === setup.roundId) ?? this.currentRound(match);
