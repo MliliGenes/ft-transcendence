@@ -229,3 +229,43 @@ loopback PostgreSQL fixture with both database variables and real Docker
 cleanup enabled. Final `npm run check`, `npm run build` and whitespace checks
 passed. The two review axes, including the recovery-fixture follow-up, have
 no remaining actionable findings.
+
+
+## Applied maximum-input repair locally — 2026-10-20
+
+Verified source commit: `2039079` on `Aimane`. Only Game and Judge worker were
+rebuilt and recreated. The worker became healthy before Game was replaced.
+Nginx passed its configuration check and received a graceful reload. Compiled
+transport, resolver, engine and evaluation module hashes match the verified
+host build inside both running images. `DEV_PRINCIPAL=false` remains enforced.
+
+All mount identities, the other six service container IDs and the settings-file
+fingerprint were preserved. All eight original services are healthy. Only the
+labelled disposable, loopback-only tmpfs PostgreSQL test container was removed;
+application databases, accounts, Redis, mail and volumes were retained.
+
+Fresh certificate-validated HTTPS/WSS network proofs on the rebuilt stack:
+
+- **12/12 1v1 starter checks:** normal password login and private Lobby; all three
+  unchanged starters run with outputs 0/0/0 and the empty-array pass; completed
+  Python/C/C++ snippets pass examples; three sealed rounds score 100/100 for both
+  sides; both clients recover the completed 300–300 result.
+- **16/16 four-player 2v2 checks:** four existing owned normal QA accounts;
+  anonymous and missing-player gates; shared code, chat and ping isolation;
+  readiness invalidation/stale rejection; reconnect with code/chat intact;
+  real visible Judge execution; three sealed rounds score 100/100 for both
+  teams; all four recover the same completed 300–300 scores and outcome.
+- **6/6 deployed maximum-case checks:** from the running Game container, its
+  public worker adapter sends the 100000-element fixture through the actual
+  internal HTTP worker and Linux Docker client. C, C++ and Python each return
+  exactly 100000000000000 on visible execution and pass sealed execution.
+  Sealed results contain no input or expected fields. This does not alter the
+  application's checked bank or claim maximum-size Match UI proof.
+
+The first two proofs use validated local certificates and real account/service
+boundaries. They use network clients, not four browser windows or separate
+computers. No certificate bypass, mock principal/profile or dev identity was
+used. Local non-secret reports remain in the ignored repair workspace; QA
+credentials were neither printed nor committed. The explicit limits above,
+including aggregate worker-request capacity and external-provider/UI limits,
+remain in force. No remote push, merge or public deployment was performed.
