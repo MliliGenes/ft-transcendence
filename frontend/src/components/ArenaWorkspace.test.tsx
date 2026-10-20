@@ -34,19 +34,52 @@ async function workspace() {
   const snapshot = transport.snapshot();
   const render = () => renderToStaticMarkup(<ArenaWorkspace snapshot={snapshot} transport={transport}
     code={client.getSource()} onCode={() => {}} collab={client} />);
-  return { client, sockets, baseline, snapshot, render };
+  return { client, sockets, baseline, snapshot, render, transport };
 }
 
 describe("shared workspace acceptance", () => {
   it("pauses Run and Readiness until edits and the Match snapshot agree", async () => {
     const f = await workspace();
+    expect(f.render().match(/<button[^>]*data-arena="submit"[^>]*>/)?.[0]).not.toContain('disabled=""');
     f.client.ytext.insert(f.client.ytext.length, " edited");
+    expect(f.render().match(/<button[^>]*data-arena="submit"[^>]*>/)?.[0]).toContain('disabled=""');
     expect(f.render().match(/<button[^>]*>Run<\/button>/)?.[0]).toContain('disabled=""');
     expect(f.render().match(/<input[^>]*type="checkbox"[^>]*>/)?.[0]).toContain('disabled=""');
     f.sockets[0]!.outgoing.at(-1)!.ack({ ok: true, revision: 2 });
     expect(f.render().match(/<button[^>]*>Run<\/button>/)?.[0]).toContain('disabled=""');
     f.snapshot.docRevision = 2;
     expect(f.render().match(/<button[^>]*>Run<\/button>/)?.[0]).not.toContain('disabled=""');
+  });
+
+  it("keeps editor status text stable while normal shared edits are acknowledged", async () => {
+    const f = await workspace();
+    f.snapshot.ready = { you: false, mate: false };
+    f.snapshot.readyRevision = null;
+    const statuses = () => [...f.render().matchAll(/<p\b[^>]*role="status"[^>]*>(.*?)<\/p>/gs)]
+      .map((match) => match[1]);
+    const before = statuses();
+    const warning = () => f.render().match(/<p id="submit-warning"[^>]*>(.*?)<\/p>/s)?.[1];
+    const beforeWarning = warning();
+    expect(beforeWarning).toBeTypeOf("string");
+
+    f.client.ytext.insert(f.client.ytext.length, " typed");
+    expect(f.client.hasPendingUpdates).toBe(true);
+    expect(statuses()).toEqual(before);
+    expect(f.render().match(/<button[^>]*>Run<\/button>/)?.[0]).toContain('disabled=""');
+
+    f.sockets[0]!.outgoing.at(-1)!.ack({ ok: true, revision: 2 });
+    expect(warning()).toEqual(beforeWarning);
+    expect(f.render().match(/<button[^>]*>Run<\/button>/)?.[0]).toContain('disabled=""');
+
+    f.snapshot.docRevision = 2;
+    expect(warning()).toEqual(beforeWarning);
+    expect(f.render().match(/<button[^>]*>Run<\/button>/)?.[0]).not.toContain('disabled=""');
+    expect(f.render().match(/<button[^>]*data-arena="submit"[^>]*>/)?.[0]).toContain('disabled=""');
+
+    vi.spyOn(f.transport, "connection").mockReturnValue("offline");
+    expect(f.render()).toContain("Actions paused until current state is confirmed. Your draft is kept.");
+    expect(f.render().match(/<button[^>]*>Run<\/button>/)?.[0]).toContain('disabled=""');
+    expect(f.render().match(/<button[^>]*data-arena="submit"[^>]*>/)?.[0]).toContain('disabled=""');
   });
 
   it("shows rejected text separately from the restored editor document", async () => {

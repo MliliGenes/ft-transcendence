@@ -42,7 +42,9 @@ export function CodeWorkspace({
   // editable while offline so no draft is lost, but nothing can succeed.
   // In collab mode the shared doc replaces the draft: paused until synced.
   const sharedActionsReady = !collab || (!collab.hasPendingUpdates && collab.revision === snapshot.docRevision && collab.language === snapshot.language);
-  const connected = transport.connection() === "connected" && collabLive && sharedActionsReady;
+  // Saving a keystroke pauses commands, but is not a connection loss. Keep
+  // connection warnings stable while the shared edit is being acknowledged.
+  const connected = transport.connection() === "connected" && collabLive;
   const recoverySource = collab?.recoverySource ?? null;
   const canSubmit = canEdit && readyGate;
   // Run/Submit always read the freshest source: shared Y.Text in collab mode.
@@ -65,9 +67,9 @@ export function CodeWorkspace({
       <EditorToolbar
         language={snapshot.language}
         languages={Object.keys(snapshot.problem.starters)}
-        canEdit={canEdit && connected}
+        canEdit={canEdit && connected && sharedActionsReady}
         canSubmit={canSubmit}
-        busy={busy}
+        busy={busy || !sharedActionsReady}
         connected={connected}
         isTeam={isTeam}
         submitHint={isTeam && !readyGate ? "Team submit needs both teammates ready." : snapshot.you.status === "coding" ? "" : `You are ${snapshot.you.status}.`}
@@ -90,7 +92,7 @@ export function CodeWorkspace({
       {collab && (
         <p role="status" className="border-b border-neutral-200 px-3 py-1 font-mono text-xs text-neutral-600">
           {collab.connection() === "connected"
-            ? collab.hasPendingUpdates ? "Saving shared changes — Run and Submit are paused." : `Shared doc r${collab.revision ?? "?"} · live`
+            ? `Shared doc r${collab.revision ?? "?"} · live — actions wait for saved changes.`
             : "Shared doc reconnecting — editing paused until synced."}
         </p>
       )}
