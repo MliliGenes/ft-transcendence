@@ -116,10 +116,10 @@ Rulings on items the reviewer did not execute or judge:
 - Judge0 compatibility is proven with a local protocol fixture that runs the
   generated programs in actual isolated Docker containers. No live Judge0
   deployment, remote quotas or provider configuration was exercised.
-- The parser was checked at 10000, 50000 and 100000 elements in review. Full
-  100000-element transport/execution was not exercised. Existing Docker
-  environment-variable transport can impose a smaller practical byte limit;
-  this repair does not claim maximum-size end-to-end capacity.
+- At the October 19 checkpoint, only parser capacity had been checked at
+  10000, 50000 and 100000 elements; full maximum-size transport was unproven.
+  The subsequent review found an actual `spawn E2BIG` failure. The October 20
+  repair and maximum-size execution proof below supersede that transport limit.
 - The reviewer did not duplicate the expensive execution suites. The executor
   ran the recorded Docker, database, root and focused regression commands.
 - Browser UI and browser certificate trust were outside the agreed test seams.
@@ -171,3 +171,61 @@ all three sealed rounds at 100/100 for both teams, and fresh authenticated socke
 recovery of the same final 300–300 scores and outcome. Equal totals are not
 reported as a draw: the normal tie-break policy still applies. These were real
 HTTPS/WSS network clients, not four browser windows or separate computers.
+
+
+## Maximum-input transport and shared metadata — 2026-10-20
+
+A subsequent two-axis review found a P2 correctness issue and a P3 maintainability
+issue. A valid maximum-size Even Ledger array exceeded process argument limits
+because source and input were base64-encoded into Docker environment arguments.
+Run, accepted Submit and recovered Submit also repeated the bank metadata
+selection rule in three places.
+
+The transport now sends byte-length-framed source, current input and runner code
+through Docker stdin. The combined case payload is bounded at **8 MiB**; exact
+byte counts are checked before compilation. Expected answers and sibling inputs
+stay on the trusted side. Existing CPU, memory, process, filesystem, network,
+output and host-timeout cleanup limits are retained. The private metadata
+resolver now supplies all three Game paths with the same driver fallback and
+language-specific entrypoint/ABI precedence. Original source, hashes and
+submission/evaluation identities are unchanged.
+
+Test-first evidence: a new public Game Run/Submit regression first failed with
+`spawn E2BIG`. After the transport change it passed in real containers. The
+fixture derives from the checked FileBank record and contains 100000 alternating
+positive/negative one-billion values. Its independently worked expected answer
+is **100000000000000**. C, C++ and Python each return that exact answer and earn
+100/100 on Submit. All three also pass visible and sealed execution through a
+real authenticated HTTP worker. Multibyte source/input survives framing. A case
+over the transport cap fails as infrastructure, adds no competitive submission,
+and allows the same Match to continue once its owned bank fixture is corrected.
+
+Independent scoped follow-ups closed both findings: **Standards: 0, Spec: 0**.
+Reviewers inspected the diff and failure paths; they did not duplicate executor
+Docker/database tests. The full real-bank suite now has 19 cases, including five
+new maximum-input/transport cases; the worker starter suite has 6 cases.
+
+The worker's existing **2 MiB aggregate HTTP body limit** remains in force.
+The proven maximum-size single-case requests fit; several large cases or a large
+source plus large cases may still exceed that aggregate request limit. The 8 MiB
+case cap is not a promise of unlimited suite capacity. No live remote Judge0,
+browser UI, separate-computer, OAuth or external-email proof is added here.
+
+Verification also exposed a preexisting recovery-fixture timing conflict. The
+first full run passed the 373 Game tests but failed the service's final reconnect
+case: serial recovery took 33.55 seconds, while its injected reconnect grace was
+30 seconds. The owned test database recorded a `grace-expired` forfeit. That case
+already permitted 120 seconds for startup before clients could reconnect. Its
+injected grace now allows 150 seconds: the startup budget plus 30 seconds for
+connections. Recovery assertions, the separate 1500 ms expiry test, production
+defaults and runtime ownership are unchanged. The focused restart case passed;
+both independent reviewers approved this setup-only correction. The initial
+failed run is retained separately from the fresh full verification below.
+
+Final verification after the fixture correction, from one fresh `npm test` run:
+**804 passed, zero skipped**. Breakdown: Game 373, harness 19, model 68, auth 48,
+service 141, worker 28, frontend 125, example 2. The run used the separate owned
+loopback PostgreSQL fixture with both database variables and real Docker
+cleanup enabled. Final `npm run check`, `npm run build` and whitespace checks
+passed. The two review axes, including the recovery-fixture follow-up, have
+no remaining actionable findings.

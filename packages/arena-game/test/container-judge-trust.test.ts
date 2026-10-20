@@ -8,20 +8,26 @@ import { SPIKE_LIMITS } from "../src/judge.js";
 
 const scratchDirs: string[] = [];
 
-function fakeDocker(stdout: string, stderr = ""): { binary: string; argsLog: string } {
+function fakeDocker(stdout: string, stderr = ""): { binary: string; argsLog: string; inputLog: string } {
   const directory = mkdtempSync(join(tmpdir(), "container-judge-trust-"));
   scratchDirs.push(directory);
   const binary = join(directory, "docker-fake");
   const argsLog = join(directory, "args.jsonl");
+  const inputLog = join(directory, "inputs.jsonl");
   const script = `#!/usr/bin/env node
 const fs = require("node:fs");
 fs.appendFileSync(${JSON.stringify(argsLog)}, JSON.stringify(process.argv.slice(2)) + "\\n");
-process.stdout.write(${JSON.stringify(stdout)} + "\\n");
-process.stderr.write(${JSON.stringify(stderr)});
+const chunks = [];
+process.stdin.on("data", chunk => chunks.push(chunk));
+process.stdin.on("end", () => {
+  fs.appendFileSync(${JSON.stringify(inputLog)}, JSON.stringify(Buffer.concat(chunks).toString("utf8")) + "\\n");
+  process.stdout.write(${JSON.stringify(stdout)} + "\\n");
+  process.stderr.write(${JSON.stringify(stderr)});
+});
 `;
   writeFileSync(binary, script);
   chmodSync(binary, 0o755);
-  return { binary, argsLog };
+  return { binary, argsLog, inputLog };
 }
 
 afterEach(() => {
@@ -127,18 +133,23 @@ describe("ContainerJudge trusted boundary", () => {
       .map((line) => JSON.parse(line) as string[]);
     expect(calls).toHaveLength(2);
 
-    const encoded = (value: string) => Buffer.from(value, "utf8").toString("base64");
-    const alphaArgs = calls[0]!.join("\n");
-    const betaArgs = calls[1]!.join("\n");
-    expect(alphaArgs).toContain(encoded("INPUT_ALPHA_731"));
-    expect(alphaArgs).not.toContain(encoded("INPUT_BETA_953"));
-    expect(betaArgs).toContain(encoded("INPUT_BETA_953"));
-    expect(betaArgs).not.toContain(encoded("INPUT_ALPHA_731"));
-    for (const args of calls) {
+    const inputs = readFileSync(fake.inputLog, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string);
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0]).toContain("INPUT_ALPHA_731");
+    expect(inputs[0]).not.toContain("INPUT_BETA_953");
+    expect(inputs[1]).toContain("INPUT_BETA_953");
+    expect(inputs[1]).not.toContain("INPUT_ALPHA_731");
+    for (const [index, args] of calls.entries()) {
       const serialized = args.join("\n");
+      const payload = serialized + inputs[index];
+      for (const expected of ["EXPECTED_ALPHA_842", "EXPECTED_BETA_064"]) {
+        expect(payload).not.toContain(expected);
+        expect(payload).not.toContain(Buffer.from(expected).toString("base64"));
+      }
       expect(serialized).not.toContain("EXP=");
-      expect(serialized).not.toContain(encoded("EXPECTED_ALPHA_842"));
-      expect(serialized).not.toContain(encoded("EXPECTED_BETA_064"));
+      expect(serialized).not.toContain("INPUT_ALPHA_731");
+      expect(serialized).not.toContain("INPUT_BETA_953");
+      expect(serialized).toContain("--interactive");
       expect(serialized).toContain("none");
       expect(serialized).not.toContain("--mount");
       expect(serialized).not.toContain("--volume");

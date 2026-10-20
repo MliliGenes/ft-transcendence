@@ -22,6 +22,7 @@ import {
   ValidationError,
   assertSupportedLanguage,
 } from "./judge-types.js";
+import { resolveProblemExecution } from "./problem-execution.js";
 import type { AuthenticatedPrincipal } from "./principal.js";
 import { IllegalStateError, MatchAuthority, NotMemberError } from "./match-authority.js";
 import type { MatchPersistence } from "./persistence-types.js";
@@ -116,11 +117,6 @@ export class ExpiredError extends Error {
   }
 }
 
-function driverFor(language: SupportedLanguage): DriverKind {
-  // ponytail: bank declares no driver/entrypoint yet (05 follow-up); Python
-  // snippet convention covers the reference bank, stdio covers I/O programs.
-  return language === "Python" ? "snippet" : "stdio";
-}
 
 export class ArenaEngine {
   private readonly judge: GameJudge;
@@ -470,8 +466,7 @@ export class ArenaEngine {
         side,
         roundId: round.roundId,
         visible: problem.visible.map((t) => ({ id: t.id, input: t.input, expected: t.expected })),
-        driver: problem.driver ?? driverFor(input.language as SupportedLanguage),
-        snippet: { entrypoint: problem.entrypoint, ...problem.snippets?.[input.language as SupportedLanguage] },
+        ...resolveProblemExecution(problem, input.language as SupportedLanguage),
       };
     });
     try {

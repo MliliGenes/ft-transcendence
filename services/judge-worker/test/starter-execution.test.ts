@@ -58,6 +58,34 @@ describe("real starter execution through the Judge HTTP worker", () => {
     expect(JSON.stringify(sealed)).not.toContain('"input"');
   }, 30000);
 
+  it.each(["C", "C++", "Python"] as const)("%s executes a valid 100000-element case over HTTP without truncation", async (language) => {
+    const judge = await worker();
+    const bank = new FileBank().loadProblem("even-ledger");
+    const solution = language === "Python"
+      ? "return sum(value if index % 2 == 0 else -value for index, value in enumerate(nums))"
+      : language === "C"
+        ? "long long total = 0; for (int i = 0; i < n; ++i) total += i % 2 == 0 ? nums[i] : -nums[i]; return total;"
+        : "long long total = 0; for (unsigned int i = 0; i < nums.size(); ++i) total += i % 2 == 0 ? nums[i] : -nums[i]; return total;";
+    const source = bank.starters[language]!.replace("return 0;", solution).replace("return 0", solution);
+    const input = "nums = [" + Array.from({ length: 100000 }, (_, index) => index % 2 === 0 ? "1000000000" : "-1000000000").join(",") + "]";
+    // Fifty thousand alternating pairs contribute 2000000000 each.
+    const test = { id: "maximum-case", input, expected: "100000000000000" };
+    const options = { entrypoint: bank.entrypoint, ...bank.snippets?.[language] };
+    const run = await judge.runVisible(language, "snippet", source, [test], SPIKE_LIMITS, options);
+    expect(run).toEqual([expect.objectContaining({
+      id: test.id, status: "accepted", passed: true,
+      output: language === "Python" ? "100000000000000" : "100000000000000\n",
+    })]);
+    const sealed = await judge.evaluateSealed({
+      evaluationId: "maximum-evaluation", submissionId: "maximum-submission", problemVersionId: bank.problemVersionId,
+      hiddenSuiteId: bank.hiddenSuiteId, language, driver: "snippet", source, ...options,
+      groups: [{ name: "maximum-array", weight: 100, tests: [test] }], limits: SPIKE_LIMITS,
+    });
+    expect(sealed.groups[0]?.results).toEqual([expect.objectContaining({ id: test.id, status: "accepted", passed: true })]);
+    expect(JSON.stringify(sealed)).not.toContain('"input"');
+    expect(JSON.stringify(sealed)).not.toContain('"expected"');
+  }, 30000);
+
   it("rejects malformed compiled metadata at the authenticated HTTP seam", async () => {
     const judge = await worker();
     for (const options of [

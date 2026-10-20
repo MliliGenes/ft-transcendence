@@ -324,9 +324,10 @@ describe("reconnect/resume over real sockets + Postgres (ticket 11)", () => {
     server.kill("SIGKILL");
     await Promise.allSettled(pending);
     await new Promise((r) => setTimeout(r, 500));
-    // Long grace here: recovery itself (judge re-drive) takes longer than a
-    // short window, and this test proves exactly-once resolution, not expiry.
-    server = await boot({ DATABASE_URL: PG_URL, RECONNECT_GRACE_MS: "30000" }, 120000);
+    // Recovery can consume the full 120s startup budget before clients may
+    // reconnect. Keep a further 30s for those connections: this case proves
+    // exactly-once recovery; the dedicated 1.5s-grace case above proves expiry.
+    server = await boot({ DATABASE_URL: PG_URL, RECONNECT_GRACE_MS: "150000" }, 120000);
     // All clients reconnect after the restart (clears the fresh grace window).
     const conns = ids.flatMap((id, i) => [connectSocket(`k-a-${i}`, id), connectSocket(`k-b-${i}`, id)]);
     for (const c of conns) await c.snapshot;

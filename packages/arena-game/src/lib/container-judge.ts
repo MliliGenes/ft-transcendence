@@ -32,6 +32,8 @@ const DEFAULT_IMAGES: Record<SupportedLanguage, string> = {
   C: "gcc:14-bookworm",
 };
 
+const MAX_CASE_PAYLOAD_BYTES = 8 * 1024 * 1024;
+
 const SOURCE_FILE: Record<SupportedLanguage, string> = {
   Python: "player.py",
   "C++": "player.cpp",
@@ -296,8 +298,21 @@ export class ContainerJudge implements GameJudge {
     const image = this.images[input.language];
     const containerName = `arena-judge-${randomUUID()}`;
     const memory = `${input.limits.runMemoryMb}m`;
+    const source = Buffer.from(input.source, "utf8");
+    const caseInput = Buffer.from(input.input, "utf8");
+    const driver = Buffer.from(SNIPPET_DRIVER, "utf8");
+    if (source.length + caseInput.length + driver.length > MAX_CASE_PAYLOAD_BYTES) {
+      throw new JudgeInfraError("judge case payload exceeds transport limit");
+    }
+    // Byte-length framing keeps source/current input off argv and out of the
+    // environment. No expected answer or sibling case enters this payload.
+    const payload = Buffer.concat([
+      Buffer.from(`${source.length}\n${caseInput.length}\n${driver.length}\n`, "ascii"),
+      source, caseInput, driver,
+    ]);
     const args = [
       "run",
+      "--interactive",
       "--rm",
       "--name",
       containerName,
@@ -323,12 +338,6 @@ export class ContainerJudge implements GameJudge {
       "--user",
       "nobody",
       "-e",
-      `SRC=${Buffer.from(input.source, "utf8").toString("base64")}`,
-      "-e",
-      `INP=${Buffer.from(input.input, "utf8").toString("base64")}`,
-      "-e",
-      `DRV=${Buffer.from(SNIPPET_DRIVER, "utf8").toString("base64")}`,
-      "-e",
       `ENTRY=${input.entrypoint ?? ""}`,
       image,
       "bash",
@@ -341,7 +350,7 @@ export class ContainerJudge implements GameJudge {
     const pythonSnippet = input.language === "Python" && input.driver === "snippet";
 
     return new Promise<RawExecution>((resolve, reject) => {
-      execFile(
+      const child = execFile(
         this.dockerBin,
         args,
         { timeout: this.outerTimeoutMs, maxBuffer, killSignal: "SIGKILL" },
@@ -412,6 +421,10 @@ export class ContainerJudge implements GameJudge {
           resolve(record);
         },
       );
+      // A launch failure/host timeout can close stdin early. The exec callback
+      // owns the authoritative launch verdict and bounded container cleanup.
+      child.stdin?.on("error", () => {});
+      child.stdin?.end(payload);
     });
   }
 
@@ -427,9 +440,13 @@ export class ContainerJudge implements GameJudge {
     const prog = language === "Python" ? "python3 player.py" : "./prog";
 
     const prefix = [
-      `printf '%s' "$SRC" | base64 -d > ${file}`,
-      `printf '%s' "$INP" | base64 -d > input.txt`,
-      `printf '%s' "$DRV" | base64 -d > driver.py`,
+      "IFS= read -r SOURCE_BYTES && IFS= read -r INPUT_BYTES && IFS= read -r DRIVER_BYTES || exit 70",
+      `for LENGTH in "$SOURCE_BYTES" "$INPUT_BYTES" "$DRIVER_BYTES"; do [[ "$LENGTH" =~ ^[0-9]{1,8}$ ]] && [ "$LENGTH" -le ${MAX_CASE_PAYLOAD_BYTES} ] || exit 70; done`,
+      `[ "$((SOURCE_BYTES + INPUT_BYTES + DRIVER_BYTES))" -le ${MAX_CASE_PAYLOAD_BYTES} ] || exit 70`,
+      `head -c "$SOURCE_BYTES" > ${file}; [ "$(wc -c < ${file})" -eq "$SOURCE_BYTES" ] || exit 70`,
+      `head -c "$INPUT_BYTES" > input.txt; [ "$(wc -c < input.txt)" -eq "$INPUT_BYTES" ] || exit 70`,
+      `head -c "$DRIVER_BYTES" > driver.py; [ "$(wc -c < driver.py)" -eq "$DRIVER_BYTES" ] || exit 70`,
+      "unset SOURCE_BYTES INPUT_BYTES DRIVER_BYTES LENGTH",
       `export ENTRYPOINT="$ENTRY"`,
       "unset SRC INP DRV ENTRY",
       "emit_result() { printf '{\"status\":\"%s\",\"output_b64\":\"%s\",\"comparison_b64\":\"%s\",\"ms\":%s}\\n' \"$1\" \"$2\" \"$3\" \"$4\"; }",

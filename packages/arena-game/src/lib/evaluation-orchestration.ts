@@ -1,3 +1,4 @@
+import { resolveProblemExecution } from "./problem-execution.js";
 import type { ArenaEvent, PlayerStatus } from "arena-model";
 import type { DriverKind, GameJudge, JudgeLimits, SealedGroup, SnippetOptions, SupportedLanguage } from "./judge-types.js";
 import { JudgeInfraError } from "./judge-types.js";
@@ -225,14 +226,14 @@ export class EvaluationOrchestrator {
         throw new DuplicateError("accepted submission has a different evaluation id");
       }
       this.assertIdentity(identity, this.identityFor(record));
+      const execution = resolveProblemExecution(problem, record.language as SupportedLanguage);
       return { attached: false as const, input: {
         matchId, roundNo: input.roundNo, roundId: record.roundId, sideId: record.sideId,
         submissionId: record.submissionId, evaluationId: record.evaluationId,
         problemVersionId: record.problemVersionId, hiddenSuiteId: input.hiddenSuiteId,
         language: record.language as SupportedLanguage,
-        driver: problem.driver ?? (record.language === "Python" ? "snippet" : "stdio"),
-        entrypoint: problem.entrypoint,
-        ...problem.snippets?.[record.language as SupportedLanguage], source: record.source,
+        driver: execution.driver,
+        ...execution.snippet, source: record.source,
         groups: problem.hidden.map((group) => ({
           name: group.name, weight: group.weight,
           tests: group.tests.map((test) => ({ id: test.id, input: test.input, expected: test.expected })),
@@ -459,15 +460,15 @@ export class EvaluationOrchestrator {
   private async evaluateStoredEvaluation(stored: SubmissionRecord, hiddenSuiteId: string): Promise<SealedVerdict> {
     const problem = this.options.bank.loadProblem(stored.problemVersionId);
     const language = stored.language as SupportedLanguage;
+    const execution = resolveProblemExecution(problem, language);
     return this.evaluateSealed(stored.evaluationId, {
       evaluationId: stored.evaluationId,
       submissionId: stored.submissionId,
       problemVersionId: stored.problemVersionId,
       hiddenSuiteId,
       language,
-      driver: problem.driver ?? (language === "Python" ? "snippet" : "stdio"),
-      entrypoint: problem.entrypoint,
-      ...problem.snippets?.[language],
+      driver: execution.driver,
+      ...execution.snippet,
       source: stored.source,
       groups: problem.hidden.map((group) => ({
         name: group.name,
