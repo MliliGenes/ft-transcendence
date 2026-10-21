@@ -1,0 +1,3 @@
+VHOST: /
+QUEUE: chat.user-events
+INDEX: v2

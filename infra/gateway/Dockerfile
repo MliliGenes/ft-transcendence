@@ -13,7 +13,7 @@ COPY services ./services
 COPY frontend ./frontend
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=${VITE_API_URL}
-RUN npm ci && npm run build --workspace arena-frontend -- --base=/play/
+RUN npm ci && npm run build --workspace arena-model && npm run build --workspace arena-frontend -- --base=/play/
 
 # Auth SPA -> /usr/share/nginx/html/
 FROM node:24-alpine AS auth-build
