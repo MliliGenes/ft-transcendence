@@ -1,0 +1,288 @@
+{
+  "version": 1,
+  "apps": {
+    "visualize-repo": {
+      "mode": "local-files",
+      "root": ".agent-native/visual-docs",
+      "entry": ".agent-native/visual-docs/repo-overview",
+      "targets": [
+        {
+          "id": "auth-profile-web-src-app-jsx",
+          "name": "Account screens",
+          "kind": "area",
+          "include": [
+            "auth-profile-web/src/App.jsx"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "packages-browser-auth-src-client-js",
+          "name": "Shared browser auth",
+          "kind": "area",
+          "include": [
+            "packages/browser-auth/src/client.js"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "frontend-src-app-tsx",
+          "name": "Arena entry",
+          "kind": "area",
+          "include": [
+            "frontend/src/App.tsx"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "frontend-src-arena-socket-ts",
+          "name": "Match transport",
+          "kind": "area",
+          "include": [
+            "frontend/src/arena/socket.ts"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "services-game-src-game-game-service-ts",
+          "name": "Game process",
+          "kind": "area",
+          "include": [
+            "services/game/src/game/game.service.ts"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "services-game-src-game-game-controller-ts",
+          "name": "Match HTTP",
+          "kind": "area",
+          "include": [
+            "services/game/src/game/game.controller.ts"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "services-game-src-game-lobby-controller-ts",
+          "name": "Lobby HTTP",
+          "kind": "area",
+          "include": [
+            "services/game/src/game/lobby.controller.ts"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "packages-arena-game-src-index-ts",
+          "name": "Engine interface",
+          "kind": "area",
+          "include": [
+            "packages/arena-game/src/index.ts"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "packages-arena-model-src-index-ts",
+          "name": "Shared model",
+          "kind": "area",
+          "include": [
+            "packages/arena-model/src/index.ts"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "packages-arena-game-src-lib-postgres-store-ts",
+          "name": "Game storage",
+          "kind": "area",
+          "include": [
+            "packages/arena-game/src/lib/postgres-store.ts"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "user-service-src-auth-auth-controller-ts",
+          "name": "Auth HTTP",
+          "kind": "area",
+          "include": [
+            "user-service/src/auth/auth.controller.ts"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "user-service-prisma-schema-prisma",
+          "name": "Account schema",
+          "kind": "model",
+          "include": [
+            "user-service/prisma/schema.prisma"
+          ],
+          "blocks": [
+            "data-model",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "required-on-pr"
+        },
+        {
+          "id": "services-judge-worker-src-http-server-ts",
+          "name": "Private judge",
+          "kind": "area",
+          "include": [
+            "services/judge-worker/src/http-server.ts"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "infra-nginx-nginx-conf",
+          "name": "Gateway routing",
+          "kind": "area",
+          "include": [
+            "infra/nginx/nginx.conf"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "docker-compose-yml",
+          "name": "Deployment topology",
+          "kind": "area",
+          "include": [
+            "docker-compose.yml"
+          ],
+          "blocks": [
+            "file-tree",
+            "diagram",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "docs-42-subject-compliance-md",
+          "name": "Release evidence matrix",
+          "kind": "docs",
+          "include": [
+            "docs/42-subject-compliance.md"
+          ],
+          "blocks": [
+            "rich-text",
+            "diagram"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "frontend-src-components-codeworkspace-tsx",
+          "name": "Shared editor status",
+          "kind": "area",
+          "include": [
+            "frontend/src/components/CodeWorkspace.tsx"
+          ],
+          "blocks": [
+            "file-tree",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "frontend-src-components-arenapage-tsx",
+          "name": "Arena result routing",
+          "kind": "area",
+          "include": [
+            "frontend/src/components/ArenaPage.tsx"
+          ],
+          "blocks": [
+            "file-tree",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        },
+        {
+          "id": "frontend-src-components-matchresult-tsx",
+          "name": "Match result",
+          "kind": "area",
+          "include": [
+            "frontend/src/components/MatchResult.tsx"
+          ],
+          "blocks": [
+            "file-tree",
+            "annotated-code"
+          ],
+          "policy": "seed"
+        }
+      ],
+      "hide": [
+        "**/node_modules/**",
+        "**/.git/**",
+        "**/dist/**",
+        "**/build/**",
+        "**/.agent-native/**",
+        "**/.env",
+        "**/.env.*",
+        "**/*.pem",
+        "**/certs/**",
+        "**/.superpowers/**",
+        "**/comments.json",
+        "**/.plan-url"
+      ]
+    }
+  }
+}

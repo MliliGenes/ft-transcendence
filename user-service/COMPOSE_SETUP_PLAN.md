@@ -1,6 +1,15 @@
 # Local microservices setup plan
 
-Status: initial scaffold and environment-based superadmin bootstrap implemented in the parent `ft-transcendence/` repository root. See root `COMPOSE.md` for usage. Later services remain pending. This document is stored in `user-service/`.
+> **Historical upstream plan — not the current setup guide.** This imported
+> document describes an earlier layout with `compose.yaml`, `envs/`, `volumes/`
+> and `COMPOSE.md`. Aimane uses root `docker-compose.yml`, `.env`, named
+> database volumes and `infra/nginx/`. Use the current [README](../README.md)
+> and [local runbook](../docs/game-local-run.md). Keep existing accounts and
+> volumes; the migration/reset notes below are historical instructions.
+
+Original status: initial scaffold and environment-based superadmin bootstrap
+were implemented in the upstream repository. The checklist below records that
+checkpoint and does not describe current Aimane completion.
 
 ## Goal
 

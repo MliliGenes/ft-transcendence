@@ -16,3 +16,6 @@ infra/nginx/certs/
 .vscode
 .DS_Store
 *.swp
+
+# Local visual docs and bridge state are not application image inputs.
+.agent-native

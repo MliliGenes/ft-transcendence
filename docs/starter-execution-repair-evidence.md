@@ -268,4 +268,7 @@ computers. No certificate bypass, mock principal/profile or dev identity was
 used. Local non-secret reports remain in the ignored repair workspace; QA
 credentials were neither printed nor committed. The explicit limits above,
 including aggregate worker-request capacity and external-provider/UI limits,
-remain in force. No remote push, merge or public deployment was performed.
+remain in force. No remote push, merge or public deployment was performed at
+that local rollout checkpoint. The rollout evidence was later committed as
+`b51bb8c`. For newer frontend repairs and verification, see the
+[2026-10-22 evidence](frontend-repair-evidence.md).

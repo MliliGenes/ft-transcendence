@@ -1,0 +1,5 @@
+# Local bridge tokens, private review comments and editor state
+**/.plan-url
+**/.plan-state.json
+**/comments.json
+**/.plan-*.json
