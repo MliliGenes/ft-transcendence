@@ -1,0 +1,22 @@
+[
+  {
+    "username": "player1",
+    "email": "player1@example.com",
+    "password": "3603539046161f5f52d4"
+  },
+  {
+    "username": "player2",
+    "email": "player2@example.com",
+    "password": "286cac61f6db0b64289b"
+  },
+  {
+    "username": "player3",
+    "email": "player3@example.com",
+    "password": "148658ee075a23e74f4f"
+  },
+  {
+    "username": "player4",
+    "email": "player4@example.com",
+    "password": "d22d4906003f0094fb46"
+  }
+]
