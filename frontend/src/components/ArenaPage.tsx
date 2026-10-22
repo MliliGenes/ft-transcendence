@@ -262,6 +262,9 @@ export function ArenaPage({ transport, onAuthSignal }: { transport: ArenaTranspo
             </button>
           </>
         )}
+        {terminal && !snapshot.reveal && snapshot.matchFinal && (
+          <MatchResult reveal={null} round={snapshot.round} matchFinal={snapshot.matchFinal} />
+        )}
         {snapshot.roundPhase === "MATCH_COMPLETE" && snapshot.reveal && (
           <>
             {snapshot.remainingSeconds <= 0 ? (

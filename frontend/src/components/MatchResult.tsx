@@ -5,22 +5,25 @@ export function MatchResult({
   round,
   matchFinal,
 }: {
-  reveal: RevealView;
+  reveal: RevealView | null;
   round: number;
   matchFinal?: MatchFinalView | null;
 }) {
-  const you = matchFinal?.you ?? reveal.totals.you;
-  const opponent = matchFinal?.opponent ?? reveal.totals.opponent;
+  const totals = matchFinal ?? reveal?.totals;
+  if (!totals) return null;
+  const { you, opponent } = totals;
   const outcome =
     matchFinal?.outcome ??
-    (reveal.totals.you > reveal.totals.opponent
+    (you > opponent
       ? "You win the match."
-      : reveal.totals.you < reveal.totals.opponent
+      : you < opponent
         ? "Opponent wins the match."
         : "The match is a draw.");
   return (
     <section aria-label="Match result" className="rounded-md border border-neutral-200 bg-white px-3 py-2">
-      <h2 className="text-sm font-semibold">Match complete after {round} round{round === 1 ? "" : "s"}</h2>
+      <h2 className="text-sm font-semibold">
+        {reveal ? <>Match complete after {round} round{round === 1 ? "" : "s"}</> : "Match complete"}
+      </h2>
       <p className="font-mono text-xs text-neutral-700" role="status">
         Final — you {you} · opponent {opponent}. {outcome}
       </p>

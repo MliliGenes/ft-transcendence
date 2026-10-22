@@ -117,10 +117,14 @@ export function adaptFinal(
   const you = f.scores?.[mySide] ?? 0;
   const opponent = f.scores?.[otherId] ?? 0;
   if (f.forfeit) {
+    const outcome = f.forfeit.winner === mySide ? "You win by forfeit." : "Opponent wins by forfeit.";
+    const departure = f.forfeit.reason === "leave"
+      ? f.forfeit.loser === mySide ? "You forfeited." : "Opponent left the match."
+      : null;
     return {
       you,
       opponent,
-      outcome: f.forfeit.winner === mySide ? "You win by forfeit." : "Opponent wins by forfeit.",
+      outcome: departure ? `${outcome} ${departure}` : outcome,
     };
   }
   return {
