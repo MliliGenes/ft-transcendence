@@ -67,7 +67,6 @@ services:
 
   client:
     build: ./client
-    env_file: ./envs/client.env
     depends_on:
       - user-service
 

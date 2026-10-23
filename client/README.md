@@ -1,6 +1,15 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+## Production configuration
+
+The client currently needs no application environment variables. Its Dockerfile
+sets `NODE_ENV=production`. Browser API requests should use relative `/api/...`
+URLs through Nginx, which routes requests to the backend services.
+
+Server-side API calls, if added later, need an explicit absolute backend URL;
+relative browser URLs do not provide a server-side destination.
+
+## Local development
 
 First, run the development server:
 
