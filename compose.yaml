@@ -67,7 +67,6 @@ services:
 
   auth-profile-web:
     build: ./auth-profile-web
-    env_file: ./envs/auth-profile-web.env
     depends_on:
       - user-service
 
