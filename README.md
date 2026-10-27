@@ -208,3 +208,60 @@ The game was imported as a curated snapshot from
 agent configuration, generated graphs/builds, screenshots, result output,
 historical puzzle-game artifacts, and placeholder Core/Chat services were not
 imported. See [ADR-0014](docs/adr/0014-code-arena-extraction.md).
+
+<!-- BEGIN EGM GAME CONTRACTS -->
+## Game directory contracts
+
+### System Overview
+
+The directory contracts below follow the Elephant-Goldfish Model (EGM).
+They describe the selected Game code on Aimane: each directory's interfaces,
+invariants (rules that must stay true), and side effects (such as file writes
+or network calls).
+They were bootstrapped from bounded source scans on **2026-10-27**, at source
+`67fc6b0`. Existing setup and dated evidence above remain the current guides.
+This bootstrap did not rerun runtime tests or change application code.
+
+### Subdirectories & System Boundaries
+
+- [Arena frontend](./frontend/README.md): browser App, Lobby, editor and live
+  clients.
+- [Game packages](./packages/README.md#game-directory-contracts): engine, shared
+  model and lifecycle harness. Direct `src/` files define public package APIs.
+- [Game services](./services/README.md): HTTP/socket Game adapter and private
+  Judge worker.
+- [Infrastructure](./infra/README.md): Game ingress, gateway build and database
+  initialization boundaries.
+- [Scripts](./scripts/README.md): repository checks, manual wizard and local
+  development/probe commands, including their side effects.
+
+### Global Invariants
+
+- Game owns Match rules and scores; Judge owns execution; Arena presents server
+  state and guards player actions. Client guards do not replace server checks.
+- Production identity comes from User Service. Development/mock fixtures and
+  the lifecycle harness are separate from real-account proof.
+- Cross-package imports use supported entry points, private paths stay private,
+  and cycles are rejected by the boundary checker.
+- One Game process owns a Game database. A loss of runtime authority closes
+  admission; recovery must not replay an arbitrary mutation.
+- Contracts state sampling limits. They are navigation and maintenance aids,
+  not a complete audit or a new module-completion claim.
+
+### Global Side Effects
+
+The runtime uses HTTP/WSS, PostgreSQL, process-local collaboration/Presence and
+Team chat, browser storage and private Docker execution. Build, certificate,
+probe and startup commands also have file, process or network effects. Read
+the relevant directory contract before running them. Account/User Service,
+shared browser-auth and platform Direct Message implementation were not changed
+by this Game-only bootstrap.
+
+### System Verification
+
+Use `npm run check:repository` and `npm run lint:boundaries` for repository and
+import boundaries. Complete runtime validation remains the existing
+[manual/automated guide](./docs/manual-game-testing.md), with disposable test
+resources. The new contracts document verification targets; they do not add
+new passing results to the dated evidence above.
+<!-- END EGM GAME CONTRACTS -->
