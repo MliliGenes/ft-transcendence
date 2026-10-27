@@ -191,10 +191,15 @@ export function createArenaSidecarLifecycle(factories: SidecarFactories = defaul
     }
 
     const desiredCollabKey = scope.collabConfig ? `${scope.round}:${configKey(scope.collabConfig)}` : null;
-    if (collabKey !== desiredCollabKey) clearCollab();
+    // Removed configs retire pending work; otherwise a matching pending factory is reused.
+    if (desiredCollabKey === null || (collabKey !== desiredCollabKey && collabPending?.key !== desiredCollabKey)) {
+      clearCollab();
+    }
 
     const desiredChatKey = scope.chatConfig ? configKey(scope.chatConfig) : null;
-    if (chatKey !== desiredChatKey) clearChat();
+    if (desiredChatKey === null || (chatKey !== desiredChatKey && chatPending?.key !== desiredChatKey)) {
+      clearChat();
+    }
 
     const collabPromise = scope.collabConfig
       ? ensureCollab(scope.collabConfig, desiredCollabKey!)
