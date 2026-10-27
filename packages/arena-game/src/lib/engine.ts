@@ -543,7 +543,6 @@ export class ArenaEngine {
         submitCode = document.source;
         submitDocRevision = document.documentRevision;
       }
-      this.validateSource(submitCode);
       const submissionId = input.submissionId ?? this.uuid();
       const evaluationId = input.evaluationId ?? this.uuid();
       const sourceHash = createHash("sha256").update(submitCode, "utf8").digest("hex");
@@ -560,6 +559,9 @@ export class ArenaEngine {
         sourceHash,
         documentRevision: submitDocRevision,
         acceptPending: async (existing: SubmissionRecord | undefined) => {
+          // Accepted work keeps its original admission; identity is checked by
+          // Evaluation orchestration before this callback is reached.
+          if (!existing) this.validateSource(submitCode);
           const resumed = existing?.status === "pending";
           if (!resumed && !canSideSubmit(this.activityOf(round, side))) {
             throw new IllegalStateError(`submit rejected for side while ${this.activityOf(round, side)}`);
@@ -1230,7 +1232,7 @@ export class ArenaEngine {
 
   private validateSource(code: string): void {
     if (code.length === 0) throw new ValidationError("empty source");
-    if (code.length > this.maxSourceBytes) {
+    if (Buffer.byteLength(code, "utf8") > this.maxSourceBytes) {
       throw new ValidationError(`source exceeds ${this.maxSourceBytes} bytes`);
     }
   }
