@@ -1,4 +1,5 @@
 import { type MatchMode, type PlayerStatus, type RoundPhase } from "arena-model";
+import { monotonicNow } from "./clock.js";
 import { FIXTURE_PROBLEM, PLACEHOLDER_MARKERS } from "./fixture.js";
 import type { SubmitReceipt } from "./transport.js";
 import type { ArenaSnapshot, MatchFinalView, RevealView } from "./types.js";
@@ -55,12 +56,14 @@ export class MockMatchAuthority {
   }
 
   snapshot(): ArenaSnapshot {
+    const remainingMs = Math.max(0, MATCH_SECONDS * 1000 - (Date.now() - this.startedAt));
     return {
       mode: this.mode,
       roundPhase: this.roundPhase,
       round: this.round,
       totalRounds: 3,
-      remainingSeconds: Math.max(0, MATCH_SECONDS - Math.floor((Date.now() - this.startedAt) / 1000)),
+      remainingSeconds: Math.ceil(remainingMs / 1000),
+      clock: { remainingMs, sampledAt: monotonicNow() },
       problem: FIXTURE_PROBLEM,
       language: this.language,
       tests: this.tests.map((test) => ({ ...test })),

@@ -254,6 +254,83 @@ describe("Arena transport lifetime", () => {
   });
 });
 
+describe("authoritative snapshot refresh loop", () => {
+  it("coalesces a burst into the in-flight fetch plus one highest-revision follow-up", async () => {
+    const { client, socket } = await arena();
+    const first = deferred<ReturnType<typeof response>>();
+    const second = deferred<ReturnType<typeof response>>();
+    const fetchMock = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    vi.stubGlobal("fetch", fetchMock);
+
+    socket.server("phase.changed", { revision: 4, round: 1 });
+    socket.server("phase.changed", { revision: 3, round: 1 });
+    socket.server("player.statusChanged", { revision: 5, round: 1 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    first.resolve(response(snapshot(4)));
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    second.resolve(response(snapshot(5)));
+    await flush();
+    expect(client.snapshot().revision).toBe(5);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("skips the follow-up when the in-flight response already satisfies the highest revision", async () => {
+    const { client, socket } = await arena();
+    const first = deferred<ReturnType<typeof response>>();
+    const fetchMock = vi.fn().mockReturnValueOnce(first.promise);
+    vi.stubGlobal("fetch", fetchMock);
+
+    socket.server("phase.changed", { revision: 3, round: 1 });
+    socket.server("player.statusChanged", { revision: 4, round: 1 });
+    first.resolve(response(snapshot(6)));
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(client.snapshot().revision).toBe(6);
+  });
+
+  it("an awaited command refresh waits for the follow-up that started after the command", async () => {
+    const { client, socket } = await arena();
+    const snapshots: Array<ReturnType<typeof deferred<ReturnType<typeof response>>>> = [];
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === "POST") return Promise.resolve(response({ ok: true }));
+      const next = deferred<ReturnType<typeof response>>();
+      snapshots.push(next);
+      return next.promise;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    socket.server("phase.changed", { revision: 2, round: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    let settled = false;
+    void client.run({ code: "source", language: "Python" }).then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(settled).toBe(false);
+
+    snapshots[0]!.resolve(response(snapshot(2)));
+    await flush();
+    expect(snapshots).toHaveLength(2);
+    expect(settled).toBe(false);
+
+    snapshots[1]!.resolve(response(snapshot(3)));
+    await flush();
+    expect(settled).toBe(true);
+    expect(client.snapshot().revision).toBe(3);
+  });
+});
+
 describe("Team chat lifetime and deliberate retries", () => {
   it("coalesces joins and re-authorizes after a reconnect", async () => {
     const client = new TeamChatClient(config);

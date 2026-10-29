@@ -1,4 +1,5 @@
 import { io, type Socket } from "socket.io-client";
+import { monotonicNow } from "./clock.js";
 import { TransportSession, type ArenaTransport, type ConnectionState, type RunReceipt, type SubmitReceipt } from "./transport.js";
 import type { ArenaSnapshot, MatchFinalView, RevealView, SideView, TeamView } from "./types.js";
 
@@ -157,6 +158,23 @@ export function shouldApplyUpdate(
 }
 
 /**
+ * Merge a burst of refresh demands into one follow-up. Any untagged demand
+ * (command reconciliation) wins because it must observe post-command truth;
+ * otherwise the highest revision (then round) is retained.
+ */
+function mergeRefreshTrigger(
+  current: { revision?: number; round?: number } | undefined,
+  next: { revision?: number; round?: number } | undefined,
+): { revision?: number; round?: number } | undefined {
+  if (!current || !next) return undefined;
+  const currentRevision = current.revision ?? Number.NEGATIVE_INFINITY;
+  const nextRevision = next.revision ?? Number.NEGATIVE_INFINITY;
+  if (nextRevision > currentRevision) return next;
+  if (nextRevision < currentRevision) return current;
+  return (next.round ?? 0) > (current.round ?? 0) ? next : current;
+}
+
+/**
  * Server RevealSnapshot -> client RevealView: pick the viewer's side for the
  * round score and group breakdown; totals become you/opponent. The server
  * shape (per-side maps) is never rendered directly — passing it through
@@ -173,10 +191,11 @@ export function adaptReveal(server: ServerReveal | null, mySide: string, otherId
 }
 
 /** Server SealedSnapshot -> client ArenaSnapshot (units, side views, 2v2 teams). */
-function adapt(server: ServerSnapshot, language: string, userId: string): ArenaSnapshot {
+function adapt(server: ServerSnapshot, language: string, userId: string, sampledAt: number): ArenaSnapshot {
   const mine = server.sides[server.mySide] ?? { status: "coding" as const, submissions: 0, presence: "online" as const };
   const otherId = Object.keys(server.sides).find((k) => k !== server.mySide) ?? "right";
   const other = server.sides[otherId] ?? mine;
+  const remainingMs = Math.max(0, server.remainingMs);
   const you: SideView = { name: "You", status: mine.status, presence: mine.presence, submissions: mine.submissions };
   const opponent: SideView = { name: "Opponent", status: other.status, presence: other.presence, submissions: other.submissions };
   // 2v2: real team state (alpha = own team, beta = opponents). 1v1 keeps the
@@ -209,7 +228,8 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
     roundPhase: server.roundPhase,
     round: server.round,
     totalRounds: server.totalRounds,
-    remainingSeconds: Math.max(0, Math.ceil(server.remainingMs / 1000)),
+    remainingSeconds: Math.ceil(remainingMs / 1000),
+    clock: { remainingMs, sampledAt },
     problem: {
       ...server.problem,
       id: server.problem.id ?? server.problem.problemVersionId ?? "unknown-problem",
@@ -296,6 +316,14 @@ export class SocketArenaTransport implements ArenaTransport {
   private recovery: Promise<void> | null = null;
   private tokenRenewal: Promise<unknown> | null = null;
   private expiryRecovery: Promise<void> | null = null;
+  /** Serial authoritative-snapshot loop: one in-flight fetch + one merged demand. */
+  private refreshLoop: Promise<void> | null = null;
+  private refreshDemand: {
+    waiters: Array<{ resolve: () => void; reject: (error: unknown) => void }>;
+    trigger?: { revision?: number; round?: number };
+    lifetime: AbortController;
+  } | null = null;
+  private refreshEpoch = 0;
   /** Browser reported a network outage since the last baseline. */
   private browserOffline = false;
 
@@ -334,6 +362,11 @@ export class SocketArenaTransport implements ArenaTransport {
 
   scopeKey(): string {
     return `live:${this.socketBase}:${this.matchId}`;
+  }
+
+  /** Signed-in identity for local draft isolation. */
+  playerId(): string | null {
+    return this.userId;
   }
 
   /** Identity for the separate collaboration socket (2v2 team document). */
@@ -610,6 +643,11 @@ export class SocketArenaTransport implements ArenaTransport {
     this.reopening = false;
     this.recovery = null;
     this.expiryRecovery = null;
+    this.refreshEpoch += 1;
+    this.refreshLoop = null;
+    const pending = this.refreshDemand;
+    this.refreshDemand = null;
+    if (pending) for (const waiter of pending.waiters) waiter.reject(new Error("Arena connection cancelled"));
   }
 
   disconnect(): void {
@@ -676,14 +714,14 @@ export class SocketArenaTransport implements ArenaTransport {
   private applySnapshot(server: ServerSnapshot): boolean {
     const userId = this.userId ?? this.devUserId ?? "";
     if (!this.snap) {
-      this.snap = adapt(server, this.language, userId);
+      this.snap = adapt(server, this.language, userId, monotonicNow());
       this.appliedRevision = this.snap.revision;
       this.appliedRound = this.snap.round;
       this.lastDocRevision = this.snap.docRevision;
       return true;
     }
     if (server.revision !== undefined && server.revision < this.appliedRevision) return false;
-    this.snap = adapt(server, this.language, userId);
+    this.snap = adapt(server, this.language, userId, monotonicNow());
     this.appliedRevision = this.snap.revision;
     this.appliedRound = this.snap.round;
     this.lastDocRevision = this.snap.docRevision;
@@ -827,14 +865,62 @@ export class SocketArenaTransport implements ArenaTransport {
       trigger &&
       !shouldApplyUpdate(
         { revision: this.appliedRevision, round: this.appliedRound },
-        { revision: trigger.revision, round: trigger.round },
+        trigger,
       )
     ) {
       return;
     }
-    const snap = (await this.get("/snapshot", lifetime)) as ServerSnapshot;
-    this.assertActive(lifetime);
-    if (this.applySnapshot(snap)) this.emit();
+    await new Promise<void>((resolve, reject) => {
+      const waiter = { resolve, reject };
+      if (this.refreshDemand) {
+        this.refreshDemand.waiters.push(waiter);
+        this.refreshDemand.trigger = mergeRefreshTrigger(this.refreshDemand.trigger, trigger);
+        this.refreshDemand.lifetime = lifetime;
+        return;
+      }
+      this.refreshDemand = { waiters: [waiter], trigger, lifetime };
+      if (!this.refreshLoop) {
+        const epoch = ++this.refreshEpoch;
+        this.refreshLoop = this.runRefreshLoop(epoch);
+      }
+    });
+  }
+
+  /**
+   * Serial snapshot loop. A burst collapses into the fetch already in flight
+   * plus one merged follow-up (highest revision wins); every caller resolves
+   * only after the fetch that satisfies its demand completes. Untagged
+   * demands (commands, 409 reconciliation, renewal) always follow the
+   * in-flight fetch so a pre-command response can never masquerade as
+   * post-command truth.
+   */
+  private async runRefreshLoop(epoch: number): Promise<void> {
+    try {
+      while (this.refreshEpoch === epoch && this.refreshDemand) {
+        const demand = this.refreshDemand;
+        this.refreshDemand = null;
+        try {
+          if (
+            demand.trigger &&
+            !shouldApplyUpdate(
+              { revision: this.appliedRevision, round: this.appliedRound },
+              demand.trigger,
+            )
+          ) {
+            for (const waiter of demand.waiters) waiter.resolve();
+            continue;
+          }
+          const snap = (await this.get("/snapshot", demand.lifetime)) as ServerSnapshot;
+          this.assertActive(demand.lifetime);
+          if (this.applySnapshot(snap)) this.emit();
+          for (const waiter of demand.waiters) waiter.resolve();
+        } catch (error) {
+          for (const waiter of demand.waiters) waiter.reject(error);
+        }
+      }
+    } finally {
+      if (this.refreshEpoch === epoch) this.refreshLoop = null;
+    }
   }
 
   private submitRequest(input: { code: string; language: string; documentRevision?: number }, documentRevision: number | undefined): {

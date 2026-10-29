@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { FileBank } from "../src/judge.js";
+import { inMemoryPersistence, type MatchPersistence } from "../src/persistence.js";
 import { P100, SOLVED_PY, setup } from "./setup.js";
 
 describe("07 run path (visible tests only, independent sides)", () => {
@@ -86,5 +88,105 @@ describe("07 run path (visible tests only, independent sides)", () => {
     await expect(engine.run(left, matchId, { code: SOLVED_PY, language: "Python" })).rejects.toThrow();
     const receipt = await engine.submit(right, matchId, { code: SOLVED_PY, language: "Python" });
     expect(receipt.ok).toBe(true);
+  });
+
+  it("10. a bank setup failure leaves the side coding and the next Run succeeds", async () => {
+    const bank = new FileBank();
+    let unavailable = false;
+    const { engine, left, matchId } = await setup([], {
+      bank: {
+        loadProblem(problemVersionId: string) {
+          if (unavailable) throw new Error("bank read failed");
+          return bank.loadProblem(problemVersionId);
+        },
+      },
+    });
+    unavailable = true;
+    await expect(engine.run(left, matchId, { code: SOLVED_PY, language: "Python" })).rejects.toThrow("bank read failed");
+    unavailable = false;
+
+    expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe("coding");
+    const retried = await engine.run(left, matchId, { code: SOLVED_PY, language: "Python" });
+    expect(retried.tests.every((test) => test.passed)).toBe(true);
+  });
+
+  it("11. a settlement write failure restores coding and the next Run succeeds", async () => {
+    const base = inMemoryPersistence();
+    const persistence: MatchPersistence = Object.create(base);
+    let armed = false;
+    persistence.saveMatch = async (...args) => {
+      const match = args[0];
+      if (armed && match.rounds.some((round) => round.runTests.left !== undefined)) {
+        armed = false;
+        throw new Error("settlement write failed");
+      }
+      return base.saveMatch(...args);
+    };
+    const { engine, left, matchId } = await setup([], { persistence });
+    armed = true;
+
+    await expect(engine.run(left, matchId, { code: SOLVED_PY, language: "Python" })).rejects.toThrow("settlement write failed");
+
+    const stored = (await base.loadMatch(matchId))!;
+    expect(stored.rounds[0]!.activities.left).toBe("coding");
+    const snapshot = await engine.snapshot(left, matchId);
+    expect(snapshot.sides.left?.status).toBe("coding");
+    expect(snapshot.failures).toContain("run: settlement write failed");
+    await expect(engine.run(left, matchId, { code: SOLVED_PY, language: "Python" })).resolves.toMatchObject({ runId: expect.any(String) });
+  });
+
+  it("12. a lost settlement acknowledgement keeps the committed verdicts", async () => {
+    const base = inMemoryPersistence();
+    const persistence: MatchPersistence = Object.create(base);
+    let armed = false;
+    persistence.saveMatch = async (...args) => {
+      const match = args[0];
+      if (armed && match.rounds.some((round) => round.runTests.left !== undefined)) {
+        armed = false;
+        await base.saveMatch(...args);
+        throw new Error("settlement ack lost");
+      }
+      return base.saveMatch(...args);
+    };
+    const { engine, left, matchId } = await setup([], { persistence });
+    armed = true;
+
+    await expect(engine.run(left, matchId, { code: SOLVED_PY, language: "Python" })).rejects.toThrow("settlement ack lost");
+
+    const snapshot = await engine.snapshot(left, matchId);
+    expect(snapshot.sides.left?.status).toBe("coding");
+    expect(snapshot.tests.every((test) => test.status === "passed")).toBe(true);
+    expect(snapshot.failures).toContain("run: settlement ack lost");
+  });
+
+  it("13. failed acceptance recovery cannot unlock a newer Run for the same side", async () => {
+    const base = inMemoryPersistence();
+    const persistence: MatchPersistence = Object.create(base);
+    let fixture: Awaited<ReturnType<typeof setup>>;
+    let armed = false;
+    let queuedRun: Promise<unknown> | undefined;
+    persistence.saveMatch = async (...args) => {
+      if (armed && args[0].rounds[0]!.activities.left === "running") {
+        armed = false;
+        // This request waits on the first Run's lock, ahead of its recovery.
+        queuedRun = fixture.engine.run(fixture.left, fixture.matchId, { code: SOLVED_PY, language: "Python" });
+        throw new Error("acceptance write failed");
+      }
+      return base.saveMatch(...args);
+    };
+    fixture = await setup([], { persistence });
+    const { engine, judge, left, matchId } = fixture;
+    judge.deferNextRun();
+    armed = true;
+
+    await expect(engine.run(left, matchId, { code: SOLVED_PY, language: "Python" })).rejects.toThrow("acceptance write failed");
+
+    try {
+      expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe("running");
+      await expect(engine.run(left, matchId, { code: SOLVED_PY, language: "Python" })).rejects.toThrow("running");
+    } finally {
+      judge.releaseRun();
+      await queuedRun;
+    }
   });
 });

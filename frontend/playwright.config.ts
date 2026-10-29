@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "clock.spec.ts",
   timeout: 240000,
   expect: { timeout: 20000 },
   fullyParallel: false,

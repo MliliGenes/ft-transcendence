@@ -57,6 +57,14 @@ export interface MatchFinalView {
   outcome: string;
 }
 
+/** A server remaining-time sample anchored to the client's monotonic clock. */
+export interface ServerClockSample {
+  /** Exact remaining Match duration reported by the server. */
+  remainingMs: number;
+  /** Client monotonic timestamp captured when this snapshot was applied. */
+  sampledAt: number;
+}
+
 /**
  * SERVER/AUTHORITATIVE snapshot: everything here renders trusted server state.
  * Local UI state (font size, tabs, collapsed panes, drafts) lives in components.
@@ -66,7 +74,13 @@ export interface ArenaSnapshot {
   roundPhase: RoundPhase;
   round: number;
   totalRounds: number;
+  /**
+   * Coarse server value. Authoritative for terminal/deadline branching; the
+   * header ticks from `clock` between snapshots.
+   */
   remainingSeconds: number;
+  /** Optional server clock anchor used to render live time between snapshots. */
+  clock?: ServerClockSample | null;
   problem: ArenaProblem;
   language: string;
   tests: TestView[];

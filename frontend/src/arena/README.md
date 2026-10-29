@@ -9,6 +9,8 @@ Browser-side Arena and Lobby state, Team chat, collaborative editing, and React 
 ## Interface
 
 - [`types.ts`](./types.ts) defines `ArenaSnapshot` and lifecycle/view contracts; [`useArena.ts`](./useArena.ts) owns the React subscription.
+- [`clock.ts`](./clock.ts) anchors the live header clock to the exact server `remainingMs` sample and ticks against `performance.now()` between snapshots.
+- [`draft.ts`](./draft.ts) owns browser-local editor drafts: player + transport scope + Round/problem/language keys, memory fallback, and older-Round pruning.
 - [`TeamChatClient`](./chat.ts) handles messages, quick pings, and token renewal.
 - [`CollabClient`](./collab.ts) manages Yjs document updates, awareness, acknowledgements, and recovery state.
 - [`LobbyClient`](./lobby.ts) performs Lobby reads and commands; [`LobbySession`](./lobby-session.ts) coordinates the active Lobby view and socket hints.
@@ -31,6 +33,18 @@ Browser-side Arena and Lobby state, Team chat, collaborative editing, and React 
 
 - A transport-level socket connection is insufficient: a server snapshot
   baseline enables commands. Snapshots apply in revision order.
+- Snapshot refreshes run through one serial loop: at most one fetch is in
+  flight, a burst merges into a single follow-up with the highest revision,
+  and an awaited refresh resolves only after the fetch that satisfies its
+  demand completes. Command/409/renewal refreshes are untagged and therefore
+  always follow any pre-command in-flight fetch.
+- The header clock is live but server-anchored: the last snapshot supplies an
+  exact `remainingMs` and the client monotonic sample time. Terminal/deadline
+  branching continues to use the authoritative `remainingSeconds` value.
+- Local editor drafts are keyed by resolved player identity plus Match scope,
+  Round, problem, and language. Legacy player-less keys are ignored, blocked
+  storage degrades to a session-memory copy, and writing a newer Round prunes
+  that player/scope's older-Round keys.
 - Same-session renewal keeps the transport/client instances but uses fresh
   sockets and baselines. Renewal or HTTP 401 never replays a mutation.
 - An uncertain Submit retains its Submission/Evaluation IDs for the same

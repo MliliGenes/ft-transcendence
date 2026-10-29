@@ -5,38 +5,35 @@ import { PhaseBanner } from "./PhaseBanner.js";
 import { RoundScoreReveal } from "./RoundScoreReveal.js";
 import type { CollabClient } from "../arena/collab.js";
 import type { TeamChatClient } from "../arena/chat.js";
+import { draftScopeFor, drafts } from "../arena/draft.js";
 import { createArenaSidecarLifecycle, type LiveClientConfig } from "../arena/sidecars.js";
 import type { ArenaTransport } from "../arena/transport.js";
 import { useArena } from "../arena/useArena.js";
+import { useMatchClock } from "../arena/clock.js";
 
 const ArenaWorkspace = lazy(() =>
   import("./ArenaWorkspace.js").then(({ ArenaWorkspace: workspace }) => ({ default: workspace })),
 );
 
 /**
- * Local draft key (ticket 11 §5): server state and the unsent editor draft
- * are different things. The draft lives in this browser only, scoped to the
- * exact round/problem/language so a stale reconnect never carries round-1
- * code into round 2. Hard refresh restores it; a new device starts from the
- * starter. The server never sees the draft — only explicit Run/Submit
- * payloads leave the browser.
+ * Local draft (ticket 11 §5): server state and the unsent editor draft are
+ * different things. Drafts live in this browser only, keyed by the signed-in
+ * player plus Match scope and round/problem/language, so a stale reconnect or
+ * a shared browser can never carry another account's code forward. Hard
+ * refresh restores the draft; a new device starts from the starter. The
+ * server never sees the draft — only explicit Run/Submit payloads leave the
+ * browser.
  */
-function draftKey(transport: ArenaTransport, round: number, problem: string, language: string): string {
-  return `arena-draft:${transport.scopeKey()}:${round}:${problem}:${language}`;
-}
-
-function loadDraft(transport: ArenaTransport, round: number, problem: string, language: string): string | null {
-  try {
-    return window.localStorage.getItem(draftKey(transport, round, problem, language));
-  } catch {
-    return null;
-  }
-}
-
 export function ArenaPage({ transport, onAuthSignal }: { transport: ArenaTransport; onAuthSignal?: (listener: () => void) => () => void }) {
   const snapshot = useArena(transport);
+  const liveRemainingSeconds = useMatchClock(snapshot);
   const starter = snapshot.problem.starters[snapshot.language as "Python"] ?? "";
-  const [code, setCode] = useState(() => loadDraft(transport, snapshot.round, snapshot.problem.id, snapshot.language) ?? starter);
+  const draftScope = draftScopeFor(transport);
+  const draftPlayerId = draftScope.playerId;
+  const draftMatchKey = draftScope.scopeKey;
+  const [code, setCode] = useState(
+    () => drafts.load(draftScope, snapshot.round, snapshot.problem.id, snapshot.language) ?? starter,
+  );
   const [actionError, setActionError] = useState<string | null>(null);
   const [deadlineResultScopeKey, setDeadlineResultScopeKey] = useState<string | null>(null);
   const fixtureControls = transport.fixtureControls?.() ?? null;
@@ -150,18 +147,15 @@ export function ArenaPage({ transport, onAuthSignal }: { transport: ArenaTranspo
     // 2v2 shared doc: the server is the truth — a stale localStorage draft
     // must never overwrite it on hard refresh (§26D).
     if (collab) return;
-    setCode(loadDraft(transport, snapshot.round, snapshot.problem.id, snapshot.language) ?? starter);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transport, collab, snapshot.round, snapshot.problem.id, snapshot.language]);
+    const scope = { playerId: draftPlayerId, scopeKey: draftMatchKey };
+    setCode(drafts.load(scope, snapshot.round, snapshot.problem.id, snapshot.language) ?? starter);
+  }, [collab, draftPlayerId, draftMatchKey, snapshot.round, snapshot.problem.id, snapshot.language, starter]);
 
   useEffect(() => {
     if (collab) return;
-    try {
-      window.localStorage.setItem(draftKey(transport, snapshot.round, snapshot.problem.id, snapshot.language), code);
-    } catch {
-      // Storage full/blocked: draft stays in memory for the session.
-    }
-  }, [transport, collab, snapshot.round, snapshot.problem.id, snapshot.language, code]);
+    const scope = { playerId: draftPlayerId, scopeKey: draftMatchKey };
+    drafts.save(scope, snapshot.round, snapshot.problem.id, snapshot.language, code);
+  }, [collab, draftPlayerId, draftMatchKey, snapshot.round, snapshot.problem.id, snapshot.language, code]);
 
   function act(fn: () => Promise<unknown>): () => void {
     return () => {
@@ -175,7 +169,7 @@ export function ArenaPage({ transport, onAuthSignal }: { transport: ArenaTranspo
       <a href="#arena-main" className="sr-only focus:not-sr-only focus:absolute focus:bg-white focus:p-2">
         Skip to arena
       </a>
-      <ArenaHeader mode={snapshot.mode} remainingSeconds={snapshot.remainingSeconds} connection={transport.connection()} />
+      <ArenaHeader mode={snapshot.mode} remainingSeconds={liveRemainingSeconds} connection={transport.connection()} />
       <main id="arena-main" className="mx-auto max-w-7xl space-y-3 p-3">
         <div className="flex items-start gap-2">
           <div className="flex-1">

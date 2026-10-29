@@ -29,7 +29,8 @@ collaboration binding; the CodeWorkspace key supplies that lifetime boundary.
 - Readiness is revision bound; editing must not preserve approval of an older document.
 - ScoreReveal renders the reveal/advance path. A terminal state without a reveal renders the saved final result; a deadline with a reveal shows that reveal before the final result.
 - Leaving a Match is an explicit confirmed command. Socket disconnection is a separate lifecycle event.
-- Local draft scopes include transport, Round, problem, and language. A shared document replaces local draft restoration and persistence for that editor path.
+- Local draft scopes include player identity, transport, Round, problem, and language. A shared document replaces local draft restoration and persistence for that editor path.
+- The header ticks from the latest server clock sample between snapshots; only terminal/deadline presentation reads the coarse authoritative remaining seconds.
 
 ## Side Effects
 

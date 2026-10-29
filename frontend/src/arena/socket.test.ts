@@ -92,6 +92,42 @@ describe("SocketArenaTransport revision conflicts", () => {
     vi.unstubAllGlobals();
   });
 
+  it("anchors the live header clock to the exact server duration", async () => {
+    const serverSnapshot = {
+      mode: "1v1" as const,
+      roundPhase: "CODING" as const,
+      round: 1,
+      totalRounds: 1,
+      remainingMs: 10_000,
+      problem: { id: "problem-1", title: "Problem", description: "", examples: [] },
+      tests: [],
+      mySide: "left",
+      sides: {
+        left: { status: "coding" as const, submissions: 0, presence: "online" as const },
+        right: { status: "coding" as const, submissions: 0, presence: "online" as const },
+      },
+      reveal: null,
+      revision: 1,
+      pendingEvaluation: false,
+      final: null,
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => serverSnapshot }));
+
+    const transport = new SocketArenaTransport({ baseUrl: "http://arena.test", userId: "user-left", matchId: "match-1" });
+    const socket = new TestSocket();
+    vi.mocked(io).mockReturnValue(socket as unknown as ReturnType<typeof io>);
+    const connecting = transport.connect();
+    for (let n = 0; n < 10; n++) await Promise.resolve();
+    socket.server("snapshot", serverSnapshot);
+    await connecting;
+
+    const snap = transport.snapshot();
+    expect(snap.remainingSeconds).toBe(10);
+    expect(snap.clock?.remainingMs).toBe(10_000);
+    expect(snap.clock?.sampledAt).toEqual(expect.any(Number));
+    transport.disconnect();
+  });
+
   it("refreshes authoritative state, then rethrows without replaying the command", async () => {
     const serverSnapshot = {
       mode: "1v1" as const,

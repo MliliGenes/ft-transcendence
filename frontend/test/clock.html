@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8"><title>Mounted Match clock fixture</title></head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import { createElement, useState } from "react";
+      import { createRoot } from "react-dom/client";
+      import { useMatchClock } from "../src/arena/clock.ts";
+      import { MockArenaTransport } from "../src/arena/mock.ts";
+      import { ArenaHeader } from "../src/components/ArenaHeader.tsx";
+
+      function ClockFixture() {
+        const [snapshot, setSnapshot] = useState(() => ({
+          ...new MockArenaTransport("1v1").snapshot(),
+          remainingSeconds: 10,
+          clock: { remainingMs: 10_000, sampledAt: performance.now() },
+        }));
+        // Test-only server-sample input; production components are unchanged.
+        window.clockHarness = {
+          sample: (remainingMs) => setSnapshot((current) => ({
+            ...current,
+            remainingSeconds: Math.ceil(remainingMs / 1000),
+            clock: { remainingMs, sampledAt: performance.now() },
+          })),
+        };
+        return createElement(ArenaHeader, {
+          mode: snapshot.mode,
+          remainingSeconds: useMatchClock(snapshot),
+          connection: "connected",
+        });
+      }
+      createRoot(document.getElementById("root")).render(createElement(ClockFixture));
+    </script>
+  </body>
+</html>

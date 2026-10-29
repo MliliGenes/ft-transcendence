@@ -74,6 +74,11 @@ export interface ArenaTransport {
   /** Stable key scoping the local editor draft (match identity). */
   scopeKey(): string;
   /**
+   * Resolved signed-in player id. Optional so fixtures stay small; live
+   * transports must expose it so drafts never cross accounts.
+   */
+  playerId?(): string | null;
+  /**
    * Collaboration endpoint identity (2v2 live transport only). Absent for
    * mocks and 1v1: consumers fall back to the local controlled document.
    */

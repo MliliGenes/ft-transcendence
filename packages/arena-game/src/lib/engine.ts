@@ -136,6 +136,8 @@ export class ArenaEngine {
   private readonly listeners = new Set<(event: ArenaEvent, payload: unknown) => void>();
   private readonly eventCommand = new AsyncLocalStorage<{ matchId: string; events: Array<{ event: ArenaEvent; payload: unknown }> }>();
   private readonly runStamps = new Map<string, number[]>();
+  /** Attempt ownership prevents a failed Run from recovering a later Run. */
+  private readonly runOwners = new Map<string, symbol>();
   private readonly evaluation: EvaluationOrchestrator;
 
   private async withMatchLock<T>(matchId: string, fn: () => Promise<T>): Promise<T> {
@@ -446,30 +448,39 @@ export class ArenaEngine {
     input: { code: string; language: string },
   ): Promise<{ runId: string; tests: Array<{ id: string; passed: boolean; output: string; runtimeMs: number }> }> {
     if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
-    const setup = await this.withMatchLock(matchId, async () => {
-      const match = await this.requireMember(principal, matchId);
-      const side = this.sideOf(match, principal);
-      const round = this.currentRound(match);
-      this.requireUnexpired(match);
-      if (!canRun(match.roundPhase)) throw new IllegalStateError(`run rejected in ${match.roundPhase}`);
-      if (!canSideRun(this.activityOf(round, side))) {
-        throw new IllegalStateError(`run rejected for side while ${this.activityOf(round, side)}`);
-      }
-      assertSupportedLanguage(input.language);
-      this.validateSource(input.code);
-      this.checkRate(matchId, side);
-      const runId = this.uuid();
-      await this.setActivity(match, round, side, "running");
-      const problem = this.bank.loadProblem(round.problemVersionId);
-      return {
-        runId,
-        side,
-        roundId: round.roundId,
-        visible: problem.visible.map((t) => ({ id: t.id, input: t.input, expected: t.expected })),
-        ...resolveProblemExecution(problem, input.language as SupportedLanguage),
-      };
-    });
+    // Set only after the command clears every gate and is about to persist
+    // `running`. Earlier failures are rejected commands, not Runs to recover.
+    const recovery: { scope?: { roundId: string; side: SideId; owner: symbol } } = {};
     try {
+      const setup = await this.withMatchLock(matchId, async () => {
+        const match = await this.requireMember(principal, matchId);
+        const side = this.sideOf(match, principal);
+        const round = this.currentRound(match);
+        this.requireUnexpired(match);
+        if (!canRun(match.roundPhase)) throw new IllegalStateError(`run rejected in ${match.roundPhase}`);
+        if (!canSideRun(this.activityOf(round, side))) {
+          throw new IllegalStateError(`run rejected for side while ${this.activityOf(round, side)}`);
+        }
+        assertSupportedLanguage(input.language);
+        this.validateSource(input.code);
+        this.checkRate(matchId, side);
+        const runId = this.uuid();
+        // Resolve bank/execution metadata before persisting `running` so a
+        // bank failure cannot strand the side in a non-runnable activity.
+        const problem = this.bank.loadProblem(round.problemVersionId);
+        const execution = resolveProblemExecution(problem, input.language as SupportedLanguage);
+        const owner = Symbol("Run");
+        recovery.scope = { roundId: round.roundId, side, owner };
+        this.runOwners.set(`${matchId}:${side}`, owner);
+        await this.setActivity(match, round, side, "running");
+        return {
+          runId,
+          side,
+          roundId: round.roundId,
+          visible: problem.visible.map((t) => ({ id: t.id, input: t.input, expected: t.expected })),
+          ...execution,
+        };
+      });
       // Visible tests only. Runs outside the match lock: the other side stays free.
       const verdicts = await this.judge.runVisible(input.language as SupportedLanguage, setup.driver, input.code, setup.visible, this.limits, setup.snippet);
       await this.withMatchLock(matchId, async () => {
@@ -496,17 +507,13 @@ export class ArenaEngine {
         tests: verdicts.map((v) => ({ id: v.id, passed: v.passed, output: v.output, runtimeMs: v.runtimeMs })),
       };
     } catch (error) {
-      await this.withMatchLock(matchId, async () => {
-        const match = await this.requireMember(principal, matchId);
-        const round = match.rounds.find((r) => r.roundId === setup.roundId) ?? this.currentRound(match);
-        await this.recordFailure(match, `run: ${error instanceof Error ? error.message : String(error)}`);
-        delete round.runTests[setup.side];
-        await this.authority.saveMatch(match);
-        if (this.activityOf(round, setup.side) === "running") {
-          await this.setActivity(match, round, setup.side, "coding");
-        }
-      });
+      if (recovery.scope) await this.recoverRun(matchId, principal, recovery.scope, error);
       throw error;
+    } finally {
+      if (recovery.scope) {
+        const key = `${matchId}:${recovery.scope.side}`;
+        if (this.runOwners.get(key) === recovery.scope.owner) this.runOwners.delete(key);
+      }
     }
   }
 
@@ -718,8 +725,7 @@ export class ArenaEngine {
     if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
     return this.withRevisionRetry(matchId, async () => {
       const match = await this.requireMember(principal, matchId);
-      this.applyGraceToMatch(match);
-      await this.authority.saveMatch(match);
+      if (this.applyGraceToMatch(match)) await this.authority.saveMatch(match);
       const side = this.sideOf(match, principal);
       const round = this.currentRound(match);
       const problem = this.bank.loadProblem(round.problemVersionId);
@@ -1187,6 +1193,7 @@ export class ArenaEngine {
     this.deadlineByMatch.delete(match.id);
     for (const side of new Set(match.participants.map((participant) => participant.sideId))) {
       this.runStamps.delete(`${match.id}:${side}`);
+      this.runOwners.delete(`${match.id}:${side}`);
     }
     for (const round of match.rounds) this.teamCollaboration.destroyRound(match, round);
   }
@@ -1258,6 +1265,36 @@ export class ArenaEngine {
   private async recordFailure(match: MatchRecord, message: string): Promise<void> {
     match.failures.push(message);
     await this.authority.saveMatch(match);
+  }
+
+  /**
+   * Best-effort, single-lock normalization after a Run command fails once it
+   * may have persisted `running`. The original error remains the caller's
+   * outcome; recovery only restores the side to `coding` and records the
+   * failure. It never deletes `round.runTests`: a lost acknowledgement may
+   * mean those verdicts were already committed.
+   */
+  private async recoverRun(
+    matchId: string,
+    principal: AuthenticatedPrincipal,
+    scope: { roundId: string; side: SideId; owner: symbol },
+    error: unknown,
+  ): Promise<void> {
+    try {
+      await this.withMatchLock(matchId, async () => {
+        const match = await this.requireMember(principal, matchId);
+        if (match.roundPhase === "MATCH_COMPLETE" || match.forfeit) return;
+        const round = match.rounds.find((r) => r.roundId === scope.roundId);
+        const restoring = this.runOwners.get(`${matchId}:${scope.side}`) === scope.owner
+          && round !== undefined && this.activityOf(round, scope.side) === "running";
+        if (round && restoring) this.transitionActivity(match, round, scope.side, "coding");
+        await this.recordFailure(match, `run: ${error instanceof Error ? error.message : String(error)}`);
+        if (restoring) this.emit("player.statusChanged", { matchId, side: scope.side, status: "coding" });
+      });
+    } catch (recoveryError) {
+      // Never mask the Run failure the caller observed.
+      console.error("run recovery failed", { matchId, recoveryError });
+    }
   }
 }
 

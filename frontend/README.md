@@ -9,15 +9,16 @@ This workspace builds the React/Vite Arena browser application. Production play 
 ## Interface
 
 - [`src`](./src/README.md) contains the application entry point, Arena/Lobby clients, and screen/editor composition.
-- [`package.json`](./package.json) exposes `dev`, `build`, `preview`, `test`, `test:e2e`, `typecheck`, and `lint` scripts for the `arena-frontend` workspace.
+- [`package.json`](./package.json) exposes `dev`, `build`, `preview`, `test`, `test:e2e`, `test:clock`, `typecheck`, and `lint` scripts for the `arena-frontend` workspace.
 - [`vite.config.ts`](./vite.config.ts) configures React/Tailwind and the Vite server/build; [`index.html`](./index.html) loads the browser entry.
 - [`playwright.config.ts`](./playwright.config.ts) configures the separate browser suite in `e2e` against an independently started server.
+- [`playwright.clock.config.ts`](./playwright.clock.config.ts) runs only the mounted clock fixture, starting its own Vite server on port 4187 without Game, Account, or database services.
 
 ## Invariants
 
 - Vite's configured development port is 5173 and no development proxy is declared.
 - The unit script runs Vitest with `e2e` excluded; unit completion does not establish browser acceptance.
-- Playwright runs with one worker. `E2E_WEB_URL` chooses the server target, defaulting to port 4173; no Playwright `webServer` launcher is configured.
+- The service-backed Playwright suite runs with one worker. `E2E_WEB_URL` chooses its server target, defaulting to port 4173; that configuration has no `webServer` launcher and excludes the standalone clock fixture.
 - Production identity comes from the real authenticated profile. Development query identity and mock transports do not establish production authentication behavior.
 - Package dependencies must use supported public entry points, as required by the repository's package boundary rules.
 
@@ -39,11 +40,12 @@ Run these commands from the repository root with Node 22:
 npm ci
 npm run build:packages
 npm test --workspace arena-frontend
+npm run test:clock --workspace arena-frontend
 npm run typecheck --workspace arena-frontend
 npm run build --workspace arena-frontend
 ```
 
-For browser tests, select the specific fixture, independently started server, and relevant test files using [manual game testing](../docs/manual-game-testing.md). The suite does not launch its own server; a blanket run is not a substitute for choosing compatible fixtures.
+For service-backed browser tests, select the specific fixture, independently started server, and relevant test files using [manual game testing](../docs/manual-game-testing.md). That suite does not launch its own server; a blanket run is not a substitute for choosing compatible fixtures. The separate `test:clock` target needs the installed Playwright Chromium browser and starts/stops its own server. It checks idle countdown, zero clamping, fresh server samples, and elapsed time after suspended timer callbacks.
 
 The direct build/browser configuration was fully reviewed; application, client, and component coverage is bounded as recorded in the child contracts. No runtime tests were run for this documentation.
 

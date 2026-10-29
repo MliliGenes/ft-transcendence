@@ -34,6 +34,10 @@ export class MockArenaTransport implements ArenaTransport {
     return `mock:${this.authority.snapshot().mode}`;
   }
 
+  playerId(): string {
+    return "fixture-player";
+  }
+
   snapshot(): ArenaSnapshot {
     return this.authority.snapshot();
   }

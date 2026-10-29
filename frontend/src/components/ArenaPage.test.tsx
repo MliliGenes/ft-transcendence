@@ -77,6 +77,18 @@ describe("ArenaPage terminal presentation", () => {
     expect(html).toContain(">Try again</button>");
   });
 
+  it("ticks the header from the server clock sample rather than the coarse seconds", () => {
+    const snapshot = {
+      ...terminalSnapshot(60),
+      roundPhase: "CODING" as const,
+      reveal: null,
+      matchFinal: null,
+      clock: { remainingMs: 5_000, sampledAt: performance.now() },
+    };
+    const html = renderToStaticMarkup(<ArenaPage transport={transportFor(snapshot)} />);
+    expect(html).toContain('aria-label="Match clock, 00:05 remaining"');
+  });
+
   it("shows an expired Match Reveal before exposing its final result", () => {
     const html = renderToStaticMarkup(<ArenaPage transport={transportFor(terminalSnapshot(0))} />);
 

@@ -52,8 +52,16 @@ Source reference: Aimane `67fc6b0`, checked 2026-10-27.
 - Run defaults to 10 requests per 60 seconds per Match-side; Run never counts a
   score. The default 1v1 reconnect grace is 90 seconds. The current 2v2 path has
   no grace-expiry forfeit; deliberate Leave causes an immediate forfeit.
+- Run resolves the bank problem and execution metadata before persisting the
+  side as `running`. A failure while persisting acceptance, judging, or settling
+  re-enters the lock once, restores `coding` only while the same Run attempt
+  still owns the side's `running` activity, records the failure, and leaves prior `runTests` verdicts intact;
+  the original Run error remains the caller-visible outcome.
 - Recovery retains the accepted evaluation identities and configured Judge.
   Use the existing attempt IDs instead of creating a new attempt on a retry.
+- Snapshot reads apply reconnect grace under the Match lock and use the
+  idempotent revision retry. The snapshot persists only when grace changed the
+  Match; an unchanged snapshot neither writes nor advances the revision.
 
 ### Evaluation and retry identity
 
