@@ -2,9 +2,10 @@
 // only a credential-free logout intent is persisted across app instances.
 import { ApiError, changedSession, createAuthApi } from './lib/api.js';
 import { createMemorySession } from './lib/session.js';
-import { SIGNED_IN, SIGNED_OUT, TOKEN_RENEWED, createControl, requireChannel, requireLocks } from './lib/coordination.js';
+import { createControl, requireChannel, requireLocks } from './lib/coordination.js';
 import { createClientState } from './lib/client-state.js';
 import { createClientFetch } from './lib/client-fetch.js';
+import { createControlCoordinator } from './lib/control-channel.js';
 export { ApiError, createAuthApi, createMemorySession };
 export { SIGNED_IN, SIGNED_OUT, TOKEN_RENEWED, DEFAULT_CHANNEL_NAME } from './lib/coordination.js';
 
@@ -29,7 +30,7 @@ export function createBrowserAuthClient({ apiBase, fetchImpl = fetch, locks, cha
     store,
     api,
     isActive: () => !disposed,
-    onTokenRenewed: () => control.post(TOKEN_RENEWED),
+    onTokenRenewed: () => coordinator.postTokenRenewed(),
   });
 
   const assertCurrent = (generation) => checkCurrent(store, generation, disposed);
@@ -82,7 +83,7 @@ export function createBrowserAuthClient({ apiBase, fetchImpl = fetch, locks, cha
       state.mapError(error);
       throw state.normalizeError(error);
     }
-    return state.toAuthenticated(me, () => control.post(SIGNED_IN));
+    return state.toAuthenticated(me, () => coordinator.postSignedIn());
   }
 
   async function logout() {
@@ -90,7 +91,7 @@ export function createBrowserAuthClient({ apiBase, fetchImpl = fetch, locks, cha
     const marker = api.markLogoutPending();
     store.clear();
     const generation = store.generation();
-    state.toAnonymous(() => control.post(SIGNED_OUT));
+    state.toAnonymous(() => coordinator.postSignedOut());
     let serverConfirmed = false;
     try { await api.logoutRequest(marker); serverConfirmed = true; } catch { /* Keep the shared intent until a confirmed logout or deliberate login. */ }
     state.emitIfCurrent(generation);
@@ -106,29 +107,15 @@ export function createBrowserAuthClient({ apiBase, fetchImpl = fetch, locks, cha
     isDisposed: () => disposed,
   });
 
-  const stopControl = control.subscribe((message) => {
-    if (disposed) return;
-    if (message === SIGNED_OUT) {
-      store.clear();
-      state.toAnonymous();
-      return;
-    }
-    if (message === SIGNED_IN) {
-      store.clear();
-      state.toLoading();
-      void restore(true).catch(() => {});
-      return;
-    }
-    if (message === TOKEN_RENEWED && store.read()) {
-      const generation = store.generation();
-      void loadProfile(api, assertCurrent, generation).then((me) => {
-        assertCurrent(generation);
-        state.toAuthenticated(me);
-      }).catch((error) => {
-        if (disposed || store.generation() !== generation || error?.code === 'SESSION_CHANGED') return;
-        if (error?.status === 401 || error?.code === 'SESSION_EXPIRED') void restore(true).catch(() => {});
-      });
-    }
+  const coordinator = createControlCoordinator({
+    control,
+    store,
+    state,
+    api,
+    loadProfile,
+    assertCurrent,
+    restore,
+    isActive: () => !disposed,
   });
 
   return {
@@ -141,7 +128,7 @@ export function createBrowserAuthClient({ apiBase, fetchImpl = fetch, locks, cha
     fetch: clientFetch,
     dispose() {
       disposed = true;
-      stopControl();
+      coordinator.dispose();
       state.dispose();
     },
   };
