@@ -73,6 +73,22 @@ function encodeRemoteCursor(clientId: number, clock: number, state: unknown): Ui
   return new Uint8Array(out);
 }
 
+function toRelativePositions(
+  ytext: Y.Text,
+  anchor: number | null,
+  head: number | null,
+): { anchor: Y.RelativePosition | null; head: Y.RelativePosition | null } | null {
+  if (typeof anchor !== "number" || typeof head !== "number") return null;
+  try {
+    return {
+      anchor: Y.createRelativePositionFromTypeIndex(ytext, anchor),
+      head: Y.createRelativePositionFromTypeIndex(ytext, head),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Collaboration provider (ticket 15): owns ONE Y.Doc bound to the team
  * Y.Text via y-codemirror.next (see EditorAdapter collab mode), syncing
@@ -162,39 +178,60 @@ export class CollabClient {
     this.lastError = "Edit confirmation was lost. Your text is available below.";
   }
 
+  private handleDocUpdateFailure(error: Error | null): void {
+    this.saveRecovery();
+    this.resetOnSync = true;
+    this.lastError = error
+      ? "Edit confirmation was lost. Your text is available below."
+      : "The edit was not saved. Your text is available below.";
+    this.stopSocket();
+    this.setConn("reconnecting");
+    void this.connect().catch(() => {});
+  }
+
+  private handleDocUpdateAck(
+    sock: Socket,
+    lifetime: AbortController,
+    pending: symbol,
+    error: Error | null,
+    result?: { ok: boolean; revision?: number; error?: string },
+  ): void {
+    if (this.socket !== sock || lifetime.signal.aborted) return;
+    this.pendingUpdates.delete(pending);
+    if (error || !result?.ok || !Number.isSafeInteger(result.revision) || result.revision! < 1) {
+      this.handleDocUpdateFailure(error);
+      return;
+    }
+    this.revision = Math.max(this.revision ?? 0, result.revision!);
+    this.emit();
+  }
+
+  private handleLocalDocUpdate(doc: Y.Doc, update: Uint8Array): void {
+    if (this.applyingRemote || doc !== this.doc) return;
+    const sock = this.socket;
+    const lifetime = this.lifetime;
+    if (!sock || !lifetime || this.conn !== "connected" || !this.roundId) {
+      if (this.resetOnSync) this.saveRecovery();
+      return;
+    }
+    const pending = Symbol();
+    this.pendingUpdates.add(pending);
+    this.emit();
+    sock.timeout(5_000).emit(
+      "update",
+      { roundId: this.roundId, updateB64: bytesToB64(update) },
+      (error: Error | null, result?: { ok: boolean; revision?: number; error?: string }) => {
+        this.handleDocUpdateAck(sock, lifetime, pending, error, result);
+      },
+    );
+  }
+
   private bindDocument(): void {
     const doc = this.doc;
     this.awareness.setLocalStateField("user", {
       name: this.options.displayName, color: colorForUser(this.options.userId),
     });
-    doc.on("update", (update: Uint8Array) => {
-      if (this.applyingRemote || doc !== this.doc) return;
-      const sock = this.socket;
-      const lifetime = this.lifetime;
-      if (!sock || !lifetime || this.conn !== "connected" || !this.roundId) {
-        if (this.resetOnSync) this.saveRecovery();
-        return;
-      }
-      const pending = Symbol();
-      this.pendingUpdates.add(pending);
-      this.emit();
-      sock.timeout(5_000).emit("update", { roundId: this.roundId, updateB64: bytesToB64(update) },
-        (error: Error | null, result?: { ok: boolean; revision?: number; error?: string }) => {
-          if (this.socket !== sock || lifetime.signal.aborted) return;
-          this.pendingUpdates.delete(pending);
-          if (error || !result?.ok || !Number.isSafeInteger(result.revision) || result.revision! < 1) {
-            this.saveRecovery();
-            this.resetOnSync = true;
-            this.lastError = error ? "Edit confirmation was lost. Your text is available below." : "The edit was not saved. Your text is available below.";
-            this.stopSocket();
-            this.setConn("reconnecting");
-            void this.connect().catch(() => {});
-            return;
-          }
-          this.revision = Math.max(this.revision ?? 0, result.revision!);
-          this.emit();
-        });
-    });
+    doc.on("update", (update: Uint8Array) => this.handleLocalDocUpdate(doc, update));
   }
 
   private replaceDocument(): void {
@@ -225,11 +262,19 @@ export class CollabClient {
     return this.connect();
   }
 
+  private shouldReconcile(revision: number | null, language: string): boolean {
+    if (this.disposed || this.connecting || this.conn !== "connected" || this.hasPendingUpdates || revision === null) {
+      return false;
+    }
+    if (this.revision !== null && revision < this.revision) {
+      return false;
+    }
+    return revision !== this.revision || language !== this.language;
+  }
+
   /** A changed language or a missed accepted frame requires a fresh document baseline. */
   async reconcile(revision: number | null, language: string): Promise<void> {
-    if (this.disposed || this.connecting || this.conn !== "connected" || this.hasPendingUpdates || revision === null) return;
-    if (this.revision !== null && revision < this.revision) return;
-    if (revision === this.revision && language === this.language) return;
+    if (!this.shouldReconcile(revision, language)) return;
     this.resetOnSync = true;
     this.stopSocket();
     await this.connect();
@@ -275,6 +320,14 @@ export class CollabClient {
     }
   }
 
+  private nextPeerClock(clientId: number): number {
+    const metaClock = this.awareness.meta.get(clientId)?.clock ?? 0;
+    const localClock = this.peerClocks.get(clientId) ?? 0;
+    const clock = Math.max(metaClock, localClock) + 1;
+    this.peerClocks.set(clientId, clock);
+    return clock;
+  }
+
   /**
    * Applies a teammate cursor into the awareness store (never the document).
    * y-codemirror.next renders remote selections from Y RELATIVE positions,
@@ -284,21 +337,8 @@ export class CollabClient {
   applyPeerCursor(cursor: PeerCursor): void {
     if (cursor.clientId === null || cursor.clientId === this.doc.clientID) return;
     if (cursor.userId) this.peerIds.set(cursor.userId, cursor.clientId);
-    const metaClock = this.awareness.meta.get(cursor.clientId)?.clock ?? 0;
-    const localClock = this.peerClocks.get(cursor.clientId) ?? 0;
-    const clock = Math.max(metaClock, localClock) + 1;
-    this.peerClocks.set(cursor.clientId, clock);
-    let rel: { anchor: Y.RelativePosition | null; head: Y.RelativePosition | null } | null = null;
-    if (typeof cursor.anchor === "number" && typeof cursor.head === "number") {
-      try {
-        rel = {
-          anchor: Y.createRelativePositionFromTypeIndex(this.ytext, cursor.anchor),
-          head: Y.createRelativePositionFromTypeIndex(this.ytext, cursor.head),
-        };
-      } catch {
-        rel = null;
-      }
-    }
+    const clock = this.nextPeerClock(cursor.clientId);
+    const rel = toRelativePositions(this.ytext, cursor.anchor, cursor.head);
     applyAwarenessUpdate(
       this.awareness,
       encodeRemoteCursor(cursor.clientId, clock, {
@@ -324,17 +364,7 @@ export class CollabClient {
    * binding rewrites it the same way); the socket carries plain offsets.
    */
   setLocalCursor(anchor: number | null, head: number | null): void {
-    let rel: { anchor: Y.RelativePosition | null; head: Y.RelativePosition | null } | null = null;
-    if (anchor !== null && head !== null) {
-      try {
-        rel = {
-          anchor: Y.createRelativePositionFromTypeIndex(this.ytext, anchor),
-          head: Y.createRelativePositionFromTypeIndex(this.ytext, head),
-        };
-      } catch {
-        rel = null;
-      }
-    }
+    const rel = toRelativePositions(this.ytext, anchor, head);
     this.awareness.setLocalStateField("cursor", rel);
     const sock = this.socket;
     if (!sock || this.conn !== "connected") return;
@@ -376,21 +406,20 @@ export class CollabClient {
     this.emit();
   }
 
-  connect(): Promise<CollabSyncPayload> {
-    if (this.disposed) return Promise.reject(new Error("Collaboration client is disposed"));
-    if (this.connecting) return this.connecting;
-    if (this.conn === "connected" && this.socket?.connected && this.baseline) return Promise.resolve(this.baseline);
-    this.stopSocket();
-    const lifetime = new AbortController();
-    this.lifetime = lifetime;
-    this.setConn("connecting");
-    const sock = io(`${this.options.baseUrl}/collab`, {
+  private isSocketActive(sock: Socket, lifetime: AbortController): boolean {
+    return this.socket === sock && !lifetime.signal.aborted;
+  }
+
+  private createSocket(): Socket {
+    return io(`${this.options.baseUrl}/collab`, {
       auth: this.collabAuth(),
       forceNew: true,
       autoConnect: false,
     });
-    this.socket = sock;
-    const active = () => this.socket === sock && !lifetime.signal.aborted;
+  }
+
+  private bindSocketListeners(sock: Socket, lifetime: AbortController): void {
+    const active = () => this.isSocketActive(sock, lifetime);
     sock.on("sync", (sync: CollabSyncPayload) => {
       if (!active()) return;
       this.applySync(sync);
@@ -409,12 +438,18 @@ export class CollabClient {
       if (active() && p && typeof p.userId === "string") this.removePeer(p.userId);
     });
     sock.on("disconnect", () => {
-      if (active()) { this.captureUnconfirmed(); this.setConn("reconnecting"); }
+      if (active()) {
+        this.captureUnconfirmed();
+        this.setConn("reconnecting");
+      }
     });
     sock.on("connect_error", () => {
       if (active()) this.setConn("reconnecting");
     });
-    const wait = new Promise<CollabSyncPayload>((resolve, reject) => {
+  }
+
+  private awaitSync(sock: Socket, lifetime: AbortController): Promise<CollabSyncPayload> {
+    return new Promise<CollabSyncPayload>((resolve, reject) => {
       const finish = (error?: Error, sync?: CollabSyncPayload) => {
         clearTimeout(timer);
         sock.off("sync", synced);
@@ -431,21 +466,40 @@ export class CollabClient {
       const denied = () => finish(new Error("Collaboration room refused"));
       const cancelled = () => finish(new Error("Collaboration connection cancelled"));
       const timer = setTimeout(() => finish(new Error("Collaboration connection timed out")), 10_000);
+
       sock.once("sync", synced);
       sock.on("connect_error", failed);
       sock.once("disconnect", denied);
       lifetime.signal.addEventListener("abort", cancelled, { once: true });
     });
-    const connecting = wait.catch((error: Error) => {
-      if (active()) {
-        this.stopSocket();
-        this.lastError = error.message;
-        this.setConn("offline");
-      }
-      throw error;
-    }).finally(() => {
-      if (this.connecting === connecting) this.connecting = null;
-    });
+  }
+
+  connect(): Promise<CollabSyncPayload> {
+    if (this.disposed) return Promise.reject(new Error("Collaboration client is disposed"));
+    if (this.connecting) return this.connecting;
+    if (this.conn === "connected" && this.socket?.connected && this.baseline) return Promise.resolve(this.baseline);
+    this.stopSocket();
+    const lifetime = new AbortController();
+    this.lifetime = lifetime;
+    this.setConn("connecting");
+
+    const sock = this.createSocket();
+    this.socket = sock;
+    this.bindSocketListeners(sock, lifetime);
+
+    const connecting = this.awaitSync(sock, lifetime)
+      .catch((error: Error) => {
+        if (this.isSocketActive(sock, lifetime)) {
+          this.stopSocket();
+          this.lastError = error.message;
+          this.setConn("offline");
+        }
+        throw error;
+      })
+      .finally(() => {
+        if (this.connecting === connecting) this.connecting = null;
+      });
+
     this.connecting = connecting;
     sock.connect();
     return connecting;
