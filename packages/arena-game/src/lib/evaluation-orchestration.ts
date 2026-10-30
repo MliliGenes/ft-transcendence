@@ -289,6 +289,28 @@ export class EvaluationOrchestrator {
       || request.evaluationId !== undefined && request.evaluationId.trim() === "") {
       throw new DuplicateError("evaluation id is already bound to different submission data");
     }
+    const existing = await this.findRetrySubmission(request);
+    if (!existing) return undefined;
+    this.assertRetryOwnership(matchId, request, existing);
+    const round = roundContext(existing);
+    const language = this.validateRetrySource(request, existing);
+    this.assertRetryRevision(request, existing, round.liveWindow);
+    return {
+      matchId,
+      ...round,
+      roundId: existing.roundId,
+      sideId: existing.sideId,
+      submissionId: existing.submissionId,
+      evaluationId: existing.evaluationId,
+      problemVersionId: existing.problemVersionId,
+      language,
+      sourceHash: existing.sourceHash,
+      documentRevision: existing.documentRevision ?? null,
+      acceptPending: async () => existing,
+    };
+  }
+
+  private async findRetrySubmission(request: EvaluationRetryRequest): Promise<SubmissionRecord | undefined> {
     const byEvaluation = request.evaluationId !== undefined
       ? await this.options.persistence.findSubmissionByEvaluationId(request.evaluationId)
       : undefined;
@@ -298,8 +320,10 @@ export class EvaluationOrchestrator {
     if (byEvaluation && bySubmission && byEvaluation.submissionId !== bySubmission.submissionId) {
       throw new DuplicateError("evaluation id is already bound to different submission data");
     }
-    const existing = byEvaluation ?? bySubmission;
-    if (!existing) return undefined;
+    return byEvaluation ?? bySubmission;
+  }
+
+  private assertRetryOwnership(matchId: string, request: EvaluationRetryRequest, existing: SubmissionRecord): void {
     if (existing.matchId !== matchId) {
       throw new DuplicateError("evaluation request does not belong to this Match command");
     }
@@ -308,7 +332,9 @@ export class EvaluationOrchestrator {
       || request.evaluationId !== undefined && existing.evaluationId !== request.evaluationId) {
       throw new DuplicateError("evaluation id is already bound to different submission data");
     }
-    const round = roundContext(existing);
+  }
+
+  private validateRetrySource(request: EvaluationRetryRequest, existing: SubmissionRecord): EvaluationSubmission["language"] {
     assertSupportedLanguage(request.language);
     if (request.language !== existing.language) {
       throw new DuplicateError("evaluation id is already bound to different submission data");
@@ -319,24 +345,15 @@ export class EvaluationOrchestrator {
         throw new DuplicateError("evaluation id is already bound to different submission data");
       }
     }
+    return request.language;
+  }
+
+  private assertRetryRevision(request: EvaluationRetryRequest, existing: SubmissionRecord, liveWindow: boolean): void {
     // Team retries identify the server's frozen Y.Doc revision, not raw client code.
     if (request.documentRevision !== undefined && request.documentRevision !== (existing.documentRevision ?? undefined)
-      || request.mode === "2v2" && !round.liveWindow && request.documentRevision === undefined) {
+      || request.mode === "2v2" && !liveWindow && request.documentRevision === undefined) {
       throw new DuplicateError("evaluation id is already bound to different submission data");
     }
-    return {
-      matchId,
-      ...round,
-      roundId: existing.roundId,
-      sideId: existing.sideId,
-      submissionId: existing.submissionId,
-      evaluationId: existing.evaluationId,
-      problemVersionId: existing.problemVersionId,
-      language: request.language,
-      sourceHash: existing.sourceHash,
-      documentRevision: existing.documentRevision ?? null,
-      acceptPending: async () => existing,
-    };
   }
 
   private assertIdentity(expected: EvaluationIdentity, actual: EvaluationIdentity): void {

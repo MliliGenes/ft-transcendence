@@ -514,7 +514,7 @@ describe("Receipt recovery after Reveal (#6)", () => {
     await expect(engine.snapshot(left, matchId)).resolves.toEqual(before);
   });
 
-  it("rejects explicit empty identifiers and accepts retries with one identifier", async () => {
+  it.each(["", " ", "\t\n"])("rejects blank identifiers (%j) and accepts retries with one identifier", async (blank) => {
     const { engine, left, matchId } = await setup([{ score: 100 }]);
     const valid = {
       code: SOLVED_PY,
@@ -530,7 +530,7 @@ describe("Receipt recovery after Reveal (#6)", () => {
     await expect(
       engine.submit(left, matchId, {
         ...valid,
-        evaluationId: "",
+        evaluationId: blank,
       }),
     ).rejects.toBeInstanceOf(DuplicateError);
 
@@ -538,7 +538,7 @@ describe("Receipt recovery after Reveal (#6)", () => {
     await expect(
       engine.submit(left, matchId, {
         ...valid,
-        submissionId: "",
+        submissionId: blank,
       }),
     ).rejects.toBeInstanceOf(DuplicateError);
 
@@ -547,14 +547,14 @@ describe("Receipt recovery after Reveal (#6)", () => {
       engine.submit(left, matchId, {
         code: SOLVED_PY,
         language: "Python",
-        submissionId: "",
+        submissionId: blank,
       }),
     ).rejects.toBeInstanceOf(DuplicateError);
     await expect(
       engine.submit(left, matchId, {
         code: SOLVED_PY,
         language: "Python",
-        evaluationId: "",
+        evaluationId: blank,
       }),
     ).rejects.toBeInstanceOf(DuplicateError);
 
