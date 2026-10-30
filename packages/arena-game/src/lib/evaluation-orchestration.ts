@@ -1,7 +1,8 @@
+import { createHash } from "node:crypto";
 import { resolveProblemExecution } from "./problem-execution.js";
 import type { ArenaEvent, PlayerStatus } from "arena-model";
 import type { DriverKind, GameJudge, JudgeLimits, SealedGroup, SnippetOptions, SupportedLanguage } from "./judge-types.js";
-import { JudgeInfraError } from "./judge-types.js";
+import { assertSupportedLanguage, JudgeInfraError } from "./judge-types.js";
 import { DuplicateError } from "./store.js";
 import { IllegalStateError } from "./match-authority.js";
 import type { EvaluationClaim, MatchPersistence } from "./persistence-types.js";
@@ -118,8 +119,30 @@ export interface EvaluationSubmission extends EvaluationIdentity {
   evaluationId: string;
   roundNo: number;
   hiddenSuiteId: string;
+  liveWindow?: boolean;
   acceptPending(existing: SubmissionRecord | undefined): Promise<SubmissionRecord>;
 }
+
+interface EvaluationRetryRequest {
+  mode: MatchRecord["mode"];
+  sideId: SideId;
+  code: string;
+  language: string;
+  submissionId?: string;
+  evaluationId?: string;
+  documentRevision?: DocumentRevision;
+}
+
+interface EvaluationRetryRound {
+  roundNo: number;
+  hiddenSuiteId: string;
+  liveWindow: boolean;
+}
+
+type EvaluationRetryLookup = (
+  request: EvaluationRetryRequest,
+  roundContext: (record: SubmissionRecord) => EvaluationRetryRound,
+) => Promise<EvaluationSubmission | undefined>;
 
 export interface EvaluationReceipt {
   ok: true;
@@ -194,11 +217,11 @@ export class EvaluationOrchestrator {
   /** Authorize/accept under a short command lock, then complete outside it. */
   async submit(
     matchId: string,
-    prepare: () => Promise<EvaluationSubmission>,
+    prepare: (recoverRetry: EvaluationRetryLookup) => Promise<EvaluationSubmission>,
   ): Promise<EvaluationReceipt> {
     let owned: { evaluationId: string; tracked: InFlightEvaluation } | undefined;
     const setup = await this.options.host.withMatchLock(matchId, async () => {
-      const input = await prepare();
+      const input = await prepare((request, roundContext) => this.prepareRetry(matchId, request, roundContext));
       const identity = this.identityFor(input);
       if (identity.matchId !== matchId) {
         throw new DuplicateError("evaluation request does not belong to this Match command");
@@ -220,6 +243,9 @@ export class EvaluationOrchestrator {
         }
         this.inFlight.settle(input.evaluationId, tracked, { ok: true });
         return { attached: true as const, roundNo: input.roundNo, evaluationId: input.evaluationId };
+      }
+      if (existing && existing.status === "pending" && input.liveWindow === false) {
+        throw new IllegalStateError("evaluation is still pending recovery");
       }
       const record = await input.acceptPending(existing);
       if (record.evaluationId !== input.evaluationId) {
@@ -252,6 +278,65 @@ export class EvaluationOrchestrator {
     }
     const stored = await this.storedSubmission(setup.evaluationId);
     return { ok: true, round: setup.roundNo, submissionId: stored.submissionId, evaluationId: setup.evaluationId };
+  }
+
+  private async prepareRetry(
+    matchId: string,
+    request: EvaluationRetryRequest,
+    roundContext: (record: SubmissionRecord) => EvaluationRetryRound,
+  ): Promise<EvaluationSubmission | undefined> {
+    if (request.submissionId !== undefined && request.submissionId.trim() === ""
+      || request.evaluationId !== undefined && request.evaluationId.trim() === "") {
+      throw new DuplicateError("evaluation id is already bound to different submission data");
+    }
+    const byEvaluation = request.evaluationId !== undefined
+      ? await this.options.persistence.findSubmissionByEvaluationId(request.evaluationId)
+      : undefined;
+    const bySubmission = request.submissionId !== undefined
+      ? await this.options.persistence.findSubmissionById(request.submissionId)
+      : undefined;
+    if (byEvaluation && bySubmission && byEvaluation.submissionId !== bySubmission.submissionId) {
+      throw new DuplicateError("evaluation id is already bound to different submission data");
+    }
+    const existing = byEvaluation ?? bySubmission;
+    if (!existing) return undefined;
+    if (existing.matchId !== matchId) {
+      throw new DuplicateError("evaluation request does not belong to this Match command");
+    }
+    if (existing.sideId !== request.sideId
+      || request.submissionId !== undefined && existing.submissionId !== request.submissionId
+      || request.evaluationId !== undefined && existing.evaluationId !== request.evaluationId) {
+      throw new DuplicateError("evaluation id is already bound to different submission data");
+    }
+    const round = roundContext(existing);
+    assertSupportedLanguage(request.language);
+    if (request.language !== existing.language) {
+      throw new DuplicateError("evaluation id is already bound to different submission data");
+    }
+    if (request.mode === "1v1") {
+      const sourceHash = createHash("sha256").update(request.code, "utf8").digest("hex");
+      if (sourceHash !== existing.sourceHash || request.code !== existing.source) {
+        throw new DuplicateError("evaluation id is already bound to different submission data");
+      }
+    }
+    // Team retries identify the server's frozen Y.Doc revision, not raw client code.
+    if (request.documentRevision !== undefined && request.documentRevision !== (existing.documentRevision ?? undefined)
+      || request.mode === "2v2" && !round.liveWindow && request.documentRevision === undefined) {
+      throw new DuplicateError("evaluation id is already bound to different submission data");
+    }
+    return {
+      matchId,
+      ...round,
+      roundId: existing.roundId,
+      sideId: existing.sideId,
+      submissionId: existing.submissionId,
+      evaluationId: existing.evaluationId,
+      problemVersionId: existing.problemVersionId,
+      language: request.language,
+      sourceHash: existing.sourceHash,
+      documentRevision: existing.documentRevision ?? null,
+      acceptPending: async () => existing,
+    };
   }
 
   private assertIdentity(expected: EvaluationIdentity, actual: EvaluationIdentity): void {

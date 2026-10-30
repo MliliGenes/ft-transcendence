@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS collab_documents (
   updated_at BIGINT NOT NULL,
   PRIMARY KEY (match_id, round_id, side_id)
 );
+CREATE INDEX IF NOT EXISTS idx_matches_active ON matches (id) WHERE (data->>'roundPhase') != 'MATCH_COMPLETE';
+CREATE STATISTICS IF NOT EXISTS stat_matches_round_phase ON (data->>'roundPhase') FROM matches;
 `;
 
 /**
@@ -225,6 +227,18 @@ export class PostgresStores {
     await this.sql.transaction(async (client) => {
       await client.query(GAME_SCHEMA);
       await client.query(LOBBY_SCHEMA);
+      const uninitialized = await client.query(`
+        SELECT 1
+        FROM pg_stats_ext_exprs
+        WHERE schemaname = current_schema()
+          AND tablename = 'matches'
+          AND statistics_name = 'stat_matches_round_phase'
+          AND null_frac IS NULL
+          AND EXISTS (SELECT 1 FROM matches LIMIT 1)
+      `);
+      if (uninitialized.rowCount && uninitialized.rowCount > 0) {
+        await client.query("ANALYZE matches");
+      }
     });
   }
 
@@ -347,6 +361,11 @@ class PostgresMatchStore implements MatchStore {
 
   async listIds(): Promise<string[]> {
     const res = await this.pool.query("SELECT id FROM matches");
+    return res.rows.map((r) => r.id as string);
+  }
+
+  async listActiveIds(): Promise<string[]> {
+    const res = await this.pool.query("SELECT id FROM matches WHERE (data->>'roundPhase') != 'MATCH_COMPLETE'");
     return res.rows.map((r) => r.id as string);
   }
 }

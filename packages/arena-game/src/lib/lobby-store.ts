@@ -705,7 +705,8 @@ export class InMemoryLobbyStore implements ILobbyStore {
         throw new LobbyError("already in a private room", 409);
       }
     }
-    for (const id of await this.matches?.listIds() ?? []) {
+    const activeMatchIds = await (this.matches?.listActiveIds ? this.matches.listActiveIds() : this.matches?.listIds() ?? []);
+    for (const id of activeMatchIds) {
       const match = await this.matches!.load(id);
       if (match && match.roundPhase !== "MATCH_COMPLETE" && match.participants.some(p => p.userId === userId)) {
         throw new LobbyError("already in an active match", 409);

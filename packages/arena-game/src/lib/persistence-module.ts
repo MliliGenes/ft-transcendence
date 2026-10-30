@@ -58,6 +58,13 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
     return this.adapters.matches.listIds();
   }
 
+  listActiveMatchIds(): Promise<string[]> {
+    if (this.adapters.matches.listActiveIds) {
+      return this.adapters.matches.listActiveIds();
+    }
+    return this.adapters.matches.listIds();
+  }
+
   async recordSubmission(record: SubmissionRecord): Promise<SubmissionRecord> {
     const existingBySubmission = await this.adapters.submissions.getBySubmissionId(record.submissionId);
     const existingByEvaluation = await this.adapters.submissions.getByEvaluationId(record.evaluationId);

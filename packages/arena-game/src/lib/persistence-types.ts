@@ -30,6 +30,7 @@ export interface MatchPersistence {
   loadMatch(matchId: string): Promise<MatchRecord | undefined>;
   saveMatch(match: MatchRecord, expectedRevision?: number): Promise<void>;
   listMatchIds(): Promise<string[]>;
+  listActiveMatchIds(): Promise<string[]>;
 
   recordSubmission(record: SubmissionRecord): Promise<SubmissionRecord>;
   updateSubmission(record: SubmissionRecord): Promise<void>;

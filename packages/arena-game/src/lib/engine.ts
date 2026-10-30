@@ -166,6 +166,11 @@ export class ArenaEngine {
     }
   }
 
+  /** Preserve older injected persistence objects as well as legacy store adapters. */
+  private activeMatchIds(): Promise<string[]> {
+    return this.persistence.listActiveMatchIds?.() ?? this.persistence.listMatchIds();
+  }
+
   constructor(options: EngineOptions) {
     this.judge = options.judge;
     this.bank = options.bank;
@@ -524,9 +529,28 @@ export class ArenaEngine {
   ): Promise<{ ok: true; round: number; submissionId: string; evaluationId: string }> {
     if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
     // Phase 1 (locked): gates, ids, pending record, activity dispatch.
-    return this.evaluation.submit(matchId, async () => {
+    return this.evaluation.submit(matchId, async (recoverRetry) => {
       const match = await this.requireMember(principal, matchId);
       const side = this.sideOf(match, principal);
+      const retry = await recoverRetry({ ...input, mode: match.mode, sideId: side }, (existing) => {
+        const targetRoundIndex = match.rounds.findIndex((r) => r.roundId === existing.roundId);
+        if (targetRoundIndex === -1) {
+          throw new DuplicateError("evaluation id is already bound to different submission data");
+        }
+        const targetRound = match.rounds[targetRoundIndex]!;
+        const targetRoundNo = targetRoundIndex + 1;
+        const now = this.clock();
+        const matchDeadline = match.startedAt + match.durationMs;
+        const withinDeadlineGrace = existing.submittedAt < matchDeadline && now <= matchDeadline + this.revealGraceMs;
+        return {
+          roundNo: targetRoundNo,
+          hiddenSuiteId: targetRound.hiddenSuiteId,
+          liveWindow: match.roundPhase === "CODING" && match.currentRound === targetRoundNo
+            && !targetRound.cutoffPassed && withinDeadlineGrace,
+        };
+      });
+      if (retry) return retry;
+
       const round = this.currentRound(match);
       this.requireUnexpired(match);
       // 1v1 keeps the legacy gate (phase only). 2v2 additionally requires
@@ -870,10 +894,11 @@ export class ArenaEngine {
     });
   }
 
-  /** Sweep every known match (service interval). Per-match failures never abort the sweep. */
+  /** Sweep active matches for disconnect grace (service interval). Per-match failures never abort the sweep. */
   async sweepGrace(): Promise<string[]> {
     const forfeited: string[] = [];
-    for (const id of await this.persistence.listMatchIds()) {
+    const ids = await this.activeMatchIds();
+    for (const id of ids) {
       try {
         if (await this.applyGraceIfExpired(id)) forfeited.push(id);
       } catch {
@@ -885,7 +910,7 @@ export class ArenaEngine {
 
   /** Close expired Matches on the server, including after a process restart. */
   async sweepExpiredMatches(): Promise<string[]> {
-    const ids = await this.persistence.listMatchIds();
+    const ids = await this.activeMatchIds();
     const outcomes = await Promise.all(ids.map(async (id) => {
       try {
         return (await this.closeExpiredMatch(id)) ? id : null;
@@ -1110,7 +1135,7 @@ export class ArenaEngine {
   async recover(): Promise<{ matches: number; retried: number; failed: number }> {
     let retried = 0;
     let failed = 0;
-    const ids = await this.persistence.listMatchIds();
+    const ids = await this.activeMatchIds();
     for (const id of ids) {
       await this.withRevisionRetry(id, async () => {
         const match = await this.loadMatchOrThrow(id);

@@ -65,9 +65,29 @@ Source reference: Aimane `67fc6b0`, checked 2026-10-27.
 
 ### Evaluation and retry identity
 
+- The Match facade authorizes the caller and resolves the original Round and
+  competitive window. Evaluation orchestration owns persisted retry lookup,
+  immutable request validation, attachment, and receipt completion.
 - Evaluation identity binds Match, Round, side, Submission, problem, language,
   source hash and document revision. A matching retry joins existing work;
   changing the bound identity is rejected.
+- Receipt recovery for a completed or superseded submission after Reveal, round
+  advance, or Match completion returns the original acceptance receipt. A receipt
+  for superseded work does not imply a counted verdict or require a Judge result;
+  recovery may supersede stale pending work without judging it.
+- The receipt-return branch performs no new acceptance, Judge invocation,
+  readiness update, attempt increment, or scoring contribution. Before that branch,
+  Submit retains its expiry preflight: it may wait for accepted evaluations,
+  publish Reveal, lock activities, and complete/persist an expired Match.
+- Outside the competitive window, retrying an orphan pending submission without an
+  in-flight owner returns a retryable `IllegalStateError` without invoking the Judge,
+  leaving boot/background recovery in charge. A pending retry may join a genuine
+  in-flight evaluation outside the Match lock.
+- Explicit empty identifiers (`""`) are rejected consistently with `DuplicateError`.
+  Legitimate single-ID retries with omitted partner IDs remain supported.
+- In 2v2 mode, late receipt recovery strictly requires an explicit `documentRevision`
+  matching the accepted frozen revision. Raw `input.code` differences are ignored
+  because the authoritative snapshot resides in the team Y.Doc.
 - Only eligible competitive completions replace the counted contribution.
   Infrastructure failures do not count. Completions past the applicable Round
   cutoff/deadline remain recorded as superseded rather than changing the score.
@@ -88,6 +108,11 @@ Source reference: Aimane `67fc6b0`, checked 2026-10-27.
 - Expected-revision writes reject conflicts with code 409. Submission identity
   is immutable; evaluation work is claimed exclusively, and commits must match
   the active claim session. Reveals are inserted once.
+- Active match maintenance sweeps query active candidates via `listActiveMatchIds`
+  and `listActiveIds`, backed by PostgreSQL partial index `idx_matches_active`
+  and extended statistics `stat_matches_round_phase`. `PostgresStores.ensureSchema`
+  automatically populates uninitialized expression statistics during upgrade on
+  pre-existing databases without requiring manual `ANALYZE`.
 - PostgreSQL provides transactional composition. Omitting optional adapter
   hooks uses process-local claims and sequential writes; those fallbacks do
   not provide the same cross-process or atomic-write guarantees.

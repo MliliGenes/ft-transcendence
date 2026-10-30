@@ -489,4 +489,131 @@ describe.runIf(HAS_PG)("postgres persistence + restart (real database)", () => {
     const reveal = await engine2.publishReveal(left, matchId);
     expect(reveal.scores.right).toBe(100);
   });
+
+  it("9. listActiveIds uses partial index idx_matches_active under completed match history", async () => {
+    const engine = liveEngine(stores, [P100], clock);
+    const activeMatchId = await createMatch(engine);
+    const baseMatch = await stores.matches.load(activeMatchId);
+    expect(baseMatch).toBeDefined();
+
+    await stores.raw.query(
+      `INSERT INTO matches(id, data)
+       SELECT 'history-' || i, jsonb_set($1::jsonb, '{id}', to_jsonb('history-' || i))
+       FROM generate_series(1, 1000) i`,
+      [JSON.stringify({ ...baseMatch, roundPhase: "MATCH_COMPLETE" })],
+    );
+
+    await stores.raw.query("ANALYZE matches");
+
+    expect(stores.matches.listActiveIds).toBeDefined();
+    const activeIds = await stores.matches.listActiveIds!();
+    expect(activeIds).toEqual([activeMatchId]);
+
+    const explainRes = await stores.raw.query(
+      "EXPLAIN (COSTS OFF) SELECT id FROM matches WHERE (data->>'roundPhase') != 'MATCH_COMPLETE'",
+    );
+    const plan = explainRes.rows.map((r: any) => r["QUERY PLAN"]).join("\n");
+    expect(plan).toContain("idx_matches_active");
+
+    await stores.matches.save({ ...baseMatch!, roundPhase: "MATCH_COMPLETE" });
+    expect(await stores.matches.listActiveIds!()).toEqual([]);
+  });
+
+  it("10. ensureSchema on existing-history database initializes expression statistics and uses idx_matches_active without manual ANALYZE", async () => {
+    const engine = liveEngine(stores, [P100], clock);
+    const activeMatchId = await createMatch(engine);
+    const baseMatch = await stores.matches.load(activeMatchId);
+    expect(baseMatch).toBeDefined();
+
+    await stores.raw.query(
+      `INSERT INTO matches(id, data)
+       SELECT 'history-' || i, jsonb_set($1::jsonb, '{id}', to_jsonb('history-' || i))
+       FROM generate_series(1, 1000) i`,
+      [JSON.stringify({ ...baseMatch, roundPhase: "MATCH_COMPLETE" })],
+    );
+
+    // Simulate pre-existing database upgrade: drop statistics and index, analyze old schema
+    await stores.raw.query("DROP STATISTICS stat_matches_round_phase; DROP INDEX idx_matches_active; ANALYZE matches");
+
+    // Call ensureSchema() to perform migration/upgrade
+    await stores.ensureSchema();
+
+    // Query active IDs without any manual ANALYZE
+    expect(stores.matches.listActiveIds).toBeDefined();
+    const activeIds = await stores.matches.listActiveIds!();
+    expect(activeIds).toEqual([activeMatchId]);
+
+    const explainRes = await stores.raw.query(
+      "EXPLAIN (ANALYZE, BUFFERS) SELECT id FROM matches WHERE (data->>'roundPhase') != 'MATCH_COMPLETE'",
+    );
+    const plan = explainRes.rows.map((r: any) => r["QUERY PLAN"]).join("\n");
+    expect(plan).toContain("idx_matches_active");
+    expect(plan).not.toContain("Seq Scan on matches");
+  });
+
+  it("11. ensureSchema and active match sweeps succeed under non-superuser database owner without permission errors", async () => {
+    const id = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const ownerRole = `arena_owner_${id}`;
+    const ownerDb = `arena_db_${id}`;
+    const ownerPass = "owner_test_password";
+
+    await stores.raw.query(`CREATE ROLE ${ownerRole} LOGIN NOSUPERUSER PASSWORD '${ownerPass}'`);
+    await stores.raw.query(`CREATE DATABASE ${ownerDb} OWNER ${ownerRole}`);
+
+    const parsed = new URL(PG_URL);
+    parsed.username = ownerRole;
+    parsed.password = ownerPass;
+    parsed.pathname = `/${ownerDb}`;
+    const ownerPgUrl = parsed.toString();
+
+    let ownerStores: PostgresStores | undefined;
+    try {
+      ownerStores = new PostgresStores(ownerPgUrl, { runtimeOwnership: "fixture" });
+
+      // 1. Fresh schema setup succeeds under non-superuser owner
+      await ownerStores.ensureSchema();
+
+      // 2. Populate completed history and 1 active match
+      const engine = liveEngine(ownerStores, [P100], clock);
+      const activeMatchId = await createMatch(engine);
+      const baseMatch = await ownerStores.matches.load(activeMatchId);
+      expect(baseMatch).toBeDefined();
+
+      await ownerStores.raw.query(
+        `INSERT INTO matches(id, data)
+         SELECT 'history-' || i, jsonb_set($1::jsonb, '{id}', to_jsonb('history-' || i))
+         FROM generate_series(1, 1000) i`,
+        [JSON.stringify({ ...baseMatch, roundPhase: "MATCH_COMPLETE" })],
+      );
+
+      // 3. Simulate upgrade on pre-existing analyzed history
+      await ownerStores.raw.query("DROP STATISTICS stat_matches_round_phase; DROP INDEX idx_matches_active; ANALYZE matches");
+
+      // 4. Schema upgrade on existing history initializes expression statistics without permission error
+      await ownerStores.ensureSchema();
+
+      // 5. Query active IDs and verify idx_matches_active natural selection
+      expect(ownerStores.matches.listActiveIds).toBeDefined();
+      const activeIds = await ownerStores.matches.listActiveIds!();
+      expect(activeIds).toEqual([activeMatchId]);
+
+      const planRes = await ownerStores.raw.query(
+        "EXPLAIN (ANALYZE, BUFFERS) SELECT id FROM matches WHERE (data->>'roundPhase') != 'MATCH_COMPLETE'",
+      );
+      const plan = planRes.rows.map((r: any) => r["QUERY PLAN"]).join("\n");
+      expect(plan).toContain("idx_matches_active");
+      expect(plan).not.toContain("Seq Scan on matches");
+
+      // 6. Completing active match removes it from candidates
+      await ownerStores.matches.save({ ...baseMatch!, roundPhase: "MATCH_COMPLETE" });
+      expect(await ownerStores.matches.listActiveIds!()).toEqual([]);
+
+      // 7. Subsequent ensureSchema does not fail or require repeated analysis
+      await ownerStores.ensureSchema();
+    } finally {
+      if (ownerStores) await ownerStores.close();
+      await stores.raw.query(`DROP DATABASE IF EXISTS ${ownerDb}`);
+      await stores.raw.query(`DROP ROLE IF EXISTS ${ownerRole}`);
+    }
+  });
 });

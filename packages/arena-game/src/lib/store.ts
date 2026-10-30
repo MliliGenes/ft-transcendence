@@ -17,6 +17,8 @@ export interface MatchStore {
   load(matchId: string): Promise<MatchRecord | undefined>;
   /** All known match ids (boot recovery: presence reset, pending re-drive). */
   listIds(): Promise<string[]>;
+  /** Active (non-complete) match ids for maintenance sweeps. */
+  listActiveIds?(): Promise<string[]>;
 }
 
 export interface SubmissionStore {
@@ -61,6 +63,8 @@ export interface RevealStore {
 
 export class InMemoryMatchStore implements MatchStore {
   private readonly matches = new Map<string, MatchRecord>();
+  private readonly activeIds = new Set<string>();
+
   async save(match: MatchRecord, expectedRevision?: number): Promise<void> {
     const current = this.matches.get(match.id);
     if (expectedRevision !== undefined && (!current || current.revision !== expectedRevision)) {
@@ -71,6 +75,11 @@ export class InMemoryMatchStore implements MatchStore {
       stored.revision = expectedRevision + 1;
     }
     this.matches.set(match.id, stored);
+    if (stored.roundPhase === "MATCH_COMPLETE") {
+      this.activeIds.delete(match.id);
+    } else {
+      this.activeIds.add(match.id);
+    }
   }
   async load(matchId: string): Promise<MatchRecord | undefined> {
     const match = this.matches.get(matchId);
@@ -78,6 +87,9 @@ export class InMemoryMatchStore implements MatchStore {
   }
   async listIds(): Promise<string[]> {
     return [...this.matches.keys()];
+  }
+  async listActiveIds(): Promise<string[]> {
+    return [...this.activeIds];
   }
 }
 
