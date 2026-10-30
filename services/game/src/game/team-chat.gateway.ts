@@ -10,8 +10,8 @@ import {
   WebSocketServer,
 } from "@nestjs/websockets";
 import type { Namespace, Socket } from "socket.io";
-import { type TeamChatEntry } from "arena-model";
-import { TeamChat } from "arena-game-engine/team-chat";
+import type { TeamChatEntry } from "arena-model";
+import { TeamChat, type TeamChatAck } from "arena-game-engine/team-chat";
 import { AuthPrincipalClient } from "../auth/auth-principal-client.js";
 import { GameService } from "./game.service.js";
 import {
@@ -24,10 +24,57 @@ import {
   type SocketVerifier,
 } from "./socket-auth.js";
 
+interface ChatSenderContext {
+  userId: string;
+  matchId: string;
+  sideId: string;
+  roomId: string;
+}
+
+type SenderAuthResult =
+  | { ok: true; userId: string; matchId: string }
+  | { ok: false; response: TeamChatAck | undefined };
+
 function expiredStored(client: Socket): boolean {
   const data = (client.data ?? {}) as { arenaPrincipal?: { expiresAt?: number } };
   const exp = data.arenaPrincipal?.expiresAt;
   return typeof exp === "number" && exp <= Date.now();
+}
+
+function safeDisconnect(client: Socket): void {
+  try {
+    client.disconnect(true);
+  } catch {
+    /* best-effort */
+  }
+}
+
+function ensureAdmissionEmittable(client: Socket, runtimeReady: boolean): boolean {
+  if (canEmitTo(client, runtimeReady)) return true;
+  safeDisconnect(client);
+  return false;
+}
+
+function clientRoomContext(client: Socket): { sideId: string; roomId: string } | undefined {
+  const sideId = client.data?.sideId as string | undefined;
+  const roomId = client.data?.roomId as string | undefined;
+  if (!sideId || !roomId) return undefined;
+  return { sideId, roomId };
+}
+
+function formatGatewayError(
+  client: Socket,
+  game: GameService,
+  error: unknown,
+  fallback: string,
+): TeamChatAck | undefined {
+  if (!canEmitTo(client, game.runtimeReady)) return undefined;
+  try {
+    game.assertServing();
+  } catch {
+    return undefined;
+  }
+  return { ok: false, error: error instanceof Error ? error.message : fallback };
 }
 
 /**
@@ -68,6 +115,68 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
     return this.verifier as unknown as SocketVerifier | undefined;
   }
 
+  private async authenticateSender(client: Socket): Promise<SenderAuthResult> {
+    if (!client.connected) {
+      safeDisconnect(client);
+      return { ok: false, response: undefined };
+    }
+    if (expiredStored(client)) {
+      safeDisconnect(client);
+      return { ok: false, response: undefined };
+    }
+    try {
+      const { userId, matchId } = (await authorizeSocketMessage(client, this.socketVerifier(), {
+        matchIdRequired: true,
+      })) as { userId: string; matchId: string };
+      return { ok: true, userId, matchId };
+    } catch {
+      if (!this.game.runtimeReady) return { ok: false, response: undefined };
+      return { ok: false, response: { ok: false, error: "unauthorized" } };
+    }
+  }
+
+  private async broadcastCommitted(
+    roomId: string,
+    eventName: "message" | "ping",
+    entry: TeamChatEntry | undefined,
+  ): Promise<void> {
+    if (!entry) return;
+    await broadcastGated(this.server, roomId, eventName, entry, () => this.game.runtimeReady);
+  }
+
+  private async dispatchChatAction(
+    client: Socket,
+    eventName: "message" | "ping",
+    fallbackError: string,
+    action: (context: ChatSenderContext) => Promise<{ ack: TeamChatAck; entry?: TeamChatEntry }>,
+  ): Promise<TeamChatAck | undefined> {
+    const auth = await this.authenticateSender(client);
+    if (!auth.ok) return auth.response;
+
+    try {
+      this.game.assertServing();
+      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
+
+      const room = clientRoomContext(client);
+      if (!room) return { ok: false, error: "unauthorized" };
+
+      const { ack, entry } = await action({
+        userId: auth.userId,
+        matchId: auth.matchId,
+        sideId: room.sideId,
+        roomId: room.roomId,
+      });
+      this.game.assertServing();
+      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
+
+      await this.broadcastCommitted(room.roomId, eventName, entry);
+      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
+      return ack;
+    } catch (error) {
+      return formatGatewayError(client, this.game, error, fallbackError);
+    }
+  }
+
   getRecentHistory(roomId: string): TeamChatEntry[] {
     this.game.assertServing();
     return this.chat.getRecentHistory(roomId);
@@ -76,33 +185,30 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
   async handleConnection(client: Socket): Promise<void> {
     try {
       this.game.assertServing();
-      const principal = (await authenticateHandshake(client, this.socketVerifier(), { matchIdRequired: true })) as { userId: string; matchId: string };
-      if (!canEmitTo(client, this.game.runtimeReady)) {
-        try { client.disconnect(true); } catch { /* best-effort */ }
-        return;
-      }
+      const principal = (await authenticateHandshake(client, this.socketVerifier(), {
+        matchIdRequired: true,
+      })) as { userId: string; matchId: string };
+      if (!ensureAdmissionEmittable(client, this.game.runtimeReady)) return;
+
       const context = await this.game.resolveTeamChatContext(principal.userId, principal.matchId);
       this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) {
-        try { client.disconnect(true); } catch { /* best-effort */ }
-        return;
-      }
-      client.data.sideId = context.sideId; client.data.roomId = context.roomId;
+      if (!ensureAdmissionEmittable(client, this.game.runtimeReady)) return;
+
+      client.data.sideId = context.sideId;
+      client.data.roomId = context.roomId;
       await client.join(context.roomId);
       this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) {
-        try { client.disconnect(true); } catch { /* best-effort */ }
-        return;
-      }
+      if (!ensureAdmissionEmittable(client, this.game.runtimeReady)) return;
+
       emitToSocket(client, "authorized", context, this.game.runtimeReady);
       const recent = this.getRecentHistory(context.roomId);
       this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) {
-        try { client.disconnect(true); } catch { /* best-effort */ }
-        return;
-      }
+      if (!ensureAdmissionEmittable(client, this.game.runtimeReady)) return;
+
       if (recent.length > 0) emitToSocket(client, "history", recent, this.game.runtimeReady);
-    } catch { try { client.disconnect(true); } catch { /* best-effort */ } }
+    } catch {
+      safeDisconnect(client);
+    }
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
@@ -114,92 +220,34 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
   async onMessage(
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { text: unknown; clientMessageId?: unknown },
-  ): Promise<{ ok: boolean; id?: string; error?: string } | undefined> {
-    if (!client.connected) { try { client.disconnect(true); } catch {} return undefined; }
-    if (expiredStored(client)) { try { client.disconnect(true); } catch {} return undefined; }
-    let userId: string;
-    let matchId: string;
-    try {
-      ({ userId, matchId } = (await authorizeSocketMessage(client, this.socketVerifier(), { matchIdRequired: true })) as { userId: string; matchId: string });
-    } catch {
-      if (!this.game.runtimeReady) return undefined;
-      return { ok: false, error: "unauthorized" };
-    }
-    try {
-      this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-      const sideId = client.data?.sideId as string | undefined;
-      const roomId = client.data?.roomId as string | undefined;
-      if (!sideId || !roomId) return { ok: false, error: "unauthorized" };
-
-      // Never trust payload identity: sender/room always derive from the
-      // verified socket principal + join-time context.
-      const { ack, entry } = await this.chat.acceptMessage({
+  ): Promise<TeamChatAck | undefined> {
+    return this.dispatchChatAction(client, "message", "message failed", (ctx) =>
+      this.chat.acceptMessage({
         connectionId: client.id,
-        userId,
-        matchId,
-        sideId,
-        roomId,
+        userId: ctx.userId,
+        matchId: ctx.matchId,
+        sideId: ctx.sideId,
+        roomId: ctx.roomId,
         text: body?.text,
         clientMessageId: body?.clientMessageId,
-      });
-      this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-
-      if (entry) {
-        await broadcastGated(this.server, roomId, "message", entry, () => this.game.runtimeReady);
-      }
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-      return ack;
-    } catch (error) {
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-      try { this.game.assertServing(); } catch { return undefined; }
-      return { ok: false, error: error instanceof Error ? error.message : "message failed" };
-    }
+      }),
+    );
   }
 
   @SubscribeMessage("ping")
   async onPing(
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { ping: unknown },
-  ): Promise<{ ok: boolean; id?: string; error?: string } | undefined> {
-    if (!client.connected) { try { client.disconnect(true); } catch {} return undefined; }
-    if (expiredStored(client)) { try { client.disconnect(true); } catch {} return undefined; }
-    let userId: string;
-    let matchId: string;
-    try {
-      ({ userId, matchId } = (await authorizeSocketMessage(client, this.socketVerifier(), { matchIdRequired: true })) as { userId: string; matchId: string });
-    } catch {
-      if (!this.game.runtimeReady) return undefined;
-      return { ok: false, error: "unauthorized" };
-    }
-    try {
-      this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-      const sideId = client.data?.sideId as string | undefined;
-      const roomId = client.data?.roomId as string | undefined;
-      if (!sideId || !roomId) return { ok: false, error: "unauthorized" };
-
-      const { ack, entry } = await this.chat.acceptPing({
+  ): Promise<TeamChatAck | undefined> {
+    return this.dispatchChatAction(client, "ping", "ping failed", (ctx) =>
+      this.chat.acceptPing({
         connectionId: client.id,
-        userId,
-        matchId,
-        sideId,
-        roomId,
+        userId: ctx.userId,
+        matchId: ctx.matchId,
+        sideId: ctx.sideId,
+        roomId: ctx.roomId,
         ping: body?.ping,
-      });
-      this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-
-      if (entry) {
-        await broadcastGated(this.server, roomId, "ping", entry, () => this.game.runtimeReady);
-      }
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-      return ack;
-    } catch (error) {
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-      try { this.game.assertServing(); } catch { return undefined; }
-      return { ok: false, error: error instanceof Error ? error.message : "ping failed" };
-    }
+      }),
+    );
   }
 }
