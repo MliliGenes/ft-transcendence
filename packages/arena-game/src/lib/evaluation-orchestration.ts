@@ -192,6 +192,122 @@ export interface EvaluationOrchestratorOptions {
   host: EvaluationOrchestrationHost;
 }
 
+function buildRunInput(
+  matchId: string,
+  input: EvaluationSubmission,
+  record: SubmissionRecord,
+  problem: ReturnType<EvaluationProblemBank["loadProblem"]>,
+  tracked: InFlightEvaluation,
+): EvaluationRunInput {
+  const language = record.language as SupportedLanguage;
+  const execution = resolveProblemExecution(problem, language);
+  return {
+    matchId,
+    roundNo: input.roundNo,
+    roundId: record.roundId,
+    sideId: record.sideId,
+    submissionId: record.submissionId,
+    evaluationId: record.evaluationId,
+    problemVersionId: record.problemVersionId,
+    hiddenSuiteId: input.hiddenSuiteId,
+    language,
+    driver: execution.driver,
+    ...execution.snippet,
+    source: record.source,
+    groups: problem.hidden.map((group) => ({
+      name: group.name,
+      weight: group.weight,
+      tests: group.tests.map((test) => ({ id: test.id, input: test.input, expected: test.expected })),
+    })),
+    documentRevision: record.documentRevision ?? null,
+    tracked,
+  };
+}
+
+function isSubmissionWithinGrace(
+  match: MatchRecord,
+  submittedAt: number,
+  now: number,
+  graceMs: number,
+): boolean {
+  const matchDeadline = match.startedAt + match.durationMs;
+  return submittedAt < matchDeadline && now <= matchDeadline + graceMs;
+}
+
+function isRecoverableRound(
+  match: MatchRecord | null | undefined,
+  round: RoundState | undefined,
+  submittedAt: number,
+  now: number,
+  graceMs: number,
+): boolean {
+  if (!match || !round) return false;
+  const isCurrentRound = round.roundId === match.rounds[match.currentRound - 1]?.roundId;
+  return (
+    match.roundPhase === "CODING" &&
+    isCurrentRound &&
+    !round.cutoffPassed &&
+    isSubmissionWithinGrace(match, submittedAt, now, graceMs)
+  );
+}
+
+function applySubmissionScoring(
+  stored: SubmissionRecord,
+  round: RoundState,
+  side: SideId,
+  scored: NonNullable<ReturnType<RoundLifecycle["scoreVerdict"]>>,
+  isCompetitive: boolean,
+): void {
+  const { score, scoreBp, groups: groupResults, testStatuses: statuses } = scored;
+  stored.scoreBp = scoreBp;
+  stored.groups = groupResults;
+  stored.testStatuses = statuses;
+
+  if (isCompetitive) {
+    round.attempts[side] = (round.attempts[side] ?? 0) + 1;
+    round.counted[side] = { score, scoringTimeMs: stored.elapsedMatchMs };
+    stored.status = "completed";
+    stored.score = score;
+  } else {
+    stored.status = "superseded";
+    stored.score = null;
+  }
+}
+
+function isCompetitiveRound(
+  match: MatchRecord,
+  round: RoundState,
+  currentRoundId: string,
+  evaluationId: string,
+  submittedAt: number,
+  now: number,
+  graceMs: number,
+): boolean {
+  const matchDeadline = match.startedAt + match.durationMs;
+  const withinDeadlineGrace = submittedAt < matchDeadline && now <= matchDeadline + graceMs;
+  return (
+    match.roundPhase === "CODING" &&
+    round.roundId === currentRoundId &&
+    !round.cutoffPassed &&
+    !round.superseded.includes(evaluationId) &&
+    withinDeadlineGrace
+  );
+}
+
+function extractTelemetryPayload(
+  judge: GameJudge,
+  evaluationId: string,
+  outcome: EvaluationTelemetryOutcome,
+  startedAt: number,
+  now: number,
+) {
+  const metrics = judge.consumeMetrics?.();
+  const provider = metrics?.provider ?? judge.provider ?? judge.constructor.name;
+  const queueWaitMs = metrics?.queueWaitMs ?? 0;
+  const executionMs = metrics?.executionMs ?? Math.max(0, now - startedAt);
+  return { evaluationId, provider, queueWaitMs, executionMs, outcome };
+}
+
 /**
  * Owns the lock-free/locked phases of a logical Evaluation.
  *
@@ -226,7 +342,6 @@ export class EvaluationOrchestrator {
       if (identity.matchId !== matchId) {
         throw new DuplicateError("evaluation request does not belong to this Match command");
       }
-      const problem = this.options.bank.loadProblem(input.problemVersionId);
       const duplicate = this.inFlight.get(input.evaluationId);
       if (duplicate) {
         this.assertIdentity(identity, duplicate);
@@ -236,48 +351,51 @@ export class EvaluationOrchestrator {
       const tracked = this.inFlight.track(input.evaluationId, identity);
       owned = { evaluationId: input.evaluationId, tracked };
       const existing = await this.options.persistence.findSubmissionByEvaluationId(input.evaluationId);
-      if (existing) this.assertIdentity(identity, this.identityFor(existing));
-      if (existing && existing.status !== "pending") {
-        if (existing.status === "failed") {
-          throw this.inFlight.failureFor(input.evaluationId) ?? new JudgeInfraError("evaluation previously failed");
-        }
-        this.inFlight.settle(input.evaluationId, tracked, { ok: true });
-        return { attached: true as const, roundNo: input.roundNo, evaluationId: input.evaluationId };
-      }
-      if (existing && existing.status === "pending" && input.liveWindow === false) {
-        throw new IllegalStateError("evaluation is still pending recovery");
-      }
+      const existingResult = this.checkExistingPendingStatus(existing, input, tracked);
+      if (existingResult) return existingResult;
+
       const record = await input.acceptPending(existing);
       if (record.evaluationId !== input.evaluationId) {
         throw new DuplicateError("accepted submission has a different evaluation id");
       }
       this.assertIdentity(identity, this.identityFor(record));
-      const execution = resolveProblemExecution(problem, record.language as SupportedLanguage);
-      return { attached: false as const, input: {
-        matchId, roundNo: input.roundNo, roundId: record.roundId, sideId: record.sideId,
-        submissionId: record.submissionId, evaluationId: record.evaluationId,
-        problemVersionId: record.problemVersionId, hiddenSuiteId: input.hiddenSuiteId,
-        language: record.language as SupportedLanguage,
-        driver: execution.driver,
-        ...execution.snippet, source: record.source,
-        groups: problem.hidden.map((group) => ({
-          name: group.name, weight: group.weight,
-          tests: group.tests.map((test) => ({ id: test.id, input: test.input, expected: test.expected })),
-        })),
-        documentRevision: record.documentRevision ?? null, tracked,
-      } };
+      const problem = this.options.bank.loadProblem(input.problemVersionId);
+      return {
+        attached: false as const,
+        input: buildRunInput(matchId, input, record, problem, tracked),
+      };
     }).catch((error: unknown) => {
       // Include errors from the host's final durable save, not just acceptance.
       if (owned) this.inFlight.settle(owned.evaluationId, owned.tracked, { ok: false, error });
       throw error;
     });
     if (!setup.attached) return this.run(setup.input);
-    if (setup.waitFor) {
+    if ("waitFor" in setup && setup.waitFor) {
       const completion = await setup.waitFor;
       if (!completion.ok) throw completion.error;
     }
     const stored = await this.storedSubmission(setup.evaluationId);
     return { ok: true, round: setup.roundNo, submissionId: stored.submissionId, evaluationId: setup.evaluationId };
+  }
+
+  private checkExistingPendingStatus(
+    existing: SubmissionRecord | undefined,
+    input: EvaluationSubmission,
+    tracked: InFlightEvaluation,
+  ): { attached: true; roundNo: number; evaluationId: string; waitFor?: Promise<EvaluationCompletion> } | undefined {
+    if (!existing) return undefined;
+    this.assertIdentity(this.identityFor(input), this.identityFor(existing));
+    if (existing.status !== "pending") {
+      if (existing.status === "failed") {
+        throw this.inFlight.failureFor(input.evaluationId) ?? new JudgeInfraError("evaluation previously failed");
+      }
+      this.inFlight.settle(input.evaluationId, tracked, { ok: true });
+      return { attached: true, roundNo: input.roundNo, evaluationId: input.evaluationId };
+    }
+    if (input.liveWindow === false) {
+      throw new IllegalStateError("evaluation is still pending recovery");
+    }
+    return undefined;
   }
 
   private async prepareRetry(
@@ -365,6 +483,99 @@ export class EvaluationOrchestrator {
     }
   }
 
+  private async resolveUnclaimedRun(
+    input: EvaluationRunInput,
+  ): Promise<{ ok: true; round: number; submissionId: string; evaluationId: string }> {
+    try {
+      const settled = await this.options.persistence.findSubmissionByEvaluationId(input.evaluationId);
+      if (!settled || settled.status === "pending") {
+        throw new IllegalStateError("evaluation claim disappeared before completion");
+      }
+      if (settled.status === "failed") {
+        throw new JudgeInfraError("evaluation previously failed");
+      }
+      this.inFlight.settle(input.evaluationId, input.tracked, { ok: true });
+      return {
+        ok: true,
+        round: input.roundNo,
+        submissionId: settled.submissionId,
+        evaluationId: input.evaluationId,
+      };
+    } catch (error) {
+      this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error });
+      throw error;
+    }
+  }
+
+  private async executeRunEvaluation(claim: EvaluationClaim, input: EvaluationRunInput): Promise<SealedVerdict> {
+    try {
+      claim.assertActive();
+      return await this.evaluateSealed(input.evaluationId, {
+        evaluationId: input.evaluationId,
+        submissionId: input.submissionId,
+        problemVersionId: input.problemVersionId,
+        hiddenSuiteId: input.hiddenSuiteId,
+        language: input.language,
+        driver: input.driver,
+        entrypoint: input.entrypoint,
+        signature: input.signature,
+        className: input.className,
+        source: input.source,
+        groups: input.groups,
+        limits: this.options.limits,
+      });
+    } catch (error) {
+      try {
+        claim.assertActive();
+      } catch (claimError) {
+        this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error: claimError });
+        throw claimError;
+      }
+      try {
+        await this.options.host.withMatchLock(input.matchId, async () => {
+          await this.failStoredEvaluation(
+            claim,
+            input.matchId,
+            input.evaluationId,
+            input.roundId,
+            input.sideId,
+            error,
+          );
+        });
+      } catch (failureError) {
+        this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error: failureError });
+        throw failureError;
+      }
+      this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error });
+      throw error;
+    }
+  }
+
+  private async commitRunEvaluation(
+    claim: EvaluationClaim,
+    input: EvaluationRunInput,
+    verdict: SealedVerdict,
+  ): Promise<void> {
+    let completion: EvaluationCompletion = { ok: true };
+    try {
+      claim.assertActive();
+      await this.options.host.withMatchLock(input.matchId, async () => {
+        await this.commitStoredEvaluation(
+          claim,
+          input.matchId,
+          input.evaluationId,
+          verdict,
+          this.options.clock(),
+        );
+      });
+    } catch (error) {
+      completion = { ok: false, error };
+      throw error;
+    } finally {
+      this.inFlight.settle(input.evaluationId, input.tracked, completion);
+    }
+  }
+
   private async run(input: EvaluationRunInput): Promise<{ ok: true; round: number; submissionId: string; evaluationId: string }> {
     let claim: EvaluationClaim | undefined;
     try {
@@ -374,104 +585,101 @@ export class EvaluationOrchestrator {
       throw error;
     }
     if (!claim) {
-      try {
-        const settled = await this.options.persistence.findSubmissionByEvaluationId(input.evaluationId);
-        if (!settled || settled.status === "pending") {
-          throw new IllegalStateError("evaluation claim disappeared before completion");
-        }
-        if (settled.status === "failed") {
-          throw new JudgeInfraError("evaluation previously failed");
-        }
-        this.inFlight.settle(input.evaluationId, input.tracked, { ok: true });
-        return {
-          ok: true,
-          round: input.roundNo,
-          submissionId: settled.submissionId,
-          evaluationId: input.evaluationId,
-        };
-      } catch (error) {
-        this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error });
-        throw error;
-      }
+      return this.resolveUnclaimedRun(input);
     }
 
     try {
-      let verdict: SealedVerdict;
-      try {
-        claim.assertActive();
-        const result = await this.evaluateSealed(input.evaluationId, {
-          evaluationId: input.evaluationId,
-          submissionId: input.submissionId,
-          problemVersionId: input.problemVersionId,
-          hiddenSuiteId: input.hiddenSuiteId,
-          language: input.language,
-          driver: input.driver,
-          entrypoint: input.entrypoint,
-          signature: input.signature,
-          className: input.className,
-          source: input.source,
-          groups: input.groups,
-          limits: this.options.limits,
-        });
-        verdict = result;
-      } catch (error) {
-        try {
-          claim.assertActive();
-        } catch (claimError) {
-          this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error: claimError });
-          throw claimError;
-        }
-        try {
-          await this.options.host.withMatchLock(
-            input.matchId,
-            async () => {
-              await this.failStoredEvaluation(
-                claim!,
-                input.matchId,
-                input.evaluationId,
-                input.roundId,
-                input.sideId,
-                error,
-              );
-            },
-          );
-        } catch (failureError) {
-          this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error: failureError });
-          throw failureError;
-        }
-        this.inFlight.settle(input.evaluationId, input.tracked, { ok: false, error });
-        throw error;
-      }
-
-      let completion: EvaluationCompletion = { ok: true };
-      try {
-        claim.assertActive();
-        await this.options.host.withMatchLock(
-          input.matchId,
-          async () => {
-            await this.commitStoredEvaluation(
-              claim!,
-              input.matchId,
-              input.evaluationId,
-              verdict,
-              this.options.clock(),
-            );
-          },
-        );
-        return {
-          ok: true,
-          round: input.roundNo,
-          submissionId: input.submissionId,
-          evaluationId: input.evaluationId,
-        };
-      } catch (error) {
-        completion = { ok: false, error };
-        throw error;
-      } finally {
-        this.inFlight.settle(input.evaluationId, input.tracked, completion);
-      }
+      const verdict = await this.executeRunEvaluation(claim, input);
+      await this.commitRunEvaluation(claim, input, verdict);
+      return {
+        ok: true,
+        round: input.roundNo,
+        submissionId: input.submissionId,
+        evaluationId: input.evaluationId,
+      };
     } finally {
       await claim.release();
+    }
+  }
+
+  private async supersedePendingSubmission(matchId: string, evaluationId: string): Promise<void> {
+    await this.options.host.withMatchLock(matchId, async () => {
+      const gone = await this.options.persistence.findSubmissionByEvaluationId(evaluationId);
+      if (gone && gone.status === "pending") {
+        gone.status = "superseded";
+        gone.score = null;
+        await this.options.persistence.updateSubmission(gone);
+      }
+    });
+  }
+
+  private async executePendingRecovery(
+    claim: EvaluationClaim,
+    stored: SubmissionRecord,
+    round: RoundState,
+  ): Promise<{ kind: "retried" } | { kind: "failed"; error: unknown }> {
+    claim.assertActive();
+    let verdict: SealedVerdict;
+    try {
+      verdict = await this.evaluateStoredEvaluation(stored, round.hiddenSuiteId);
+    } catch (error) {
+      await this.options.host.withMatchLock(stored.matchId, async () => {
+        await this.failStoredEvaluation(
+          claim,
+          stored.matchId,
+          stored.evaluationId,
+          stored.roundId,
+          stored.sideId,
+          error,
+        );
+      });
+      return { kind: "failed", error };
+    }
+    claim.assertActive();
+    await this.options.host.withMatchLock(stored.matchId, async () => {
+      await this.commitStoredEvaluation(claim, stored.matchId, stored.evaluationId, verdict, this.options.clock());
+    });
+    return { kind: "retried" };
+  }
+
+  private async verifyClaimedPending(evaluationId: string): Promise<boolean> {
+    const current = await this.options.persistence.findSubmissionByEvaluationId(evaluationId);
+    return current?.status === "pending";
+  }
+
+  private async recoverSingleSubmission(
+    stored: SubmissionRecord,
+  ): Promise<"retried" | "failed" | "skipped"> {
+    const tracked = this.inFlight.track(stored.evaluationId, this.identityFor(stored));
+    let claim: EvaluationClaim | undefined;
+    let judgeStarted = false;
+    let completion: EvaluationCompletion = { ok: true };
+    try {
+      const match = await this.options.persistence.loadMatch(stored.matchId);
+      const round = match?.rounds.find((candidate) => candidate.roundId === stored.roundId);
+      if (!isRecoverableRound(match, round, stored.submittedAt, this.options.clock(), this.options.deadlineGraceMs)) {
+        await this.supersedePendingSubmission(stored.matchId, stored.evaluationId);
+        return "skipped";
+      }
+      claim = await this.options.persistence.claimPendingEvaluation(stored.evaluationId);
+      if (!claim) return "skipped";
+      if (!(await this.verifyClaimedPending(stored.evaluationId))) return "skipped";
+
+      judgeStarted = true;
+      const result = await this.executePendingRecovery(claim, stored, round!);
+      if (result.kind === "failed") {
+        completion = { ok: false, error: result.error };
+        return "failed";
+      }
+      return "retried";
+    } catch (error) {
+      completion = { ok: false, error };
+      if (!judgeStarted) throw error;
+      claim?.assertActive();
+      throw error;
+    } finally {
+      if (claim) await claim.release();
+      this.inFlight.settle(stored.evaluationId, tracked, completion);
     }
   }
 
@@ -481,80 +689,9 @@ export class EvaluationOrchestrator {
     let failed = 0;
     for (const stored of await this.options.persistence.listPendingSubmissions()) {
       if (this.inFlight.get(stored.evaluationId)) continue;
-      const tracked = this.inFlight.track(stored.evaluationId, this.identityFor(stored));
-      let claim: EvaluationClaim | undefined;
-      let judgeStarted = false;
-      let completion: EvaluationCompletion = { ok: true };
-      try {
-        const match = await this.options.persistence.loadMatch(stored.matchId);
-        const round = match?.rounds.find((candidate) => candidate.roundId === stored.roundId);
-        const matchDeadline = match ? match.startedAt + match.durationMs : undefined;
-        const withinDeadlineGrace =
-          matchDeadline !== undefined &&
-          stored.submittedAt < matchDeadline &&
-          this.options.clock() <= matchDeadline + this.options.deadlineGraceMs;
-        const live =
-          match &&
-          match.roundPhase === "CODING" &&
-          round &&
-          round.roundId === match.rounds[match.currentRound - 1]?.roundId &&
-          !round.cutoffPassed &&
-          withinDeadlineGrace;
-        if (!live) {
-          await this.options.host.withMatchLock(stored.matchId, async () => {
-            const gone = await this.options.persistence.findSubmissionByEvaluationId(stored.evaluationId);
-            if (gone && gone.status === "pending") {
-              gone.status = "superseded";
-              gone.score = null;
-              await this.options.persistence.updateSubmission(gone);
-            }
-          });
-          continue;
-        }
-        claim = await this.options.persistence.claimPendingEvaluation(stored.evaluationId);
-        if (!claim) continue;
-        const current = await this.options.persistence.findSubmissionByEvaluationId(stored.evaluationId);
-        if (!current || current.status !== "pending") continue;
-        claim.assertActive();
-        let verdict: SealedVerdict;
-        try {
-          judgeStarted = true;
-          verdict = await this.evaluateStoredEvaluation(stored, round!.hiddenSuiteId);
-        } catch (error) {
-          completion = { ok: false, error };
-          await this.options.host.withMatchLock(
-            stored.matchId,
-            async () => {
-              await this.failStoredEvaluation(
-                claim!,
-                stored.matchId,
-                stored.evaluationId,
-                stored.roundId,
-                stored.sideId,
-                error,
-              );
-            },
-          );
-          failed++;
-          continue;
-        }
-        claim.assertActive();
-        await this.options.host.withMatchLock(
-          stored.matchId,
-          async () => {
-            await this.commitStoredEvaluation(claim!, stored.matchId, stored.evaluationId, verdict, this.options.clock());
-          },
-        );
-        retried++;
-      } catch (error) {
-        completion = { ok: false, error };
-        if (!judgeStarted) throw error;
-        claim?.assertActive();
-        throw error;
-      } finally {
-        if (claim) await claim.release();
-        this.inFlight.settle(stored.evaluationId, tracked, completion);
-      }
+      const outcome = await this.recoverSingleSubmission(stored);
+      if (outcome === "retried") retried++;
+      else if (outcome === "failed") failed++;
     }
     return { retried, failed };
   }
@@ -603,19 +740,26 @@ export class EvaluationOrchestrator {
   private recordTelemetry(evaluationId: string, outcome: EvaluationTelemetryOutcome, startedAt: number): void {
     const telemetry = this.options.telemetry;
     if (!telemetry) return;
-    // Rollout measurements must never replace a judge verdict or its error.
     try {
-      const metrics = this.options.judge.consumeMetrics?.();
-      telemetry.record({
-        evaluationId,
-        provider: metrics?.provider ?? this.options.judge.provider ?? this.options.judge.constructor.name,
-        queueWaitMs: metrics?.queueWaitMs ?? 0,
-        executionMs: metrics?.executionMs ?? Math.max(0, this.options.clock() - startedAt),
-        outcome,
-      });
+      telemetry.record(
+        extractTelemetryPayload(this.options.judge, evaluationId, outcome, startedAt, this.options.clock()),
+      );
     } catch {
       // Telemetry is best effort and cannot change competitive Match state.
     }
+  }
+
+  private async finishEvaluationCommit(
+    claim: EvaluationClaim,
+    match: MatchRecord,
+    round: RoundState,
+    side: SideId,
+    stored?: SubmissionRecord,
+  ): Promise<void> {
+    const activityChanged = this.options.host.activityOf(round, side) === "evaluating";
+    if (activityChanged) this.options.host.transitionActivity(match, round, side, "coding");
+    await this.options.host.commitClaimedEvaluation(claim, match, stored);
+    if (activityChanged) this.options.host.emit("player.statusChanged", { matchId: match.id, side, status: "coding" });
   }
 
   private async commitStoredEvaluation(
@@ -635,42 +779,21 @@ export class EvaluationOrchestrator {
       stored.status = "failed";
       stored.failureCode = "internal_error";
       match.failures.push("submit: judge returned non-competitive verdict set");
-      const activityChanged = this.options.host.activityOf(round, side) === "evaluating";
-      if (activityChanged) this.options.host.transitionActivity(match, round, side, "coding");
-      await this.options.host.commitClaimedEvaluation(claim, match, stored);
-      if (activityChanged) this.options.host.emit("player.statusChanged", { matchId: match.id, side, status: "coding" });
+      await this.finishEvaluationCommit(claim, match, round, side, stored);
       throw new JudgeInfraError("judge returned non-competitive verdict set");
     }
-    const { score, scoreBp, groups: groupResults, testStatuses: statuses } = scored;
-    const matchDeadline = match.startedAt + match.durationMs;
-    const withinDeadlineGrace = stored.submittedAt < matchDeadline && now <= matchDeadline + this.options.deadlineGraceMs;
-    if (
-      match.roundPhase === "CODING" &&
-      round.roundId === this.options.host.currentRound(match).roundId &&
-      !round.cutoffPassed &&
-      !round.superseded.includes(evaluationId) &&
-      withinDeadlineGrace
-    ) {
-      const attempts = (round.attempts[side] ?? 0) + 1;
-      round.attempts[side] = attempts;
-      const counted: CountedResult = { score, scoringTimeMs: stored.elapsedMatchMs };
-      round.counted[side] = counted;
-      stored.status = "completed";
-      stored.score = score;
-      stored.scoreBp = scoreBp;
-      stored.groups = groupResults;
-      stored.testStatuses = statuses;
-    } else {
-      stored.status = "superseded";
-      stored.score = null;
-      stored.scoreBp = scoreBp;
-      stored.groups = groupResults;
-      stored.testStatuses = statuses;
-    }
-    const activityChanged = this.options.host.activityOf(round, side) === "evaluating";
-    if (activityChanged) this.options.host.transitionActivity(match, round, side, "coding");
-    await this.options.host.commitClaimedEvaluation(claim, match, stored);
-    if (activityChanged) this.options.host.emit("player.statusChanged", { matchId: match.id, side, status: "coding" });
+    const currentRoundId = this.options.host.currentRound(match).roundId;
+    const isCompetitive = isCompetitiveRound(
+      match,
+      round,
+      currentRoundId,
+      evaluationId,
+      stored.submittedAt,
+      now,
+      this.options.deadlineGraceMs,
+    );
+    applySubmissionScoring(stored, round, side, scored, isCompetitive);
+    await this.finishEvaluationCommit(claim, match, round, side, stored);
   }
 
   private async failStoredEvaluation(
@@ -690,10 +813,7 @@ export class EvaluationOrchestrator {
     const match = structuredClone(await this.options.host.loadMatchOrThrow(matchId));
     match.failures.push(`submit: ${error instanceof Error ? error.message : String(error)}`);
     const round = match.rounds.find((candidate) => candidate.roundId === roundId) ?? this.options.host.currentRound(match);
-    const activityChanged = this.options.host.activityOf(round, side) === "evaluating";
-    if (activityChanged) this.options.host.transitionActivity(match, round, side, "coding");
-    await this.options.host.commitClaimedEvaluation(claim, match, stored);
-    if (activityChanged) this.options.host.emit("player.statusChanged", { matchId: match.id, side, status: "coding" });
+    await this.finishEvaluationCommit(claim, match, round, side, stored);
   }
 
   private async storedSubmission(evaluationId: string): Promise<SubmissionRecord> {
