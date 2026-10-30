@@ -1,98 +1,76 @@
 // Shared browser auth lifecycle. Credentials stay in memory / HttpOnly cookies;
 // only a credential-free logout intent is persisted across app instances.
-import { ApiError, changedSession, createAuthApi, unavailableSession } from './lib/api.js';
+import { ApiError, changedSession, createAuthApi } from './lib/api.js';
 import { createMemorySession } from './lib/session.js';
 import { SIGNED_IN, SIGNED_OUT, TOKEN_RENEWED, createControl, requireChannel, requireLocks } from './lib/coordination.js';
+import { createClientState } from './lib/client-state.js';
 export { ApiError, createAuthApi, createMemorySession };
 export { SIGNED_IN, SIGNED_OUT, TOKEN_RENEWED, DEFAULT_CHANNEL_NAME } from './lib/coordination.js';
+
+function checkCurrent(store, generation, disposed) {
+  if (disposed || store.generation() !== generation) throw changedSession();
+}
+
+async function loadProfile(api, assertCurrent, generation) {
+  const me = await api.request('/accounts/me', { retrySafeRead: true });
+  assertCurrent(generation);
+  return me;
+}
 
 export function createBrowserAuthClient({ apiBase, fetchImpl = fetch, locks, channel, clock = Date, store: injectedStore, storage = globalThis.localStorage } = {}) {
   requireLocks(locks);
   requireChannel(channel);
   const store = injectedStore ?? createMemorySession();
   const control = createControl(channel);
-  const listeners = new Set();
-  let status = 'loading';
-  let profile = null;
   let disposed = false;
-  let lastRevision = 0;
-  let lastGeneration = store.generation();
   const api = createAuthApi({ apiBase, fetchImpl, store, locks, clock, storage, isActive: () => !disposed });
-  const snapshot = () => {
-    const session = store.read();
-    return { status, profile, sessionGeneration: session?.sessionGeneration ?? store.generation(), tokenRevision: session?.tokenRevision ?? lastRevision, logoutPending: api.isLogoutPending() };
-  };
-  const emit = () => {
-    if (disposed) return;
-    const current = snapshot();
-    for (const listener of [...listeners]) listener(current);
-  };
-  const assertCurrent = (generation) => {
-    if (disposed || store.generation() !== generation) throw changedSession();
-  };
-  const assertActive = () => { if (disposed) throw new Error('The auth client is disposed.'); };
-  const stopStore = store.subscribe((session) => {
-    if (disposed) return;
-    if (!session) {
-      lastGeneration = store.generation();
-      if (status === 'authenticated' || status === 'unavailable') {
-        status = 'anonymous'; profile = null; emit();
-      }
-      return;
-    }
-    if (session.tokenRevision !== lastRevision) {
-      const renewed = session.sessionGeneration === lastGeneration;
-      lastGeneration = session.sessionGeneration;
-      lastRevision = session.tokenRevision;
-      if (renewed) control.post(TOKEN_RENEWED);
-      emit();
-    }
+  const state = createClientState({
+    store,
+    api,
+    isActive: () => !disposed,
+    onTokenRenewed: () => control.post(TOKEN_RENEWED),
   });
-  const normalize = (error) => error?.code === 'NETWORK' || error?.status === 0 ? unavailableSession(error) : error;
-  const mapStatus = (error) => {
-    if (error?.status === 401 || error?.code === 'SESSION_EXPIRED') { status = 'anonymous'; profile = null; }
-    else status = 'unavailable';
-    emit();
-  };
-  async function loadProfile(generation) {
-    const me = await api.request('/accounts/me', { retrySafeRead: true });
-    assertCurrent(generation);
-    profile = me;
-  }
+
+  const assertCurrent = (generation) => checkCurrent(store, generation, disposed);
+  const assertActive = () => { if (disposed) throw new Error('The auth client is disposed.'); };
+
   async function restore(force = false) {
     assertActive();
     let generation = store.generation();
     let session;
+    let me;
     try {
       session = await api.restoreSession(force);
       // Restore may create its own session; only that returned epoch is valid.
       assertCurrent(session.sessionGeneration);
       generation = session.sessionGeneration;
-      await loadProfile(generation);
+      me = await loadProfile(api, assertCurrent, generation);
       assertCurrent(generation);
     } catch (error) {
       if (error?.code === 'SESSION_CHANGED') throw error;
       // A confirmed expiry can clear this operation's own epoch.
       if (error?.status === 401 && !store.read() && store.generation() === generation + 1) generation = store.generation();
       assertCurrent(generation);
-      mapStatus(error);
-      if (error?.status === 401 && error?.code !== 'LOGOUT_PENDING' && !store.read()) return snapshot();
-      throw normalize(error);
+      state.mapError(error);
+      if (error?.status === 401 && error?.code !== 'LOGOUT_PENDING' && !store.read()) return state.getSnapshot();
+      throw state.normalizeError(error);
     }
-    status = 'authenticated'; emit(); return snapshot();
+    return state.toAuthenticated(me);
   }
+
   async function login(mode, values) {
     assertActive();
     // Deliberate identity replacement invalidates older restore/profile work
     // synchronously, before joining the origin-wide cookie-operation queue.
     store.clear();
-    status = 'loading'; profile = null; emit();
+    state.toLoading();
     let generation = store.generation();
+    let me;
     try {
       const session = await api.loginRequest(mode, values);
       assertCurrent(session.sessionGeneration);
       generation = session.sessionGeneration;
-      await loadProfile(generation);
+      me = await loadProfile(api, assertCurrent, generation);
       assertCurrent(generation);
     } catch (error) {
       if (error?.code === 'SESSION_CHANGED') throw error;
@@ -100,23 +78,24 @@ export function createBrowserAuthClient({ apiBase, fetchImpl = fetch, locks, cha
       // logout increments it again, so its state still cannot be overwritten.
       if (error?.code === 'SESSION_EXPIRED' && !store.read() && store.generation() === generation + 1) generation = store.generation();
       assertCurrent(generation);
-      mapStatus(error);
-      throw normalize(error);
+      state.mapError(error);
+      throw state.normalizeError(error);
     }
-    status = 'authenticated'; control.post(SIGNED_IN); emit(); return snapshot();
+    return state.toAuthenticated(me, () => control.post(SIGNED_IN));
   }
+
   async function logout() {
     assertActive();
     const marker = api.markLogoutPending();
     store.clear();
     const generation = store.generation();
-    status = 'anonymous'; profile = null;
-    control.post(SIGNED_OUT); emit();
+    state.toAnonymous(() => control.post(SIGNED_OUT));
     let serverConfirmed = false;
     try { await api.logoutRequest(marker); serverConfirmed = true; } catch { /* Keep the shared intent until a confirmed logout or deliberate login. */ }
-    if (!disposed && store.generation() === generation) emit();
+    state.emitIfCurrent(generation);
     return { serverConfirmed };
   }
+
   async function fetch(path, options = {}) {
     assertActive();
     const generation = store.generation();
@@ -127,39 +106,55 @@ export function createBrowserAuthClient({ apiBase, fetchImpl = fetch, locks, cha
     } catch (error) {
       if (error?.code === 'SESSION_CHANGED') throw error;
       if (disposed) throw changedSession();
-      const normalized = normalize(error);
+      const normalized = state.normalizeError(error);
       const ownExpiry = normalized?.code === 'SESSION_EXPIRED' && !store.read() && store.generation() === generation + 1;
       if (!ownExpiry) assertCurrent(generation);
-      if (normalized?.code === 'SESSION_EXPIRED' && !store.read()) { status = 'anonymous'; profile = null; emit(); }
-      else if (normalized?.code === 'UNAVAILABLE' || (normalized?.status ?? 0) >= 500) {
-        if (status === 'authenticated') { status = 'unavailable'; emit(); }
+      if (normalized?.code === 'SESSION_EXPIRED' && !store.read()) {
+        state.toAnonymous();
+      } else if (normalized?.code === 'UNAVAILABLE' || (normalized?.status ?? 0) >= 500) {
+        state.toUnavailable();
       }
       throw normalized;
     }
   }
+
   const stopControl = control.subscribe((message) => {
     if (disposed) return;
     if (message === SIGNED_OUT) {
-      store.clear(); status = 'anonymous'; profile = null; emit(); return;
+      store.clear();
+      state.toAnonymous();
+      return;
     }
     if (message === SIGNED_IN) {
-      store.clear(); status = 'loading'; profile = null; emit();
-      void restore(true).catch(() => {}); return;
+      store.clear();
+      state.toLoading();
+      void restore(true).catch(() => {});
+      return;
     }
     if (message === TOKEN_RENEWED && store.read()) {
       const generation = store.generation();
-      void loadProfile(generation).then(() => {
-        assertCurrent(generation); status = 'authenticated'; emit();
+      void loadProfile(api, assertCurrent, generation).then((me) => {
+        assertCurrent(generation);
+        state.toAuthenticated(me);
       }).catch((error) => {
         if (disposed || store.generation() !== generation || error?.code === 'SESSION_CHANGED') return;
         if (error?.status === 401 || error?.code === 'SESSION_EXPIRED') void restore(true).catch(() => {});
       });
     }
   });
+
   return {
-    getSnapshot: snapshot,
-    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-    restore, login, logout, getAccessToken: () => store.read()?.accessToken ?? null, fetch,
-    dispose() { disposed = true; stopControl(); stopStore(); listeners.clear(); },
+    getSnapshot: state.getSnapshot,
+    subscribe: state.subscribe,
+    restore,
+    login,
+    logout,
+    getAccessToken: () => store.read()?.accessToken ?? null,
+    fetch,
+    dispose() {
+      disposed = true;
+      stopControl();
+      state.dispose();
+    },
   };
 }
