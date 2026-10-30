@@ -190,19 +190,10 @@ export function adaptReveal(server: ServerReveal | null, mySide: string, otherId
   };
 }
 
-/** Server SealedSnapshot -> client ArenaSnapshot (units, side views, 2v2 teams). */
-function adapt(server: ServerSnapshot, language: string, userId: string, sampledAt: number): ArenaSnapshot {
-  const mine = server.sides[server.mySide] ?? { status: "coding" as const, submissions: 0, presence: "online" as const };
-  const otherId = Object.keys(server.sides).find((k) => k !== server.mySide) ?? "right";
-  const other = server.sides[otherId] ?? mine;
-  const remainingMs = Math.max(0, server.remainingMs);
-  const you: SideView = { name: "You", status: mine.status, presence: mine.presence, submissions: mine.submissions };
-  const opponent: SideView = { name: "Opponent", status: other.status, presence: other.presence, submissions: other.submissions };
-  // 2v2: real team state (alpha = own team, beta = opponents). 1v1 keeps the
-  // legacy shape with the readiness shim off.
-  const ownTeam = server.teams?.find((t) => t.members.some((m) => m.userId === userId));
-  const otherTeam = server.teams?.find((t) => t !== ownTeam);
-  const toTeamView = (t: NonNullable<ServerSnapshot["teams"]>[number]): TeamView => ({
+type ServerTeam = NonNullable<ServerSnapshot["teams"]>[number];
+
+function toTeamView(t: ServerTeam): TeamView {
+  return {
     id: t.side,
     members: [
       {
@@ -220,9 +211,54 @@ function adapt(server: ServerSnapshot, language: string, userId: string, sampled
     ],
     score: null,
     submissions: t.submissions,
-  });
-  const youRec = ownTeam?.members.find((m) => m.userId === userId);
-  const mateRec = ownTeam?.members.find((m) => m.userId !== userId);
+  };
+}
+
+function fallbackTeam(id: string, leader: SideView, teammateName: string): TeamView {
+  return {
+    id,
+    members: [leader, { name: teammateName, status: "coding", presence: "online", submissions: 0 }],
+    score: null,
+    submissions: leader.submissions,
+  };
+}
+
+function adaptReadiness(team: ServerTeam | undefined, userId: string): Pick<ArenaSnapshot, "ready" | "readyRevision"> {
+  if (!team) return { ready: { you: false, mate: false }, readyRevision: null };
+  const you = team.members.find((m) => m.userId === userId);
+  const mate = team.members.find((m) => m.userId !== userId);
+  return {
+    ready: { you: you?.ready === true, mate: mate?.ready === true },
+    readyRevision: { you: you?.readyRevision ?? null, mate: mate?.readyRevision ?? null },
+  };
+}
+
+function adaptTeamState(
+  server: ServerSnapshot,
+  language: string,
+  userId: string,
+  sides: Pick<ArenaSnapshot, "you" | "opponent">,
+): Pick<ArenaSnapshot, "alpha" | "beta" | "ready" | "readyRevision" | "docRevision" | "language"> {
+  // Alpha is the viewer's team, regardless of its authoritative side id.
+  const ownTeam = server.teams?.find((t) => t.members.some((m) => m.userId === userId));
+  const otherTeam = server.teams?.find((t) => t !== ownTeam);
+  return {
+    alpha: ownTeam ? toTeamView(ownTeam) : fallbackTeam("alpha", sides.you, "Mate"),
+    beta: otherTeam ? toTeamView(otherTeam) : fallbackTeam("beta", sides.opponent, "Rival 2"),
+    language: ownTeam?.language ?? language,
+    docRevision: ownTeam?.documentRevision ?? null,
+    ...adaptReadiness(ownTeam, userId),
+  };
+}
+
+/** Server SealedSnapshot -> client ArenaSnapshot (units, side views, 2v2 teams). */
+function adapt(server: ServerSnapshot, language: string, userId: string, sampledAt: number): ArenaSnapshot {
+  const mine = server.sides[server.mySide] ?? { status: "coding" as const, submissions: 0, presence: "online" as const };
+  const otherId = Object.keys(server.sides).find((k) => k !== server.mySide) ?? "right";
+  const other = server.sides[otherId] ?? mine;
+  const remainingMs = Math.max(0, server.remainingMs);
+  const you: SideView = { name: "You", status: mine.status, presence: mine.presence, submissions: mine.submissions };
+  const opponent: SideView = { name: "Opponent", status: other.status, presence: other.presence, submissions: other.submissions };
   return {
     mode: server.mode,
     roundPhase: server.roundPhase,
@@ -234,33 +270,10 @@ function adapt(server: ServerSnapshot, language: string, userId: string, sampled
       ...server.problem,
       id: server.problem.id ?? server.problem.problemVersionId ?? "unknown-problem",
     },
-    language: ownTeam?.language ?? language,
+    ...adaptTeamState(server, language, userId, { you, opponent }),
     tests: server.tests,
     you,
     opponent,
-    alpha: ownTeam
-      ? toTeamView(ownTeam)
-      : {
-          id: "alpha",
-          members: [you, { name: "Mate", status: "coding", presence: "online", submissions: 0 }],
-          score: null,
-          submissions: you.submissions,
-        },
-    beta: otherTeam
-      ? toTeamView(otherTeam)
-      : {
-          id: "beta",
-          members: [opponent, { name: "Rival 2", status: "coding", presence: "online", submissions: 0 }],
-          score: null,
-          submissions: opponent.submissions,
-        },
-    ready: ownTeam
-      ? { you: youRec?.ready === true, mate: mateRec?.ready === true }
-      : { you: false, mate: false },
-    docRevision: ownTeam?.documentRevision ?? null,
-    readyRevision: ownTeam
-      ? { you: youRec?.readyRevision ?? null, mate: mateRec?.readyRevision ?? null }
-      : null,
     reveal: adaptReveal(server.reveal, server.mySide, otherId),
     notice: null,
     revision: server.revision ?? 0,
