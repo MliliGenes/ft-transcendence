@@ -23,7 +23,7 @@ export function TeamChat({
 }) {
   const [entries, setEntries] = useState<TeamChatEntry[]>(() => client?.getMessages() ?? []);
   const [fallbackMessages, setFallbackMessages] = useState<FallbackMessage[]>([]);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState({ text: "" });
   const [status, setStatus] = useState(client?.status ?? "connected");
   const [error, setError] = useState<string | null>(client?.error ?? null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -47,23 +47,23 @@ export function TeamChat({
   const handleSendText = async (e: React.FormEvent) => {
     e.preventDefault();
     setActionError(null);
-    const text = draft.trim();
+    const text = draft.text.trim();
     if (!text) return;
 
-    if (client) {
-      try {
+    try {
+      if (client) {
         await client.sendMessage(text);
-        setDraft("");
-      } catch (err) {
-        setActionError(err instanceof Error ? err.message : "failed to send message");
+      } else {
+        // Mock / fallback path
+        setFallbackMessages((prev) => [
+          ...prev,
+          { id: String(Date.now()), from: "You", text, type: "text" },
+        ]);
       }
-    } else {
-      // Mock / fallback path
-      setFallbackMessages((prev) => [
-        ...prev,
-        { id: String(Date.now()), from: "You", text, type: "text" },
-      ]);
-      setDraft("");
+      // An edit owns a new draft, even when it restores the same text.
+      setDraft((current) => current === draft ? { text: "" } : current);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "failed to send message");
     }
   };
 
@@ -166,8 +166,8 @@ export function TeamChat({
         <input
           aria-label="Team message"
           className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-xs disabled:bg-neutral-100 disabled:text-neutral-500"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          value={draft.text}
+          onChange={(e) => setDraft({ text: e.target.value })}
           placeholder={readOnly ? "Match complete — chat closed" : "Message your team…"}
           disabled={disabled}
           maxLength={500}
@@ -176,7 +176,7 @@ export function TeamChat({
           type="submit"
           className="rounded bg-teal-700 px-2 py-1 text-xs text-white disabled:opacity-50"
           aria-label="Send team message"
-          disabled={disabled || !draft.trim()}
+          disabled={disabled || !draft.text.trim()}
         >
           ›
         </button>

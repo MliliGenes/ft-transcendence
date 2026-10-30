@@ -31,6 +31,9 @@ collaboration binding; the CodeWorkspace key supplies that lifetime boundary.
 - Leaving a Match is an explicit confirmed command. Socket disconnection is a separate lifecycle event.
 - Local draft scopes include player identity, transport, Round, problem, and language. A shared document replaces local draft restoration and persistence for that editor path.
 - The header ticks from the latest server clock sample between snapshots; only terminal/deadline presentation reads the coarse authoritative remaining seconds.
+- Team chat stays editable while a send awaits confirmation. Success clears
+  only the unchanged draft that was sent; later edits, including retyping the
+  same text, survive older confirmations. A failed send keeps the current draft.
 
 ## Side Effects
 
@@ -45,8 +48,12 @@ From the repository root with Node 22, after `npm ci` and `npm run build:package
 ```sh
 npm test --workspace arena-frontend
 npm run typecheck --workspace arena-frontend
+npm run test:chat --workspace arena-frontend
 ```
 
-The unit target excludes `e2e`. Select the browser fixture, server, and relevant cases using [manual game testing](../../../docs/manual-game-testing.md); browser coverage is a separate result.
+The unit target excludes `e2e`. The chat target starts its own Vite fixture
+server and needs no Game backend. Select other browser fixtures, servers, and
+cases using [manual game testing](../../../docs/manual-game-testing.md);
+browser coverage is a separate result.
 
 The scout read 49,912 bytes across seven files, with at most 300 lines per file. `ArenaPage.tsx` and `LobbyPage.tsx` were partial; ten files, including `MatchResult.tsx`, `TeamChat.tsx`, and `ReadyState.tsx`, were unreviewed. Complete supporting-component and cleanup behavior is outside this sample. No runtime tests were run for this documentation.

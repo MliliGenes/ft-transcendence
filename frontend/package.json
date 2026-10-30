@@ -11,6 +11,7 @@
     "test": "vitest run --exclude e2e",
     "test:e2e": "playwright test",
     "test:clock": "playwright test -c playwright.clock.config.ts",
+    "test:chat": "playwright test -c playwright.chat.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint"
   },
