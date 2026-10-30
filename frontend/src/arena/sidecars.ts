@@ -1,5 +1,6 @@
 import type { TeamChatClient } from "./chat.js";
 import type { CollabClient } from "./collab.js";
+import { SidecarSlot } from "./sidecar-slot.js";
 
 export interface LiveClientConfig {
   baseUrl: string;
@@ -33,15 +34,6 @@ export interface ArenaSidecarLifecycle {
   dispose(): void;
 }
 
-type DisposableClient = { disconnect(): void; dispose?(): void };
-
-interface PendingClient<T> {
-  key: string;
-  cancelled: boolean;
-  client: T | null;
-  promise: Promise<T | null>;
-}
-
 interface ScopeIdentity {
   transportKey: object;
   matchId: string | null;
@@ -62,15 +54,6 @@ function configKey(config: LiveClientConfig): string {
   return JSON.stringify([config.baseUrl, config.userId, config.matchId]);
 }
 
-function disconnect(client: DisposableClient): void {
-  try {
-    if (client.dispose) client.dispose();
-    else client.disconnect();
-  } catch {
-    // Disposal is best effort so one sidecar cannot strand the other.
-  }
-}
-
 function sameScope(left: ScopeIdentity, right: ScopeIdentity): boolean {
   return Object.is(left.transportKey, right.transportKey) && left.matchId === right.matchId;
 }
@@ -79,154 +62,80 @@ function matchId(scope: SidecarScope): string | null {
   return scope.chatConfig?.matchId ?? scope.collabConfig?.matchId ?? null;
 }
 
+function computeKeys(scope: SidecarScope): { collabKey: string | null; chatKey: string | null } {
+  return {
+    collabKey: scope.collabConfig ? `${scope.round}:${configKey(scope.collabConfig)}` : null,
+    chatKey: scope.chatConfig ? configKey(scope.chatConfig) : null,
+  };
+}
+
+function fetchSidecars(
+  scope: SidecarScope,
+  collabSlot: SidecarSlot<CollabClient>,
+  chatSlot: SidecarSlot<TeamChatClient>,
+  collabKey: string | null,
+  chatKey: string | null,
+  isDisposed: () => boolean,
+): Promise<[CollabClient | null, TeamChatClient | null]> {
+  const collabPromise = scope.collabConfig
+    ? collabSlot.ensure(scope.collabConfig, collabKey!, isDisposed)
+    : Promise.resolve(null);
+  const chatPromise = scope.chatConfig
+    ? chatSlot.ensure(scope.chatConfig, chatKey!, isDisposed)
+    : Promise.resolve(null);
+  return Promise.all([collabPromise, chatPromise]);
+}
+
 export function createArenaSidecarLifecycle(factories: SidecarFactories = defaultFactories): ArenaSidecarLifecycle {
   let disposed = false;
   let requestVersion = 0;
   let identity: ScopeIdentity | null = null;
 
-  let collab: CollabClient | null = null;
-  let collabKey: string | null = null;
-  let collabPending: PendingClient<CollabClient> | null = null;
+  const collabSlot = new SidecarSlot(factories.createCollab);
+  const chatSlot = new SidecarSlot(factories.createChat);
 
-  let chat: TeamChatClient | null = null;
-  let chatKey: string | null = null;
-  let chatPending: PendingClient<TeamChatClient> | null = null;
+  const isDisposed = () => disposed;
 
   function state(): SidecarState {
-    return { collab, chat };
+    return { collab: collabSlot.client, chat: chatSlot.client };
   }
 
-  function cancelCollabPending(): void {
-    const pending = collabPending;
-    if (!pending) return;
-    pending.cancelled = true;
-    if (pending.client) {
-      disconnect(pending.client);
-      pending.client = null;
+  function alignScope(scope: SidecarScope): void {
+    const nextIdentity = { transportKey: scope.transportKey, matchId: matchId(scope) } satisfies ScopeIdentity;
+    if (!identity || !sameScope(identity, nextIdentity)) {
+      collabSlot.clear();
+      chatSlot.clear();
+      identity = nextIdentity;
     }
-    collabPending = null;
-  }
-
-  function cancelChatPending(): void {
-    const pending = chatPending;
-    if (!pending) return;
-    pending.cancelled = true;
-    if (pending.client) {
-      disconnect(pending.client);
-      pending.client = null;
-    }
-    chatPending = null;
-  }
-
-  function clearCollab(): void {
-    cancelCollabPending();
-    if (collab) disconnect(collab);
-    collab = null;
-    collabKey = null;
-  }
-
-  function clearChat(): void {
-    cancelChatPending();
-    if (chat) disconnect(chat);
-    chat = null;
-    chatKey = null;
-  }
-
-  function start<T extends DisposableClient>(
-    factory: (config: LiveClientConfig) => Promise<T>,
-    config: LiveClientConfig,
-    key: string,
-  ): PendingClient<T> {
-    const pending: PendingClient<T> = {
-      key,
-      cancelled: false,
-      client: null,
-      promise: Promise.resolve(null) as Promise<T | null>,
-    };
-
-    pending.promise = Promise.resolve()
-      .then(() => factory(config))
-      .then(
-        (client) => {
-          if (pending.cancelled || disposed) {
-            disconnect(client);
-            return null;
-          }
-          pending.client = client;
-          return client;
-        },
-        (error: unknown) => {
-          if (pending.cancelled || disposed) return null;
-          throw error;
-        },
-      );
-    return pending;
-  }
-
-  function ensureCollab(config: LiveClientConfig, key: string): Promise<CollabClient | null> {
-    if (collab && collabKey === key) return Promise.resolve(collab);
-    if (collabPending?.key === key) return collabPending.promise;
-    const pending = start(factories.createCollab, config, key);
-    collabPending = pending;
-    return pending.promise;
-  }
-
-  function ensureChat(config: LiveClientConfig, key: string): Promise<TeamChatClient | null> {
-    if (chat && chatKey === key) return Promise.resolve(chat);
-    if (chatPending?.key === key) return chatPending.promise;
-    const pending = start(factories.createChat, config, key);
-    chatPending = pending;
-    return pending.promise;
   }
 
   async function sync(scope: SidecarScope): Promise<SidecarState | null> {
     disposed = false;
     const version = ++requestVersion;
-    const nextIdentity = { transportKey: scope.transportKey, matchId: matchId(scope) } satisfies ScopeIdentity;
+    alignScope(scope);
 
-    if (!identity || !sameScope(identity, nextIdentity)) {
-      clearCollab();
-      clearChat();
-      identity = nextIdentity;
-    }
-
-    const desiredCollabKey = scope.collabConfig ? `${scope.round}:${configKey(scope.collabConfig)}` : null;
-    // Removed configs retire pending work; otherwise a matching pending factory is reused.
-    if (desiredCollabKey === null || (collabKey !== desiredCollabKey && collabPending?.key !== desiredCollabKey)) {
-      clearCollab();
-    }
-
-    const desiredChatKey = scope.chatConfig ? configKey(scope.chatConfig) : null;
-    if (desiredChatKey === null || (chatKey !== desiredChatKey && chatPending?.key !== desiredChatKey)) {
-      clearChat();
-    }
-
-    const collabPromise = scope.collabConfig
-      ? ensureCollab(scope.collabConfig, desiredCollabKey!)
-      : Promise.resolve(null);
-    const chatPromise = scope.chatConfig ? ensureChat(scope.chatConfig, desiredChatKey!) : Promise.resolve(null);
+    const { collabKey, chatKey } = computeKeys(scope);
+    collabSlot.prune(collabKey);
+    chatSlot.prune(chatKey);
 
     try {
-      const [nextCollab, nextChat] = await Promise.all([collabPromise, chatPromise]);
+      const [nextCollab, nextChat] = await fetchSidecars(
+        scope,
+        collabSlot,
+        chatSlot,
+        collabKey,
+        chatKey,
+        isDisposed,
+      );
       if (version !== requestVersion || disposed) return null;
 
-      if (nextCollab) {
-        collab = nextCollab;
-        collabKey = desiredCollabKey;
-        if (collabPending?.client === nextCollab) collabPending.client = null;
-        collabPending = null;
-      }
-      if (nextChat) {
-        chat = nextChat;
-        chatKey = desiredChatKey;
-        if (chatPending?.client === nextChat) chatPending.client = null;
-        chatPending = null;
-      }
+      collabSlot.adopt(nextCollab, collabKey);
+      chatSlot.adopt(nextChat, chatKey);
       return state();
     } catch (error) {
       if (version === requestVersion && !disposed) {
-        if (collabPending?.key === desiredCollabKey) clearCollab();
-        if (chatPending?.key === desiredChatKey) clearChat();
+        collabSlot.onSyncError(collabKey);
+        chatSlot.onSyncError(chatKey);
       }
       throw error;
     }
@@ -235,15 +144,14 @@ export function createArenaSidecarLifecycle(factories: SidecarFactories = defaul
   function dispose(): void {
     disposed = true;
     requestVersion++;
-    clearCollab();
-    clearChat();
+    collabSlot.clear();
+    chatSlot.clear();
     identity = null;
   }
 
-  /** Renew both sidecars explicitly: same instances, fresh sockets, kept Yjs/chat state. */
   async function renew(): Promise<void> {
     if (disposed) return;
-    await Promise.allSettled([collab?.renewSocket(), chat?.renewSocket()]);
+    await Promise.allSettled([collabSlot.renewSocket(), chatSlot.renewSocket()]);
   }
 
   return {
