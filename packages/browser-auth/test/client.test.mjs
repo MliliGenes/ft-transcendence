@@ -302,3 +302,150 @@ test('token rotation bumps tokenRevision so sidecars can renew explicitly', asyn
   assert.equal(client.getAccessToken(), 'access-2');
   client.dispose();
 });
+
+test('storage getItem failure on restore propagates fail-closed without network call', async () => {
+  let networkCalls = 0;
+  const faultStorage = {
+    getItem() { throw new Error('SecurityError: storage read blocked'); },
+    setItem() {},
+    removeItem() {},
+  };
+  const [channelA] = linkedChannels();
+  const client = createBrowserAuthClient({
+    apiBase: 'https://auth.test',
+    fetchImpl: async () => { networkCalls++; return json(TOKENS(1)); },
+    locks: serialLocks(),
+    channel: channelA,
+    storage: faultStorage,
+  });
+  await assert.rejects(
+    client.restore(),
+    (error) => error.message === 'SecurityError: storage read blocked',
+  );
+  assert.equal(networkCalls, 0);
+  client.dispose();
+});
+
+test('storage setItem failure on logout propagates fail-closed', async () => {
+  let networkCalls = 0;
+  const faultStorage = {
+    getItem() { return null; },
+    setItem() { throw new Error('QuotaExceededError: storage write blocked'); },
+    removeItem() {},
+  };
+  const [channelA] = linkedChannels();
+  const client = createBrowserAuthClient({
+    apiBase: 'https://auth.test',
+    fetchImpl: async () => { networkCalls++; return new Response(null, { status: 204 }); },
+    locks: serialLocks(),
+    channel: channelA,
+    storage: faultStorage,
+  });
+  await assert.rejects(
+    client.logout(),
+    (error) => error.message === 'QuotaExceededError: storage write blocked',
+  );
+  assert.equal(networkCalls, 0);
+  client.dispose();
+});
+
+test('storage setItem failure during login acknowledgement rejects with SESSION_CHANGED while intent remains unacknowledged', async () => {
+  let acknowledgementAttempts = 0;
+  const faultStorage = {
+    entries: new Map([['browser-auth:logout-pending', 'active-logout-id']]),
+    getItem(key) { return this.entries.get(key) ?? null; },
+    setItem(key, value) {
+      if (key === 'browser-auth:logout-acknowledged') {
+        acknowledgementAttempts++;
+        throw new Error('QuotaExceededError: acknowledgement write blocked');
+      }
+      this.entries.set(key, value);
+    },
+    removeItem(key) { this.entries.delete(key); },
+  };
+  const [channelA] = linkedChannels();
+  const client = createBrowserAuthClient({
+    apiBase: 'https://auth.test',
+    fetchImpl: scriptFetch((url) => {
+      if (url.endsWith('/auth/login')) return json(TOKENS(1));
+      return json(ME);
+    }),
+    locks: serialLocks(),
+    channel: channelA,
+    storage: faultStorage,
+  });
+  await assert.rejects(
+    client.login('login', {}),
+    (error) => error.code === 'SESSION_CHANGED',
+  );
+  assert.equal(acknowledgementAttempts, 1);
+  assert.equal(faultStorage.getItem('browser-auth:logout-acknowledged'), null);
+  assert.equal(faultStorage.getItem('browser-auth:logout-pending'), 'active-logout-id');
+  assert.equal(client.getAccessToken(), TOKENS(1).accessToken);
+  const snapshot = client.getSnapshot();
+  assert.equal(snapshot.status, 'loading');
+  assert.equal(snapshot.logoutPending, true);
+  client.dispose();
+});
+
+test('per-instance fallback when storage is null keeps independent clients isolated', async () => {
+  const [channelA, channelB] = linkedChannels();
+  const locks = serialLocks();
+  const fetchImplA = scriptFetch((url) => {
+    if (url.endsWith('/auth/logout')) throw new TypeError('offline');
+    return json(ME);
+  });
+  const fetchImplB = scriptFetch((url) => {
+    if (url.endsWith('/auth/refresh')) return json(TOKENS(1));
+    return json(ME);
+  });
+  const clientA = createBrowserAuthClient({
+    apiBase: 'https://auth.test',
+    fetchImpl: fetchImplA,
+    locks,
+    channel: channelA,
+    storage: null,
+  });
+  const clientB = createBrowserAuthClient({
+    apiBase: 'https://auth.test',
+    fetchImpl: fetchImplB,
+    locks,
+    channel: channelB,
+    storage: null,
+  });
+  await clientA.logout();
+  assert.equal(clientA.getSnapshot().logoutPending, true);
+  assert.equal(clientB.getSnapshot().logoutPending, false);
+  const snapB = await clientB.restore();
+  assert.equal(snapB.status, 'authenticated');
+  assert.equal(snapB.logoutPending, false);
+  clientA.dispose();
+  clientB.dispose();
+});
+
+test('per-instance fallback when storage is null blocks restore after failed logout until login', async () => {
+  const fetchImpl = scriptFetch((url) => {
+    if (url.endsWith('/auth/logout')) throw new TypeError('offline');
+    if (url.endsWith('/auth/refresh')) return json(TOKENS(1));
+    if (url.endsWith('/auth/login')) return json(TOKENS(2));
+    return json(ME);
+  });
+  const [channelA] = linkedChannels();
+  const client = createBrowserAuthClient({
+    apiBase: 'https://auth.test',
+    fetchImpl,
+    locks: serialLocks(),
+    channel: channelA,
+    storage: null,
+  });
+  await client.logout();
+  assert.equal(client.getSnapshot().logoutPending, true);
+  await assert.rejects(
+    client.restore(),
+    (error) => error.code === 'LOGOUT_PENDING',
+  );
+  const logged = await client.login('login', {});
+  assert.equal(logged.status, 'authenticated');
+  assert.equal(client.getSnapshot().logoutPending, false);
+  client.dispose();
+});

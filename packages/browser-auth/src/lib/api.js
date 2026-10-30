@@ -4,6 +4,8 @@
 // may retry an opted-in safe read once; a confirmed 401 renewal ends the session, while a network /
 // 5xx / timeout failure retains it as unavailable.
 
+import { createLogoutIntent } from './logout-intent.js';
+
 export class ApiError extends Error {
   constructor(message, status = 0, messages = [message], code = '') {
     super(message);
@@ -15,8 +17,6 @@ export class ApiError extends Error {
 }
 
 const SESSION_LOCK = 'browser-auth:session';
-const LOGOUT_MARKER = 'browser-auth:logout-pending';
-const LOGOUT_ACKNOWLEDGED = 'browser-auth:logout-acknowledged';
 const RETRIABLE_NETWORK = 0;
 const isSafeMethod = (method) => method === 'GET' || method === 'HEAD';
 const isRetriable = (error) =>
@@ -58,39 +58,12 @@ export function createAuthApi({
   void clock;
   const base = String(apiBase ?? '').replace(/\/$/, '');
   let renewal = null;
-  // Non-browser callers may omit storage; browsers share only a credential-free
-  // intent marker. The refresh credential remains exclusively in its cookie.
-  let localMarker = null;
-  let localAcknowledged = null;
-  const readMarker = () => storage ? storage.getItem(LOGOUT_MARKER) : localMarker;
-  const isLogoutPending = () => {
-    // Read the acknowledgement first: a later intent always wins. Cookie work
-    // serializes acknowledgements, but synchronous intent writes stay outside
-    // that lock and must never be deleted by a non-atomic compare/remove pair.
-    const acknowledged = storage ? storage.getItem(LOGOUT_ACKNOWLEDGED) : localAcknowledged;
-    const marker = readMarker();
-    return marker !== null && marker !== acknowledged;
-  };
-  const markLogoutPending = () => {
-    const marker = globalThis.crypto.randomUUID();
-    if (storage) storage.setItem(LOGOUT_MARKER, marker);
-    else localMarker = marker;
-    return marker;
-  };
-  const acknowledgeMarker = (expected) => {
-    if (expected == null || readMarker() !== expected) return;
-    // Cookie acknowledgements are serialized, so an older queued operation
-    // cannot replace the acknowledgement of the current newer intent.
-    // Acknowledge only our own ID, leaving the intent key untouched. Another
-    // tab can write a newer ID at any storage-operation boundary safely.
-    if (storage) storage.setItem(LOGOUT_ACKNOWLEDGED, expected);
-    else localAcknowledged = expected;
-  };
+  const logoutIntent = createLogoutIntent(storage);
   const assertCurrent = (generation) => {
     if (!isActive() || store.generation() !== generation) throw changedSession();
   };
   const requireRestoreAllowed = () => {
-    if (isLogoutPending())
+    if (logoutIntent.isPending())
       throw new ApiError('You are signed out on this browser. Please sign in again.', 401, undefined, 'LOGOUT_PENDING');
   };
 
@@ -302,10 +275,10 @@ export function createAuthApi({
 
   async function loginRequest(mode, values) {
     const generation = store.generation();
-    const marker = readMarker();
+    const marker = logoutIntent.readMarker();
     const assertIntent = () => {
       assertCurrent(generation);
-      const currentMarker = readMarker();
+      const currentMarker = logoutIntent.readMarker();
       // A prior logout may finish before this queued deliberate login; only
       // a newer outstanding intent supersedes the login.
       if (currentMarker !== null && currentMarker !== marker) throw changedSession();
@@ -321,18 +294,26 @@ export function createAuthApi({
       }
       assertIntent();
       const session = store.replace(tokens);
-      acknowledgeMarker(marker);
+      logoutIntent.acknowledge(marker);
       return session;
     });
   }
 
-  async function logoutRequest(marker = markLogoutPending()) {
+  async function logoutRequest(marker = logoutIntent.markPending()) {
     return withSessionLock(async () => {
       await send('/auth/logout', { method: 'POST' });
       // Only this operation's intent ID is acknowledged; a newer ID stays pending.
-      acknowledgeMarker(marker);
+      logoutIntent.acknowledge(marker);
     });
   }
 
-  return { request, restoreSession, renew, loginRequest, logoutRequest, isLogoutPending, markLogoutPending };
+  return {
+    request,
+    restoreSession,
+    renew,
+    loginRequest,
+    logoutRequest,
+    isLogoutPending: () => logoutIntent.isPending(),
+    markLogoutPending: () => logoutIntent.markPending(),
+  };
 }
