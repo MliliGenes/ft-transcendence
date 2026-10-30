@@ -33,6 +33,24 @@ function expiredStored(client: Socket): boolean {
   return !!p && typeof p.expiresAt === "number" && p.expiresAt <= Date.now();
 }
 
+function safeDisconnect(client: Socket): void {
+  try {
+    client.disconnect(true);
+  } catch {
+    /* best-effort */
+  }
+}
+
+function ensureEmittable(client: Socket, runtimeReady: boolean): boolean {
+  if (canEmitTo(client, runtimeReady)) return true;
+  safeDisconnect(client);
+  return false;
+}
+
+type SenderAuthResult =
+  | { ok: true; principal: MatchSocketPrincipal }
+  | { ok: false; response: { ok: false; error: string } | undefined };
+
 /**
  * Real-time transport: game-owned event fan-out per match room.
  * Connection: handshake accessToken verified -> membership verified
@@ -64,6 +82,36 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return this.verifier as unknown as SocketVerifier | undefined;
   }
 
+  private async cleanupAdmissionFailure(
+    client: Socket,
+    principal: MatchSocketPrincipal | null,
+    opened: boolean,
+  ): Promise<void> {
+    if (opened && principal?.matchId) {
+      try {
+        await this.game.noteSocketClosed(principal.userId, principal.matchId, client.id);
+      } catch {
+        /* Existing best-effort cleanup policy. */
+      }
+    }
+    safeDisconnect(client);
+  }
+
+  private async abortOpenConnection(
+    client: Socket,
+    principal: MatchSocketPrincipal,
+  ): Promise<void> {
+    await this.game.noteSocketClosed(principal.userId, principal.matchId, client.id);
+    safeDisconnect(client);
+  }
+
+  private async checkOpenEmittable(client: Socket, principal: MatchSocketPrincipal): Promise<boolean> {
+    this.game.assertServing();
+    if (canEmitTo(client, this.game.runtimeReady)) return true;
+    await this.abortOpenConnection(client, principal);
+    return false;
+  }
+
   /**
    * Authoritative reconnect attach (ticket 11 §2/§3, strategy C): verify
    * membership, register the socket (presence), join the room FIRST, then
@@ -80,48 +128,27 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.game.assertServing();
       principal = (await authenticateHandshake(client, this.socketVerifier(), { matchIdRequired: true })) as MatchSocketPrincipal;
       if (!canEmitTo(client, this.game.runtimeReady)) {
-        if (opened && principal?.matchId) {
-          try { await this.game.noteSocketClosed(principal.userId, principal.matchId, client.id); } catch { /* best-effort */ }
-        }
-        try { client.disconnect(true); } catch { /* best-effort */ }
+        await this.cleanupAdmissionFailure(client, principal, opened);
         return;
       }
       const { userId, matchId } = principal;
       await this.game.snapshot(userId, matchId);
       this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) {
-        try { client.disconnect(true); } catch { /* best-effort */ }
-        return;
-      }
+      if (!ensureEmittable(client, this.game.runtimeReady)) return;
+
       await this.game.noteSocketOpen(userId, matchId, client.id);
       opened = true;
-      this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) {
-        await this.game.noteSocketClosed(userId, matchId, client.id);
-        try { client.disconnect(true); } catch { /* best-effort */ }
-        return;
-      }
+      if (!(await this.checkOpenEmittable(client, principal))) return;
+
       await client.join(roomFor(matchId));
-      this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) {
-        await this.game.noteSocketClosed(userId, matchId, client.id);
-        try { client.disconnect(true); } catch { /* best-effort */ }
-        return;
-      }
+      if (!(await this.checkOpenEmittable(client, principal))) return;
+
       const snapshot = await this.game.snapshot(userId, matchId);
-      this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) {
-        await this.game.noteSocketClosed(userId, matchId, client.id);
-        try { client.disconnect(true); } catch { /* best-effort */ }
-        return;
-      }
+      if (!(await this.checkOpenEmittable(client, principal))) return;
+
       emitToSocket(client, "snapshot", snapshot, this.game.runtimeReady);
     } catch {
-      if (opened && principal?.matchId) {
-        try { await this.game.noteSocketClosed(principal.userId, principal.matchId, client.id); }
-        catch { /* Existing best-effort cleanup policy. */ }
-      }
-      try { client.disconnect(true); } catch { /* best-effort */ }
+      await this.cleanupAdmissionFailure(client, principal, opened);
     }
   }
 
@@ -138,33 +165,72 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  @SubscribeMessage("run")
-  async onRun(@ConnectedSocket() client: Socket, @MessageBody() body: { code: string; language: string }) {
-    if (!client.connected) { try { client.disconnect(true); } catch {} return undefined; }
-    if (expiredStored(client)) { try { client.disconnect(true); } catch {} return undefined; }
-    let principal: MatchSocketPrincipal;
-    try {
-      principal = (await authorizeSocketMessage(client, this.socketVerifier(), { matchIdRequired: true })) as MatchSocketPrincipal;
-    } catch (error) {
-      if (!this.game.runtimeReady) return undefined;
-      return { ok: false as const, error: error instanceof Error ? error.message : "run failed" };
+  private async authenticateSender(
+    client: Socket,
+    fallbackError: string,
+  ): Promise<SenderAuthResult> {
+    if (!client.connected) {
+      safeDisconnect(client);
+      return { ok: false, response: undefined };
     }
+    if (expiredStored(client)) {
+      safeDisconnect(client);
+      return { ok: false, response: undefined };
+    }
+    try {
+      const principal = (await authorizeSocketMessage(client, this.socketVerifier(), {
+        matchIdRequired: true,
+      })) as MatchSocketPrincipal;
+      return { ok: true, principal };
+    } catch (error) {
+      if (!this.game.runtimeReady) return { ok: false, response: undefined };
+      return {
+        ok: false,
+        response: {
+          ok: false,
+          error: error instanceof Error ? error.message : fallbackError,
+        },
+      };
+    }
+  }
+
+  private async dispatchGameCommand<TSuccess extends { ok: true }>(
+    client: Socket,
+    fallbackError: string,
+    execute: (principal: MatchSocketPrincipal) => Promise<TSuccess>,
+  ): Promise<TSuccess | { ok: false; error: string } | undefined> {
+    const auth = await this.authenticateSender(client, fallbackError);
+    if (!auth.ok) return auth.response;
+
     try {
       this.game.assertServing();
       if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-      // Never read payload identity: side resolves from the socket principal.
-      const result = await this.game.run(principal.userId, principal.matchId, body);
+
+      const successAck = await execute(auth.principal);
+
       if (!canEmitTo(client, this.game.runtimeReady)) {
-        if (expiredStored(client)) try { client.disconnect(true); } catch {}
+        if (expiredStored(client)) safeDisconnect(client);
         return undefined;
       }
       this.game.assertServing();
-      return { ok: true as const, result };
+      return successAck;
     } catch (error) {
       if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-      try { this.game.assertServing(); } catch { return undefined; }
-      return { ok: false as const, error: error instanceof Error ? error.message : "run failed" };
+      try {
+        this.game.assertServing();
+      } catch {
+        return undefined;
+      }
+      return { ok: false, error: error instanceof Error ? error.message : fallbackError };
     }
+  }
+
+  @SubscribeMessage("run")
+  async onRun(@ConnectedSocket() client: Socket, @MessageBody() body: { code: string; language: string }) {
+    return this.dispatchGameCommand(client, "run failed", async (principal) => {
+      const result = await this.game.run(principal.userId, principal.matchId, body);
+      return { ok: true as const, result };
+    });
   }
 
   @SubscribeMessage("submit")
@@ -172,94 +238,28 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { code: string; language: string; submissionId?: string; evaluationId?: string },
   ) {
-    if (!client.connected) { try { client.disconnect(true); } catch {} return undefined; }
-    if (expiredStored(client)) { try { client.disconnect(true); } catch {} return undefined; }
-    let principal: MatchSocketPrincipal;
-    try {
-      principal = (await authorizeSocketMessage(client, this.socketVerifier(), { matchIdRequired: true })) as MatchSocketPrincipal;
-    } catch (error) {
-      if (!this.game.runtimeReady) return undefined;
-      return { ok: false as const, error: error instanceof Error ? error.message : "submit failed" };
-    }
-    try {
-      this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-      // Auth failure throws before the engine: an accepted Evaluation is
-      // never failed here — late expiry only suppresses the ack.
+    return this.dispatchGameCommand(client, "submit failed", async (principal) => {
       const result = await this.game.submit(principal.userId, principal.matchId, body);
-      if (!canEmitTo(client, this.game.runtimeReady)) {
-        if (expiredStored(client)) try { client.disconnect(true); } catch {}
-        return undefined;
-      }
-      this.game.assertServing();
       return { ok: true as const, result };
-    } catch (error) {
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-      try { this.game.assertServing(); } catch { return undefined; }
-      return { ok: false as const, error: error instanceof Error ? error.message : "submit failed" };
-    }
+    });
   }
 
   @SubscribeMessage("setReady")
   async onReady(@ConnectedSocket() client: Socket, @MessageBody() body: { value: boolean; documentRevision?: number }) {
-    // 2v2: revision-bound per-player readiness (engine-enforced). 1v1 keeps
-    // the legacy no-op ack — the engine returns without effect there.
-    if (!client.connected) { try { client.disconnect(true); } catch {} return undefined; }
-    if (expiredStored(client)) { try { client.disconnect(true); } catch {} return undefined; }
-    let principal: MatchSocketPrincipal;
-    try {
-      principal = (await authorizeSocketMessage(client, this.socketVerifier(), { matchIdRequired: true })) as MatchSocketPrincipal;
-    } catch (error) {
-      if (!this.game.runtimeReady) return undefined;
-      return { ok: false as const, error: error instanceof Error ? error.message : "setReady failed" };
-    }
-    try {
-      this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
+    return this.dispatchGameCommand(client, "setReady failed", async (principal) => {
       await this.game.setReady(principal.userId, principal.matchId, {
         ready: body?.value === true,
         documentRevision: body?.documentRevision,
       });
-      if (!canEmitTo(client, this.game.runtimeReady)) {
-        if (expiredStored(client)) try { client.disconnect(true); } catch {}
-        return undefined;
-      }
-      this.game.assertServing();
       return { ok: true as const };
-    } catch (error) {
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-      try { this.game.assertServing(); } catch { return undefined; }
-      return { ok: false as const, error: error instanceof Error ? error.message : "setReady failed" };
-    }
+    });
   }
 
   @SubscribeMessage("leave")
   async onLeave(@ConnectedSocket() client: Socket) {
-    // Deliberate leave only: immediate forfeit (§15). Socket loss never lands
-    // here — handleDisconnect owns that path and never forfeits.
-    if (!client.connected) { try { client.disconnect(true); } catch {} return undefined; }
-    if (expiredStored(client)) { try { client.disconnect(true); } catch {} return undefined; }
-    let principal: MatchSocketPrincipal;
-    try {
-      principal = (await authorizeSocketMessage(client, this.socketVerifier(), { matchIdRequired: true })) as MatchSocketPrincipal;
-    } catch (error) {
-      if (!this.game.runtimeReady) return undefined;
-      return { ok: false as const, error: error instanceof Error ? error.message : "leave failed" };
-    }
-    try {
-      this.game.assertServing();
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
+    return this.dispatchGameCommand(client, "leave failed", async (principal) => {
       const result = await this.game.leave(principal.userId, principal.matchId);
-      if (!canEmitTo(client, this.game.runtimeReady)) {
-        if (expiredStored(client)) try { client.disconnect(true); } catch {}
-        return undefined;
-      }
-      this.game.assertServing();
       return { ok: true as const, result };
-    } catch (error) {
-      if (!canEmitTo(client, this.game.runtimeReady)) return undefined;
-      try { this.game.assertServing(); } catch { return undefined; }
-      return { ok: false as const, error: error instanceof Error ? error.message : "leave failed" };
-    }
+    });
   }
 }
