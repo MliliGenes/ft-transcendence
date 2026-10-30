@@ -52,6 +52,75 @@ export interface RevealInput {
  * locking/events; this module owns the deeper Round transitions and scoring
  * invariants behind that facade.
  */
+function getMatchSides(match: MatchRecord): SideId[] {
+  const firstRound = match.rounds[0];
+  if (!firstRound) return [];
+  return Object.keys(firstRound.activities);
+}
+
+function computeSideScores(rounds: RoundState[], sides: SideId[]): Partial<Record<SideId, number>> {
+  const scores: Partial<Record<SideId, number>> = {};
+  for (const side of sides) {
+    scores[side] = matchSum(rounds.map((round) => {
+      const counted = round.counted[side];
+      return counted ? counted.score : 0;
+    }));
+  }
+  return scores;
+}
+
+function computeForfeitResult(
+  match: MatchRecord,
+  sides: SideId[],
+  forfeit: NonNullable<MatchRecord["forfeit"]>,
+): FinalResult {
+  const scores = computeSideScores(match.rounds, sides);
+  const [left, right] = sides;
+  const winner = forfeit.winner;
+  let outcome: FinalResult["outcome"] = "draw";
+  if (winner === left) outcome = "left";
+  else if (winner === right) outcome = "right";
+
+  return {
+    scores,
+    outcome,
+    winner,
+    forfeit: { ...forfeit },
+  };
+}
+
+function buildSideContributions(rounds: RoundState[], side: SideId) {
+  return rounds.map((round) => {
+    const counted = round.counted[side];
+    return {
+      score: counted ? counted.score : 0,
+      scoringTimeMs: counted ? counted.scoringTimeMs : 0,
+      submissions: round.attempts[side] || 0,
+    };
+  });
+}
+
+function resolveWinner(outcome: FinalResult["outcome"], left: SideId, right: SideId): SideId | null {
+  if (outcome === "left") return left;
+  if (outcome === "right") return right;
+  return null;
+}
+
+function computeCompetitiveResult(match: MatchRecord, sides: SideId[]): FinalResult {
+  const [left, right] = sides;
+  const leftContrib = buildSideContributions(match.rounds, left);
+  const rightContrib = buildSideContributions(match.rounds, right);
+  const outcome = compareSides(leftContrib, rightContrib);
+  const scores = computeSideScores(match.rounds, sides);
+
+  return {
+    scores,
+    outcome,
+    winner: resolveWinner(outcome, left, right),
+    forfeit: null,
+  };
+}
+
 export class RoundLifecycle {
   startRound(match: MatchRecord): void {
     if (!canTransition(match.roundPhase, "ROUND_INTRO")) {
@@ -211,33 +280,11 @@ export class RoundLifecycle {
   }
 
   computeFinal(match: MatchRecord): FinalResult {
+    const sides = getMatchSides(match);
     if (match.forfeit) {
-      const scores: Partial<Record<SideId, number>> = {};
-      for (const side of Object.keys(match.rounds[0]?.activities ?? {})) {
-        scores[side] = matchSum(match.rounds.map((round) => round.counted[side]?.score ?? 0));
-      }
-      const [left, right] = Object.keys(match.rounds[0]?.activities ?? {});
-      const winner = match.forfeit.winner;
-      return {
-        scores,
-        outcome: winner === left ? "left" : winner === right ? "right" : "draw",
-        winner,
-        forfeit: { ...match.forfeit },
-      };
+      return computeForfeitResult(match, sides, match.forfeit);
     }
-
-    const sides = Object.keys(match.rounds[0]?.activities ?? {});
-    const contributions = (side: SideId) =>
-      match.rounds.map((round) => ({
-        score: round.counted[side]?.score ?? 0,
-        scoringTimeMs: round.counted[side]?.scoringTimeMs ?? 0,
-        submissions: round.attempts[side] ?? 0,
-      }));
-    const [left, right] = sides;
-    const outcome = compareSides(contributions(left), contributions(right));
-    const scores: Partial<Record<SideId, number>> = {};
-    for (const side of sides) scores[side] = matchSum(contributions(side).map((contribution) => contribution.score));
-    return { scores, outcome, winner: outcome === "draw" ? null : outcome === "left" ? left : right, forfeit: null };
+    return computeCompetitiveResult(match, sides);
   }
 
   totalScore(match: MatchRecord, side: SideId): number {

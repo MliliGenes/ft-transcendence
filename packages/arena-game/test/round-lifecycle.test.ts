@@ -115,4 +115,53 @@ describe("RoundLifecycle", () => {
       superseded: [],
     });
   });
+
+  it("computes competitive final results with winner and scores", () => {
+    const lifecycle = new RoundLifecycle();
+    const current = match();
+    current.rounds[0].counted = {
+      left: { score: 100, scoringTimeMs: 100 },
+      right: { score: 80, scoringTimeMs: 200 },
+    };
+    current.rounds[1].counted = {
+      left: { score: 50, scoringTimeMs: 150 },
+      right: { score: 50, scoringTimeMs: 120 },
+    };
+    const final = lifecycle.computeFinal(current);
+
+    expect(final).toEqual({
+      scores: { left: 150, right: 130 },
+      outcome: "left",
+      winner: "left",
+      forfeit: null,
+    });
+  });
+
+  it("computes forfeit final results attributing win to the forfeit winner", () => {
+    const lifecycle = new RoundLifecycle();
+    const current = match();
+    current.rounds[0].counted = {
+      left: { score: 60, scoringTimeMs: 100 },
+      right: { score: 40, scoringTimeMs: 200 },
+    };
+    current.forfeit = {
+      winner: "right",
+      loser: "left",
+      at: 1000,
+      reason: "grace-expired",
+    };
+    const final = lifecycle.computeFinal(current);
+
+    expect(final).toEqual({
+      scores: { left: 60, right: 40 },
+      outcome: "right",
+      winner: "right",
+      forfeit: {
+        winner: "right",
+        loser: "left",
+        at: 1000,
+        reason: "grace-expired",
+      },
+    });
+  });
 });
