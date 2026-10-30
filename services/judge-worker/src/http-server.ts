@@ -67,10 +67,12 @@ function isStringField(record: Record<string, unknown>, key: string): boolean {
   return typeof record[key] === "string";
 }
 
+function isOptionalIdentifier(value: unknown): boolean {
+  return value === undefined || typeof value === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
+}
+
 function parseSnippetOptions(value: Record<string, unknown>): SnippetOptions {
-  const identifier = /^[A-Za-z_][A-Za-z0-9_]*$/;
-  if ((value.entrypoint !== undefined && (typeof value.entrypoint !== "string" || !identifier.test(value.entrypoint)))
-    || (value.className !== undefined && (typeof value.className !== "string" || !identifier.test(value.className)))
+  if (!isOptionalIdentifier(value.entrypoint) || !isOptionalIdentifier(value.className)
     || (value.signature !== undefined && value.signature !== "int64-array")) {
     throw new InvalidRequestError();
   }
@@ -81,65 +83,54 @@ function parseSnippetOptions(value: Record<string, unknown>): SnippetOptions {
   };
 }
 
-function parseVisibleRequest(value: unknown): {
-  language: SupportedLanguage;
-  driver: DriverKind;
-  source: string;
-  tests: VisibleTest[];
-  limits: JudgeLimits;
-} & SnippetOptions {
-  if (!isRecord(value) || !isLanguage(value.language) || !isDriver(value.driver)
-    || !isStringField(value, "source") || !isLimits(value.limits) || !Array.isArray(value.tests)) {
+type ExecutionRequest = Pick<SealedEvaluationRequest, "language" | "driver" | "source" | "limits"> & SnippetOptions;
+
+function parseExecutionRequest(value: Record<string, unknown>): ExecutionRequest {
+  if (!isLanguage(value.language) || !isDriver(value.driver)
+    || !isStringField(value, "source") || !isLimits(value.limits)) {
     throw new InvalidRequestError();
   }
-  const tests = value.tests.map((test) => {
-    if (!isRecord(test) || !isStringField(test, "id") || !isStringField(test, "input") || !isStringField(test, "expected")) {
-      throw new InvalidRequestError();
-    }
-    return { id: test.id as string, input: test.input as string, expected: test.expected as string };
-  });
   return {
     language: value.language,
     driver: value.driver,
     source: value.source as string,
     ...parseSnippetOptions(value),
-    tests,
     limits: value.limits,
   };
 }
 
-function parseSealedRequest(value: unknown): SealedEvaluationRequest {
-  if (!isRecord(value) || !isStringField(value, "evaluationId") || !isStringField(value, "submissionId")
-    || !isStringField(value, "problemVersionId") || !isStringField(value, "hiddenSuiteId")
-    || !isLanguage(value.language) || !isDriver(value.driver) || !isStringField(value, "source")
-    || !isLimits(value.limits) || !Array.isArray(value.groups)
-    || (value.entrypoint !== undefined && typeof value.entrypoint !== "string")) {
+function parseTest(value: unknown): VisibleTest {
+  if (!isRecord(value) || !isStringField(value, "id") || !isStringField(value, "input") || !isStringField(value, "expected")) {
     throw new InvalidRequestError();
   }
-  const groups = value.groups.map((group) => {
-    if (!isRecord(group) || !isStringField(group, "name") || typeof group.weight !== "number"
-      || !Number.isFinite(group.weight) || group.weight < 0 || !Array.isArray(group.tests)) {
-      throw new InvalidRequestError();
-    }
-    const tests = group.tests.map((test) => {
-      if (!isRecord(test) || !isStringField(test, "id") || !isStringField(test, "input") || !isStringField(test, "expected")) {
-        throw new InvalidRequestError();
-      }
-      return { id: test.id as string, input: test.input as string, expected: test.expected as string };
-    });
-    return { name: group.name as string, weight: group.weight, tests };
-  });
+  return { id: value.id as string, input: value.input as string, expected: value.expected as string };
+}
+
+function parseVisibleRequest(value: unknown): ExecutionRequest & { tests: VisibleTest[] } {
+  if (!isRecord(value) || !Array.isArray(value.tests)) throw new InvalidRequestError();
+  return { ...parseExecutionRequest(value), tests: value.tests.map(parseTest) };
+}
+
+function parseSealedGroup(value: unknown): SealedEvaluationRequest["groups"][number] {
+  if (!isRecord(value) || !isStringField(value, "name") || typeof value.weight !== "number"
+    || !Number.isFinite(value.weight) || value.weight < 0 || !Array.isArray(value.tests)) {
+    throw new InvalidRequestError();
+  }
+  return { name: value.name as string, weight: value.weight, tests: value.tests.map(parseTest) };
+}
+
+function parseSealedRequest(value: unknown): SealedEvaluationRequest {
+  if (!isRecord(value) || !["evaluationId", "submissionId", "problemVersionId", "hiddenSuiteId"].every((key) => isStringField(value, key))
+    || !Array.isArray(value.groups)) {
+    throw new InvalidRequestError();
+  }
   return {
+    ...parseExecutionRequest(value),
     evaluationId: value.evaluationId as string,
     submissionId: value.submissionId as string,
     problemVersionId: value.problemVersionId as string,
     hiddenSuiteId: value.hiddenSuiteId as string,
-    language: value.language,
-    driver: value.driver,
-    ...parseSnippetOptions(value),
-    source: value.source as string,
-    groups,
-    limits: value.limits,
+    groups: value.groups.map(parseSealedGroup),
   };
 }
 

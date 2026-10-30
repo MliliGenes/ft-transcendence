@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { GameJudge } from "arena-game-engine/judge";
+import { createJudgeWorkerServer, type JudgeWorkerServerOptions } from "../src/http-server.js";
 import { BoundedJobQueue } from "../src/job-queue.js";
 
-const serverModulePath = "../src/http-server.js";
 const TOKEN = "worker-test-token-32-bytes-long";
 const limits = {
   compileWallMs: 1000,
@@ -18,35 +19,36 @@ const visibleRequest = {
   tests: [{ id: "visible-1", input: "value = 1", expected: "1" }],
   limits,
 };
+const sealedRequest = {
+  evaluationId: "evaluation",
+  submissionId: "submission",
+  problemVersionId: "problem-v1",
+  hiddenSuiteId: "suite-v1",
+  language: "Python",
+  driver: "snippet",
+  source: "def solve(value): return value",
+  groups: [{ name: "hidden", weight: 1, tests: [{ id: "hidden-1", input: "value=1", expected: "1" }] }],
+  limits,
+};
 
 const servers: Array<{ close: (callback: (error?: Error) => void) => void }> = [];
 
-async function loadServerModule(): Promise<any> {
-  let loaded: any;
-  try {
-    loaded = await import(serverModulePath);
-  } catch {
-    loaded = null;
-  }
-  expect(loaded?.createJudgeWorkerServer).toBeTypeOf("function");
-  return loaded;
-}
+type ServerOverrides = Omit<Partial<JudgeWorkerServerOptions>, "judge"> & { judge?: Partial<GameJudge> };
 
-async function startServer(options: Record<string, unknown> = {}) {
-  const { createJudgeWorkerServer } = await loadServerModule();
+async function startServer(options: ServerOverrides = {}) {
   const server = createJudgeWorkerServer({
     token: TOKEN,
     judge: {
       provider: "fake",
       runVisible: async () => [{ id: "visible-1", passed: true, status: "accepted", output: "1", runtimeMs: 1 }],
-      evaluateSealed: async (request: any) => ({
-        groups: request.groups.map((group: any) => ({
+      evaluateSealed: async (request) => ({
+        groups: request.groups.map((group) => ({
           name: group.name,
           weight: group.weight,
-          results: group.tests.map((test: any) => ({ id: test.id, passed: true, status: "accepted", runtimeMs: 1 })),
+          results: group.tests.map((test) => ({ id: test.id, passed: true, status: "accepted", runtimeMs: 1 })),
         })),
       }),
-      ...((options.judge as object | undefined) ?? {}),
+      ...options.judge,
     },
     queue: options.queue ?? new BoundedJobQueue({
       concurrency: 1,
@@ -116,17 +118,7 @@ describe("judge worker HTTP API", () => {
 
   it("implements the sealed GameJudge method without returning case inputs or expected answers", async () => {
     const url = await startServer();
-    const response = await postSealed(url, TOKEN, {
-      evaluationId: "evaluation",
-      submissionId: "submission",
-      problemVersionId: "problem-v1",
-      hiddenSuiteId: "suite-v1",
-      language: "Python",
-      driver: "snippet",
-      source: "def solve(value): return value",
-      groups: [{ name: "hidden", weight: 1, tests: [{ id: "hidden-1", input: "value=1", expected: "1" }] }],
-      limits,
-    });
+    const response = await postSealed(url, TOKEN, sealedRequest);
 
     expect(response.status).toBe(200);
     const result = await response.json();
@@ -135,6 +127,110 @@ describe("judge worker HTTP API", () => {
     ]);
     expect(JSON.stringify(result)).not.toContain("value=1");
     expect(JSON.stringify(result)).not.toContain('"expected"');
+  });
+
+  it.each<[string, unknown]>([
+    ["null body", null],
+    ["array body", []],
+    ...["evaluationId", "submissionId", "problemVersionId", "hiddenSuiteId"].map((key): [string, unknown] => [
+      `missing ${key}`, { ...sealedRequest, [key]: undefined },
+    ]),
+    ["non-string evaluation ID", { ...sealedRequest, evaluationId: 1 }],
+    ["unsupported language", { ...sealedRequest, language: "Java" }],
+    ["unsupported driver", { ...sealedRequest, driver: "unknown" }],
+    ["non-string source", { ...sealedRequest, source: 1 }],
+    ["missing limits", { ...sealedRequest, limits: null }],
+    ...Object.keys(limits).map((key): [string, unknown] => [`zero ${key}`, { ...sealedRequest, limits: { ...limits, [key]: 0 } }]),
+    ["non-string entrypoint", { ...sealedRequest, entrypoint: 1 }],
+    ["invalid entrypoint", { ...sealedRequest, entrypoint: "9solve" }],
+    ["invalid class name", { ...sealedRequest, className: "invalid-name" }],
+    ["non-string class name", { ...sealedRequest, className: 1 }],
+    ["unsupported signature", { ...sealedRequest, signature: "string-array" }],
+    ["missing groups", { ...sealedRequest, groups: undefined }],
+    ["non-array groups", { ...sealedRequest, groups: {} }],
+    ["null group", { ...sealedRequest, groups: [null] }],
+    ["non-string group name", { ...sealedRequest, groups: [{ ...sealedRequest.groups[0], name: 1 }] }],
+    ["missing weight", { ...sealedRequest, groups: [{ ...sealedRequest.groups[0], weight: undefined }] }],
+    ["negative weight", { ...sealedRequest, groups: [{ ...sealedRequest.groups[0], weight: -1 }] }],
+    ["non-array tests", { ...sealedRequest, groups: [{ ...sealedRequest.groups[0], tests: {} }] }],
+    ["null test", { ...sealedRequest, groups: [{ ...sealedRequest.groups[0], tests: [null] }] }],
+    ...["id", "input", "expected"].map((key): [string, unknown] => [
+      `non-string test ${key}`,
+      { ...sealedRequest, groups: [{ ...sealedRequest.groups[0], tests: [{ ...sealedRequest.groups[0]!.tests[0], [key]: 1 }] }] },
+    ]),
+  ])("rejects malformed sealed input before Judge dispatch: %s", async (_name, body) => {
+    let calls = 0;
+    const url = await startServer({ judge: { evaluateSealed: async () => { calls++; return { groups: [] }; } } });
+    const response = await postSealed(url, TOKEN, body);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "invalid judge request" });
+    expect(calls).toBe(0);
+  });
+
+  it.each<[string, unknown]>([
+    ["null body", null],
+    ["array body", []],
+    ["missing tests", { ...visibleRequest, tests: undefined }],
+    ["non-array tests", { ...visibleRequest, tests: {} }],
+    ["null test", { ...visibleRequest, tests: [null] }],
+    ["non-string test id", { ...visibleRequest, tests: [{ ...visibleRequest.tests[0], id: 1 }] }],
+    ["non-string test input", { ...visibleRequest, tests: [{ ...visibleRequest.tests[0], input: 1 }] }],
+    ["non-string test expected", { ...visibleRequest, tests: [{ ...visibleRequest.tests[0], expected: 1 }] }],
+  ])("rejects malformed visible input before Judge dispatch: %s", async (_name, body) => {
+    let calls = 0;
+    const url = await startServer({ judge: { runVisible: async () => { calls++; return []; } } });
+    const response = await post(url, TOKEN, body);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "invalid judge request" });
+    expect(calls).toBe(0);
+  });
+
+  it("rejects a JSON numeric overflow in a sealed group weight", async () => {
+    let calls = 0;
+    const url = await startServer({ judge: { evaluateSealed: async () => { calls++; return { groups: [] }; } } });
+    const response = await fetch(`${url}/v1/evaluate-sealed`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify(sealedRequest).replace('"weight":1', '"weight":1e999'),
+    });
+    expect(response.status).toBe(400);
+    expect(calls).toBe(0);
+  });
+
+  it("keeps zero weights and validated metadata while dropping extra request fields", async () => {
+    let received: unknown;
+    const url = await startServer({ judge: { evaluateSealed: async (input: unknown) => {
+      received = input;
+      return { groups: [] };
+    } } });
+    const expected = {
+      ...sealedRequest,
+      entrypoint: "solve",
+      className: "Solution",
+      signature: "int64-array",
+      groups: [{ name: "hidden", weight: 0, tests: sealedRequest.groups[0]!.tests }],
+    };
+    const response = await postSealed(url, TOKEN, {
+      ...expected,
+      ignored: "extra",
+      groups: [{ ...expected.groups[0], ignored: "extra", tests: expected.groups[0]!.tests.map((test) => ({ ...test, ignored: "extra" })) }],
+    });
+    expect(response.status).toBe(200);
+    expect(received).toEqual(expected);
+  });
+
+  it.each([
+    ["empty groups", []],
+    ["empty tests", [{ name: "hidden", weight: 0, tests: [] }]],
+  ])("preserves accepted empty collections: %s", async (_name, groups) => {
+    let received: unknown;
+    const url = await startServer({ judge: { evaluateSealed: async (input: unknown) => {
+      received = input;
+      return { groups: [] };
+    } } });
+    const body = { ...sealedRequest, evaluationId: "", submissionId: "", problemVersionId: "", hiddenSuiteId: "", groups };
+    expect((await postSealed(url, TOKEN, body)).status).toBe(200);
+    expect(received).toEqual(body);
   });
 
   it("reports Docker and image readiness failures and recovers without restarting Game", async () => {
