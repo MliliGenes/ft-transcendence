@@ -44,6 +44,10 @@ function tokenNearExpiry(token: string | null): boolean {
   } catch { return false; }
 }
 
+function isMutationMethod(method?: string): boolean {
+  return Boolean(method && method !== "GET" && method !== "HEAD");
+}
+
 export class LobbyClient {
   private socket?: Socket;
   private readonly apiBase: string;
@@ -81,43 +85,66 @@ export class LobbyClient {
     }
   }
 
+  private authHeader(): Record<string, string> {
+    const token = this.getAccessToken ? this.getAccessToken() : null;
+    if (token) return { Authorization: `Bearer ${token}` };
+    if (import.meta.env.DEV && this.devUserId) return { "x-dev-user-id": this.devUserId };
+    return {};
+  }
+
   private headers(): Record<string, string> {
-    const token = this.getAccessToken?.();
     return {
       "content-type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : import.meta.env.DEV && this.devUserId ? { "x-dev-user-id": this.devUserId } : {}),
+      ...this.authHeader(),
     };
+  }
+
+  private performFetch(path: string, init: { method?: string; body?: unknown } | undefined, lifetime: AbortController): Promise<Response> {
+    return fetch(`${this.apiBase}${path}`, {
+      method: init?.method,
+      headers: this.headers(),
+      body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+      signal: lifetime.signal,
+    });
+  }
+
+  private async handle401(lifetime: AbortController, method?: string): Promise<void> {
+    await this.renewAuth();
+    this.assertActive(lifetime);
+    if (!this.recovery && this.attachedToken !== (this.getAccessToken ? this.getAccessToken() : null)) {
+      await this.renewSocket();
+    }
+    this.assertActive(lifetime);
+    if (isMutationMethod(method)) {
+      throw new Error("Session renewed. The action was not resent. Check the lobby before retrying.");
+    }
+  }
+
+  private async parseResponse<T>(res: Response, lifetime: AbortController): Promise<T> {
+    const json = (await res.json()) as (T & { error?: string }) | null;
+    if (!res.ok || (json && typeof json.error === "string")) {
+      throw new Error(json?.error ?? `Lobby request failed (${res.status})`);
+    }
+    this.assertActive(lifetime);
+    return json as T;
   }
 
   /** Single safe retry on 401-after-renew; mutations are never replayed. */
   private async call<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
     const lifetime = this.lifetime;
-    if (init?.method && init.method !== "GET" && init.method !== "HEAD") await this.prepareCommand(lifetime);
+    if (isMutationMethod(init?.method)) await this.prepareCommand(lifetime);
     this.assertActive(lifetime);
-    const send = async (): Promise<Response> =>
-      fetch(`${this.apiBase}${path}`, {
-        method: init?.method,
-        headers: this.headers(),
-        body: init?.body === undefined ? undefined : JSON.stringify(init.body),
-        signal: lifetime.signal,
-      });
-    let res = await send();
+
+    let res = await this.performFetch(path, init, lifetime);
     this.assertActive(lifetime);
+
     if (res.status === 401 && this.onAuthExpired) {
-      await this.renewAuth();
-      this.assertActive(lifetime);
-      if (!this.recovery && this.attachedToken !== this.getAccessToken?.()) await this.renewSocket();
-      this.assertActive(lifetime);
-      if ((init?.method ?? "GET") !== "GET" && init?.method !== "HEAD") {
-        throw new Error("Session renewed. The action was not resent. Check the lobby before retrying.");
-      }
-      res = await send();
+      await this.handle401(lifetime, init?.method);
+      res = await this.performFetch(path, init, lifetime);
       this.assertActive(lifetime);
     }
-    const json = (await res.json()) as (T & { error?: string }) | null;
-    if (!res.ok || (json && typeof json.error === "string")) throw new Error(json?.error ?? `Lobby request failed (${res.status})`);
-    this.assertActive(lifetime);
-    return json as T;
+
+    return this.parseResponse<T>(res, lifetime);
   }
 
   async joinQueue(mode: MatchMode): Promise<QueueEntry> {
@@ -188,18 +215,24 @@ export class LobbyClient {
     return () => { if (this.lifetime === lifetime) this.disconnect(); };
   }
 
+  private resetCurrentSocket(): void {
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+    }
+  }
+
   /** The same client keeps its callbacks; token rotation replaces only its socket. */
   renewSocket(): Promise<void> {
     if (this.recovery) return this.recovery;
     if (!this.socket || this.lifetime.signal.aborted) return Promise.resolve();
     const lifetime = this.lifetime;
-    this.socket.removeAllListeners();
-    this.socket.disconnect();
+    this.resetCurrentSocket();
     const recovery = this.attachSocket(lifetime).then(async () => {
       // A read during recovery may itself refresh the token. Rejoin with that token too.
-      if (this.attachedToken !== this.getAccessToken?.()) {
-        this.socket?.removeAllListeners();
-        this.socket?.disconnect();
+      const token = this.getAccessToken ? this.getAccessToken() : null;
+      if (this.attachedToken !== token) {
+        this.resetCurrentSocket();
         await this.attachSocket(lifetime);
       }
     }).finally(() => {
@@ -210,46 +243,84 @@ export class LobbyClient {
     return recovery;
   }
 
-  private attachSocket(lifetime: AbortController): Promise<void> {
-    this.assertActive(lifetime);
-    const token = this.getAccessToken?.() ?? null;
-    this.attachedToken = token;
-    const socket = io(`${this.socketBase}/lobby`, {
-      auth: token ? { accessToken: token } : import.meta.env.DEV ? { userId: this.devUserId } : {},
-      transports: ["websocket"], reconnection: true, autoConnect: false, forceNew: true,
+  private buildSocket(token: string | null): Socket {
+    return io(`${this.socketBase}/lobby`, {
+      auth: token ? { accessToken: token } : import.meta.env.DEV && this.devUserId ? { userId: this.devUserId } : {},
+      transports: ["websocket"],
+      reconnection: true,
+      autoConnect: false,
+      forceNew: true,
     });
-    this.socket = socket;
-    const active = () => this.socket === socket && this.lifetime === lifetime && !lifetime.signal.aborted;
-    for (const [event, callback] of [
+  }
+
+  private isSocketActive(socket: Socket, lifetime: AbortController): boolean {
+    return this.socket === socket && this.lifetime === lifetime && !lifetime.signal.aborted;
+  }
+
+  private bindSocketEvents(socket: Socket, lifetime: AbortController): void {
+    const handlers: Array<[string, ((data: any) => void) | undefined]> = [
       ["lobby.roomUpdated", this.callbacks?.onRoomUpdated],
       ["lobby.matchFound", this.callbacks?.onMatchFound],
       ["lobby.queueMatched", this.callbacks?.onQueueMatched],
-    ] as const) {
-      if (callback) socket.on(event, (data: unknown) => { if (active()) callback(data as never); });
+    ];
+    for (const [event, cb] of handlers) {
+      if (cb) {
+        socket.on(event, (data: unknown) => {
+          if (this.isSocketActive(socket, lifetime)) cb(data);
+        });
+      }
     }
+  }
+
+  private handleSocketConnect(
+    socket: Socket,
+    lifetime: AbortController,
+    resolve: () => void,
+    reject: (error: Error) => void,
+  ): void {
+    if (!this.isSocketActive(socket, lifetime)) return;
+    const recovery = Promise.resolve().then(() => this.callbacks?.onConnect?.()).then(() => {
+      this.assertActive(lifetime);
+      if (!this.isSocketActive(socket, lifetime) || !socket.connected) {
+        throw new Error("Lobby disconnected during recovery");
+      }
+    });
+    this.ready = recovery;
+    void recovery.then(resolve, reject);
+  }
+
+  private handleSocketDisconnect(
+    socket: Socket,
+    lifetime: AbortController,
+    token: string | null,
+    reason: string,
+    reject: (error: Error) => void,
+  ): void {
+    if (!this.isSocketActive(socket, lifetime)) return;
+    reject(new Error("Lobby disconnected during recovery"));
+    if (reason === "io server disconnect" && token) {
+      void this.recoverExpiredSocket(lifetime).catch(() => {});
+    }
+  }
+
+  private bindConnectionLifecycle(
+    socket: Socket,
+    lifetime: AbortController,
+    token: string | null,
+  ): Promise<void> {
     let resolve!: () => void;
     let reject!: (error: Error) => void;
     const ready = new Promise<void>((done, fail) => { resolve = done; reject = fail; });
     const timer = setTimeout(() => reject(new Error("Lobby connection timed out")), 10_000);
     const cancelled = () => reject(new Error("Lobby connection cancelled"));
     lifetime.signal.addEventListener("abort", cancelled, { once: true });
-    socket.on("connect", () => {
-      if (!active()) return;
-      const recovery = Promise.resolve().then(() => this.callbacks?.onConnect?.()).then(() => {
-        this.assertActive(lifetime);
-        if (!active() || !socket.connected) throw new Error("Lobby disconnected during recovery");
-      });
-      this.ready = recovery;
-      void recovery.then(resolve, reject);
+
+    socket.on("connect", () => this.handleSocketConnect(socket, lifetime, resolve, reject));
+    socket.on("disconnect", (reason: string) => this.handleSocketDisconnect(socket, lifetime, token, reason, reject));
+    socket.on("connect_error", (error: Error) => {
+      if (this.isSocketActive(socket, lifetime) && !socket.active) reject(error);
     });
-    socket.on("disconnect", (reason: string) => {
-      if (!active()) return;
-      reject(new Error("Lobby disconnected during recovery"));
-      if (reason === "io server disconnect" && token) {
-        void this.recoverExpiredSocket(lifetime).catch(() => {});
-      }
-    });
-    socket.on("connect_error", (error: Error) => { if (active() && !socket.active) reject(error); });
+
     socket.connect();
     return ready.finally(() => {
       clearTimeout(timer);
@@ -257,32 +328,54 @@ export class LobbyClient {
     });
   }
 
+  private attachSocket(lifetime: AbortController): Promise<void> {
+    this.assertActive(lifetime);
+    const token = this.getAccessToken ? this.getAccessToken() : null;
+    this.attachedToken = token;
+    const socket = this.buildSocket(token);
+    this.socket = socket;
+    this.bindSocketEvents(socket, lifetime);
+    return this.bindConnectionLifecycle(socket, lifetime, token);
+  }
+
+  private async executeExpiryRecovery(lifetime: AbortController): Promise<void> {
+    // Trust the server disconnect, not the browser clock's expiry estimate.
+    const token = this.getAccessToken ? this.getAccessToken() : null;
+    if (token && token === this.attachedToken) await this.renewAuth();
+    this.assertActive(lifetime);
+    const nextToken = this.getAccessToken ? this.getAccessToken() : null;
+    if (!nextToken) throw new Error("Session expired. Please sign in again.");
+    if (this.attachedToken !== nextToken) await this.renewSocket();
+    if (this.recovery) await this.recovery;
+    this.assertActive(lifetime);
+  }
+
   private recoverExpiredSocket(lifetime: AbortController): Promise<void> {
     if (this.expiryRecovery) return this.expiryRecovery;
-    const recovery = (async () => {
-      // Trust the server disconnect, not the browser clock's expiry estimate.
-      const token = this.getAccessToken?.();
-      if (token && token === this.attachedToken) await this.renewAuth();
-      this.assertActive(lifetime);
-      if (!this.getAccessToken?.()) throw new Error("Session expired. Please sign in again.");
-      if (this.attachedToken !== this.getAccessToken()) await this.renewSocket();
-      if (this.recovery) await this.recovery;
-      this.assertActive(lifetime);
-    })().finally(() => {
+    const recovery = this.executeExpiryRecovery(lifetime).finally(() => {
       if (this.expiryRecovery === recovery) this.expiryRecovery = null;
     });
     this.expiryRecovery = recovery;
     return recovery;
   }
 
+  private async ensureTokenFresh(lifetime: AbortController): Promise<void> {
+    const token = this.getAccessToken ? this.getAccessToken() : null;
+    if (tokenNearExpiry(token) && this.onAuthExpired) await this.renewAuth();
+    this.assertActive(lifetime);
+    if (this.getAccessToken && !this.getAccessToken()) throw new Error("Session expired. Please sign in again.");
+  }
+
+  private async ensureSocketSynced(): Promise<void> {
+    const token = this.getAccessToken ? this.getAccessToken() : null;
+    if (this.socket && this.attachedToken !== token) await this.renewSocket();
+  }
+
   private async prepareCommand(lifetime: AbortController): Promise<void> {
     await this.ready;
     this.assertActive(lifetime);
-    const token = this.getAccessToken?.();
-    if (tokenNearExpiry(token ?? null) && this.onAuthExpired) await this.renewAuth();
-    this.assertActive(lifetime);
-    if (this.getAccessToken && !this.getAccessToken()) throw new Error("Session expired. Please sign in again.");
-    if (this.socket && this.attachedToken !== this.getAccessToken?.()) await this.renewSocket();
+    await this.ensureTokenFresh(lifetime);
+    await this.ensureSocketSynced();
     await this.ready;
     this.assertActive(lifetime);
     if (this.socket && !this.socket.connected) throw new Error("Lobby is disconnected");
@@ -307,8 +400,7 @@ export class LobbyClient {
   disconnect(): void {
     this.expiryRecovery = null;
     this.lifetime.abort();
-    this.socket?.removeAllListeners();
-    this.socket?.disconnect();
+    this.resetCurrentSocket();
     this.socket = undefined;
     this.callbacks = undefined;
     this.recovery = null;

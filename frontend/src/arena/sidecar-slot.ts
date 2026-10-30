@@ -1,4 +1,9 @@
-import type { LiveClientConfig } from "./sidecars.js";
+export interface LiveClientConfig {
+  baseUrl: string;
+  userId: string;
+  matchId: string;
+  getAccessToken?: () => string | null;
+}
 
 export type DisposableClient = {
   disconnect(): void;

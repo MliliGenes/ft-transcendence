@@ -1,13 +1,8 @@
 import type { TeamChatClient } from "./chat.js";
 import type { CollabClient } from "./collab.js";
-import { SidecarSlot } from "./sidecar-slot.js";
+import { SidecarSlot, type LiveClientConfig } from "./sidecar-slot.js";
 
-export interface LiveClientConfig {
-  baseUrl: string;
-  userId: string;
-  matchId: string;
-  getAccessToken?: () => string | null;
-}
+export type { LiveClientConfig };
 
 export interface SidecarScope {
   transportKey: object;
