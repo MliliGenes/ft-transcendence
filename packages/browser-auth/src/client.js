@@ -4,6 +4,7 @@ import { ApiError, changedSession, createAuthApi } from './lib/api.js';
 import { createMemorySession } from './lib/session.js';
 import { SIGNED_IN, SIGNED_OUT, TOKEN_RENEWED, createControl, requireChannel, requireLocks } from './lib/coordination.js';
 import { createClientState } from './lib/client-state.js';
+import { createClientFetch } from './lib/client-fetch.js';
 export { ApiError, createAuthApi, createMemorySession };
 export { SIGNED_IN, SIGNED_OUT, TOKEN_RENEWED, DEFAULT_CHANNEL_NAME } from './lib/coordination.js';
 
@@ -96,27 +97,14 @@ export function createBrowserAuthClient({ apiBase, fetchImpl = fetch, locks, cha
     return { serverConfirmed };
   }
 
-  async function fetch(path, options = {}) {
-    assertActive();
-    const generation = store.generation();
-    try {
-      const result = await api.request(path, options);
-      assertCurrent(generation);
-      return result;
-    } catch (error) {
-      if (error?.code === 'SESSION_CHANGED') throw error;
-      if (disposed) throw changedSession();
-      const normalized = state.normalizeError(error);
-      const ownExpiry = normalized?.code === 'SESSION_EXPIRED' && !store.read() && store.generation() === generation + 1;
-      if (!ownExpiry) assertCurrent(generation);
-      if (normalized?.code === 'SESSION_EXPIRED' && !store.read()) {
-        state.toAnonymous();
-      } else if (normalized?.code === 'UNAVAILABLE' || (normalized?.status ?? 0) >= 500) {
-        state.toUnavailable();
-      }
-      throw normalized;
-    }
-  }
+  const clientFetch = createClientFetch({
+    api,
+    store,
+    state,
+    assertActive,
+    assertCurrent,
+    isDisposed: () => disposed,
+  });
 
   const stopControl = control.subscribe((message) => {
     if (disposed) return;
@@ -150,7 +138,7 @@ export function createBrowserAuthClient({ apiBase, fetchImpl = fetch, locks, cha
     login,
     logout,
     getAccessToken: () => store.read()?.accessToken ?? null,
-    fetch,
+    fetch: clientFetch,
     dispose() {
       disposed = true;
       stopControl();
