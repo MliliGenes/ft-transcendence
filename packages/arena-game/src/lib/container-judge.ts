@@ -202,6 +202,82 @@ function expectedMatches(language: SupportedLanguage, driver: DriverKind, actual
   return actual.replace(/\n+$/, "") === expected.replace(/\n+$/, "");
 }
 
+function formatSnippetResult(record: RawExecution, stderr: string, outputCap: number): RawExecution {
+  const display = stderr
+    ? `${stderr}${stderr.endsWith("\n") || !record.output ? "" : "\n"}${record.output}`
+    : record.output;
+  if (Buffer.byteLength(stderr, "utf8") + Buffer.byteLength(record.comparison, "utf8") > outputCap) {
+    return {
+      status: "output_limit_exceeded",
+      output: Buffer.from(display, "utf8").subarray(0, outputCap).toString("utf8"),
+      comparison: "",
+      ms: record.ms,
+    };
+  }
+  return { ...record, output: display };
+}
+
+function buildCasePayload(sourceStr: string, inputStr: string, driverStr: string): Buffer {
+  const source = Buffer.from(sourceStr, "utf8");
+  const caseInput = Buffer.from(inputStr, "utf8");
+  const driver = Buffer.from(driverStr, "utf8");
+  if (source.length + caseInput.length + driver.length > MAX_CASE_PAYLOAD_BYTES) {
+    throw new JudgeInfraError("judge case payload exceeds transport limit");
+  }
+  // Byte-length framing keeps source/current input off argv and out of the
+  // environment. No expected answer or sibling case enters this payload.
+  return Buffer.concat([
+    Buffer.from(`${source.length}\n${caseInput.length}\n${driver.length}\n`, "ascii"),
+    source,
+    caseInput,
+    driver,
+  ]);
+}
+
+function buildDockerRunArgs(options: {
+  containerName: string;
+  image: string;
+  memory: string;
+  limits: JudgeLimits;
+  entrypoint?: string;
+  script: string;
+}): string[] {
+  return [
+    "run",
+    "--interactive",
+    "--rm",
+    "--name",
+    options.containerName,
+    "--cap-drop=ALL",
+    "--security-opt=no-new-privileges",
+    "--network",
+    "none",
+    "--cpus",
+    String(options.limits.runCpus),
+    "--memory",
+    options.memory,
+    "--memory-swap",
+    options.memory,
+    "--pids-limit",
+    String(options.limits.runPids),
+    "--read-only",
+    "--tmpfs",
+    `/scratch:rw,exec,size=${options.memory},mode=1777`,
+    "--tmpfs",
+    `/tmp:rw,exec,size=${options.memory},mode=1777`,
+    "--workdir",
+    "/scratch",
+    "--user",
+    "nobody",
+    "-e",
+    `ENTRY=${options.entrypoint ?? ""}`,
+    options.image,
+    "bash",
+    "-c",
+    options.script,
+  ];
+}
+
 export class ContainerJudge implements GameJudge {
   readonly provider = "container";
   private readonly dockerBin: string;
@@ -287,6 +363,79 @@ export class ContainerJudge implements GameJudge {
     };
   }
 
+  private cleanupContainer(containerName: string): Promise<void> {
+    return new Promise<void>((done) => {
+      execFile(
+        this.dockerBin,
+        ["rm", "-f", containerName],
+        { timeout: 5000, maxBuffer: 64 * 1024, killSignal: "SIGKILL" },
+        () => done(),
+      );
+    });
+  }
+
+  private isProcessAborted(error: Error | null): boolean {
+    if (!error) return false;
+    const errorCode = (error as NodeJS.ErrnoException).code;
+    const captureAborted = errorCode === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+    const clientStopped = Boolean((error as any).killed) || errorCode === "ETIMEDOUT";
+    return captureAborted || clientStopped;
+  }
+
+  private handleExecutionError(
+    error: Error,
+    stderr: string,
+    pythonSnippet: boolean,
+  ): RawExecution {
+    const errorCode = (error as NodeJS.ErrnoException).code;
+    const captureAborted = errorCode === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+    const clientStopped = Boolean((error as any).killed) || errorCode === "ETIMEDOUT";
+
+    if (clientStopped && !captureAborted) {
+      throw new JudgeInfraError("judge orchestrator timeout");
+    }
+    // String error codes (ENOENT/EACCES/ERR_CHILD_PROCESS_*) mean Docker
+    // never returned a container verdict. Do not turn launch failures
+    // into competitive failures or phantom Submit counts.
+    if (typeof (error as { code?: unknown }).code === "string") {
+      if (pythonSnippet && captureAborted) {
+        return {
+          status: "output_limit_exceeded",
+          output: stderr.slice(0, 4000),
+          comparison: "",
+          ms: 0,
+        };
+      }
+      throw new JudgeInfraError(`judge launch failed: ${error.message}`);
+    }
+    const code = typeof (error as { code?: unknown }).code === "number"
+      ? (error as unknown as { code: number }).code
+      : 0;
+    if ([124, 137, 143].includes(code)) {
+      return { status: verdictFromContainerExit(code), output: "", comparison: "", ms: 0 };
+    }
+    if (code !== 0) {
+      throw new JudgeInfraError(`judge runner exited without a verdict (code ${code})`);
+    }
+    throw new JudgeInfraError("unexpected error state");
+  }
+
+  private processExecutionOutput(
+    stdout: string,
+    stderr: string,
+    pythonSnippet: boolean,
+    outputCap: number,
+  ): RawExecution {
+    const record = parseRunnerRecord(stdout);
+    if (!record) {
+      return { status: "internal_error", output: "", comparison: "", ms: 0 };
+    }
+    if (pythonSnippet) {
+      return formatSnippetResult(record, stderr, outputCap);
+    }
+    return record;
+  }
+
   private executeOneCase(input: {
     language: SupportedLanguage;
     driver: DriverKind;
@@ -298,52 +447,16 @@ export class ContainerJudge implements GameJudge {
     const image = this.images[input.language];
     const containerName = `arena-judge-${randomUUID()}`;
     const memory = `${input.limits.runMemoryMb}m`;
-    const source = Buffer.from(input.source, "utf8");
-    const caseInput = Buffer.from(input.input, "utf8");
-    const driver = Buffer.from(SNIPPET_DRIVER, "utf8");
-    if (source.length + caseInput.length + driver.length > MAX_CASE_PAYLOAD_BYTES) {
-      throw new JudgeInfraError("judge case payload exceeds transport limit");
-    }
-    // Byte-length framing keeps source/current input off argv and out of the
-    // environment. No expected answer or sibling case enters this payload.
-    const payload = Buffer.concat([
-      Buffer.from(`${source.length}\n${caseInput.length}\n${driver.length}\n`, "ascii"),
-      source, caseInput, driver,
-    ]);
-    const args = [
-      "run",
-      "--interactive",
-      "--rm",
-      "--name",
+    const payload = buildCasePayload(input.source, input.input, SNIPPET_DRIVER);
+    const script = this.oneCaseScript(input.language, input.driver, input.limits);
+    const args = buildDockerRunArgs({
       containerName,
-      "--cap-drop=ALL",
-      "--security-opt=no-new-privileges",
-      "--network",
-      "none",
-      "--cpus",
-      String(input.limits.runCpus),
-      "--memory",
-      memory,
-      "--memory-swap",
-      memory,
-      "--pids-limit",
-      String(input.limits.runPids),
-      "--read-only",
-      "--tmpfs",
-      `/scratch:rw,exec,size=${memory},mode=1777`,
-      "--tmpfs",
-      `/tmp:rw,exec,size=${memory},mode=1777`,
-      "--workdir",
-      "/scratch",
-      "--user",
-      "nobody",
-      "-e",
-      `ENTRY=${input.entrypoint ?? ""}`,
       image,
-      "bash",
-      "-c",
-      this.oneCaseScript(input.language, input.driver, input.limits),
-    ];
+      memory,
+      limits: input.limits,
+      entrypoint: input.entrypoint,
+      script,
+    });
 
     const outputCap = Math.max(1, Math.floor(input.limits.runOutputBytes));
     const maxBuffer = Math.max(64 * 1024, Math.ceil((outputCap + 1) * 4 / 3) + 16 * 1024);
@@ -355,70 +468,18 @@ export class ContainerJudge implements GameJudge {
         args,
         { timeout: this.outerTimeoutMs, maxBuffer, killSignal: "SIGKILL" },
         async (error, stdout, stderr) => {
-          const errorCode = (error as NodeJS.ErrnoException | null)?.code;
-          const captureAborted = errorCode === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
-          const clientStopped = Boolean(error?.killed) || errorCode === "ETIMEDOUT";
-          if (captureAborted || clientStopped) {
-            // Killing the Docker client does not stop its daemon-owned job.
-            // Wait for a bounded cleanup attempt before releasing this case.
-            await new Promise<void>((done) => {
-              execFile(this.dockerBin, ["rm", "-f", containerName],
-                { timeout: 5000, maxBuffer: 64 * 1024, killSignal: "SIGKILL" }, () => done());
-            });
+          if (this.isProcessAborted(error)) {
+            await this.cleanupContainer(containerName);
           }
-          const code = typeof (error as { code?: unknown } | null)?.code === "number"
-            ? (error as { code: number }).code
-            : 0;
-          if (clientStopped && !captureAborted) {
-            reject(new JudgeInfraError("judge orchestrator timeout"));
-            return;
-          }
-          // String error codes (ENOENT/EACCES/ERR_CHILD_PROCESS_*) mean Docker
-          // never returned a container verdict. Do not turn launch failures
-          // into competitive failures or phantom Submit counts.
-          if (error && typeof (error as { code?: unknown }).code === "string") {
-            if (pythonSnippet && (error as NodeJS.ErrnoException).code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
-              resolve({
-                status: "output_limit_exceeded",
-                output: stderr.slice(0, 4000),
-                comparison: "",
-                ms: 0,
-              });
-              return;
-            }
-            reject(new JudgeInfraError(`judge launch failed: ${(error as Error).message}`));
-            return;
-          }
-          if (code !== 0) {
-            if ([124, 137, 143].includes(code)) {
-              resolve({ status: verdictFromContainerExit(code), output: "", comparison: "", ms: 0 });
-            } else {
-              reject(new JudgeInfraError(`judge runner exited without a verdict (code ${code})`));
+          if (error) {
+            try {
+              resolve(this.handleExecutionError(error, stderr, pythonSnippet));
+            } catch (err) {
+              reject(err);
             }
             return;
           }
-          const record = parseRunnerRecord(stdout);
-          if (!record) {
-            resolve({ status: "internal_error", output: "", comparison: "", ms: 0 });
-            return;
-          }
-          if (pythonSnippet) {
-            const display = stderr
-              ? `${stderr}${stderr.endsWith("\n") || !record.output ? "" : "\n"}${record.output}`
-              : record.output;
-            if (Buffer.byteLength(stderr, "utf8") + Buffer.byteLength(record.comparison, "utf8") > outputCap) {
-              resolve({
-                status: "output_limit_exceeded",
-                output: Buffer.from(display, "utf8").subarray(0, outputCap).toString("utf8"),
-                comparison: "",
-                ms: record.ms,
-              });
-              return;
-            }
-            resolve({ ...record, output: display });
-            return;
-          }
-          resolve(record);
+          resolve(this.processExecutionOutput(stdout, stderr, pythonSnippet, outputCap));
         },
       );
       // A launch failure/host timeout can close stdin early. The exec callback
