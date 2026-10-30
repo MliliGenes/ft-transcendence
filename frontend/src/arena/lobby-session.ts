@@ -22,6 +22,14 @@ export interface LobbySessionSnapshot {
   error: string | null;
 }
 
+function matchedQueueId(queue?: { status: string; matchedMatchId: string | null } | null): string | null {
+  return queue?.status === "matched" ? queue.matchedMatchId : null;
+}
+
+function matchedRoomId(room?: { room: { status: string; matchId: string | null } } | null): string | null {
+  return room?.room.status === "matched" ? room.room.matchId : null;
+}
+
 /**
  * Owns Lobby recovery and client-side convergence around the authoritative
  * active-state endpoint. Socket payloads and mutation responses only trigger
@@ -102,62 +110,108 @@ export class LobbySession {
     return refresh;
   }
 
+  private handleMatched(matchId: string): void {
+    this.handoff(matchId);
+    this.applyRoom(null);
+  }
+
+  private isCurrentRequest(lifetimeVersion: number, requestVersion: number): boolean {
+    return this.isCurrentLifetime(lifetimeVersion) && requestVersion === this.requestVersion;
+  }
+
+  private async waitForCurrentRequest(propagateError: boolean, lifetimeVersion: number): Promise<void> {
+    if (propagateError && this.isCurrentLifetime(lifetimeVersion)) {
+      await this.currentRefresh;
+    }
+  }
+
+  private async handleWaitingQueue(
+    recoveringSocket: boolean,
+    lifetimeVersion: number,
+    requestVersion: number,
+    propagateError: boolean,
+  ): Promise<{ continue: boolean; activeState: Awaited<ReturnType<LobbySessionClient["getActive"]>> }> {
+    if (recoveringSocket) {
+      this.applyRoom(null);
+      const lifetime = this.lifetimeVersion;
+      void this.socketRecovery?.then(() => {
+        if (this.isCurrentLifetime(lifetime)) void this.refresh();
+      }).catch(() => {});
+      return { continue: false, activeState: { room: null, queue: null } };
+    }
+    const cancelled = await this.client.cancelQueue();
+    if (!this.isCurrentRequest(lifetimeVersion, requestVersion)) {
+      await this.waitForCurrentRequest(propagateError, lifetimeVersion);
+      return { continue: false, activeState: { room: null, queue: null } };
+    }
+    if (cancelled.matched && cancelled.matchId) {
+      this.handleMatched(cancelled.matchId);
+      return { continue: false, activeState: { room: null, queue: null } };
+    }
+    const activeState = await this.client.getActive();
+    if (!this.isCurrentRequest(lifetimeVersion, requestVersion)) {
+      await this.waitForCurrentRequest(propagateError, lifetimeVersion);
+      return { continue: false, activeState: { room: null, queue: null } };
+    }
+    return { continue: true, activeState };
+  }
+
+  private async reconcileActive(
+    activeState: Awaited<ReturnType<LobbySessionClient["getActive"]>>,
+    recoveringSocket: boolean,
+    lifetimeVersion: number,
+    requestVersion: number,
+    propagateError: boolean,
+  ): Promise<boolean> {
+    const queueMatch = matchedQueueId(activeState.queue);
+    if (queueMatch) {
+      this.handleMatched(queueMatch);
+      return false;
+    }
+
+    let current = activeState;
+    if (current.queue?.status === "waiting") {
+      const waiting = await this.handleWaitingQueue(recoveringSocket, lifetimeVersion, requestVersion, propagateError);
+      if (!waiting.continue) return false;
+      current = waiting.activeState;
+    }
+
+    const roomMatch = matchedRoomId(current.room);
+    if (roomMatch) {
+      this.handleMatched(roomMatch);
+      return false;
+    }
+
+    const roomData = current.room?.room.status === "open" ? current.room : null;
+    return this.applyRoom(roomData);
+  }
+
   private async readActive(propagateError: boolean, recoveringSocket: boolean): Promise<void> {
     if (!this.active) return;
     const requestVersion = ++this.requestVersion;
     const lifetimeVersion = this.lifetimeVersion;
-    const isCurrent = () => this.isCurrentLifetime(lifetimeVersion) && requestVersion === this.requestVersion;
-    const waitForCurrent = async () => {
-      // An obsolete read is not a completed recovery baseline.
-      if (propagateError && this.isCurrentLifetime(lifetimeVersion)) await this.currentRefresh;
-    };
     this.update({ error: null });
     try {
-      let activeState = await this.client.getActive();
-      if (!isCurrent()) { await waitForCurrent(); return; }
-
-      if (activeState.queue?.status === "matched" && activeState.queue.matchedMatchId) {
-        this.handoff(activeState.queue.matchedMatchId);
-        this.applyRoom(null);
+      const activeState = await this.client.getActive();
+      if (!this.isCurrentRequest(lifetimeVersion, requestVersion)) {
+        await this.waitForCurrentRequest(propagateError, lifetimeVersion);
         return;
       }
 
-      // Public matchmaking is retained by the server for a future release.
-      // Clear a persisted waiting entry so this release remains invite-only.
-      if (activeState.queue?.status === "waiting") {
-        if (recoveringSocket) {
-          // Publish the baseline first. Cleanup is a mutation and waits for socket recovery.
-          this.applyRoom(null);
-          const lifetime = this.lifetimeVersion;
-          // Cleanup waits for the whole socket baseline, not only this read.
-          // Tracking a cleanup read earlier creates a recovery -> cleanup -> recovery cycle.
-          void this.socketRecovery?.then(() => {
-            if (this.isCurrentLifetime(lifetime)) void this.refresh();
-          }).catch(() => {});
-          return;
-        }
-        const cancelled = await this.client.cancelQueue();
-        if (!isCurrent()) { await waitForCurrent(); return; }
-        if (cancelled.matched && cancelled.matchId) {
-          this.handoff(cancelled.matchId);
-          this.applyRoom(null);
-          return;
-        }
-        activeState = await this.client.getActive();
-        if (!isCurrent()) { await waitForCurrent(); return; }
-      }
-
-      if (activeState.room?.room.status === "matched" && activeState.room.room.matchId) {
-        this.handoff(activeState.room.room.matchId);
-        this.applyRoom(null);
-        return;
-      }
-
-      const roomData = activeState.room?.room.status === "open" ? activeState.room : null;
-      if (this.applyRoom(roomData)) await this.refresh(propagateError, recoveringSocket);
+      const shouldRefresh = await this.reconcileActive(
+        activeState,
+        recoveringSocket,
+        lifetimeVersion,
+        requestVersion,
+        propagateError,
+      );
+      if (shouldRefresh) await this.refresh(propagateError, recoveringSocket);
     } catch (error) {
-      if (!isCurrent()) { await waitForCurrent(); return; }
-      if (isCurrent()) this.update({ error: this.message(error, "Failed to recover lobby") });
+      if (!this.isCurrentRequest(lifetimeVersion, requestVersion)) {
+        await this.waitForCurrentRequest(propagateError, lifetimeVersion);
+        return;
+      }
+      this.update({ error: this.message(error, "Failed to recover lobby") });
       if (propagateError) throw error;
     }
   }
