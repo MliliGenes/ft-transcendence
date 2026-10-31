@@ -9,6 +9,21 @@ const OPPONENT_SCRIPT_SCORE = 65;
 
 type ChangeListener = () => void;
 
+function validateTeamSubmitRevision(
+  ready: { you: boolean; mate: boolean },
+  readyRev: { you: number | null; mate: number | null },
+  docRevision: number,
+  inputRev?: number
+): void {
+  const revisionIsReady = readyRev.you === docRevision && readyRev.mate === docRevision;
+  if (!(ready.you && ready.mate && revisionIsReady)) {
+    throw new Error("team submit requires both teammates ready on the current revision");
+  }
+  if (inputRev !== undefined && inputRev !== docRevision) {
+    throw new Error("stale document revision");
+  }
+}
+
 /**
  * Deterministic Match authority for the frontend fixture.
  *
@@ -165,41 +180,47 @@ export class MockMatchAuthority {
     return { ok: true };
   }
 
-  async submit(input: { code: string; language: string; documentRevision?: number }): Promise<SubmitReceipt> {
-    if (this.mode === "2v2") {
-      const revisionIsReady = this.readyRev.you === this.docRevision && this.readyRev.mate === this.docRevision;
-      if (!(this.ready.you && this.ready.mate && revisionIsReady)) {
-        throw new Error("team submit requires both teammates ready on the current revision");
-      }
-      if (input.documentRevision !== undefined && input.documentRevision !== this.docRevision) {
-        throw new Error("stale document revision");
-      }
+  private setSubmissionPhaseStatus(status: PlayerStatus): void {
+    if (this.mode === "1v1") {
+      this.youStatus = status;
+    } else {
+      this.alphaStatus = [status, status];
     }
-    const solo = this.mode === "1v1";
-    this.requireSideAction(solo ? this.youStatus : this.alphaStatus[0], "submit");
-    if (solo) this.youStatus = "submitted";
-    else this.alphaStatus = ["submitted", "submitted"];
-    this.emit();
-    await Promise.resolve();
-    if (solo) this.youStatus = "evaluating";
-    else this.alphaStatus = ["evaluating", "evaluating"];
-    this.emit();
-    await Promise.resolve();
-    const score = this.isPlaceholder(input.code) ? 0 : 100;
+  }
+
+  private applySubmissionOutcome(score: number): void {
     this.counted = score;
     this.countedGroups = [{ name: "Basic", weight: 100, earned: score }];
-    if (solo) {
+    if (this.mode === "1v1") {
       this.youSubmissions += 1;
       this.youStatus = "coding";
       if (this.opponentCounted === null) {
         this.opponentCounted = OPPONENT_SCRIPT_SCORE;
         this.opponentSubmissions = 1;
       }
-    } else {
-      this.teamSubmissions += 1;
-      this.alphaStatus = ["coding", "coding"];
-      if (this.opponentCounted === null) this.opponentCounted = OPPONENT_SCRIPT_SCORE;
+      return;
     }
+    this.teamSubmissions += 1;
+    this.alphaStatus = ["coding", "coding"];
+    if (this.opponentCounted === null) {
+      this.opponentCounted = OPPONENT_SCRIPT_SCORE;
+    }
+  }
+
+  async submit(input: { code: string; language: string; documentRevision?: number }): Promise<SubmitReceipt> {
+    if (this.mode === "2v2") {
+      validateTeamSubmitRevision(this.ready, this.readyRev, this.docRevision, input.documentRevision);
+    }
+    const currentStatus = this.mode === "1v1" ? this.youStatus : this.alphaStatus[0];
+    this.requireSideAction(currentStatus, "submit");
+    this.setSubmissionPhaseStatus("submitted");
+    this.emit();
+    await Promise.resolve();
+    this.setSubmissionPhaseStatus("evaluating");
+    this.emit();
+    await Promise.resolve();
+    const score = this.isPlaceholder(input.code) ? 0 : 100;
+    this.applySubmissionOutcome(score);
     this.emit();
     return { ok: true, round: this.round };
   }
