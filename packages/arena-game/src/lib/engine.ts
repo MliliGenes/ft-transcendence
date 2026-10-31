@@ -13,6 +13,7 @@ import {
   canSubmit,
 } from "arena-model";
 import {
+  type CaseResult,
   type DriverKind,
   type GameJudge,
   type JudgeLimits,
@@ -142,6 +143,133 @@ export class ExpiredError extends Error {
   }
 }
 
+
+function validate2v2Participants(participants: Participant[], bySide: Map<SideId, string[]>): void {
+  if (participants.length !== 4 || bySide.size !== 2) {
+    throw new ValidationError("2v2 requires exactly four participants on two sides");
+  }
+  for (const [side, users] of bySide) {
+    if (users.length !== 2) throw new ValidationError(`2v2 side ${side} requires exactly two members`);
+  }
+  const distinct = new Set(participants.map((p) => p.userId));
+  if (distinct.size !== 4) throw new ValidationError("2v2 requires four distinct users");
+}
+
+function validateMatchParticipants(mode: MatchMode, participants: Participant[]): Map<SideId, string[]> {
+  if (mode !== "1v1" && mode !== "2v2") throw new ValidationError("unknown match mode");
+  const bySide = new Map<SideId, string[]>();
+  for (const p of participants) {
+    const list = bySide.get(p.sideId) ?? [];
+    list.push(p.userId);
+    bySide.set(p.sideId, list);
+  }
+  if (mode === "1v1") {
+    if (bySide.size !== 2 || participants.length !== 2) {
+      throw new ValidationError("1v1 requires exactly two participants on two sides");
+    }
+    return bySide;
+  }
+  validate2v2Participants(participants, bySide);
+  return bySide;
+}
+
+function buildInitialRounds(params: {
+  problemVersionIds: string[];
+  participants: Participant[];
+  sideIds: SideId[];
+  teams: boolean;
+  bank: ProblemBank;
+  uuid: () => string;
+}): RoundState[] {
+  return params.problemVersionIds.map((problemVersionId) => {
+    const problem = params.bank.loadProblem(problemVersionId);
+    const activities: Partial<Record<SideId, PlayerStatus>> = {};
+    for (const p of params.participants) activities[p.sideId] = "coding";
+    return {
+      roundId: params.uuid(),
+      problemVersionId: problem.problemVersionId,
+      hiddenSuiteId: problem.hiddenSuiteId,
+      counted: {},
+      attempts: {},
+      activities,
+      runTests: {},
+      teamDocs: params.teams ? Object.fromEntries(params.sideIds.map((s) => [s, { revision: 1, language: "Python" }])) : undefined,
+      readiness: params.teams ? {} : undefined,
+      reveal: null,
+      closing: false,
+      cutoffPassed: false,
+      superseded: [],
+    };
+  });
+}
+
+interface RunSetup {
+  runId: string;
+  side: SideId;
+  roundId: string;
+  driver: DriverKind;
+  snippet: SnippetOptions;
+  visible: Array<{ id: string; input: string; expected: string }>;
+}
+
+function resetMatchPresence(match: MatchRecord, now: number): void {
+  for (const p of match.participants) {
+    match.presence[p.sideId] = "offline";
+    match.offlineSinceMs[p.sideId] = now;
+  }
+  if (match.mode === "2v2") {
+    match.memberPresence ??= {};
+    match.memberOfflineSinceMs ??= {};
+    for (const p of match.participants) {
+      match.memberPresence[p.userId] = "offline";
+      match.memberOfflineSinceMs[p.userId] = now;
+    }
+  }
+}
+
+function buildSnapshotSides(
+  match: MatchRecord,
+  round: RoundState,
+  teamCollaboration: TeamCollaboration,
+): Record<SideId, { status: PlayerStatus; submissions: number; presence: "online" | "offline" }> {
+  const sides: Record<SideId, { status: PlayerStatus; submissions: number; presence: "online" | "offline" }> = {};
+  for (const [sideId, status] of Object.entries(round.activities)) {
+    const sidePresence =
+      match.mode === "2v2"
+        ? teamCollaboration.hasOnlineMember(match, sideId)
+          ? ("online" as const)
+          : ("offline" as const)
+        : (match.presence[sideId] ?? "offline");
+    sides[sideId] = {
+      status: status ?? "coding",
+      submissions: round.attempts[sideId] ?? 0,
+      presence: sidePresence,
+    };
+  }
+  return sides;
+}
+
+function buildSnapshotProblem(problem: BankProblem): {
+  problem: {
+    problemVersionId: string;
+    title: string;
+    description: string;
+    examples: Array<{ id: string; input: string; expected: string }>;
+    starters: Partial<Record<SupportedLanguage, string>>;
+  };
+  visibleTests: Array<{ id: string; input: string; expected: string }>;
+} {
+  return {
+    problem: {
+      problemVersionId: problem.problemVersionId,
+      title: problem.statement.title,
+      description: problem.statement.description,
+      examples: problem.statement.examples.map((e) => ({ ...e })),
+      starters: { ...problem.starters },
+    },
+    visibleTests: problem.visible.map((t) => ({ id: t.id, input: t.input, expected: t.expected })),
+  };
+}
 
 type ExpiredClosureDecision =
   | { status: "idle" }
@@ -293,31 +421,8 @@ export class ArenaEngine {
     durationMs?: number;
     now?: number;
   }, save: (match: MatchRecord) => Promise<void> = (match) => this.persistence.saveMatch(match)): Promise<string> {
-    if (input.mode !== "1v1" && input.mode !== "2v2") throw new ValidationError("unknown match mode");
     if (input.problemVersionIds.length === 0) throw new ValidationError("at least one round required");
-    const bySide = new Map<SideId, string[]>();
-    for (const p of input.participants) {
-      const list = bySide.get(p.sideId) ?? [];
-      list.push(p.userId);
-      bySide.set(p.sideId, list);
-    }
-    if (input.mode === "1v1") {
-      if (bySide.size !== 2 || input.participants.length !== 2) {
-        throw new ValidationError("1v1 requires exactly two participants on two sides");
-      }
-    } else {
-      // ponytail: teams ARE sides — one team = one competitive side, so the
-      // sideId is the team identity and participants[] is the membership
-      // relation. No parallel team table, no fixed player columns.
-      if (input.participants.length !== 4 || bySide.size !== 2) {
-        throw new ValidationError("2v2 requires exactly four participants on two sides");
-      }
-      for (const [side, users] of bySide) {
-        if (users.length !== 2) throw new ValidationError(`2v2 side ${side} requires exactly two members`);
-      }
-      const distinct = new Set(input.participants.map((p) => p.userId));
-      if (distinct.size !== 4) throw new ValidationError("2v2 requires four distinct users");
-    }
+    const bySide = validateMatchParticipants(input.mode, input.participants);
     const teams = input.mode === "2v2";
     const now = input.now ?? this.clock();
     const matchId = this.uuid();
@@ -331,26 +436,13 @@ export class ArenaEngine {
       durationMs: input.durationMs ?? MATCH_DURATION_MS,
       startedAt: now,
       participants: input.participants.map((p) => ({ ...p })),
-      rounds: input.problemVersionIds.map((problemVersionId) => {
-        const problem = this.bank.loadProblem(problemVersionId);
-        const activities: Partial<Record<SideId, PlayerStatus>> = {};
-        for (const p of input.participants) activities[p.sideId] = "coding";
-        return {
-          roundId: this.uuid(),
-          problemVersionId: problem.problemVersionId,
-          hiddenSuiteId: problem.hiddenSuiteId,
-          counted: {},
-          attempts: {},
-          activities,
-          runTests: {},
-          // 2v2 only: fresh shared-doc identity per team side (revision 1).
-          teamDocs: teams ? Object.fromEntries(sideIds.map((s) => [s, { revision: 1, language: "Python" }])) : undefined,
-          readiness: teams ? {} : undefined,
-          reveal: null,
-          closing: false,
-          cutoffPassed: false,
-          superseded: [],
-        };
+      rounds: buildInitialRounds({
+        problemVersionIds: input.problemVersionIds,
+        participants: input.participants,
+        sideIds,
+        teams,
+        bank: this.bank,
+        uuid: this.uuid,
       }),
       failures: [],
       revision: 0,
@@ -483,6 +575,76 @@ export class ArenaEngine {
       return result.revision;
     });
   }
+  private async prepareRun(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+    input: { code: string; language: string },
+    recovery: { scope?: { roundId: string; side: SideId; owner: symbol } },
+  ): Promise<RunSetup> {
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      const side = this.sideOf(match, principal);
+      const round = this.currentRound(match);
+      this.requireUnexpired(match);
+      if (!canRun(match.roundPhase)) throw new IllegalStateError(`run rejected in ${match.roundPhase}`);
+      if (!canSideRun(this.activityOf(round, side))) {
+        throw new IllegalStateError(`run rejected for side while ${this.activityOf(round, side)}`);
+      }
+      assertSupportedLanguage(input.language);
+      this.validateSource(input.code);
+      this.checkRate(matchId, side);
+      const runId = this.uuid();
+      // Resolve bank/execution metadata before persisting `running` so a
+      // bank failure cannot strand the side in a non-runnable activity.
+      const problem = this.bank.loadProblem(round.problemVersionId);
+      const execution = resolveProblemExecution(problem, input.language as SupportedLanguage);
+      const owner = Symbol("Run");
+      recovery.scope = { roundId: round.roundId, side, owner };
+      this.runOwners.set(`${matchId}:${side}`, owner);
+      await this.setActivity(match, round, side, "running");
+      return {
+        runId,
+        side,
+        roundId: round.roundId,
+        visible: problem.visible.map((t) => ({ id: t.id, input: t.input, expected: t.expected })),
+        ...execution,
+      };
+    });
+  }
+
+  private async commitRunVerdicts(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+    setup: RunSetup,
+    verdicts: CaseResult[],
+  ): Promise<void> {
+    await this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      const round = match.rounds.find((r) => r.roundId === setup.roundId) ?? this.currentRound(match);
+      this.emit("tests.updated", {
+        matchId: match.id,
+        side: setup.side,
+        tests: verdicts.map((v) => ({ id: v.id, status: v.passed ? "passed" : "failed" })),
+      });
+      round.runTests[setup.side] = verdicts.map((v) => ({
+        id: v.id,
+        status: v.passed ? "passed" : "failed",
+        output: v.output,
+        ms: v.runtimeMs,
+      }));
+      await this.authority.saveMatch(match);
+      if (this.activityOf(round, setup.side) === "running") {
+        await this.setActivity(match, round, setup.side, "coding");
+      }
+    });
+  }
+
+  private cleanupRunOwner(matchId: string, scope?: { roundId: string; side: SideId; owner: symbol }): void {
+    if (!scope) return;
+    const key = `${matchId}:${scope.side}`;
+    if (this.runOwners.get(key) === scope.owner) this.runOwners.delete(key);
+  }
+
   async run(
     principal: AuthenticatedPrincipal,
     matchId: string,
@@ -493,56 +655,17 @@ export class ArenaEngine {
     // `running`. Earlier failures are rejected commands, not Runs to recover.
     const recovery: { scope?: { roundId: string; side: SideId; owner: symbol } } = {};
     try {
-      const setup = await this.withMatchLock(matchId, async () => {
-        const match = await this.requireMember(principal, matchId);
-        const side = this.sideOf(match, principal);
-        const round = this.currentRound(match);
-        this.requireUnexpired(match);
-        if (!canRun(match.roundPhase)) throw new IllegalStateError(`run rejected in ${match.roundPhase}`);
-        if (!canSideRun(this.activityOf(round, side))) {
-          throw new IllegalStateError(`run rejected for side while ${this.activityOf(round, side)}`);
-        }
-        assertSupportedLanguage(input.language);
-        this.validateSource(input.code);
-        this.checkRate(matchId, side);
-        const runId = this.uuid();
-        // Resolve bank/execution metadata before persisting `running` so a
-        // bank failure cannot strand the side in a non-runnable activity.
-        const problem = this.bank.loadProblem(round.problemVersionId);
-        const execution = resolveProblemExecution(problem, input.language as SupportedLanguage);
-        const owner = Symbol("Run");
-        recovery.scope = { roundId: round.roundId, side, owner };
-        this.runOwners.set(`${matchId}:${side}`, owner);
-        await this.setActivity(match, round, side, "running");
-        return {
-          runId,
-          side,
-          roundId: round.roundId,
-          visible: problem.visible.map((t) => ({ id: t.id, input: t.input, expected: t.expected })),
-          ...execution,
-        };
-      });
+      const setup = await this.prepareRun(principal, matchId, input, recovery);
       // Visible tests only. Runs outside the match lock: the other side stays free.
-      const verdicts = await this.judge.runVisible(input.language as SupportedLanguage, setup.driver, input.code, setup.visible, this.limits, setup.snippet);
-      await this.withMatchLock(matchId, async () => {
-        const match = await this.requireMember(principal, matchId);
-        const round = match.rounds.find((r) => r.roundId === setup.roundId) ?? this.currentRound(match);
-        this.emit("tests.updated", {
-          matchId: match.id,
-          side: setup.side,
-          tests: verdicts.map((v) => ({ id: v.id, status: v.passed ? "passed" : "failed" })),
-        });
-        round.runTests[setup.side] = verdicts.map((v) => ({
-          id: v.id,
-          status: v.passed ? "passed" : "failed",
-          output: v.output,
-          ms: v.runtimeMs,
-        }));
-        await this.authority.saveMatch(match);
-        if (this.activityOf(round, setup.side) === "running") {
-          await this.setActivity(match, round, setup.side, "coding");
-        }
-      });
+      const verdicts = await this.judge.runVisible(
+        input.language as SupportedLanguage,
+        setup.driver,
+        input.code,
+        setup.visible,
+        this.limits,
+        setup.snippet,
+      );
+      await this.commitRunVerdicts(principal, matchId, setup, verdicts);
       return {
         runId: setup.runId,
         tests: verdicts.map((v) => ({ id: v.id, passed: v.passed, output: v.output, runtimeMs: v.runtimeMs })),
@@ -551,10 +674,7 @@ export class ArenaEngine {
       if (recovery.scope) await this.recoverRun(matchId, principal, recovery.scope, error);
       throw error;
     } finally {
-      if (recovery.scope) {
-        const key = `${matchId}:${recovery.scope.side}`;
-        if (this.runOwners.get(key) === recovery.scope.owner) this.runOwners.delete(key);
-      }
+      this.cleanupRunOwner(matchId, recovery.scope);
     }
   }
 
@@ -706,11 +826,10 @@ export class ArenaEngine {
     };
   }
 
-  async publishReveal(
+  private async checkExpiredOrExistingReveal(
     principal: AuthenticatedPrincipal,
     matchId: string,
-    options: { graceMs?: number } = {},
-  ): Promise<RevealSnapshot> {
+  ): Promise<RevealSnapshot | undefined> {
     if (this.deadlineHasElapsedOrUnknown(matchId) && await this.closeExpiredMatch(matchId)) {
       const match = await this.requireMember(principal, matchId);
       const reveal = this.currentRound(match).reveal;
@@ -726,49 +845,71 @@ export class ArenaEngine {
       await this.authority.saveMatch(match);
       return null;
     });
-    if (existingReveal) return existingReveal;
-    const first = await this.requireMember(principal, matchId);
-    const firstRound = this.currentRound(first);
-    const graceMs = options.graceMs ?? this.revealGraceMs;
-    const pending = this.evaluation.forRound(matchId, firstRound.roundId);
-    if (!firstRound.cutoffPassed && pending.length > 0 && graceMs > 0) {
+    return existingReveal ?? undefined;
+  }
+
+  private async waitForRevealGrace(
+    matchId: string,
+    round: RoundState,
+    graceMs: number,
+  ): Promise<void> {
+    const pending = this.evaluation.forRound(matchId, round.roundId);
+    if (!round.cutoffPassed && pending.length > 0 && graceMs > 0) {
       await Promise.race([
         Promise.allSettled(pending.map((p) => p.promise)),
         new Promise((resolve) => setTimeout(resolve, graceMs)),
       ]);
     }
+  }
+
+  private async persistAndCommitReveal(
+    match: MatchRecord,
+    round: RoundState,
+  ): Promise<RevealSnapshot> {
+    const savedReveal = await this.persistence.findReveal(match.id, round.roundId);
+    const snapshot = savedReveal ?? await this.createRevealSnapshot(match, round, this.clock());
+    if (!savedReveal) {
+      try {
+        await this.persistence.publishReveal(match.id, round.roundId, snapshot);
+      } catch (error) {
+        if (error instanceof DuplicateError) throw new IllegalStateError("reveal already published");
+        throw error;
+      }
+    }
+    this.roundLifecycle.commitReveal(match, snapshot);
+    for (const side of Object.keys(round.activities)) {
+      if (this.activityOf(round, side) !== "locked") await this.setActivity(match, round, side, "locked");
+    }
+    await this.authority.saveMatch(match);
+    this.emit("reveal.published", { matchId: match.id, round: match.currentRound });
+    return JSON.parse(JSON.stringify(snapshot)) as RevealSnapshot;
+  }
+
+  async publishReveal(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+    options: { graceMs?: number } = {},
+  ): Promise<RevealSnapshot> {
+    const existing = await this.checkExpiredOrExistingReveal(principal, matchId);
+    if (existing) return existing;
+
+    const first = await this.requireMember(principal, matchId);
+    const firstRound = this.currentRound(first);
+    await this.waitForRevealGrace(matchId, firstRound, options.graceMs ?? this.revealGraceMs);
+
     return this.withMatchLock(matchId, async () => {
       const match = await this.requireMember(principal, matchId);
       const round = this.currentRound(match);
-      this.roundLifecycle.prepareReveal(
-        match,
-        new Set(
-          (await this.persistence.listRoundSubmissions(matchId, round.roundId))
-            .filter((s) => s.status === "completed")
-            .map((s) => s.evaluationId),
-        ),
-        this.evaluation.forRound(matchId, round.roundId).map((entry) => entry.evaluationId),
+      const submissions = await this.persistence.listRoundSubmissions(matchId, round.roundId);
+      const completedIds = new Set(
+        submissions.filter((s) => s.status === "completed").map((s) => s.evaluationId),
       );
+      const inFlightIds = this.evaluation.forRound(matchId, round.roundId).map((entry) => entry.evaluationId);
+      this.roundLifecycle.prepareReveal(match, completedIds, inFlightIds);
       // Save the cutoff before the immutable Reveal: a failed phase write
       // must not let a late Evaluation change the saved score.
       await this.authority.saveMatch(match);
-      const savedReveal = await this.persistence.findReveal(match.id, round.roundId);
-      const snapshot = savedReveal ?? await this.createRevealSnapshot(match, round, this.clock());
-      if (!savedReveal) {
-        try {
-          await this.persistence.publishReveal(match.id, round.roundId, snapshot);
-        } catch (error) {
-          if (error instanceof DuplicateError) throw new IllegalStateError("reveal already published");
-          throw error;
-        }
-      }
-      this.roundLifecycle.commitReveal(match, snapshot);
-      for (const side of Object.keys(round.activities)) {
-        if (this.activityOf(round, side) !== "locked") await this.setActivity(match, round, side, "locked");
-      }
-      await this.authority.saveMatch(match);
-      this.emit("reveal.published", { matchId: match.id, round: match.currentRound });
-      return JSON.parse(JSON.stringify(snapshot)) as RevealSnapshot;
+      return this.persistAndCommitReveal(match, round);
     });
   }
 
@@ -829,20 +970,7 @@ export class ArenaEngine {
       const problem = this.bank.loadProblem(round.problemVersionId);
       const now = this.clock();
       const remainingMs = Math.max(0, match.durationMs - (now - match.startedAt));
-      const sides: Record<SideId, { status: PlayerStatus; submissions: number; presence: "online" | "offline" }> = {};
-      for (const [sideId, status] of Object.entries(round.activities)) {
-        const sidePresence =
-          match.mode === "2v2"
-            ? this.teamCollaboration.hasOnlineMember(match, sideId)
-              ? ("online" as const)
-              : ("offline" as const)
-            : (match.presence[sideId] ?? "offline");
-        sides[sideId] = {
-          status: status ?? "coding",
-          submissions: round.attempts[sideId] ?? 0,
-          presence: sidePresence,
-        };
-      }
+      const sides = buildSnapshotSides(match, round, this.teamCollaboration);
       const pending = (await this.persistence.listRoundSubmissions(matchId, round.roundId)).some(
         (s) => s.sideId === side && s.status === "pending",
       );
@@ -859,21 +987,14 @@ export class ArenaEngine {
         pendingEvaluation: pending,
         final: match.roundPhase === "MATCH_COMPLETE" ? this.roundLifecycle.computeFinal(match) : null,
         teams: match.mode === "2v2" ? this.teamCollaboration.snapshots(match, round, side) : undefined,
-        problem: {
-        problemVersionId: problem.problemVersionId,
-        title: problem.statement.title,
-        description: problem.statement.description,
-        examples: problem.statement.examples.map((e) => ({ ...e })),
-        starters: { ...problem.starters },
-      },
-      visibleTests: problem.visible.map((t) => ({ id: t.id, input: t.input, expected: t.expected })),
-      tests:
-        round.runTests[side] ??
-        problem.visible.map((t) => ({ id: t.id, status: "idle" as const, output: null, ms: null })),
-      sides,
-      reveal: round.reveal ? JSON.parse(JSON.stringify(round.reveal)) : null,
-      failures: [...match.failures],
-    };
+        ...buildSnapshotProblem(problem),
+        tests:
+          round.runTests[side] ??
+          problem.visible.map((t) => ({ id: t.id, status: "idle" as const, output: null, ms: null })),
+        sides,
+        reveal: round.reveal ? JSON.parse(JSON.stringify(round.reveal)) : null,
+        failures: [...match.failures],
+      };
     });
   }
 
@@ -1219,6 +1340,55 @@ export class ArenaEngine {
     this.emit("match.ended", { matchId: match.id, result: "forfeit", winner, loser, reason });
   }
 
+  private async repairRoundActivities(match: MatchRecord, round: RoundState): Promise<void> {
+    const pendingSides = new Set(
+      (await this.persistence.listRoundSubmissions(match.id, round.roundId))
+        .filter((s) => s.status === "pending")
+        .map((s) => s.sideId),
+    );
+    for (const side of Object.keys(round.activities)) {
+      const activity = this.activityOf(round, side);
+      if (activity === "running" || activity === "submitted") {
+        round.activities[side] = "coding";
+      } else if (activity === "evaluating" && !pendingSides.has(side)) {
+        round.activities[side] = "coding";
+        await this.recordFailure(match, "recover: evaluating without a pending submission");
+      }
+    }
+  }
+
+  private async repairRevealState(match: MatchRecord, round: RoundState): Promise<void> {
+    if (!round.closing && !round.cutoffPassed) return;
+    const published = await this.persistence.findReveal(match.id, round.roundId);
+    if (published && !round.reveal) {
+      round.reveal = published;
+      round.closing = false;
+      match.roundPhase = "SCORE_REVEAL";
+      for (const side of Object.keys(round.activities)) {
+        if (this.activityOf(round, side) !== "locked") round.activities[side] = "locked";
+      }
+      await this.authority.saveMatch(match);
+      this.emit("reveal.published", { matchId: match.id, round: match.currentRound });
+    } else if (!published) {
+      round.closing = false;
+      round.cutoffPassed = false;
+      round.superseded = [];
+    }
+  }
+
+  private async recoverSingleMatch(id: string): Promise<void> {
+    await this.withRevisionRetry(id, async () => {
+      const match = await this.loadMatchOrThrow(id);
+      resetMatchPresence(match, this.clock());
+      if (match.roundPhase !== "MATCH_COMPLETE") {
+        const round = this.currentRound(match);
+        await this.repairRoundActivities(match, round);
+        await this.repairRevealState(match, round);
+      }
+      await this.authority.saveMatch(match);
+    });
+  }
+
   /**
    * Boot recovery (ticket 11 §10). The service awaits this before serving.
    * Per known match: presence goes offline with a fresh grace window (sockets
@@ -1232,67 +1402,13 @@ export class ArenaEngine {
    * without judging; judge failure → explicit failed, never fabricated.
    */
   async recover(): Promise<{ matches: number; retried: number; failed: number }> {
-    let retried = 0;
-    let failed = 0;
     const ids = await this.activeMatchIds();
     for (const id of ids) {
-      await this.withRevisionRetry(id, async () => {
-        const match = await this.loadMatchOrThrow(id);
-        const now = this.clock();
-        for (const p of match.participants) {
-          match.presence[p.sideId] = "offline";
-          match.offlineSinceMs[p.sideId] = now;
-        }
-        if (match.mode === "2v2") {
-          match.memberPresence ??= {};
-          match.memberOfflineSinceMs ??= {};
-          for (const p of match.participants) {
-            match.memberPresence[p.userId] = "offline";
-            match.memberOfflineSinceMs[p.userId] = now;
-          }
-        }
-        if (match.roundPhase !== "MATCH_COMPLETE") {
-          const round = this.currentRound(match);
-          const pendingSides = new Set(
-            (await this.persistence.listRoundSubmissions(id, round.roundId))
-              .filter((s) => s.status === "pending")
-              .map((s) => s.sideId),
-          );
-          for (const side of Object.keys(round.activities)) {
-            const activity = this.activityOf(round, side);
-            if (activity === "running" || activity === "submitted") {
-              round.activities[side] = "coding";
-            } else if (activity === "evaluating" && !pendingSides.has(side)) {
-              round.activities[side] = "coding";
-              await this.recordFailure(match, "recover: evaluating without a pending submission");
-            }
-          }
-          if (round.closing || round.cutoffPassed) {
-            const published = await this.persistence.findReveal(id, round.roundId);
-            if (published && !round.reveal) {
-              round.reveal = published;
-              round.closing = false;
-              match.roundPhase = "SCORE_REVEAL";
-              for (const side of Object.keys(round.activities)) {
-                if (this.activityOf(round, side) !== "locked") round.activities[side] = "locked";
-              }
-              await this.authority.saveMatch(match);
-              this.emit("reveal.published", { matchId: match.id, round: match.currentRound });
-            } else if (!published) {
-              round.closing = false;
-              round.cutoffPassed = false;
-              round.superseded = [];
-            }
-          }
-        }
-        await this.authority.saveMatch(match);
-      });
+      await this.recoverSingleMatch(id);
     }
     const recovery = await this.evaluation.recoverPending();
-    retried = recovery.retried;
-    failed = recovery.failed;
     await this.sweepExpiredMatches();
-    return { matches: ids.length, retried, failed };
+    return { matches: ids.length, retried: recovery.retried, failed: recovery.failed };
   }
 
   private async requireMember(principal: AuthenticatedPrincipal, matchId: string): Promise<MatchRecord> {
