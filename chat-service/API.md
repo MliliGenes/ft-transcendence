@@ -255,6 +255,22 @@ Responses:
 - `401 Unauthorized`: missing, invalid, or expired access token
 - `404 Not Found`: message is missing, deleted, or owned by another user
 
+### Delete a message
+
+`DELETE /chat/messages/:messageId`
+
+Requires an access token. Only the original author can delete a message.
+Deletion is soft: Chat clears `content`, sets `deletedAt`, and atomically
+increments `version`. The message row remains available so history ordering and
+read markers stay stable.
+
+Responses:
+
+- `204 No Content`: message deleted
+- `400 Bad Request`: invalid message UUID
+- `401 Unauthorized`: missing, invalid, or expired access token
+- `404 Not Found`: message is missing, already deleted, or owned by another user
+
 ## Socket.IO
 
 Chat exposes the Socket.IO namespace `/chat`. Connect with the User-service JWT
@@ -318,6 +334,10 @@ curl -X PATCH http://localhost:3000/chat/messages/<messageId> \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{"content":"Updated message content"}'
+
+# Soft-delete one of your own messages.
+curl -X DELETE http://localhost:3000/chat/messages/<messageId> \
+  -H "Authorization: Bearer <accessToken>"
 ```
 
 ## Current limitations
@@ -326,6 +346,6 @@ curl -X PATCH http://localhost:3000/chat/messages/<messageId> \
 - Conversation listing has no unread count or last-read marker yet.
 - Message pagination does not return a finished cursor envelope.
 - Read markers are not monotonic yet.
-- Message delete, reactions, group management, live delivery, presence, and
-  heartbeat/activity behavior are not implemented.
+- Reactions, group management, live delivery, presence, and heartbeat/activity
+  behavior are not implemented.
 - The Socket.IO namespace authenticates connections but defines no chat events.

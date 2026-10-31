@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -74,5 +77,15 @@ export class ChatController {
     @Body() body: EditMessageDto,
   ) {
     return this.chatService.editMessage(req.user.sub, messageId, body);
+  }
+
+  @UseGuards(AuthGuard)
+  @Delete('messages/:messageId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteMessage(
+    @Request() req: Request & { user: { sub: string } },
+    @Param('messageId', new ParseUUIDPipe({ version: '4' })) messageId: string,
+  ) {
+    return this.chatService.deleteMessage(req.user.sub, messageId);
   }
 }

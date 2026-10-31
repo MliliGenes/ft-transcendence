@@ -422,6 +422,43 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         }
+      },
+      "delete": {
+        "operationId": "deleteMessage",
+        "summary": "Delete a message",
+        "tags": [
+          "Messages"
+        ],
+        "description": "Soft-deletes a message owned by the authenticated user. Chat clears content, sets deletedAt, and atomically increments version. Missing, already deleted, and other users' messages all return 404.",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "description": "Message to delete",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Message deleted"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
       }
     }
   },
