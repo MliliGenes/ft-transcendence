@@ -47,37 +47,91 @@ export class MatchSocketPresence {
     });
   }
 
+  private async markTargetOnline(matchId: string, userId: string, side: string, mode: MatchSocketPresenceMode): Promise<void> {
+    this.assertOpen();
+    if (mode === "2v2") await this.target.setMemberPresence(matchId, userId, "online");
+    else await this.target.setPresence(matchId, side, "online");
+    this.assertOpen();
+  }
+
+  private async markTargetOffline(matchId: string, userId: string): Promise<void> {
+    try {
+      const mode = await this.target.modeOf(matchId);
+      if (this.stopped) return;
+      if (mode === "2v2") await this.target.setMemberPresence(matchId, userId, "offline");
+      else {
+        const side = await this.target.participantSide(userId, matchId);
+        if (this.stopped) return;
+        await this.target.setPresence(matchId, side, "offline");
+      }
+    } catch {
+      // Existing policy: later admission reconciles an unavailable Match.
+    }
+  }
+
+  private registerSocket(key: string, socketId: string): { isFirst: boolean; alreadyPresent: boolean } {
+    const set = this.sockets.get(key) ?? new Set<string>();
+    if (set.has(socketId)) return { isFirst: false, alreadyPresent: true };
+    set.add(socketId);
+    this.sockets.set(key, set);
+    return { isFirst: set.size === 1, alreadyPresent: false };
+  }
+
+  private rollbackSocketRegistration(key: string, socketId: string): void {
+    const set = this.sockets.get(key);
+    if (!set) return;
+    set.delete(socketId);
+    if (set.size === 0) this.sockets.delete(key);
+  }
+
+  private async executeSocketAdmission(
+    key: string,
+    userId: string,
+    matchId: string,
+    socketId: string,
+    pending: { closed: boolean },
+  ): Promise<string> {
+    let added = false;
+    try {
+      this.assertOpen();
+      const side = await this.target.participantSide(userId, matchId);
+      this.assertOpen();
+      const mode = await this.target.modeOf(matchId);
+      this.assertOpen();
+      if (pending.closed) throw new Error("socket closed during admission");
+
+      const { isFirst, alreadyPresent } = this.registerSocket(key, socketId);
+      if (alreadyPresent) return side;
+      added = true;
+
+      if (isFirst) {
+        await this.markTargetOnline(matchId, userId, side, mode);
+      }
+      return side;
+    } catch (error) {
+      if (added) this.rollbackSocketRegistration(key, socketId);
+      throw error;
+    }
+  }
+
+  private removeLastSocket(key: string, socketId: string): boolean {
+    const set = this.sockets.get(key);
+    if (!set || !set.delete(socketId) || set.size > 0) return false;
+    this.sockets.delete(key);
+    return true;
+  }
+
   /** Admission can be canceled while membership or durable Presence is pending. */
   noteSocketOpen(userId: string, matchId: string, socketId: string): Promise<string> {
     if (this.stopped) return Promise.reject(new Error("socket presence stopped"));
     const key = this.socketKey(userId, matchId);
     const pendingKey = JSON.stringify([matchId, userId, socketId]);
-    const pending = { closed: false }; this.opening.set(pendingKey, pending);
+    const pending = { closed: false };
+    this.opening.set(pendingKey, pending);
+
     return this.serialize(key, async () => {
-      let added = false;
       try {
-        this.assertOpen();
-        const side = await this.target.participantSide(userId, matchId);
-        this.assertOpen();
-        const mode = await this.target.modeOf(matchId);
-        this.assertOpen();
-        if (pending.closed) throw new Error("socket closed during admission");
-        const set = this.sockets.get(key) ?? new Set<string>();
-        if (set.has(socketId)) return side;
-        set.add(socketId); added = true; this.sockets.set(key, set);
-        if (set.size === 1) {
-          this.assertOpen();
-          if (mode === "2v2") await this.target.setMemberPresence(matchId, userId, "online");
-          else await this.target.setPresence(matchId, side, "online");
-          this.assertOpen();
-        }
-        return side;
-      } catch (error) {
-        if (added) {
-          const set = this.sockets.get(key); set?.delete(socketId);
-          if (set?.size === 0) this.sockets.delete(key);
-        }
-        throw error;
+        return await this.executeSocketAdmission(key, userId, matchId, socketId, pending);
       } finally {
         if (this.opening.get(pendingKey) === pending) this.opening.delete(pendingKey);
       }
@@ -90,23 +144,11 @@ export class MatchSocketPresence {
     const key = this.socketKey(userId, matchId);
     const pending = this.opening.get(JSON.stringify([matchId, userId, socketId]));
     if (pending) pending.closed = true;
+
     return this.serialize(key, async () => {
       if (this.stopped) return;
-      const set = this.sockets.get(key);
-      if (!set || !set.delete(socketId) || set.size > 0) return;
-      this.sockets.delete(key);
-      try {
-        const mode = await this.target.modeOf(matchId);
-        if (this.stopped) return;
-        if (mode === "2v2") await this.target.setMemberPresence(matchId, userId, "offline");
-        else {
-          const side = await this.target.participantSide(userId, matchId);
-          if (this.stopped) return;
-          await this.target.setPresence(matchId, side, "offline");
-        }
-      } catch {
-        // Existing policy: later admission reconciles an unavailable Match.
-      }
+      if (!this.removeLastSocket(key, socketId)) return;
+      await this.markTargetOffline(matchId, userId);
     });
   }
 }
