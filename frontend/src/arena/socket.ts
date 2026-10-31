@@ -107,33 +107,36 @@ class AuthLossSignal extends Error {
   }
 }
 
+function resolveForfeitOutcome(
+  forfeit: NonNullable<NonNullable<ServerSnapshot["final"]>["forfeit"]>,
+  mySide: string
+): string {
+  const base = forfeit.winner === mySide ? "You win by forfeit." : "Opponent wins by forfeit.";
+  if (forfeit.reason !== "leave") {
+    return base;
+  }
+  const departure = forfeit.loser === mySide ? "You forfeited." : "Opponent left the match.";
+  return `${base} ${departure}`;
+}
+
+function resolveStandardOutcome(winner: string | null, mySide: string): string {
+  if (winner === null) return "The match is a draw.";
+  return winner === mySide ? "You win the match." : "Opponent wins the match.";
+}
+
 /** Server terminal result -> viewer-relative final view (score sums + forfeit override). */
 export function adaptFinal(
   final: ServerSnapshot["final"],
   mySide: string,
   otherId: string,
 ): MatchFinalView | null {
-  const f = final;
-  if (!f) return null;
-  const you = f.scores?.[mySide] ?? 0;
-  const opponent = f.scores?.[otherId] ?? 0;
-  if (f.forfeit) {
-    const outcome = f.forfeit.winner === mySide ? "You win by forfeit." : "Opponent wins by forfeit.";
-    const departure = f.forfeit.reason === "leave"
-      ? f.forfeit.loser === mySide ? "You forfeited." : "Opponent left the match."
-      : null;
-    return {
-      you,
-      opponent,
-      outcome: departure ? `${outcome} ${departure}` : outcome,
-    };
-  }
-  return {
-    you,
-    opponent,
-    outcome:
-      f.winner === null ? "The match is a draw." : f.winner === mySide ? "You win the match." : "Opponent wins the match.",
-  };
+  if (!final) return null;
+  const you = final.scores?.[mySide] ?? 0;
+  const opponent = final.scores?.[otherId] ?? 0;
+  const outcome = final.forfeit
+    ? resolveForfeitOutcome(final.forfeit, mySide)
+    : resolveStandardOutcome(final.winner, mySide);
+  return { you, opponent, outcome };
 }
 
 /**
@@ -279,6 +282,42 @@ function adapt(server: ServerSnapshot, language: string, userId: string, sampled
     revision: server.revision ?? 0,
     matchFinal: adaptFinal(server.final, server.mySide, otherId),
   };
+}
+
+function resolveSocketAuth(
+  token: string | null | undefined,
+  userId: string | null,
+  matchId: string
+): Record<string, unknown> {
+  if (token) return { accessToken: token, matchId };
+  if (import.meta.env.DEV) return { userId, matchId };
+  return { matchId };
+}
+
+const REFRESH_EVENTS = [
+  "phase.changed",
+  "player.statusChanged",
+  "player.presenceChanged",
+  "readiness.changed",
+  "tests.updated",
+  "reveal.published",
+  "round.advanced",
+  "match.clock",
+  "match.ended",
+] as const;
+
+function bindRefreshEvents(
+  socket: Socket,
+  isActive: () => boolean,
+  onRefresh: (trigger?: { revision?: number; round?: number }) => void
+): void {
+  for (const event of REFRESH_EVENTS) {
+    socket.on(event, (payload: unknown) => {
+      if (!isActive()) return;
+      const p = payload as { revision?: number; round?: number } | null;
+      onRefresh({ revision: p?.revision, round: p?.round });
+    });
+  }
 }
 
 /**
@@ -438,21 +477,30 @@ export class SocketArenaTransport implements ArenaTransport {
     return connecting;
   }
 
+  private canReopen(lifetime: AbortController | null): boolean {
+    if (!lifetime || !this.socket) return false;
+    return !this.connecting && !this.connected && !this.reopening;
+  }
+
+  private handleReopenFailure(lifetime: AbortController): void {
+    if (this.lifetime === lifetime && !lifetime.signal.aborted) {
+      this.connected = false;
+      this.setConn("reconnecting");
+    }
+  }
+
   /** Browser network recovery rejoins the authorized room for a fresh baseline. */
   private async reopen(): Promise<void> {
     const lifetime = this.lifetime;
-    if (!lifetime || this.connecting || this.connected || this.reopening || !this.socket) return;
+    if (!this.canReopen(lifetime)) return;
     this.reopening = true;
     try {
       // Renewal already owns a fresh socket and its baseline wait.
       // Network recovery must join it instead of detaching that socket.
       if (this.recovery) await this.recovery;
-      else await this.reattach(lifetime);
+      else await this.reattach(lifetime!);
     } catch {
-      if (this.lifetime === lifetime && !lifetime.signal.aborted) {
-        this.connected = false;
-        this.setConn("reconnecting");
-      }
+      this.handleReopenFailure(lifetime!);
     } finally {
       if (this.lifetime === lifetime) {
         this.reopening = false;
@@ -500,29 +548,37 @@ export class SocketArenaTransport implements ArenaTransport {
     throw new AuthExpiredError();
   }
 
+  private async executeExpiryRecovery(lifetime: AbortController): Promise<void> {
+    // Server expiry is authoritative even when the browser clock is slow.
+    // Reuse an already rotated token; otherwise refresh once from this signal.
+    const token = this.getAccessToken?.();
+    if (token && token === this.attachedToken) await this.renewAuth();
+    this.assertActive(lifetime);
+    if (!this.getAccessToken?.()) throw new AuthExpiredError();
+    if (this.attachedToken !== this.getAccessToken()) await this.renewSocket();
+    if (this.recovery) await this.recovery;
+    this.assertActive(lifetime);
+    this.requireConnected("Session recovery");
+  }
+
+  private handleExpiryRecoveryError(error: unknown, lifetime: AbortController): void {
+    if (this.lifetime === lifetime && !lifetime.signal.aborted && !this.connected) {
+      this.connectError = error instanceof Error ? error.message : "Session unavailable. Please try again.";
+      this.setConn("offline");
+      this.emit();
+    }
+  }
+
   private recoverExpiredSocket(lifetime: AbortController): Promise<void> {
     if (this.expiryRecovery) return this.expiryRecovery;
-    const recovery = (async () => {
-      // Server expiry is authoritative even when the browser clock is slow.
-      // Reuse an already rotated token; otherwise refresh once from this signal.
-      const token = this.getAccessToken?.();
-      if (token && token === this.attachedToken) await this.renewAuth();
-      this.assertActive(lifetime);
-      if (!this.getAccessToken?.()) throw new AuthExpiredError();
-      if (this.attachedToken !== this.getAccessToken()) await this.renewSocket();
-      if (this.recovery) await this.recovery;
-      this.assertActive(lifetime);
-      this.requireConnected("Session recovery");
-    })().catch((error: unknown) => {
-      if (this.lifetime === lifetime && !lifetime.signal.aborted && !this.connected) {
-        this.connectError = error instanceof Error ? error.message : "Session unavailable. Please try again.";
-        this.setConn("offline");
-        this.emit();
-      }
-      throw error;
-    }).finally(() => {
-      if (this.expiryRecovery === recovery) this.expiryRecovery = null;
-    });
+    const recovery = this.executeExpiryRecovery(lifetime)
+      .catch((error: unknown) => {
+        this.handleExpiryRecoveryError(error, lifetime);
+        throw error;
+      })
+      .finally(() => {
+        if (this.expiryRecovery === recovery) this.expiryRecovery = null;
+      });
     this.expiryRecovery = recovery;
     return recovery;
   }
@@ -542,58 +598,53 @@ export class SocketArenaTransport implements ArenaTransport {
     return lifetime;
   }
 
+  private handleSocketSnapshot(snapshot: ServerSnapshot): void {
+    if (this.browserOffline) return;
+    this.applySnapshot(snapshot);
+    this.connected = true;
+    this.connectError = null;
+    this.setConn("connected");
+    this.emit();
+  }
+
+  private handleSocketDisconnect(reason: string, lifetime: AbortController, token: string | null | undefined): void {
+    this.connected = false;
+    this.setConn("reconnecting");
+    this.emit();
+    if (reason === "io server disconnect" && token) {
+      void this.recoverExpiredSocket(lifetime).catch(() => {});
+    }
+  }
+
+  private handleSocketConnectError(error: Error): void {
+    this.connectError = error.message;
+    this.connected = false;
+    this.setConn("reconnecting");
+    this.emit();
+  }
+
   private attachFreshSocket(lifetime: AbortController): Socket {
     this.assertActive(lifetime);
     const token = this.getAccessToken?.();
     this.attachedToken = token;
     const socket = io(this.socketBase, {
-      auth: token ? { accessToken: token, matchId: this.matchId } : import.meta.env.DEV ? { userId: this.userId, matchId: this.matchId } : { matchId: this.matchId },
+      auth: resolveSocketAuth(token, this.userId, this.matchId),
       forceNew: true,
       autoConnect: false,
     });
     this.socket = socket;
     const active = () => this.socket === socket && this.lifetime === lifetime && !lifetime.signal.aborted;
-    for (const event of [
-      "phase.changed",
-      "player.statusChanged",
-      "player.presenceChanged",
-      "readiness.changed",
-      "tests.updated",
-      "reveal.published",
-      "round.advanced",
-      "match.clock",
-      "match.ended",
-    ]) {
-      socket.on(event, (payload: unknown) => {
-        if (!active()) return;
-        const p = payload as { revision?: number; round?: number } | null;
-        void this.refresh({ revision: p?.revision, round: p?.round }, lifetime).catch(() => {});
-      });
-    }
-    // This handler survives reconnects; only a server baseline enables commands.
+    bindRefreshEvents(socket, active, (trigger) => {
+      void this.refresh(trigger, lifetime).catch(() => {});
+    });
     socket.on("snapshot", (snapshot: ServerSnapshot) => {
-      if (!active() || this.browserOffline) return;
-      this.applySnapshot(snapshot);
-      this.connected = true;
-      this.connectError = null;
-      this.setConn("connected");
-      this.emit();
+      if (active()) this.handleSocketSnapshot(snapshot);
     });
     socket.on("disconnect", (reason: string) => {
-      if (!active()) return;
-      this.connected = false;
-      this.setConn("reconnecting");
-      this.emit();
-      if (reason === "io server disconnect" && token) {
-        void this.recoverExpiredSocket(lifetime).catch(() => {});
-      }
+      if (active()) this.handleSocketDisconnect(reason, lifetime, token);
     });
     socket.on("connect_error", (error: Error) => {
-      if (!active()) return;
-      this.connectError = error.message;
-      this.connected = false;
-      this.setConn("reconnecting");
-      this.emit();
+      if (active()) this.handleSocketConnectError(error);
     });
     return socket;
   }
@@ -799,11 +850,56 @@ export class SocketArenaTransport implements ArenaTransport {
     return receipt;
   }
 
-  /**
-   * Revision-bound readiness (2v2): approves the latest authoritative
-   * revision this client has seen. The server re-checks currency — a stale
-   * approval throws and the snapshot (source of truth) corrects the UI.
-   */
+  private parseReadyResponse(
+    error: Error | null,
+    res?: { ok: boolean; error?: string }
+  ): void {
+    if (res?.ok) return;
+    if (res === undefined || error) {
+      throw new AuthLossSignal();
+    }
+    throw new Error(res.error ?? "setReady rejected");
+  }
+
+/**
+ * Revision-bound readiness (2v2): approves the latest authoritative
+ * revision this client has seen. The server re-checks currency — a stale
+ * approval throws and the snapshot (source of truth) corrects the UI.
+ */
+  private emitSetReady(
+    sock: Socket,
+    payload: { value: boolean; documentRevision?: number },
+    lifetime: AbortController
+  ): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const cancelled = () => reject(new Error("Readiness confirmation was lost"));
+      lifetime.signal.addEventListener("abort", cancelled, { once: true });
+      sock.timeout(5_000).emit("setReady", payload, (error: Error | null, res?: { ok: boolean; error?: string }) => {
+        lifetime.signal.removeEventListener("abort", cancelled);
+        if (lifetime.signal.aborted || this.socket !== sock) {
+          reject(new Error("Readiness confirmation was lost"));
+          return;
+        }
+        try {
+          this.parseReadyResponse(error, res);
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+  }
+
+  private async handleSetReadyError(error: unknown, sock: Socket, lifetime: AbortController): Promise<never> {
+    if (error instanceof AuthLossSignal) {
+      if (this.onAuthExpired && !lifetime.signal.aborted && this.socket === sock) {
+        return this.renewAfterAuthLoss(lifetime);
+      }
+      throw new Error("Readiness confirmation was lost");
+    }
+    throw error;
+  }
+
   async setReady(value: boolean): Promise<void> {
     const lifetime = await this.prepareCommand("setReady");
     await this.ensureSocketToken(lifetime);
@@ -811,24 +907,9 @@ export class SocketArenaTransport implements ArenaTransport {
     if (!sock || lifetime.signal.aborted) throw new Error("Readiness confirmation was lost");
     const payload = { value, documentRevision: this.lastDocRevision ?? undefined };
     try {
-      await new Promise<void>((resolve, reject) => {
-        const cancelled = () => reject(new Error("Readiness confirmation was lost"));
-        lifetime.signal.addEventListener("abort", cancelled, { once: true });
-        sock.timeout(5_000).emit("setReady", payload, (error: Error | null, res?: { ok: boolean; error?: string }) => {
-          lifetime.signal.removeEventListener("abort", cancelled);
-          if (lifetime.signal.aborted || this.socket !== sock) reject(new Error("Readiness confirmation was lost"));
-          else if (res?.ok) resolve();
-          // A missing ack (or a timeout where the server suppressed the ack)
-          // means auth/runtime loss — never a blind retry. The catch below
-          // renews, reconnects, and throws so the UI reconciles via snapshot.
-          else if (res === undefined || error) reject(new AuthLossSignal());
-          else reject(new Error(res?.error ?? "setReady rejected"));
-        });
-      });
+      await this.emitSetReady(sock, payload, lifetime);
     } catch (error) {
-      if (error instanceof AuthLossSignal && this.onAuthExpired && !lifetime.signal.aborted && this.socket === sock)
-        return this.renewAfterAuthLoss(lifetime);
-      throw error instanceof AuthLossSignal ? new Error("Readiness confirmation was lost") : error;
+      await this.handleSetReadyError(error, sock, lifetime);
     }
   }
 
@@ -899,6 +980,23 @@ export class SocketArenaTransport implements ArenaTransport {
     });
   }
 
+  private async processRefreshDemand(demand: NonNullable<typeof this.refreshDemand>): Promise<void> {
+    if (
+      demand.trigger &&
+      !shouldApplyUpdate(
+        { revision: this.appliedRevision, round: this.appliedRound },
+        demand.trigger,
+      )
+    ) {
+      for (const waiter of demand.waiters) waiter.resolve();
+      return;
+    }
+    const snap = (await this.get("/snapshot", demand.lifetime)) as ServerSnapshot;
+    this.assertActive(demand.lifetime);
+    if (this.applySnapshot(snap)) this.emit();
+    for (const waiter of demand.waiters) waiter.resolve();
+  }
+
   /**
    * Serial snapshot loop. A burst collapses into the fetch already in flight
    * plus one merged follow-up (highest revision wins); every caller resolves
@@ -913,20 +1011,7 @@ export class SocketArenaTransport implements ArenaTransport {
         const demand = this.refreshDemand;
         this.refreshDemand = null;
         try {
-          if (
-            demand.trigger &&
-            !shouldApplyUpdate(
-              { revision: this.appliedRevision, round: this.appliedRound },
-              demand.trigger,
-            )
-          ) {
-            for (const waiter of demand.waiters) waiter.resolve();
-            continue;
-          }
-          const snap = (await this.get("/snapshot", demand.lifetime)) as ServerSnapshot;
-          this.assertActive(demand.lifetime);
-          if (this.applySnapshot(snap)) this.emit();
-          for (const waiter of demand.waiters) waiter.resolve();
+          await this.processRefreshDemand(demand);
         } catch (error) {
           for (const waiter of demand.waiters) waiter.reject(error);
         }
