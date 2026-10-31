@@ -203,21 +203,21 @@ export class Judge0Adapter implements GameJudge {
     }
   }
 
-  private async runCase(
+  private buildSubmissionRequest(
     language: SupportedLanguage,
     driver: DriverKind,
     source: string,
     snippet: SnippetOptions | undefined,
     test: CaseInput,
     limits: JudgeLimits,
-  ): Promise<NormalizedCase> {
+  ): { request: Judge0SubmissionRequest; executionDriver: DriverKind } {
     const compiled = driver === "snippet" && language !== "Python"
       ? prepareCompiledSnippet(language, source, test.input, snippet) : undefined;
     const executionDriver = compiled ? "stdio" : driver;
     const providerSource = compiled?.source ?? (driver === "snippet" ? this.snippetHarness(source, test.input, snippet?.entrypoint) : source);
-    let response: Judge0SubmissionResponse;
-    try {
-      const created = await this.http.createSubmission({
+    return {
+      executionDriver,
+      request: {
         languageId: this.languageIds[language],
         sourceCode: providerSource,
         stdin: compiled?.input ?? test.input,
@@ -231,14 +231,27 @@ export class Judge0Adapter implements GameJudge {
         maxFileSizeKb: Math.max(1, Math.ceil(limits.runOutputBytes / 1024)),
         redirectStderrToStdout: false,
         enableNetwork: false,
-      });
+      },
+    };
+  }
+
+  private async executeSubmission(request: Judge0SubmissionRequest): Promise<Judge0SubmissionResponse> {
+    try {
+      const created = await this.http.createSubmission(request);
       if (!created.token) throw new JudgeInfraError("Judge0 did not return a submission token");
-      response = await this.poll(created.token);
+      return await this.poll(created.token);
     } catch (error) {
       if (error instanceof JudgeInfraError) throw error;
       throw new JudgeInfraError("Judge0 request failed");
     }
+  }
 
+  private evaluateResponse(
+    response: Judge0SubmissionResponse,
+    test: CaseInput,
+    executionDriver: DriverKind,
+    limits: JudgeLimits,
+  ): NormalizedCase {
     const status = this.statusFrom(response.status?.id);
     if (status === "internal_error") throw new JudgeInfraError("Judge0 returned an internal execution failure");
     const runtimeMs = this.runtimeMs(response.time);
@@ -264,6 +277,21 @@ export class Judge0Adapter implements GameJudge {
       output,
       runtimeMs,
     };
+  }
+
+  private async runCase(
+    language: SupportedLanguage,
+    driver: DriverKind,
+    source: string,
+    snippet: SnippetOptions | undefined,
+    test: CaseInput,
+    limits: JudgeLimits,
+  ): Promise<NormalizedCase> {
+    const { request, executionDriver } = this.buildSubmissionRequest(
+      language, driver, source, snippet, test, limits,
+    );
+    const response = await this.executeSubmission(request);
+    return this.evaluateResponse(response, test, executionDriver, limits);
   }
 
   private async poll(token: string): Promise<Judge0SubmissionResponse> {
