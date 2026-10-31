@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { prepareCompiledSnippet } from "../src/lib/compiled-snippet.js";
-import { JudgeInfraError } from "../src/lib/judge-types.js";
+import { prepareCompiledSnippet, JudgeInfraError } from "../src/judge.js";
 
 describe("prepareCompiledSnippet", () => {
   it("prepares valid C snippet harness and stdin", () => {

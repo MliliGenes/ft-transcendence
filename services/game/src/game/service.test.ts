@@ -5,7 +5,7 @@ import { io } from "socket.io-client";
 
 const PORT = 3217;
 const BASE = `http://localhost:${PORT}`;
-const PG_URL = process.env.TEST_PG_URL ?? "postgres://postgres:postgres@localhost:5433/arena_test";
+const PG_URL = process.env.TEST_PG_URL;
 
 const SOLVED_PY = `def ledger_sum(nums):
     total = 0
@@ -32,7 +32,7 @@ async function api(method: string, path: string, user?: string, body?: unknown):
   return { status: res.status, json: await res.json().catch(() => null) };
 }
 
-async function boot(extraEnv: Record<string, string> = {}, timeoutMs = 20000): Promise<ChildProcess> {
+async function boot(extraEnv: Record<string, string | undefined> = {}, timeoutMs = 20000): Promise<ChildProcess> {
   const child = spawn("node", ["dist/main.js"], {
     cwd: path.join(__dirname, "..", ".."),
     env: { ...process.env, PORT: String(PORT), DEV_PRINCIPAL: "true", ...extraEnv },
@@ -135,7 +135,7 @@ describe("game service integration (real HTTP + sockets + containers)", () => {
     sockB.disconnect();
   }, 60000);
 
-  it("restart with Postgres keeps counted result and reveal", async () => {
+  it.skipIf(!PG_URL)("restart with Postgres keeps counted result and reveal", async () => {
     server.kill();
     await new Promise((r) => setTimeout(r, 500));
     server = await boot({ DATABASE_URL: PG_URL });

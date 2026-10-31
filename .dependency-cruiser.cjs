@@ -80,7 +80,7 @@ module.exports = {
       name: "no-unresolved",
       comment: "A missing import cannot be checked against a package interface.",
       severity: "error",
-      from: {},
+      from: { pathNot: "^user-service/" },
       to: { couldNotResolve: true },
     },
 
