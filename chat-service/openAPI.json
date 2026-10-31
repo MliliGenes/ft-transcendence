@@ -1,0 +1,825 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Chat Service API",
+    "version": "0.0.1",
+    "description": "Chat Service HTTP API checked against the current NestJS controllers, DTO validation, Prisma schema, and service implementation. Socket.IO handshake behavior is summarized here, but application events require AsyncAPI once defined.",
+    "x-documentation-notes": [
+      "Message history currently returns a raw newest-first array containing up to limit + 1 rows; the lookahead row and cursor envelope are not finalized.",
+      "Message edits require the original author and reject soft-deleted messages.",
+      "A successful same-payload message retry currently returns only requestHash instead of the original Message object."
+    ]
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Service",
+      "description": "Service-level routes"
+    },
+    {
+      "name": "Conversations",
+      "description": "Conversation creation and listing"
+    },
+    {
+      "name": "Messages",
+      "description": "Message persistence and history"
+    },
+    {
+      "name": "Read state",
+      "description": "Per-user conversation read markers"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "getServiceRoot",
+        "summary": "Get service root",
+        "tags": [
+          "Service"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service placeholder response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RootResponse"
+                },
+                "example": {
+                  "message": "AM I THE BEST CAUSE I AM SAAD OR AM I SAD CAUSE I AM THE BEST?"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chat/conversations/dm": {
+      "post": {
+        "operationId": "createOrGetDm",
+        "summary": "Create or get a direct conversation",
+        "tags": [
+          "Conversations"
+        ],
+        "description": "Creates one canonical DM for the authenticated user and target user, or returns the existing DM. Participant UUIDs are sorted before lookup. The target must exist as a non-deleted ChatUser. Self-DM currently reaches the generic 500 error handler.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDmRequest"
+              },
+              "example": {
+                "userId": "4a13e0f8-8632-489a-b85a-552d886b41ea"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Existing or newly created direct conversation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conversation"
+                },
+                "example": {
+                  "id": "1ee9b51b-c93d-45da-ab9d-03eb1a76302d",
+                  "kind": "DM",
+                  "createdAt": "2026-10-31T05:20:00.000Z",
+                  "updatedAt": "2026-10-31T05:20:00.000Z",
+                  "dmUserAId": "4a13e0f8-8632-489a-b85a-552d886b41ea",
+                  "dmUserBId": "90299aa4-f556-4337-9c98-74e4d215fa29",
+                  "groupId": null,
+                  "name": null,
+                  "topic": null
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/chat/conversations": {
+      "get": {
+        "operationId": "listConversations",
+        "summary": "List direct conversations",
+        "tags": [
+          "Conversations"
+        ],
+        "description": "Returns conversations where the authenticated user is one of the two DM participants. The current response does not include group channels, participant profiles, latest-message summaries, read state, unread counts, or a guaranteed sort order.",
+        "responses": {
+          "200": {
+            "description": "Direct conversations visible to the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Conversation"
+                  }
+                },
+                "example": [
+                  {
+                    "id": "1ee9b51b-c93d-45da-ab9d-03eb1a76302d",
+                    "kind": "DM",
+                    "createdAt": "2026-10-31T05:20:00.000Z",
+                    "updatedAt": "2026-10-31T05:20:00.000Z",
+                    "dmUserAId": "4a13e0f8-8632-489a-b85a-552d886b41ea",
+                    "dmUserBId": "90299aa4-f556-4337-9c98-74e4d215fa29",
+                    "groupId": null,
+                    "name": null,
+                    "topic": null
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/chat/conversations/{conversationId}/messages": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationId"
+        }
+      ],
+      "post": {
+        "operationId": "sendMessage",
+        "summary": "Send a message",
+        "tags": [
+          "Messages"
+        ],
+        "description": "Persists a message for an authenticated DM participant. clientRequestId scopes idempotency to the author. A same-ID request with a different conversation/content hash returns 409. A same-payload retry currently returns RequestHashOnly rather than the original Message.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              },
+              "example": {
+                "content": "Hello from the chat service",
+                "clientRequestId": "908a6c18-78fc-45bf-9677-d5c7eb1317d3"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "New message, or the current reduced response for an identical retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Message"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RequestHashOnly"
+                    }
+                  ]
+                },
+                "examples": {
+                  "created": {
+                    "summary": "New message",
+                    "value": {
+                      "id": "6681dc8a-eb00-4502-abc4-24706c2fa433",
+                      "conversationId": "1ee9b51b-c93d-45da-ab9d-03eb1a76302d",
+                      "authorId": "90299aa4-f556-4337-9c98-74e4d215fa29",
+                      "content": "Hello from the chat service",
+                      "createdAt": "2026-10-31T06:38:49.525Z",
+                      "editedAt": null,
+                      "deletedAt": null,
+                      "clientRequestId": "908a6c18-78fc-45bf-9677-d5c7eb1317d3",
+                      "requestHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                      "version": 1
+                    }
+                  },
+                  "identicalRetry": {
+                    "summary": "Current retry response",
+                    "value": {
+                      "requestHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "get": {
+        "operationId": "getMessages",
+        "summary": "Load message history",
+        "tags": [
+          "Messages"
+        ],
+        "description": "Returns a raw newest-first message array. The current implementation queries limit + 1 rows for lookahead but does not remove the extra row or return hasMore/nextBefore. The optional before value is a unique Message.id cursor and the cursor row is skipped.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageLimit"
+          },
+          {
+            "$ref": "#/components/parameters/BeforeMessageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages ordered by createdAt descending, then id descending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  },
+                  "maxItems": 101
+                },
+                "example": [
+                  {
+                    "id": "6681dc8a-eb00-4502-abc4-24706c2fa433",
+                    "conversationId": "1ee9b51b-c93d-45da-ab9d-03eb1a76302d",
+                    "authorId": "90299aa4-f556-4337-9c98-74e4d215fa29",
+                    "content": "Newest message",
+                    "createdAt": "2026-10-31T06:38:49.525Z",
+                    "editedAt": null,
+                    "deletedAt": null,
+                    "clientRequestId": "f5a049b6-82af-49f4-b440-037b12e19a8c",
+                    "requestHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    "version": 1
+                  }
+                ]
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/chat/conversations/{conversationId}/read-state": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationId"
+        }
+      ],
+      "patch": {
+        "operationId": "markMessageRead",
+        "summary": "Mark a message as read",
+        "tags": [
+          "Read state"
+        ],
+        "description": "Validates that messageId belongs to the supplied conversation and that the caller is a DM participant, then upserts ConversationReadState by (conversationId, userId). The current implementation permits the marker to move backward and does not support group membership here.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadRequest"
+              },
+              "example": {
+                "messageId": "6681dc8a-eb00-4502-abc4-24706c2fa433"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Read marker saved; current response has no JSON body"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/chat/messages/{messageId}": {
+      "patch": {
+        "operationId": "editMessage",
+        "summary": "Edit a message",
+        "tags": [
+          "Messages"
+        ],
+        "description": "Only the original author can edit a non-deleted message. The update replaces content, sets editedAt, and atomically increments version. Missing, deleted, and other users' messages all return 404.",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "description": "Message to edit",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditMessageRequest"
+              },
+              "example": {
+                "content": "Updated message content"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                },
+                "example": {
+                  "id": "6681dc8a-eb00-4502-abc4-24706c2fa433",
+                  "conversationId": "1ee9b51b-c93d-45da-ab9d-03eb1a76302d",
+                  "authorId": "90299aa4-f556-4337-9c98-74e4d215fa29",
+                  "content": "Updated message content",
+                  "createdAt": "2026-10-31T06:38:49.525Z",
+                  "editedAt": "2026-10-31T07:00:00.000Z",
+                  "deletedAt": null,
+                  "clientRequestId": "f5a049b6-82af-49f4-b440-037b12e19a8c",
+                  "requestHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                  "version": 2
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "RS256 JWT",
+        "description": "User-service access JWT with issuer user-service, audience ft-transcendence-api, UUID sub, and numeric exp."
+      }
+    },
+    "parameters": {
+      "ConversationId": {
+        "name": "conversationId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "MessageLimit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "Requested page size. The current service returns up to one additional lookahead row.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 50
+        }
+      },
+      "BeforeMessageId": {
+        "name": "before",
+        "in": "query",
+        "required": false,
+        "description": "Message UUID used as a Prisma cursor; that message is skipped.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "schemas": {
+      "RootResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateDmRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "userId"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Target User-service account UUID"
+          }
+        }
+      },
+      "SendMessageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "content",
+          "clientRequestId"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "Text content; leading and trailing whitespace is trimmed before validation"
+          },
+          "clientRequestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Client-generated idempotency identifier for one logical send"
+          }
+        }
+      },
+      "MarkReadRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messageId"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Latest message the client reports as read"
+          }
+        }
+      },
+      "EditMessageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "content"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "Replacement text; leading and trailing whitespace is trimmed before validation"
+          }
+        }
+      },
+      "Conversation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "createdAt",
+          "updatedAt",
+          "dmUserAId",
+          "dmUserBId",
+          "groupId",
+          "name",
+          "topic"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "DM",
+              "CHANNEL"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "dmUserAId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "dmUserBId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "groupId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80
+          },
+          "topic": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "conversationId",
+          "authorId",
+          "content",
+          "createdAt",
+          "editedAt",
+          "deletedAt",
+          "clientRequestId",
+          "requestHash",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "editedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "deletedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "clientRequestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Server-computed SHA-256 hex digest"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "RequestHashOnly": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestHash"
+        ],
+        "properties": {
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "NestError": {
+        "type": "object",
+        "required": [
+          "statusCode",
+          "message"
+        ],
+        "properties": {
+          "statusCode": {
+            "type": "integer"
+          },
+          "message": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Request validation failed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/NestError"
+            },
+            "example": {
+              "statusCode": 400,
+              "message": [
+                "limit must not be greater than 100"
+              ],
+              "error": "Bad Request"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Bearer access token is missing, invalid, or expired",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/NestError"
+            },
+            "example": {
+              "statusCode": 401,
+              "message": "Access token is invalid or expired",
+              "error": "Unauthorized"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource is missing or inaccessible to the caller",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/NestError"
+            },
+            "example": {
+              "statusCode": 404,
+              "message": "Conversation not found",
+              "error": "Not Found"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "The client request ID was reused with another message payload",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/NestError"
+            },
+            "example": {
+              "statusCode": 409,
+              "message": "Request ID was already used for another message",
+              "error": "Conflict"
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "Unhandled application or database error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/NestError"
+            },
+            "example": {
+              "statusCode": 500,
+              "message": "Internal server error"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-socket-io": {
+    "namespace": "/chat`",
+    "authentication": {
+      "handshakeAuthField": "token",
+      "example": {
+        "auth": {
+          "token": "<accessToken>"
+        }
+      }
+    },
+    "serverBehavior": "After authentication the socket joins user:<sub>.",
+    "applicationEvents": []
+  }
+}

@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  NotImplementedException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -17,6 +16,7 @@ import { CreateDmDto } from './dtos/create-dm.dto.js';
 import { SendMessageDto } from './dtos/message.dto.js';
 import { GetMessagesQueryDto } from './dtos/get-messages-query.dto.js';
 import { MarkReadDto } from './dtos/mark-read.dto.js';
+import { EditMessageDto } from './dtos/edit-message.dto.js';
 
 @Controller('chat')
 export class ChatController {
@@ -66,8 +66,13 @@ export class ChatController {
     return this.chatService.markRead(req.user.sub, conversationId, body.messageId);
   }
 
+  @UseGuards(AuthGuard)
   @Patch('messages/:messageId')
-  editMessage(@Param('messageId') _messageId: string) {
-    throw new NotImplementedException();
+  editMessage(
+    @Request() req: Request & { user: { sub: string } },
+    @Param('messageId', new ParseUUIDPipe({ version: '4' })) messageId: string,
+    @Body() body: EditMessageDto,
+  ) {
+    return this.chatService.editMessage(req.user.sub, messageId, body);
   }
 }

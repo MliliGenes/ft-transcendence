@@ -2,13 +2,13 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-  NotImplementedException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SendMessageDto } from './dtos/message.dto.js';
 import { GetMessagesQueryDto } from './dtos/get-messages-query.dto.js';
 import { createHash } from 'crypto';
 import { MarkReadDto } from './dtos/mark-read.dto.js';
+import { EditMessageDto } from './dtos/edit-message.dto.js';
 
 @Injectable()
 export class ChatService {
@@ -149,6 +149,33 @@ export class ChatService {
     });
 
     return newMessage;
+  }
+
+  async editMessage(
+    userId: string,
+    messageId: string,
+    body: EditMessageDto,
+  ) {
+    const result = await this.prisma.message.updateMany({
+      where: {
+        id: messageId,
+        authorId: userId,
+        deletedAt: null,
+      },
+      data: {
+        content: body.content,
+        editedAt: new Date(),
+        version: { increment: 1 },
+      },
+    });
+
+    if (result.count === 0) {
+      throw new NotFoundException('Message not found');
+    }
+
+    return this.prisma.message.findUniqueOrThrow({
+      where: { id: messageId },
+    });
   }
 
   async markRead(userId: string, conversationId: string, _messageId: string) {
