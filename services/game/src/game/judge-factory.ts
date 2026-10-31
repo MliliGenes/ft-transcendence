@@ -16,24 +16,20 @@ function configuredPositiveInteger(environment: JudgeEnvironment, name: string):
   return value;
 }
 
-/** Select one GameJudge provider at process startup; provider failures never trigger fallback. */
-export function createGameJudge(environment: JudgeEnvironment = process.env, signal?: AbortSignal): GameJudge {
-  const backend = (environment.JUDGE_BACKEND ?? "container").trim().toLowerCase();
-  if (backend === "container") return new ContainerJudge();
-  if (backend === "worker") {
-    const baseUrl = environment.JUDGE_WORKER_URL?.trim();
-    if (!baseUrl) throw new Error("JUDGE_WORKER_URL is required when JUDGE_BACKEND=worker");
-    const token = environment.JUDGE_WORKER_TOKEN?.trim();
-    if (!token) throw new Error("JUDGE_WORKER_TOKEN is required when JUDGE_BACKEND=worker");
-    return new WorkerJudgeAdapter({
-      baseUrl,
-      token,
-      timeoutMs: configuredPositiveInteger(environment, "JUDGE_WORKER_TIMEOUT_MS"),
-      signal,
-    });
-  }
-  if (backend !== "judge0") throw new Error(`unsupported JUDGE_BACKEND ${backend}`);
+function buildWorkerJudge(environment: JudgeEnvironment, signal?: AbortSignal): WorkerJudgeAdapter {
+  const baseUrl = environment.JUDGE_WORKER_URL?.trim();
+  if (!baseUrl) throw new Error("JUDGE_WORKER_URL is required when JUDGE_BACKEND=worker");
+  const token = environment.JUDGE_WORKER_TOKEN?.trim();
+  if (!token) throw new Error("JUDGE_WORKER_TOKEN is required when JUDGE_BACKEND=worker");
+  return new WorkerJudgeAdapter({
+    baseUrl,
+    token,
+    timeoutMs: configuredPositiveInteger(environment, "JUDGE_WORKER_TIMEOUT_MS"),
+    signal,
+  });
+}
 
+function buildJudge0Judge(environment: JudgeEnvironment): Judge0Adapter {
   const baseUrl = environment.JUDGE0_URL?.trim();
   if (!baseUrl) throw new Error("JUDGE0_URL is required when JUDGE_BACKEND=judge0");
   const authToken = environment.JUDGE0_AUTH_TOKEN?.trim();
@@ -48,4 +44,19 @@ export function createGameJudge(environment: JudgeEnvironment = process.env, sig
     pollIntervalMs: Number(environment.JUDGE0_POLL_INTERVAL_MS ?? 250),
     maxPolls: Number(environment.JUDGE0_MAX_POLLS ?? 120),
   });
+}
+
+/** Select one GameJudge provider at process startup; provider failures never trigger fallback. */
+export function createGameJudge(environment: JudgeEnvironment = process.env, signal?: AbortSignal): GameJudge {
+  const backend = (environment.JUDGE_BACKEND ?? "container").trim().toLowerCase();
+  switch (backend) {
+    case "container":
+      return new ContainerJudge();
+    case "worker":
+      return buildWorkerJudge(environment, signal);
+    case "judge0":
+      return buildJudge0Judge(environment);
+    default:
+      throw new Error(`unsupported JUDGE_BACKEND ${backend}`);
+  }
 }
