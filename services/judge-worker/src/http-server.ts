@@ -187,6 +187,113 @@ function errorResponse(error: unknown): { status: number; body: { error: string 
   return { status: 500, body: { error: "judge request failed" } };
 }
 
+async function handleReadiness(
+  readiness: JudgeReadinessProbe,
+  response: import("node:http").ServerResponse,
+): Promise<void> {
+  try {
+    const checks = await readiness.check();
+    respond(response, checks.ready ? 200 : 503, { ready: checks.ready, checks });
+  } catch {
+    respond(response, 503, { ready: false, checks: { docker: false } });
+  }
+}
+
+async function ensureJudgeReady(
+  readiness: JudgeReadinessProbe,
+  response: import("node:http").ServerResponse,
+): Promise<boolean> {
+  try {
+    const check = await readiness.check();
+    if (check.ready) return true;
+  } catch {
+    // readiness check threw
+  }
+  respond(response, 503, { error: "judge unavailable" });
+  return false;
+}
+
+async function executeVisibleRun(
+  options: JudgeWorkerServerOptions,
+  body: unknown,
+  response: import("node:http").ServerResponse,
+): Promise<void> {
+  const input = parseVisibleRequest(body);
+  const result = await options.queue.run(() => options.judge.runVisible(
+    input.language, input.driver, input.source, input.tests, input.limits,
+    { entrypoint: input.entrypoint, signature: input.signature, className: input.className },
+  ));
+  respond(response, 200, result);
+}
+
+async function executeSealedEvaluation(
+  options: JudgeWorkerServerOptions,
+  body: unknown,
+  response: import("node:http").ServerResponse,
+): Promise<void> {
+  const input = parseSealedRequest(body);
+  const result = await options.queue.run(() => options.judge.evaluateSealed(input));
+  respond(response, 200, result);
+}
+
+async function handleGetRoutes(
+  path: string,
+  readiness: JudgeReadinessProbe,
+  response: import("node:http").ServerResponse,
+): Promise<boolean> {
+  if (path === "/health") {
+    respond(response, 200, { status: "ok" });
+    return true;
+  }
+  if (path === "/ready") {
+    await handleReadiness(readiness, response);
+    return true;
+  }
+  return false;
+}
+
+function checkJudgeRoute(
+  method: string | undefined,
+  path: string,
+  response: import("node:http").ServerResponse,
+): "visible" | "sealed" | null {
+  const visible = method === "POST" && path === "/v1/run-visible";
+  const sealed = method === "POST" && path === "/v1/evaluate-sealed";
+  if (!visible && !sealed) {
+    const isV1 = path.startsWith("/v1/");
+    respond(response, isV1 ? 405 : 404, { error: isV1 ? "method not allowed" : "not found" });
+    return null;
+  }
+  return visible ? "visible" : "sealed";
+}
+
+async function dispatchWorkerRequest(
+  request: IncomingMessage,
+  response: import("node:http").ServerResponse,
+  options: JudgeWorkerServerOptions,
+  maxBodyBytes: number,
+): Promise<void> {
+  const path = new URL(request.url ?? "/", "http://judge-worker.internal").pathname;
+  if (request.method === "GET" && await handleGetRoutes(path, options.readiness, response)) return;
+
+  const route = checkJudgeRoute(request.method, path, response);
+  if (!route) return;
+
+  if (!authenticated(request, options.token)) {
+    respond(response, 401, { error: "unauthorized" });
+    return;
+  }
+
+  if (!await ensureJudgeReady(options.readiness, response)) return;
+
+  const body = await readJsonBody(request, maxBodyBytes);
+  if (route === "visible") {
+    await executeVisibleRun(options, body, response);
+    return;
+  }
+  await executeSealedEvaluation(options, body, response);
+}
+
 /** Internal-only HTTP transport for the existing GameJudge contract. */
 export function createJudgeWorkerServer(options: JudgeWorkerServerOptions): Server {
   if (!options.token.trim()) throw new Error("JUDGE_WORKER_TOKEN is required");
@@ -194,66 +301,12 @@ export function createJudgeWorkerServer(options: JudgeWorkerServerOptions): Serv
   if (!Number.isSafeInteger(maxBodyBytes) || maxBodyBytes < 1) throw new Error("maxBodyBytes must be positive");
 
   const server = createServer((request, response) => {
-    void handleRequest(request, response).catch((error: unknown) => {
+    void dispatchWorkerRequest(request, response, options, maxBodyBytes).catch((error: unknown) => {
       const result = errorResponse(error);
       respond(response, result.status, result.body);
     });
   });
   server.requestTimeout = 30000;
   server.headersTimeout = 10000;
-
-  async function handleRequest(request: IncomingMessage, response: import("node:http").ServerResponse): Promise<void> {
-    const path = new URL(request.url ?? "/", "http://judge-worker.internal").pathname;
-    if (request.method === "GET" && path === "/health") {
-      respond(response, 200, { status: "ok" });
-      return;
-    }
-    if (request.method === "GET" && path === "/ready") {
-      try {
-        const checks = await options.readiness.check();
-        respond(response, checks.ready ? 200 : 503, { ready: checks.ready, checks });
-      } catch {
-        respond(response, 503, { ready: false, checks: { docker: false } });
-      }
-      return;
-    }
-
-    const visible = request.method === "POST" && path === "/v1/run-visible";
-    const sealed = request.method === "POST" && path === "/v1/evaluate-sealed";
-    if (!visible && !sealed) {
-      respond(response, path.startsWith("/v1/") ? 405 : 404, { error: path.startsWith("/v1/") ? "method not allowed" : "not found" });
-      return;
-    }
-    if (!authenticated(request, options.token)) {
-      respond(response, 401, { error: "unauthorized" });
-      return;
-    }
-
-    let readiness;
-    try {
-      readiness = await options.readiness.check();
-    } catch {
-      respond(response, 503, { error: "judge unavailable" });
-      return;
-    }
-    if (!readiness.ready) {
-      respond(response, 503, { error: "judge unavailable" });
-      return;
-    }
-
-    const body = await readJsonBody(request, maxBodyBytes);
-    if (visible) {
-      const input = parseVisibleRequest(body);
-      const result = await options.queue.run(() => options.judge.runVisible(
-        input.language, input.driver, input.source, input.tests, input.limits, { entrypoint: input.entrypoint, signature: input.signature, className: input.className },
-      ));
-      respond(response, 200, result);
-      return;
-    }
-    const input = parseSealedRequest(body);
-    const result = await options.queue.run(() => options.judge.evaluateSealed(input));
-    respond(response, 200, result);
-  }
-
   return server;
 }
