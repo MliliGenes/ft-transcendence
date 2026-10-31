@@ -35,36 +35,73 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isValidExecutionStatus(status: unknown): status is ExecutionStatus {
+  return typeof status === "string" && STATUSES.has(status as ExecutionStatus);
+}
+
+function isValidRuntimeMs(ms: unknown): ms is number {
+  return typeof ms === "number" && Number.isFinite(ms) && ms >= 0;
+}
+
 function parseCaseResult(value: unknown): CaseResult | null {
   if (!isRecord(value) || typeof value.id !== "string" || typeof value.passed !== "boolean"
-    || typeof value.status !== "string" || !STATUSES.has(value.status as ExecutionStatus)
-    || typeof value.output !== "string" || typeof value.runtimeMs !== "number"
-    || !Number.isFinite(value.runtimeMs) || value.runtimeMs < 0) return null;
+    || !isValidExecutionStatus(value.status) || typeof value.output !== "string"
+    || !isValidRuntimeMs(value.runtimeMs)) return null;
   return {
     id: value.id,
     passed: value.passed,
-    status: value.status as ExecutionStatus,
+    status: value.status,
     output: value.output,
     runtimeMs: value.runtimeMs,
+  };
+}
+
+function parseSealedCaseResult(item: unknown): SealedGroupResult["results"][number] | null {
+  if (!isRecord(item) || typeof item.id !== "string" || typeof item.passed !== "boolean"
+    || !isValidExecutionStatus(item.status) || !isValidRuntimeMs(item.runtimeMs)) return null;
+  return {
+    id: item.id,
+    passed: item.passed,
+    status: item.status,
+    runtimeMs: item.runtimeMs,
   };
 }
 
 function parseSealedGroup(value: unknown): SealedGroupResult | null {
   if (!isRecord(value) || typeof value.name !== "string" || typeof value.weight !== "number"
     || !Number.isFinite(value.weight) || !Array.isArray(value.results)) return null;
-  const results = value.results.map((item) => {
-    if (!isRecord(item) || typeof item.id !== "string" || typeof item.passed !== "boolean"
-      || typeof item.status !== "string" || !STATUSES.has(item.status as ExecutionStatus)
-      || typeof item.runtimeMs !== "number" || !Number.isFinite(item.runtimeMs) || item.runtimeMs < 0) return null;
-    return {
-      id: item.id,
-      passed: item.passed,
-      status: item.status as ExecutionStatus,
-      runtimeMs: item.runtimeMs,
-    };
-  });
+  const results = value.results.map(parseSealedCaseResult);
   if (results.some((item) => item === null)) return null;
   return { name: value.name, weight: value.weight, results: results as SealedGroupResult["results"] };
+}
+
+function parseWorkerEndpoint(baseUrl: string): URL {
+  let endpoint: URL;
+  try {
+    endpoint = new URL(baseUrl);
+  } catch {
+    throw new Error("JUDGE_WORKER_URL must be an absolute HTTP URL");
+  }
+  if ((endpoint.protocol !== "http:" && endpoint.protocol !== "https:") || endpoint.username || endpoint.password) {
+    throw new Error("JUDGE_WORKER_URL must be an absolute HTTP URL without embedded credentials");
+  }
+  return endpoint;
+}
+
+function parseWorkerTimeout(timeoutMs?: number): number {
+  const timeout = timeoutMs ?? 930000;
+  if (!Number.isFinite(timeout) || timeout < 1) throw new Error("worker timeout must be positive");
+  return timeout;
+}
+
+function assertSealedGroupMatches(
+  actual: SealedGroupResult,
+  expected: SealedEvaluationRequest["groups"][number],
+): void {
+  if (actual.name !== expected.name || actual.weight !== expected.weight || actual.results.length !== expected.tests.length
+    || actual.results.some((item, testIndex) => item.id !== expected.tests[testIndex]?.id)) {
+    throw new JudgeInfraError("judge worker returned mismatched sealed cases");
+  }
 }
 
 /** Game-side transport adapter. It has no provider fallback by design. */
@@ -81,19 +118,9 @@ export class WorkerJudgeAdapter implements GameJudge {
   constructor(options: WorkerJudgeAdapterOptions) {
     const token = options.token.trim();
     if (!token) throw new Error("JUDGE_WORKER_TOKEN is required");
-    let endpoint: URL;
-    try {
-      endpoint = new URL(options.baseUrl);
-    } catch {
-      throw new Error("JUDGE_WORKER_URL must be an absolute HTTP URL");
-    }
-    if ((endpoint.protocol !== "http:" && endpoint.protocol !== "https:") || endpoint.username || endpoint.password) {
-      throw new Error("JUDGE_WORKER_URL must be an absolute HTTP URL without embedded credentials");
-    }
-    this.endpoint = endpoint;
+    this.endpoint = parseWorkerEndpoint(options.baseUrl);
     this.token = token;
-    this.timeoutMs = options.timeoutMs ?? 930000;
-    if (!Number.isFinite(this.timeoutMs) || this.timeoutMs < 1) throw new Error("worker timeout must be positive");
+    this.timeoutMs = parseWorkerTimeout(options.timeoutMs);
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.signal = options.signal;
   }
@@ -128,43 +155,55 @@ export class WorkerJudgeAdapter implements GameJudge {
     if (groups.some((item) => item === null)) throw new JudgeInfraError("judge worker returned an invalid sealed result");
     const typedGroups = groups as SealedGroupResult[];
     for (let groupIndex = 0; groupIndex < typedGroups.length; groupIndex++) {
-      const actual = typedGroups[groupIndex]!;
-      const expected = request.groups[groupIndex]!;
-      if (actual.name !== expected.name || actual.weight !== expected.weight || actual.results.length !== expected.tests.length
-        || actual.results.some((item, testIndex) => item.id !== expected.tests[testIndex]?.id)) {
-        throw new JudgeInfraError("judge worker returned mismatched sealed cases");
-      }
+      assertSealedGroupMatches(typedGroups[groupIndex]!, request.groups[groupIndex]!);
     }
     return { groups: typedGroups };
   }
 
-  private async post(path: string, body: unknown): Promise<unknown> {
+  private createRequestSignal(): { signal: AbortSignal; checkCanceled: () => void } {
     const signal = this.signal
       ? AbortSignal.any([this.signal, AbortSignal.timeout(this.timeoutMs)])
       : AbortSignal.timeout(this.timeoutMs);
-    const canceled = () => new JudgeInfraError(this.signal?.aborted
-      ? "Game runtime stopped" : "judge worker request timed out");
-    if (signal.aborted) throw canceled();
+    const checkCanceled = () => {
+      if (signal.aborted) {
+        throw new JudgeInfraError(this.signal?.aborted ? "Game runtime stopped" : "judge worker request timed out");
+      }
+    };
+    return { signal, checkCanceled };
+  }
+
+  private async parseJsonResponse(response: Response, checkCanceled: () => void): Promise<unknown> {
+    try {
+      const result: unknown = await response.json();
+      checkCanceled();
+      return result;
+    } catch {
+      checkCanceled();
+      throw new JudgeInfraError("judge worker returned invalid JSON");
+    }
+  }
+
+  private async post(path: string, body: unknown): Promise<unknown> {
+    const { signal, checkCanceled } = this.createRequestSignal();
+    checkCanceled();
     let response: Response;
     try {
       response = await this.fetchImpl(new URL(path, this.endpoint), {
-        method: "POST", headers: { authorization: `Bearer ${this.token}`,
-          "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify(body), signal,
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${this.token}`,
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify(body),
+        signal,
       });
     } catch {
-      if (signal.aborted) throw canceled();
+      checkCanceled();
       throw new JudgeInfraError("judge worker request failed");
     }
-    if (signal.aborted) throw canceled();
+    checkCanceled();
     if (!response.ok) throw new JudgeInfraError(`judge worker returned HTTP ${response.status}`);
-    try {
-      const result: unknown = await response.json();
-      if (signal.aborted) throw canceled();
-      return result;
-    } catch {
-      if (signal.aborted) throw canceled();
-      throw new JudgeInfraError("judge worker returned invalid JSON");
-    }
+    return this.parseJsonResponse(response, checkCanceled);
   }
 }
