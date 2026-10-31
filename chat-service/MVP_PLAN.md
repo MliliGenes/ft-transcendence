@@ -1,6 +1,6 @@
 # Chat service MVP — our working plan
 
-Status: proposed scope, based on source inspection on 2026-10-29. No feature implementation is included in this step.
+Status: active working plan, updated 2026-10-31. Persistent DM features are in progress; live delivery is next.
 
 ## How we work
 
@@ -10,9 +10,27 @@ We plan one feature at a time. You describe your approach and write the code; I 
 
 Two existing User-service accounts can authenticate, open a direct conversation, send text messages, load history, and receive live messages. Chat keeps the public profile information it needs synchronized with User service and handles deleted accounts deliberately.
 
-Proposed first milestone: DMs, text messages, bounded history, live delivery, reconnect recovery, and user synchronization. One Chat instance initially; HTTP handles writes and reads, sockets deliver notifications. No second socket-based message-writing API yet.
+First milestone: DMs, text messages, bounded history, live delivery, reconnect recovery, and user synchronization. One Chat instance initially; HTTP handles writes and reads, sockets deliver notifications. No second socket-based message-writing API is planned for the MVP.
 
-Later marathon features: message edit/delete, groups/channels and roles, reactions, heartbeat/activity and last seen. These remain on the roadmap; their presence in the Prisma schema does not make all of them prerequisites for the first DM flow. Attachments, typing indicators, read receipts, and multi-instance presence are outside this initial scope.
+Message edit, soft delete, read markers, and derived unread counts have been added to the current DM implementation. After live message delivery works, the next feature is groups, channels, and group roles. Reactions, heartbeat/activity, and last seen remain later marathon features. Attachments, typing indicators, and multi-instance presence are outside this initial scope.
+
+## Current implementation snapshot
+
+Implemented in the current codebase:
+
+- JWT-protected Chat HTTP endpoints and an authenticated Socket.IO `/chat` namespace.
+- Create or return one canonical DM for a sorted user pair.
+- List the caller's DM conversations with `lastReadMessageId` and a derived `unreadCount`.
+- Send idempotent text messages, load message history, edit messages, and soft-delete messages.
+- Upsert a caller's last-read message for a DM.
+- API reference files in `API.md` and `openAPI.json`.
+
+Still incomplete or awaiting stronger verification:
+
+- An idempotent message retry currently needs to return the complete stored message before broadcasting is added.
+- Message pagination still needs a finished response envelope and next cursor.
+- Read markers can currently move backward.
+- Socket token-expiry handling, User-service synchronization, recovery, block eligibility, deployment routing, and end-to-end integration remain unfinished.
 
 ## What User service actually provides
 
@@ -97,20 +115,22 @@ These are proposals to agree on before implementing the relevant feature:
 - **Reliability:** implement the consumer plus an explicit reconciliation task before calling synchronization complete. A producer outbox is the stronger later improvement; do not assume publisher confirms close the database/publication gap.
 - **Deletion enforcement:** on a trusted deletion, clear profile fields, retain the UUID tombstone, deny future operations, and disconnect that user's sockets. Account checks/reconciliation cover missed deletion events; do not claim immediate revocation during outages. Define history retention before implementing deletion cleanup.
 - **Consumer behavior:** validate runtime payloads, apply updates atomically only if newer, tolerate duplicates, and acknowledge only after the database transaction commits. Equal timestamps are not a total order; conflicting snapshots need reconciliation. Bound transient retries and isolate malformed/poison messages instead of infinite requeueing. Coordinate queue arguments with the publisher's existing declaration.
+- **Live delivery:** REST remains the only message-write path. After a new message commits, emit `message:created` to the existing `user:<userId>` rooms of both DM participants, including the sender so their other tabs update. An idempotent retry returns the stored message without emitting again. Socket delivery is best effort; reconnect recovery always reloads authoritative state through HTTP.
 
 No extra event bus, Redis, shared database, or generalized synchronization framework is planned for the first milestone.
 
 ## Feature checkpoints
 
-| Order | Feature we plan together | Done when |
-| --- | --- | --- |
-| 1 | Authentication and runnable foundation | A real User-service token reaches protected Chat HTTP/socket paths; invalid/expired/wrong issuer/audience tokens fail; socket expiry works; database migration and required constraints are verified. |
-| 2 | User event consumer | Create/update/delete populate `ChatUser`; duplicate, stale, delete-before-create, malformed payload, and DB-failure cases behave correctly. RabbitMQ reconnect resumes consumption. |
-| 3 | Recovery and eligibility contracts | An older user can be bootstrapped; a missed profile/deletion event can be repaired; both block directions are checked; dependency failure does not grant access. Requires agreed User-service changes. |
-| 4 | Create/get a DM and list conversations | Concurrent creation gives one canonical pair; self-DM is rejected; only participants see their conversations. |
-| 5 | Send and load text messages | Author comes from verified identity; membership/eligibility is checked; text bounds and history cursors are validated; retries with one request ID do not duplicate messages; changed retry payloads are rejected. |
-| 6 | Live delivery and reconnect | Notify participants after persistence, never unrelated users; reconnect reloads authoritative state through HTTP. A missed socket notification does not lose the stored message. |
-| 7 | MVP integration check | The full flow works through the gateway with real User service, RabbitMQ, and PostgreSQL; endpoint/event documentation matches behavior and the client knows error/retry handling. |
+| Order | Feature we plan together | Status | Done when |
+| --- | --- | --- | --- |
+| 1 | Authentication and runnable foundation | In progress | A real User-service token reaches protected Chat HTTP/socket paths; invalid/expired/wrong issuer/audience tokens fail; socket expiry works; database migration and required constraints are verified. |
+| 2 | User event consumer | Not started | Create/update/delete populate `ChatUser`; duplicate, stale, delete-before-create, malformed payload, and DB-failure cases behave correctly. RabbitMQ reconnect resumes consumption. |
+| 3 | Recovery and eligibility contracts | Not started | An older user can be bootstrapped; a missed profile/deletion event can be repaired; both block directions are checked; dependency failure does not grant access. Requires agreed User-service changes. |
+| 4 | Create/get a DM and list conversations | Implemented, verification incomplete | Concurrent creation gives one canonical pair; self-DM is rejected; only participants see their conversations; conversation summaries return the caller's read marker and unread count. |
+| 5 | Send, load, edit, delete, and mark messages read | Implemented, verification incomplete | Author comes from verified identity; access is checked; text bounds and history cursors are validated; retries do not duplicate messages; changed retry payloads are rejected; edit/delete ownership and unread calculations are verified. |
+| 6 | Live delivery and reconnect | Next | A newly committed message emits `message:created` once to both participants; retries do not re-emit; unrelated users receive nothing; reconnect reloads authoritative state through HTTP. |
+| 7 | Groups, channels, and roles | After live delivery | A group creator becomes an admin; authorized admins manage members and channels; members can access only their groups; live delivery reaches current members only. |
+| 8 | MVP integration check | Not started | The full flow works through the gateway with real User service, RabbitMQ, and PostgreSQL; endpoint/event documentation matches behavior and the client knows error/retry handling. |
 
 For every row: agree on behavior and failure cases, you outline your approach, you implement, then we review and run targeted checks. We only expand the next row when the current one is understood.
 
@@ -124,12 +144,15 @@ Plan Chat's container/database configuration, public verification key, broker cr
 
 Keep this as a later feature checkpoint. First distinguish a live connection from actual user activity. Start with online/offline based on authenticated live connections and disconnect timeouts; all tabs/devices must disconnect before a user becomes offline. Add idle/last-seen semantics only after we agree what activity means and who may see it. It can move earlier without changing the identity or profile-event contracts.
 
-## First discussion before coding
+## Current next step: broadcast newly created messages
 
-1. Agree on the DM-first milestone and whether friends are required.
-2. Agree on the small User-service snapshot/eligibility contracts and service authentication.
-3. Start checkpoint 1 with your approach to applying the HTTP guard and handling socket token expiry.
+1. Make the idempotency lookup return the complete existing message.
+2. Add a gateway method that emits `message:created` to a list of `user:<userId>` rooms.
+3. Call it only after `prisma.message.create()` succeeds; never emit from the retry branch.
+4. Emit to both DM participants, including the sender for their other connected tabs.
+5. Verify that two clients receive one event, a third user receives none, and retrying the same `clientRequestId` creates and emits nothing new.
+6. Document the socket handshake and `message:created` payload. Then begin groups and channels.
 
 ## Verification status
 
-This plan comes from current source inspection, not a running integration test or a full security audit. No application code, secrets, dependencies, migrations, or sibling-service files were changed for this plan. Existing working-tree edits were left in place. Runtime connectivity, deployment configuration values, and broker permissions remain unverified.
+This plan reflects source inspection and the work completed so far. The Chat build and OpenAPI structure have been checked, and individual HTTP flows have been exercised during development, but the full User service + Chat service + PostgreSQL + RabbitMQ + Socket.IO path has not passed an end-to-end integration run. Deployment routing, broker consumption, socket broadcast isolation, reconnect recovery, and several negative authorization cases remain unverified.
