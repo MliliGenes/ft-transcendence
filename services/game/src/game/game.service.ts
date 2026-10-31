@@ -166,71 +166,95 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     return dispose;
   }
 
+  private async initStorage(): Promise<MatchPersistence> {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (databaseUrl) {
+      this.stores = new PostgresStores(databaseUrl); // required mode, no bypass
+      await this.stores.acquireRuntime({ onLost: (error) => this.loseRuntime(error) });
+      this.assertStartingOwner();
+      await this.stores.ensureSchema();
+      this.assertStartingOwner();
+      this.lobbyStore = this.stores.lobby;
+      return this.stores.persistence;
+    }
+    if (process.env.DEV_PRINCIPAL !== "true") {
+      throw new Error("DATABASE_URL is required unless DEV_PRINCIPAL=true");
+    }
+    const matches = new InMemoryMatchStore();
+    this.lobbyStore = new InMemoryLobbyStore(undefined, undefined, matches);
+    return new StoreBackedMatchPersistence({
+      matches,
+      submissions: new InMemorySubmissionStore(),
+      reveals: new InMemoryRevealStore(),
+      collab: new InMemoryCollabPersist(),
+    });
+  }
+
+  private wireEngineEvents(): () => void {
+    return this.engine.on((event, payload) => {
+      const matchId = (payload as { matchId?: string } | null)?.matchId;
+      if (!this.runtimeReady || typeof matchId !== "string" || !matchId) return;
+      for (const listener of this.listeners) {
+        if (!this.runtimeReady) return;
+        try {
+          listener(event, matchId, payload);
+        } catch (error) {
+          console.error(`[game] live event listener failed for ${event}:`, error);
+        }
+      }
+    });
+  }
+
+  private startPeriodicTimers(): void {
+    this.deadlineTimer = setInterval(() => {
+      if (!this.runtimeReady) return;
+      void this.engine.sweepExpiredMatches().catch(() => {});
+      for (const [matchId, pending] of this.pendingAutoReveals) {
+        if (!this.runtimeReady) return;
+        void this.maybeAutoReveal(pending.userId, matchId).catch(() => {});
+      }
+    }, 1000);
+    this.deadlineTimer.unref();
+
+    this.graceTimer = setInterval(() => {
+      if (!this.runtimeReady) return;
+      void this.engine.sweepGrace().catch(() => {});
+      for (const mode of ["1v1", "2v2"] as const) {
+        if (!this.runtimeReady) return;
+        void this.triggerMatchmaking(mode).catch((error) => {
+          if (this.runtimeReady) console.error("[lobby] matcher retry failed", error);
+        });
+      }
+    }, 10000);
+    this.graceTimer.unref();
+  }
+
   async onModuleInit(): Promise<void> {
-    if (this.initStarted || this.runtimeState !== "starting")
+    if (this.initStarted || this.runtimeState !== "starting") {
       throw new Error("Game runtime cannot start twice");
+    }
     this.initStarted = true;
     try {
-      const databaseUrl = process.env.DATABASE_URL;
-      let persistence: MatchPersistence;
-      if (databaseUrl) {
-        this.stores = new PostgresStores(databaseUrl); // required mode, no bypass
-        await this.stores.acquireRuntime({ onLost: (error) => this.loseRuntime(error) });
-        this.assertStartingOwner();
-        await this.stores.ensureSchema();
-        this.assertStartingOwner();
-        persistence = this.stores.persistence; this.lobbyStore = this.stores.lobby;
-      } else {
-        if (process.env.DEV_PRINCIPAL !== "true")
-          throw new Error("DATABASE_URL is required unless DEV_PRINCIPAL=true");
-        const matches = new InMemoryMatchStore();
-        persistence = new StoreBackedMatchPersistence({ matches,
-          submissions: new InMemorySubmissionStore(), reveals: new InMemoryRevealStore(),
-          collab: new InMemoryCollabPersist() });
-        this.lobbyStore = new InMemoryLobbyStore(undefined, undefined, matches);
-      }
+      const persistence = await this.initStorage();
       this.assertStartingOwner();
       this.engine = new ArenaEngine({
-        judge: createGameJudge(process.env, this.shutdownSignal), bank: new FileBank(),
-        persistence, telemetry: this.evaluationTelemetry,
+        judge: createGameJudge(process.env, this.shutdownSignal),
+        bank: new FileBank(),
+        persistence,
+        telemetry: this.evaluationTelemetry,
         reconnectGraceMs: Number(process.env.RECONNECT_GRACE_MS ?? 90000),
       });
-      this.lobby = new Lobby({ store: this.lobbyStore,
+      this.lobby = new Lobby({
+        store: this.lobbyStore,
         createMatch: (input, save) => this.engine.createMatch(input, save),
-        availableProblems: ["even-ledger", "double-it"] });
-      this.disposeEngineEvents = this.engine.on((event, payload) => {
-        const matchId = (payload as { matchId?: string } | null)?.matchId;
-        if (!this.runtimeReady || typeof matchId !== "string" || !matchId) return;
-        for (const listener of this.listeners) {
-          if (!this.runtimeReady) return;
-          try { listener(event, matchId, payload); }
-          catch (error) { console.error(`[game] live event listener failed for ${event}:`, error); }
-        }
+        availableProblems: ["even-ledger", "double-it"],
       });
+      this.disposeEngineEvents = this.wireEngineEvents();
       const recovered = await this.engine.recover();
       this.assertStartingOwner();
       console.log(`[game] boot recovery: ${recovered.matches} matches, ${recovered.retried} retried, ${recovered.failed} failed`);
       this.runtimeState = "ready";
-      this.deadlineTimer = setInterval(() => {
-        if (!this.runtimeReady) return;
-        void this.engine.sweepExpiredMatches().catch(() => {});
-        for (const [matchId, pending] of this.pendingAutoReveals) {
-          if (!this.runtimeReady) return;
-          void this.maybeAutoReveal(pending.userId, matchId).catch(() => {});
-        }
-      }, 1000);
-      this.deadlineTimer.unref();
-      this.graceTimer = setInterval(() => {
-        if (!this.runtimeReady) return;
-        void this.engine.sweepGrace().catch(() => {});
-        for (const mode of ["1v1", "2v2"] as const) {
-          if (!this.runtimeReady) return;
-          void this.triggerMatchmaking(mode).catch((error) => {
-            if (this.runtimeReady) console.error("[lobby] matcher retry failed", error);
-          });
-        }
-      }, 10000);
-      this.graceTimer.unref();
+      this.startPeriodicTimers();
     } catch (error) {
       void this.stop().catch(() => console.error("[game] startup cleanup failed"));
       throw error;
