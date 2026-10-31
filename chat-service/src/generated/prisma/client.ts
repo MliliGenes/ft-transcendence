@@ -62,6 +62,11 @@ export type GroupMember = Prisma.GroupMemberModel
  */
 export type Conversation = Prisma.ConversationModel
 /**
+ * Model ConversationReadState
+ * 
+ */
+export type ConversationReadState = Prisma.ConversationReadStateModel
+/**
  * Model Message
  * 
  */

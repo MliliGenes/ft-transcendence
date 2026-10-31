@@ -24,6 +24,7 @@ model ChatUser {
   dmsAsUserA  Conversation[] @relation("DmUserA")
   dmsAsUserB  Conversation[] @relation("DmUserB")
   messages    Message[]
+  readStates  ConversationReadState[]
   reactions   Reaction[]
 }
 
@@ -74,12 +75,26 @@ model Conversation {
   group   Group?  @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   messages Message[]
+  readStates  ConversationReadState[]
 
   // PostgreSQL permits multiple null pairs, so group channels can coexist.
   @@unique([dmUserAId, dmUserBId])
   @@index([dmUserAId, createdAt, id])
   @@index([dmUserBId, createdAt, id])
   @@index([groupId, createdAt, id])
+}
+
+model ConversationReadState {
+  conversationId    String   @db.Uuid
+  userId            String   @db.Uuid
+  lastReadMessageId String?  @db.Uuid
+  updatedAt         DateTime @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         ChatUser     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([conversationId, userId])
+  @@index([userId])
 }
 
 model Message {
