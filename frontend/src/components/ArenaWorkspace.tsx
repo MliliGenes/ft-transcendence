@@ -7,6 +7,30 @@ import type { CollabClient } from "../arena/collab.js";
 import type { TeamChatClient } from "../arena/chat.js";
 import type { ArenaSnapshot } from "../arena/types.js";
 
+function isCollabReady(collab: CollabClient | null | undefined, snapshot: ArenaSnapshot): boolean {
+  if (!collab) return true;
+  return (
+    collab.connection() === "connected" &&
+    !collab.hasPendingUpdates &&
+    collab.recoverySource === null &&
+    collab.revision === snapshot.docRevision &&
+    collab.language === snapshot.language
+  );
+}
+
+function isSharedActionReady(
+  transport: ArenaTransport,
+  collab: CollabClient | null | undefined,
+  snapshot: ArenaSnapshot
+): boolean {
+  return transport.connection() === "connected" && isCollabReady(collab, snapshot);
+}
+
+function isReadyDisabled(sharedActionsReady: boolean, snapshot: ArenaSnapshot): boolean {
+  if (!sharedActionsReady) return true;
+  return snapshot.roundPhase !== "CODING" || snapshot.you.status !== "coding";
+}
+
 export function ArenaWorkspace({
   snapshot,
   transport,
@@ -23,12 +47,26 @@ export function ArenaWorkspace({
   chat?: TeamChatClient | null;
 }) {
   const [, refreshCollaboration] = useState(0);
-  useEffect(() => collab?.subscribe(() => refreshCollaboration((value) => value + 1)), [collab]);
+
   useEffect(() => {
-    void collab?.reconcile(snapshot.docRevision, snapshot.language).catch(() => {});
+    if (!collab) return;
+    return collab.subscribe(() => refreshCollaboration((value) => value + 1));
+  }, [collab]);
+
+  useEffect(() => {
+    if (!collab) return;
+    void collab.reconcile(snapshot.docRevision, snapshot.language).catch(() => {});
   }, [collab, snapshot.docRevision, snapshot.language, collab?.hasPendingUpdates, collab?.revision, collab?.language]);
-  const sharedActionsReady = transport.connection() === "connected" && (!collab ||
-    (collab.connection() === "connected" && !collab.hasPendingUpdates && collab.recoverySource === null && collab.revision === snapshot.docRevision && collab.language === snapshot.language));
+
+  const sharedActionsReady = isSharedActionReady(transport, collab, snapshot);
+  const readyDisabled = isReadyDisabled(sharedActionsReady, snapshot);
+
+  const handleSetReady = (v: boolean) => {
+    if (sharedActionsReady) {
+      void transport.setReady(v).catch(() => {});
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)_minmax(0,4fr)]">
       <ProblemPanel problem={snapshot.problem} />
@@ -40,8 +78,8 @@ export function ArenaWorkspace({
       */}
       <MatchPanel
         snapshot={snapshot}
-        readyDisabled={!sharedActionsReady || snapshot.roundPhase !== "CODING" || snapshot.you.status !== "coding"}
-        onSetReady={(v) => { if (sharedActionsReady) void transport.setReady(v).catch(() => {}); }}
+        readyDisabled={readyDisabled}
+        onSetReady={handleSetReady}
         chat={chat}
       />
     </div>
