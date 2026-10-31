@@ -401,6 +401,7 @@ export const ModelName = {
   Group: 'Group',
   GroupMember: 'GroupMember',
   Conversation: 'Conversation',
+  ConversationReadState: 'ConversationReadState',
   Message: 'Message',
   Reaction: 'Reaction'
 } as const
@@ -418,7 +419,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "chatUser" | "group" | "groupMember" | "conversation" | "message" | "reaction"
+    modelProps: "chatUser" | "group" | "groupMember" | "conversation" | "conversationReadState" | "message" | "reaction"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -718,6 +719,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ConversationReadState: {
+      payload: Prisma.$ConversationReadStatePayload<ExtArgs>
+      fields: Prisma.ConversationReadStateFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ConversationReadStateFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConversationReadStatePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ConversationReadStateFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConversationReadStatePayload>
+        }
+        findFirst: {
+          args: Prisma.ConversationReadStateFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConversationReadStatePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ConversationReadStateFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConversationReadStatePayload>
+        }
+        findMany: {
+          args: Prisma.ConversationReadStateFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConversationReadStatePayload>[]
+        }
+        create: {
+          args: Prisma.ConversationReadStateCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConversationReadStatePayload>
+        }
+        createMany: {
+          args: Prisma.ConversationReadStateCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ConversationReadStateCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConversationReadStatePayload>[]
+        }
+        delete: {
+          args: Prisma.ConversationReadStateDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConversationReadStatePayload>
+        }
+        update: {
+          args: Prisma.ConversationReadStateUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConversationReadStatePayload>
+        }
+        deleteMany: {
+          args: Prisma.ConversationReadStateDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ConversationReadStateUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ConversationReadStateUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConversationReadStatePayload>[]
+        }
+        upsert: {
+          args: Prisma.ConversationReadStateUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConversationReadStatePayload>
+        }
+        aggregate: {
+          args: Prisma.ConversationReadStateAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateConversationReadState>
+        }
+        groupBy: {
+          args: Prisma.ConversationReadStateGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ConversationReadStateGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ConversationReadStateCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ConversationReadStateCountAggregateOutputType> | number
+        }
+      }
+    }
     Message: {
       payload: Prisma.$MessagePayload<ExtArgs>
       fields: Prisma.MessageFieldRefs
@@ -952,6 +1027,16 @@ export const ConversationScalarFieldEnum = {
 } as const
 
 export type ConversationScalarFieldEnum = (typeof ConversationScalarFieldEnum)[keyof typeof ConversationScalarFieldEnum]
+
+
+export const ConversationReadStateScalarFieldEnum = {
+  conversationId: 'conversationId',
+  userId: 'userId',
+  lastReadMessageId: 'lastReadMessageId',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ConversationReadStateScalarFieldEnum = (typeof ConversationReadStateScalarFieldEnum)[keyof typeof ConversationReadStateScalarFieldEnum]
 
 
 export const MessageScalarFieldEnum = {
@@ -1262,6 +1347,7 @@ export type GlobalOmitConfig = {
   group?: Prisma.GroupOmit
   groupMember?: Prisma.GroupMemberOmit
   conversation?: Prisma.ConversationOmit
+  conversationReadState?: Prisma.ConversationReadStateOmit
   message?: Prisma.MessageOmit
   reaction?: Prisma.ReactionOmit
 }

@@ -1,11 +1,48 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  NotImplementedException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SendMessageDto } from './dtos/message.dto.js';
+import { GetMessagesQueryDto } from './dtos/get-messages-query.dto.js';
 import { createHash } from 'crypto';
+import { MarkReadDto } from './dtos/mark-read.dto.js';
 
 @Injectable()
 export class ChatService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async getMessages(
+    userId: string,
+    conversationId: string,
+    _query: GetMessagesQueryDto,
+  ) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        OR: [
+          { dmUserAId: userId },
+          { dmUserBId: userId },
+          { group: { is: { members: { some: { userId } } } } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    const messages = await this.prisma.message.findMany({
+      where: { conversationId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: _query.limit + 1,
+      ...(_query.before ? { cursor: { id: _query.before }, skip: 1 } : {}),
+    });
+    return messages;
+  }
 
   async createOrGetDm(userId: string, otherUserId: string) {
     if (userId === otherUserId) {
@@ -112,5 +149,36 @@ export class ChatService {
     });
 
     return newMessage;
+  }
+
+  async markRead(userId: string, conversationId: string, _messageId: string) {
+    const message = await this.prisma.message.findFirst({
+      where: { id: _messageId, conversationId },
+      select: { id: true },
+    });
+
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        OR: [{ dmUserAId: userId }, { dmUserBId: userId }],
+      },
+      select: { id: true },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    await this.prisma.conversationReadState.upsert({
+      where: {
+        conversationId_userId: { conversationId, userId },
+      },
+      update: { lastReadMessageId: _messageId },
+      create: { conversationId, userId, lastReadMessageId: _messageId },
+    });
   }
 }

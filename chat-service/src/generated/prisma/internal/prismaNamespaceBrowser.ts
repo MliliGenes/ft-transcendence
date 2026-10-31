@@ -55,6 +55,7 @@ export const ModelName = {
   Group: 'Group',
   GroupMember: 'GroupMember',
   Conversation: 'Conversation',
+  ConversationReadState: 'ConversationReadState',
   Message: 'Message',
   Reaction: 'Reaction'
 } as const
@@ -122,6 +123,16 @@ export const ConversationScalarFieldEnum = {
 } as const
 
 export type ConversationScalarFieldEnum = (typeof ConversationScalarFieldEnum)[keyof typeof ConversationScalarFieldEnum]
+
+
+export const ConversationReadStateScalarFieldEnum = {
+  conversationId: 'conversationId',
+  userId: 'userId',
+  lastReadMessageId: 'lastReadMessageId',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ConversationReadStateScalarFieldEnum = (typeof ConversationReadStateScalarFieldEnum)[keyof typeof ConversationReadStateScalarFieldEnum]
 
 
 export const MessageScalarFieldEnum = {
