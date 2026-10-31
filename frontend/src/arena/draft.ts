@@ -57,6 +57,40 @@ function browserStorage(): DraftStorage | null {
   };
 }
 
+function collectStorageKeys(storage: DraftStorage, target: Set<string>): void {
+  try {
+    for (const key of storage.keys()) target.add(key);
+  } catch {
+    // Keep memory-only behavior when enumeration is blocked.
+  }
+}
+
+function collectCandidateKeys(memory: Map<string, string>, storage: DraftStorage | null): Set<string> {
+  const candidates = new Set<string>(memory.keys());
+  if (storage) {
+    collectStorageKeys(storage, candidates);
+  }
+  return candidates;
+}
+
+function isOlderRoundKey(key: string, prefix: string, currentRound: number): boolean {
+  if (!key.startsWith(prefix)) return false;
+  const rest = key.slice(prefix.length);
+  const separator = rest.indexOf(":");
+  if (separator <= 0) return false;
+  const keyRound = Number(rest.slice(0, separator));
+  return Number.isInteger(keyRound) && keyRound < currentRound;
+}
+
+function removeStorageKey(storage: DraftStorage | null, key: string): void {
+  if (!storage) return;
+  try {
+    storage.removeItem(key);
+  } catch {
+    // Already unusable; the current write still proceeds.
+  }
+}
+
 /**
  * Browser-local editor drafts, isolated by player + transport scope +
  * round/problem/language.
@@ -97,27 +131,11 @@ export class DraftRepository {
 
   private pruneOlderRounds(scope: DraftScope, round: number): void {
     const prefix = scopePrefix(scope);
-    const candidates = new Set<string>(this.memory.keys());
-    if (this.storage) {
-      try {
-        for (const key of this.storage.keys()) candidates.add(key);
-      } catch {
-        // Keep memory-only behavior when enumeration is blocked.
-      }
-    }
+    const candidates = collectCandidateKeys(this.memory, this.storage);
     for (const key of candidates) {
-      if (!key.startsWith(prefix)) continue;
-      const rest = key.slice(prefix.length);
-      const separator = rest.indexOf(":");
-      if (separator <= 0) continue;
-      const keyRound = Number(rest.slice(0, separator));
-      if (!Number.isInteger(keyRound) || keyRound >= round) continue;
-      this.memory.delete(key);
-      if (!this.storage) continue;
-      try {
-        this.storage.removeItem(key);
-      } catch {
-        // Already unusable; the current write still proceeds.
+      if (isOlderRoundKey(key, prefix, round)) {
+        this.memory.delete(key);
+        removeStorageKey(this.storage, key);
       }
     }
   }
