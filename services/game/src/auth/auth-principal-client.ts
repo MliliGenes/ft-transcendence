@@ -20,6 +20,38 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIMEOUT_MS = 2000;
 
+async function requestPrincipal(baseUrl: string, accessToken: string): Promise<Response> {
+  try {
+    return await fetch(`${baseUrl}/auth/principal`, {
+      headers: { authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch {
+    throw new VerificationUnavailableError();
+  }
+}
+
+function validateResponseStatus(res: Response): void {
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) throw new VerificationUnavailableError(`principal status ${res.status}`);
+}
+
+function parsePrincipalPayload(body: unknown): VerifiedPrincipal {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw new VerificationUnavailableError("principal body must be an object");
+  }
+  const principal = body as Partial<VerifiedPrincipal>;
+  if (
+    typeof principal.userId !== "string" ||
+    !UUID_RE.test(principal.userId) ||
+    !Number.isSafeInteger(principal.expiresAt) ||
+    (principal.expiresAt as number) <= Date.now()
+  ) {
+    throw new VerificationUnavailableError("principal malformed or expired");
+  }
+  return { userId: principal.userId, expiresAt: principal.expiresAt as number };
+}
+
 /** Verifies game access tokens against user-service GET /auth/principal. */
 @Injectable()
 export class AuthPrincipalClient {
@@ -42,35 +74,14 @@ export class AuthPrincipalClient {
   }
 
   private async fetchPrincipal(accessToken: string): Promise<VerifiedPrincipal> {
-    let res: Response;
-    try {
-      res = await fetch(`${this.baseUrl}/auth/principal`, {
-        headers: { authorization: `Bearer ${accessToken}` },
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
-    } catch {
-      throw new VerificationUnavailableError();
-    }
-    if (res.status === 401) throw new UnauthorizedError();
-    if (!res.ok) throw new VerificationUnavailableError(`principal status ${res.status}`);
+    const res = await requestPrincipal(this.baseUrl, accessToken);
+    validateResponseStatus(res);
     let body: unknown;
     try {
       body = await res.json();
     } catch {
       throw new VerificationUnavailableError("principal body unreadable");
     }
-    if (body === null || typeof body !== "object" || Array.isArray(body)) {
-      throw new VerificationUnavailableError("principal body must be an object");
-    }
-    const principal = body as Partial<VerifiedPrincipal>;
-    if (
-      typeof principal.userId !== "string" ||
-      !UUID_RE.test(principal.userId) ||
-      !Number.isSafeInteger(principal.expiresAt) ||
-      (principal.expiresAt as number) <= Date.now()
-    ) {
-      throw new VerificationUnavailableError("principal malformed or expired");
-    }
-    return { userId: principal.userId, expiresAt: principal.expiresAt as number };
+    return parsePrincipalPayload(body);
   }
 }
