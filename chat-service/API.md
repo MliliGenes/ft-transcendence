@@ -96,14 +96,20 @@ Response (`200 OK`):
     "dmUserBId": "90299aa4-f556-4337-9c98-74e4d215fa29",
     "groupId": null,
     "name": null,
-    "topic": null
+    "topic": null,
+    "lastReadMessageId": "4d0d1050-9c8d-4ae6-b734-5d2f33e0750b",
+    "unreadCount": 3
   }
 ]
 ```
 
+`lastReadMessageId` is `null` until the caller marks a message as read.
+`unreadCount` counts non-deleted messages from other users after that marker,
+using `(createdAt, id)` as the stable message order. Without a marker, every
+non-deleted message from another user is unread.
+
 The current implementation does not include group channels, participant
-profiles, latest-message summaries, read state, unread counts, or guaranteed
-ordering in this response.
+profiles, latest-message summaries, or guaranteed ordering in this response.
 
 Responses:
 
@@ -343,7 +349,6 @@ curl -X DELETE http://localhost:3000/chat/messages/<messageId> \
 ## Current limitations
 
 - User synchronization and RabbitMQ consumption are planned but not implemented.
-- Conversation listing has no unread count or last-read marker yet.
 - Message pagination does not return a finished cursor envelope.
 - Read markers are not monotonic yet.
 - Reactions, group management, live delivery, presence, and heartbeat/activity

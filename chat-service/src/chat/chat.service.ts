@@ -92,9 +92,56 @@ export class ChatService {
       where: {
         OR: [{ dmUserAId: userId }, { dmUserBId: userId }],
       },
+      include: {
+        readStates: {
+          where: { userId },
+          select: { lastReadMessageId: true },
+        },
+      },
     });
 
-    return conversations;
+    const lastReadMessageIds = conversations.flatMap(({ readStates }) =>
+      readStates[0]?.lastReadMessageId
+        ? [readStates[0].lastReadMessageId]
+        : [],
+    );
+
+    const lastReadMessages = await this.prisma.message.findMany({
+      where: { id: { in: lastReadMessageIds } },
+      select: { id: true, conversationId: true, createdAt: true },
+    });
+
+    const lastReadByConversationId = new Map(
+      lastReadMessages.map((message) => [message.conversationId, message]),
+    );
+
+    return Promise.all(
+      conversations.map(async ({ readStates, ...conversation }) => {
+        const lastReadMessageId = readStates[0]?.lastReadMessageId ?? null;
+        const lastReadMessage = lastReadByConversationId.get(conversation.id);
+
+        const unreadCount = await this.prisma.message.count({
+          where: {
+            conversationId: conversation.id,
+            authorId: { not: userId },
+            deletedAt: null,
+            ...(lastReadMessage
+              ? {
+                  OR: [
+                    { createdAt: { gt: lastReadMessage.createdAt } },
+                    {
+                      createdAt: lastReadMessage.createdAt,
+                      id: { gt: lastReadMessage.id },
+                    },
+                  ],
+                }
+              : {}),
+          },
+        });
+
+        return { ...conversation, lastReadMessageId, unreadCount };
+      }),
+    );
   }
 
   async sendMessage(
