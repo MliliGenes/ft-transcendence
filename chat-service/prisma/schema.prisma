@@ -89,7 +89,7 @@ model ConversationReadState {
   userId            String   @db.Uuid
   lastReadMessageId String?  @db.Uuid
   updatedAt         DateTime @updatedAt
-
+  
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         ChatUser     @relation(fields: [userId], references: [id], onDelete: Restrict)
 
