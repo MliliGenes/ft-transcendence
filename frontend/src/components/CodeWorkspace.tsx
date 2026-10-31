@@ -6,6 +6,199 @@ import type { ArenaTransport } from "../arena/transport.js";
 import type { CollabClient } from "../arena/collab.js";
 import type { ArenaSnapshot } from "../arena/types.js";
 
+function isRevisionApproved(snapshot: ArenaSnapshot): boolean {
+  if (snapshot.docRevision === null) return true;
+  return (
+    snapshot.readyRevision?.you === snapshot.docRevision &&
+    snapshot.readyRevision?.mate === snapshot.docRevision
+  );
+}
+
+function isReadyGateApproved(snapshot: ArenaSnapshot): boolean {
+  if (snapshot.mode !== "2v2") return true;
+  return Boolean(snapshot.ready.you && snapshot.ready.mate && isRevisionApproved(snapshot));
+}
+
+function isCollabLive(collab?: CollabClient | null): boolean {
+  return !collab || collab.connection() === "connected";
+}
+
+function isEditable(snapshot: ArenaSnapshot, collab?: CollabClient | null): boolean {
+  const canEditBase = snapshot.roundPhase === "CODING" && snapshot.you.status === "coding";
+  if (!canEditBase) return false;
+  return isCollabLive(collab) && (!collab || collab.recoverySource === null);
+}
+
+function isCollabSynced(snapshot: ArenaSnapshot, collab?: CollabClient | null): boolean {
+  if (!collab) return true;
+  return (
+    !collab.hasPendingUpdates &&
+    collab.revision === snapshot.docRevision &&
+    collab.language === snapshot.language
+  );
+}
+
+function resolveSubmitHint(snapshot: ArenaSnapshot, readyGate: boolean): string {
+  if (snapshot.mode === "2v2" && !readyGate) {
+    return "Team submit needs both teammates ready.";
+  }
+  return snapshot.you.status === "coding" ? "" : `You are ${snapshot.you.status}.`;
+}
+
+function confirmResubmitIfNeeded(snapshot: ArenaSnapshot): boolean {
+  const hasSubmitted = snapshot.you.submissions > 0 || snapshot.alpha.submissions > 0;
+  if (!hasSubmitted) return true;
+  return window.confirm("Submitting again replaces your current scored result for this round. Continue?");
+}
+
+function resolveEditorKey(snapshot: ArenaSnapshot, collab?: CollabClient | null): string {
+  if (collab) {
+    return `collab-${snapshot.round}-${collab.doc.clientID}`;
+  }
+  return "local";
+}
+
+function UnsavedEditRecovery({
+  recoverySource,
+  onDismiss,
+  onError,
+}: {
+  recoverySource: string;
+  onDismiss: () => void;
+  onError: (msg: string) => void;
+}) {
+  const handleCopy = () => {
+    if (!navigator.clipboard) {
+      onError("Select the recovery text and copy it manually.");
+      return;
+    }
+    void navigator.clipboard
+      .writeText(recoverySource)
+      .catch(() => onError("Select the recovery text and copy it manually."));
+  };
+
+  return (
+    <section aria-label="Unsaved edit recovery" className="space-y-2 border-b border-neutral-200 bg-neutral-50 p-3">
+      <p className="text-xs">Your unconfirmed text is kept here. Copy it, then dismiss this copy to resume editing.</p>
+      <textarea aria-label="Recovery text" readOnly value={recoverySource} className="h-24 w-full rounded border border-neutral-300 bg-white p-2 font-mono text-xs" />
+      <div className="flex gap-2">
+        <button type="button" className="rounded border border-neutral-300 px-2 py-1 text-xs" onClick={handleCopy}>
+          Copy recovery text
+        </button>
+        <button type="button" className="rounded border border-neutral-300 px-2 py-1 text-xs" onClick={onDismiss}>
+          Dismiss recovery copy
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function CollabStatusBanner({ collab }: { collab: CollabClient }) {
+  const isConnected = collab.connection() === "connected";
+  const message = isConnected
+    ? `Shared doc r${collab.revision ?? "?"} · live — actions wait for saved changes.`
+    : "Shared doc reconnecting — editing paused until synced.";
+
+  return (
+    <>
+      <p role="status" className="border-b border-neutral-200 px-3 py-1 font-mono text-xs text-neutral-600">
+        {message}
+      </p>
+      {collab.error && (
+        <p role="alert" className="border-b border-neutral-200 px-3 py-1 text-xs text-red-700">
+          {collab.error}
+        </p>
+      )}
+    </>
+  );
+}
+
+function useAsyncGuard() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const guard = async (fn: () => Promise<unknown>, action: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : `${action} failed`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return { busy, error, setError, guard };
+}
+
+function WorkspaceToolbar({
+  snapshot,
+  transport,
+  canEdit,
+  canSubmit,
+  connected,
+  sharedActionsReady,
+  busy,
+  readyGate,
+  liveCode,
+  guard,
+  setFontSize,
+  setError,
+}: {
+  snapshot: ArenaSnapshot;
+  transport: ArenaTransport;
+  canEdit: boolean;
+  canSubmit: boolean;
+  connected: boolean;
+  sharedActionsReady: boolean;
+  busy: boolean;
+  readyGate: boolean;
+  liveCode: string;
+  guard: (fn: () => Promise<unknown>, action: string) => Promise<void>;
+  setFontSize: React.Dispatch<React.SetStateAction<number>>;
+  setError: (err: string | null) => void;
+}) {
+  const isTeam = snapshot.mode === "2v2";
+  const canEditToolbar = canEdit && connected && sharedActionsReady;
+  const isToolbarBusy = busy || !sharedActionsReady;
+
+  const handleSubmit = () => {
+    if (!confirmResubmitIfNeeded(snapshot)) return;
+    void guard(
+      () =>
+        transport.submit({
+          code: liveCode,
+          language: snapshot.language,
+          documentRevision: snapshot.docRevision ?? undefined,
+        }),
+      "Submit"
+    );
+  };
+
+  const handleLanguage = (l: string) => {
+    transport.setLanguage(l).catch((e: unknown) => setError(e instanceof Error ? e.message : "language switch failed"));
+  };
+
+  return (
+    <EditorToolbar
+      language={snapshot.language}
+      languages={Object.keys(snapshot.problem.starters)}
+      canEdit={canEditToolbar}
+      canSubmit={canSubmit}
+      busy={isToolbarBusy}
+      connected={connected}
+      isTeam={isTeam}
+      submitHint={resolveSubmitHint(snapshot, readyGate)}
+      onLanguage={handleLanguage}
+      onFontBigger={() => setFontSize((f) => Math.min(20, f + 1))}
+      onFontSmaller={() => setFontSize((f) => Math.max(10, f - 1))}
+      onRun={() => void guard(() => transport.run({ code: liveCode, language: snapshot.language }), "Run")}
+      onSubmit={handleSubmit}
+    />
+  );
+}
+
 export function CodeWorkspace({
   snapshot,
   transport,
@@ -22,98 +215,39 @@ export function CodeWorkspace({
 }) {
   const editorRef = useRef<EditorAdapterHandle>(null);
   const [fontSize, setFontSize] = useState(13);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const isTeam = snapshot.mode === "2v2";
-  const canEditBase = snapshot.roundPhase === "CODING" && snapshot.you.status === "coding";
-  // Ticket 15 §20: collab disconnected -> shared editor read-only, actions
-  // paused. The game socket still owns Run/Submit gating via `connected`.
-  const collabLive = !collab || collab.connection() === "connected";
-  const canEdit = canEditBase && collabLive && (!collab || collab.recoverySource === null);
-  // Ticket 14: team gate needs both approvals bound to the CURRENT team-doc
-  // revision (server re-checks; this is UX only). Ticket 15 keeps this gate
-  // and binds the revision to real Yjs updates; the editor itself stays a
-  // local mock source until then (no collaborative text claimed).
-  const revisionGate =
-    snapshot.docRevision === null ||
-    (snapshot.readyRevision?.you === snapshot.docRevision && snapshot.readyRevision?.mate === snapshot.docRevision);
-  const readyGate = !isTeam || (snapshot.ready.you && snapshot.ready.mate && revisionGate);
-  // Ticket 11 §14: actions need a live transport; the editor stays locally
-  // editable while offline so no draft is lost, but nothing can succeed.
-  // In collab mode the shared doc replaces the draft: paused until synced.
-  const sharedActionsReady = !collab || (!collab.hasPendingUpdates && collab.revision === snapshot.docRevision && collab.language === snapshot.language);
-  // Saving a keystroke pauses commands, but is not a connection loss. Keep
-  // connection warnings stable while the shared edit is being acknowledged.
-  const connected = transport.connection() === "connected" && collabLive;
-  const recoverySource = collab?.recoverySource ?? null;
-  const canSubmit = canEdit && readyGate;
-  // Run/Submit always read the freshest source: shared Y.Text in collab mode.
-  const liveCode = collab ? collab.getSource() : code;
+  const { busy, error, setError, guard } = useAsyncGuard();
 
-  async function guard(fn: () => Promise<unknown>, action: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      await fn();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : `${action} failed`);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const canEdit = isEditable(snapshot, collab);
+  const readyGate = isReadyGateApproved(snapshot);
+  const sharedActionsReady = isCollabSynced(snapshot, collab);
+  const connected = transport.connection() === "connected" && isCollabLive(collab);
+  const canSubmit = canEdit && readyGate;
+  const liveCode = collab ? collab.getSource() : code;
+  const recoverySource = collab?.recoverySource;
 
   return (
     <section aria-label="Code workspace" className="overflow-hidden rounded-md border border-neutral-200 bg-white">
-      <EditorToolbar
-        language={snapshot.language}
-        languages={Object.keys(snapshot.problem.starters)}
-        canEdit={canEdit && connected && sharedActionsReady}
+      <WorkspaceToolbar
+        snapshot={snapshot}
+        transport={transport}
+        canEdit={canEdit}
         canSubmit={canSubmit}
-        busy={busy || !sharedActionsReady}
         connected={connected}
-        isTeam={isTeam}
-        submitHint={isTeam && !readyGate ? "Team submit needs both teammates ready." : snapshot.you.status === "coding" ? "" : `You are ${snapshot.you.status}.`}
-        onLanguage={(l) => {
-          // 1v1: local-only. 2v2: authoritative team switch (may throw when
-          // the round disallows it); failures surface in the workspace error.
-          transport.setLanguage(l).catch((e: unknown) => setError(e instanceof Error ? e.message : "language switch failed"));
-        }}
-        onFontBigger={() => setFontSize((f) => Math.min(20, f + 1))}
-        onFontSmaller={() => setFontSize((f) => Math.max(10, f - 1))}
-        onRun={() => void guard(() => transport.run({ code: liveCode, language: snapshot.language }), "Run")}
-        onSubmit={() => {
-          if (snapshot.you.submissions > 0 || snapshot.alpha.submissions > 0) {
-            // The prominent warning already sits beside the button; confirm inline, never a tooltip.
-            if (!window.confirm("Submitting again replaces your current scored result for this round. Continue?")) return;
-          }
-          void guard(() => transport.submit({ code: liveCode, language: snapshot.language, documentRevision: snapshot.docRevision ?? undefined }), "Submit");
-        }}
+        sharedActionsReady={sharedActionsReady}
+        busy={busy}
+        readyGate={readyGate}
+        liveCode={liveCode}
+        guard={guard}
+        setFontSize={setFontSize}
+        setError={setError}
       />
-      {collab && (
-        <p role="status" className="border-b border-neutral-200 px-3 py-1 font-mono text-xs text-neutral-600">
-          {collab.connection() === "connected"
-            ? `Shared doc r${collab.revision ?? "?"} · live — actions wait for saved changes.`
-            : "Shared doc reconnecting — editing paused until synced."}
-        </p>
-      )}
-      {collab?.error && <p role="alert" className="border-b border-neutral-200 px-3 py-1 text-xs text-red-700">{collab.error}</p>}
-      {recoverySource !== null && (
-        <section aria-label="Unsaved edit recovery" className="space-y-2 border-b border-neutral-200 bg-neutral-50 p-3">
-          <p className="text-xs">Your unconfirmed text is kept here. Copy it, then dismiss this copy to resume editing.</p>
-          <textarea aria-label="Recovery text" readOnly value={recoverySource} className="h-24 w-full rounded border border-neutral-300 bg-white p-2 font-mono text-xs" />
-          <div className="flex gap-2">
-            <button type="button" className="rounded border border-neutral-300 px-2 py-1 text-xs"
-              onClick={() => {
-                if (!navigator.clipboard) { setError("Select the recovery text and copy it manually."); return; }
-                void navigator.clipboard.writeText(recoverySource).catch(() => setError("Select the recovery text and copy it manually."));
-              }}>
-              Copy recovery text
-            </button>
-            <button type="button" className="rounded border border-neutral-300 px-2 py-1 text-xs" onClick={() => collab?.clearRecovery()}>
-              Dismiss recovery copy
-            </button>
-          </div>
-        </section>
+      {collab && <CollabStatusBanner collab={collab} />}
+      {recoverySource && (
+        <UnsavedEditRecovery
+          recoverySource={recoverySource}
+          onDismiss={() => collab.clearRecovery()}
+          onError={setError}
+        />
       )}
       {error && (
         <p role="alert" className="border-b border-neutral-200 px-3 py-1 font-mono text-xs text-red-700">
@@ -122,10 +256,7 @@ export function CodeWorkspace({
       )}
       <div className="p-3">
         <EditorAdapter
-          // ponytail: collab binding is round-scoped (fresh team Y.Doc per
-          // round) — remount the editor on round change so old-round content
-          // can never merge into the new document. Local mode never remounts.
-          key={collab ? `collab-${snapshot.round}-${collab.doc.clientID}` : "local"}
+          key={resolveEditorKey(snapshot, collab)}
           ref={editorRef}
           language={snapshot.language}
           code={code}
