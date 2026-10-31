@@ -15,6 +15,7 @@ use dated evidence for what was tested and historical plans for why it changed.
 | Understand wider Nook product direction | [Project context](../PROJECT_CONTEXT.md), dated product direction rather than proof of implemented features |
 | Connect User Service identity to Game | [Auth/Game contract](auth-game-contract.md) |
 | Find package public interfaces | [Package guide](../packages/README.md) |
+| 42 Peer evaluation script and defense walkthrough | [Evaluation guide](evaluation-guide.md) |
 | Check 42 candidate modules and evidence gaps | [Compliance matrix](42-subject-compliance.md) and [subject PDF](../requirements/ft_transcendence-v21.2.pdf) |
 
 ## Dated evidence
