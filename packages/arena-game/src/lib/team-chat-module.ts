@@ -122,52 +122,66 @@ export class TeamChat {
     this.pingTimestamps.delete(connectionId);
   }
 
+  private resolveAckKey(roomId: string, userId: string, rawClientMsgId?: unknown): string | undefined {
+    const clientMessageId = typeof rawClientMsgId === "string" ? rawClientMsgId.trim().slice(0, 64) : undefined;
+    return clientMessageId ? `${roomId}:${userId}:${clientMessageId}` : undefined;
+  }
+
+  private rememberAck(ackKey: string | undefined, id: string, timestamp: number): void {
+    if (!ackKey) return;
+    this.clientMsgAcks.set(ackKey, { id, timestamp });
+    if (this.clientMsgAcks.size > 200) {
+      const oldest = this.clientMsgAcks.keys().next().value;
+      if (oldest) this.clientMsgAcks.delete(oldest);
+    }
+  }
+
+  private validateMessageText(text: unknown): { ok: true; text: string } | { ok: false; error: string } {
+    if (typeof text !== "string") {
+      return { ok: false, error: "invalid message payload" };
+    }
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return { ok: false, error: "empty message" };
+    }
+    if (trimmed.length > this.maxTextLength) {
+      return { ok: false, error: `message exceeds ${this.maxTextLength} characters` };
+    }
+    return { ok: true, text: trimmed };
+  }
+
+  private async verifyActiveContext(userId: string, matchId: string, disabledReason: string): Promise<string | undefined> {
+    try {
+      const context = await this.resolveContext(userId, matchId);
+      if (!context.active) return disabledReason;
+      return undefined;
+    } catch {
+      return "match unavailable";
+    }
+  }
+
   async acceptMessage(input: AcceptMessageInput): Promise<TeamChatResult<TeamChatMessage>> {
     const { connectionId, userId, matchId, sideId, roomId, text, clientMessageId: rawClientMsgId } = input;
-
-    const clientMessageId = typeof rawClientMsgId === "string" ? rawClientMsgId.trim().slice(0, 64) : undefined;
-    const ackKey = clientMessageId ? `${roomId}:${userId}:${clientMessageId}` : undefined;
+    const ackKey = this.resolveAckKey(roomId, userId, rawClientMsgId);
 
     // Check duplicate retry before rate limiting so retries don't consume rate tokens
-    if (ackKey) {
-      const existing = this.clientMsgAcks.get(ackKey);
-      if (existing) {
-        return { ack: { ok: true, id: existing.id } };
-      }
+    if (ackKey && this.clientMsgAcks.has(ackKey)) {
+      return { ack: { ok: true, id: this.clientMsgAcks.get(ackKey)!.id } };
     }
 
     if (!this.checkRateLimit(this.msgTimestamps, connectionId, this.msgRateWindowMs, this.msgRateLimit)) {
       return { ack: { ok: false, error: "rate limit exceeded: too many messages" } };
     }
 
-    // Verify match lifecycle: reject new messages once MATCH_COMPLETE
-    try {
-      const context = await this.resolveContext(userId, matchId);
-      if (!context.active) {
-        return { ack: { ok: false, error: "chat is disabled after match complete" } };
-      }
-    } catch {
-      return { ack: { ok: false, error: "match unavailable" } };
-    }
+    const inactiveError = await this.verifyActiveContext(userId, matchId, "chat is disabled after match complete");
+    if (inactiveError) return { ack: { ok: false, error: inactiveError } };
 
-    if (typeof text !== "string") {
-      return { ack: { ok: false, error: "invalid message payload" } };
-    }
-
-    const trimmed = text.trim();
-    if (!trimmed) {
-      return { ack: { ok: false, error: "empty message" } };
-    }
-    if (trimmed.length > this.maxTextLength) {
-      return { ack: { ok: false, error: `message exceeds ${this.maxTextLength} characters` } };
-    }
+    const textValidation = this.validateMessageText(text);
+    if (!textValidation.ok) return { ack: { ok: false, error: textValidation.error } };
 
     // Re-check after async context resolution to protect against concurrent duplicate retries
-    if (ackKey) {
-      const existing = this.clientMsgAcks.get(ackKey);
-      if (existing) {
-        return { ack: { ok: true, id: existing.id } };
-      }
+    if (ackKey && this.clientMsgAcks.has(ackKey)) {
+      return { ack: { ok: true, id: this.clientMsgAcks.get(ackKey)!.id } };
     }
 
     const msg: TeamChatMessage = {
@@ -175,19 +189,12 @@ export class TeamChat {
       matchId,
       sideId,
       senderUserId: userId,
-      text: trimmed,
+      text: textValidation.text,
       timestamp: this.clock(),
       type: "text",
     };
 
-    if (ackKey) {
-      this.clientMsgAcks.set(ackKey, { id: msg.id, timestamp: msg.timestamp });
-      if (this.clientMsgAcks.size > 200) {
-        const oldest = this.clientMsgAcks.keys().next().value;
-        if (oldest) this.clientMsgAcks.delete(oldest);
-      }
-    }
-
+    this.rememberAck(ackKey, msg.id, msg.timestamp);
     this.recordHistory(roomId, msg);
     return { ack: { ok: true, id: msg.id }, entry: msg };
   }
@@ -199,14 +206,8 @@ export class TeamChat {
       return { ack: { ok: false, error: "rate limit exceeded: too many pings" } };
     }
 
-    try {
-      const context = await this.resolveContext(userId, matchId);
-      if (!context.active) {
-        return { ack: { ok: false, error: "match is complete; pings disabled" } };
-      }
-    } catch {
-      return { ack: { ok: false, error: "match unavailable" } };
-    }
+    const inactiveError = await this.verifyActiveContext(userId, matchId, "match is complete; pings disabled");
+    if (inactiveError) return { ack: { ok: false, error: inactiveError } };
 
     if (!isTeamPing(ping)) {
       return { ack: { ok: false, error: "invalid ping type" } };
