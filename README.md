@@ -1,3 +1,5 @@
+*This project has been created as part of the 42 curriculum by ayousr, sel-mlil, aouellad.*
+
 # Nook / Code Arena
 
 Code Arena is Nook's first-game implementation baseline for the 42
@@ -33,6 +35,53 @@ Nook product direction remains in [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).
 Start at the [docs index](docs/README.md) for current guides, dated evidence and
 historical references. The [visual repository map](.agent-native/visual-docs/repo-overview/plan.mdx)
 shows source files and the remaining work; see the [viewer instructions](.agent-native/README.md).
+
+## System architecture
+
+```mermaid
+flowchart TD
+  Client["Client (Browser / Modern Chrome)"] -->|"HTTPS / WSS (Ports 80/443)"| Gateway["Nginx TLS Reverse Proxy"]
+
+  subgraph Ingress & Static SPAs
+    Gateway -->|"Route: / (Port 80/443)"| AuthSPA["Account & Profile SPA (React / Vite)"]
+    Gateway -->|"Route: /play/ (Port 80/443)"| ArenaSPA["Code Arena SPA (React / Vite)"]
+    Gateway -->|"Route: /api/auth/*"| UserSvc["User Service (NestJS :3000)"]
+    Gateway -->|"Route: /matches, /lobby, /socket.io"| GameSvc["Game Service (NestJS :3002)"]
+  end
+
+  subgraph Internal Services & Workers
+    UserSvc -->|"Prisma ORM"| UserDB[("User Database (PostgreSQL :5432)")]
+    GameSvc -->|"pg Driver / SQL"| GameDB[("Game Database (PostgreSQL :5432)")]
+    GameSvc -->|"Readiness & Cache"| RedisDB[("Redis Cache (:6379)")]
+    GameSvc -->|"Verified Principal Check"| UserSvc
+    GameSvc -->|"Internal Token Auth (:3010)"| JudgeWorker["Judge Worker (:3010)"]
+    JudgeWorker -->|"Docker Socket (/var/run/docker.sock)"| Containers["Ephemeral Isolated Containers (Python / GCC)"]
+  end
+```
+
+## Database architecture & schemas
+
+The application separates concerns across two independent PostgreSQL databases:
+
+### 1. User database (`user-service` via Prisma ORM)
+- `User`: Primary identity table storing `id` (UUID), `username`, `email`, `role`, `passwordHash` (Argon2/bcrypt), avatar and banner URLs, and verification timestamps.
+- `Friendship`: Social graph tracking `requesterId`, `addresseeId`, and status (`PENDING`, `ACCEPTED`, `BLOCKED`).
+- `Block`: Mutual messaging and interaction block list (`blockerId`, `blockedId`).
+- `AuthProvider`: External OAuth identities linking `provider` (GitHub/Discord) and `providerUserId`.
+- `RefreshToken`: Secure hashed refresh tokens for session renewal.
+- `TwoFactorAuth` & `RecoveryCode`: TOTP secret storage and single-use emergency recovery hashes.
+- `UserImage`: Metadata for uploaded avatars and banners (`url`, `sizeBytes`, `mimeType`).
+
+### 2. Game database (`game` service via SQL migrations)
+- `matches`: Authoritative match records and status (`id`, `data` JSONB).
+- `rounds`: Problem assignments and timing per round (`match_id`, `idx`, `round_id`, `problem_version_id`).
+- `round_sides`: Team scoring and progress (`match_id`, `round_id`, `side_id`, `activity`, `attempts`, `counted_score`, `scoring_time_ms`).
+- `submissions`: Sealed candidate attempts and test verdicts (`submission_id`, `evaluation_id`, `match_id`, `round_id`, `data` JSONB).
+- `reveals`: Published round scores and breakdown (`match_id`, `round_id`, `published_at`, `data` JSONB).
+- `match_failures`: Audit log of infrastructure or evaluation faults (`match_id`, `idx`, `message`).
+- `collab_documents`: Real-time 2v2 shared editor Yjs documents and language selections (`match_id`, `round_id`, `side_id`, `app_revision`, `language`, `ydoc_state`).
+- `private_rooms`: Matchmaking rooms and invitation codes (`code`, `mode`, `host_user_id`, `status`).
+- `private_room_members`: Room participant slots and readiness (`code`, `user_id`, `side_id`, `ready`, `is_host`).
 
 ## Prerequisites
 
@@ -185,6 +234,50 @@ for updates, ownership loss and deliberate restart.
 
 The original game extraction and subsequent auth integration used selected source
 imports; no complete teammate branch merge or rewrite is claimed.
+
+## Team roles & project management
+
+| Team Member | Role(s) | Primary Responsibilities |
+| --- | --- | --- |
+| Saad (`sel-mlil`) | Product Owner (PO) | Product vision, backlog prioritization, User Service architecture, and auth contract definitions. |
+| Aimane (`ayousr`) | Technical Lead & Architect | Code Arena core engine architecture, deep module boundaries, cyclomatic complexity reduction, Yjs collaboration, and isolated judge worker. |
+| Amal (`aouellad`) | Project Manager (PM) & Developer | Sprint tracking, direct messaging integration, profile interactions, and team coordination. |
+
+- **Project Management Practices**: Iterative sprints with task tracking via GitHub Issues, automated CI gates (`check:repository`, `typecheck`, `build`, `lint`), and regular coordination sessions over Discord.
+
+## 42 modules & point calculations
+
+| Module | Category | Type | Points | Description & Implementation Scope |
+| --- | --- | --- | ---: | --- |
+| Framework for frontend and backend | Web | Major | 2 | React/Vite frontends (Account + Arena) and NestJS backends (User Service + Game). |
+| Real-time features | Web | Major | 2 | Socket.IO namespaces for match authority, lobby rooms, player presence, Yjs collaborative editing, and match chat. |
+| User interaction | Web | Major | 2 | User profile views, avatar/banner uploads, friendship system, and match-scoped messaging. |
+| Complete web-based game | Gaming | Major | 2 | Code Arena: 1v1 and 2v2 multiplayer competitive coding matches with hidden suites, test runner, scoring, and score reveals. |
+| Remote players | Gaming | Major | 2 | Real-time networked play across separate clients with disconnect handling and token expiry recovery. |
+| Multiplayer game (3+ players) | Gaming | Major | 2 | Four-player 2v2 collaborative shared document editing, team readiness gates, and sealed evaluation. |
+| Backend as microservices | Devops | Major | 2 | Independent User Service, Game Service, and private Judge Worker with authenticated service boundaries. |
+| Database ORM | Web | Minor | 1 | Prisma ORM powering User Service schema migrations, relations, and type-safe data access. |
+| Real-time collaboration | Web | Minor | 1 | Yjs CRDT real-time collaborative code editor with synchronized edits and peer cursor awareness. |
+| OAuth 2.0 authentication | User Management | Minor | 1 | External authentication integration with GitHub and Discord OAuth providers. |
+| **Total Claimed Points** | | | **17 pts** | Minimum required by subject: **14 points**. |
+
+## Resources & AI-use disclosure
+
+### References & documentation
+- [ft_transcendence v21.2 Subject PDF](requirements/ft_transcendence-v21.2.pdf)
+- [React 19 Documentation](https://react.dev)
+- [NestJS Framework Guide](https://docs.nestjs.com)
+- [Prisma ORM Reference](https://www.prisma.io/docs)
+- [Socket.IO Realtime Engine](https://socket.io/docs/v4/)
+- [Yjs Shared Data Types](https://docs.yjs.dev/)
+
+### AI-use disclosure
+- **Assisting Tools**: Google DeepMind Antigravity and Gemini CLI coding agents.
+- **Tasks & Scope**:
+  1. Systematic Cyclomatic Complexity refactoring: decomposing complex modules into private deep functions and components with CC <= 10.
+  2. Test harness implementation: building unit and characterization test suites (800+ test cases across the monorepo).
+  3. Boundary and type enforcement: verifying zero dependency cycles and exact TypeScript type safety.
+- **Verification Protocol**: Every AI-assisted modification was validated through automated test suites (`npm test`), mutation testing spot-checks, strict typechecking (`tsc --noEmit`), build verification, and independent peer reviews.
 
 ## Known limitations
 
