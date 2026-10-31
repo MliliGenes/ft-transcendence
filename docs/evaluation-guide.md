@@ -201,21 +201,21 @@ Follow this exact sequence with two browser windows side by side (e.g. standard 
 
 ---
 
-## Proof Station 5: Code Quality & Uncle Bob Quality Gates
+## Proof Station 5: Code Quality & Maintainability Gates
 
-When asked how the code was engineered, explain the three **`ub-mode`** quality gates:
+When asked how code quality and test discipline are enforced across the architecture, highlight these three engineering standards:
 
-### Gate 1: CRAP Score Gate (Target: CRAP < 10)
+### Gate 1: Change Risk Anti-Patterns (CRAP) & Complexity (Target: CRAP < 10, CC <= 10)
 - **Formula**: `CRAP(m) = CC^2 * (1 - cov)^3 + CC`
 - When Cyclomatic Complexity is <= 10 and test coverage is high, CRAP is guaranteed to stay below 10.
 - 100% of domain functions in `packages/arena-game` have CC <= 10.
 
-### Gate 2: Duplication Gate / Dryer (Target: Similarity < 0.8)
+### Gate 2: Zero Structural Duplication (Target: Similarity < 0.8)
 - Zero copy-pasted domain logic between services.
 - All shared types, schemas, and events live in `packages/arena-model`.
 - Module boundaries verified via `npm run lint:boundaries`.
 
-### Gate 3: Mutator Gate / Mutation Mindset (100% Killed)
+### Gate 3: Mutation Verification (100% Defect Kill Rate)
 - If you invert any condition (e.g. `if (!active)` -> `if (active)`) in `packages/arena-game/src/lib/round-lifecycle.ts`, running `npm test --workspace arena-game-engine` fails immediately with assertion errors.
 - Proves tests actively guard domain rules rather than inflating superficial coverage.
 
