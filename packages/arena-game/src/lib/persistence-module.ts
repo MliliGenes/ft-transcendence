@@ -65,40 +65,41 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
     return this.adapters.matches.listIds();
   }
 
+  private async findExistingSubmission(submissionId: string, evaluationId: string): Promise<SubmissionRecord | undefined> {
+    const bySubmission = await this.adapters.submissions.getBySubmissionId(submissionId);
+    if (bySubmission) return bySubmission;
+    return await this.adapters.submissions.getByEvaluationId(evaluationId);
+  }
+
+  private assertSubmissionMatches(existing: SubmissionRecord, target: SubmissionRecord): SubmissionRecord {
+    if (immutableSubmissionView(existing) !== immutableSubmissionView(target)) {
+      throw new DuplicateError("submission or evaluation id is already bound to different data");
+    }
+    return existing;
+  }
+
+  private async handleUniqueInsertConflict(error: unknown, record: SubmissionRecord): Promise<SubmissionRecord> {
+    if (!isUniqueViolation(error)) throw error;
+    const winner = await this.findExistingSubmission(record.submissionId, record.evaluationId);
+    if (!winner) throw error;
+    return this.assertSubmissionMatches(winner, record);
+  }
+
   async recordSubmission(record: SubmissionRecord): Promise<SubmissionRecord> {
-    const existingBySubmission = await this.adapters.submissions.getBySubmissionId(record.submissionId);
-    const existingByEvaluation = await this.adapters.submissions.getByEvaluationId(record.evaluationId);
-    const existing = existingBySubmission ?? existingByEvaluation;
+    const existing = await this.findExistingSubmission(record.submissionId, record.evaluationId);
     if (existing) {
-      if (immutableSubmissionView(existing) !== immutableSubmissionView(record)) {
-        throw new DuplicateError("submission or evaluation id is already bound to different data");
-      }
-      return existing;
+      return this.assertSubmissionMatches(existing, record);
     }
 
     try {
       await this.adapters.submissions.append(record);
     } catch (error) {
-      // A second process may win the unique insert between the reads above.
-      // Re-read the durable row and apply the same idempotency rule.
-      if (!isUniqueViolation(error)) throw error;
-      const winner =
-        (await this.adapters.submissions.getBySubmissionId(record.submissionId)) ??
-        (await this.adapters.submissions.getByEvaluationId(record.evaluationId));
-      if (!winner) throw error;
-      if (immutableSubmissionView(winner) !== immutableSubmissionView(record)) {
-        throw new DuplicateError("submission or evaluation id is already bound to different data");
-      }
-      return winner;
+      return await this.handleUniqueInsertConflict(error, record);
     }
-    const stored =
-      (await this.adapters.submissions.getBySubmissionId(record.submissionId)) ??
-      (await this.adapters.submissions.getByEvaluationId(record.evaluationId));
+
+    const stored = await this.findExistingSubmission(record.submissionId, record.evaluationId);
     if (!stored) return record;
-    if (immutableSubmissionView(stored) !== immutableSubmissionView(record)) {
-      throw new DuplicateError("submission or evaluation id is already bound to different data");
-    }
-    return stored;
+    return this.assertSubmissionMatches(stored, record);
   }
 
   updateSubmission(record: SubmissionRecord): Promise<void> {
