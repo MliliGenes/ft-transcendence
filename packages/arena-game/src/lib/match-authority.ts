@@ -51,6 +51,20 @@ export class MatchAuthority {
    * used by events emitted during the command.
    */
   async withLock<T>(matchId: string, fn: () => Promise<T>): Promise<MatchLockResult<T>> {
+    const { prev, tail, release } = this.acquireLockSlot(matchId);
+    await prev;
+    let durable: MatchRecord | undefined;
+    try {
+      await this.enterLockState(matchId);
+      const result = await fn();
+      durable = await this.loadDurableState(matchId);
+      return { value: result, revision: durable?.revision };
+    } finally {
+      this.cleanupLock(matchId, tail, release, durable);
+    }
+  }
+
+  private acquireLockSlot(matchId: string): { prev: Promise<void>; tail: Promise<void>; release: () => void } {
     const prev = this.matchLocks.get(matchId) ?? Promise.resolve();
     let release!: () => void;
     const mine = new Promise<void>((resolve) => {
@@ -58,40 +72,51 @@ export class MatchAuthority {
     });
     const tail = prev.then(() => mine);
     this.matchLocks.set(matchId, tail);
-    await prev;
-    let durable: MatchRecord | undefined;
+    return { prev, tail, release };
+  }
+
+  private async enterLockState(matchId: string): Promise<void> {
+    const beforeRow = await this.persistence.loadMatch(matchId);
+    this.lockBaseRevision.set(matchId, beforeRow?.revision);
+    this.lockRevision.set(matchId, (beforeRow?.revision ?? 0) + 1);
+    this.lockPersisted.delete(matchId);
+    this.lockLastState.set(matchId, beforeRow ? this.stateText(beforeRow) : null);
+    if (beforeRow) this.lockSnapshots.set(matchId, structuredClone(beforeRow));
+  }
+
+  private async loadDurableState(matchId: string): Promise<MatchRecord | undefined> {
     try {
-      const beforeRow = await this.persistence.loadMatch(matchId);
-      this.lockBaseRevision.set(matchId, beforeRow?.revision);
-      this.lockRevision.set(matchId, (beforeRow?.revision ?? 0) + 1);
-      this.lockPersisted.delete(matchId);
-      this.lockLastState.set(matchId, beforeRow ? this.stateText(beforeRow) : null);
-      if (beforeRow) this.lockSnapshots.set(matchId, structuredClone(beforeRow));
-      const result = await fn();
-      try {
-        durable = await this.persistence.loadMatch(matchId);
-      } catch (error) {
-        durable = this.lockSnapshots.get(matchId);
-        if (!durable) throw error;
-        console.error("Match revision read failed; using confirmed state", error);
-      }
-      return { value: result, revision: durable?.revision };
-    } finally {
-      const confirmed = this.lockSnapshots.get(matchId);
-      if (confirmed && (!durable || confirmed.revision >= durable.revision)) durable = confirmed;
-      try {
-        if (durable) this.settled?.(durable);
-      } catch {
-        // Resource retirement is retryable on the next locked read.
-      }
-      release();
-      this.lockRevision.delete(matchId);
-      this.lockBaseRevision.delete(matchId);
-      this.lockPersisted.delete(matchId);
-      this.lockLastState.delete(matchId);
-      this.lockSnapshots.delete(matchId);
-      if (this.matchLocks.get(matchId) === tail) this.matchLocks.delete(matchId);
+      return await this.persistence.loadMatch(matchId);
+    } catch (error) {
+      const fallback = this.lockSnapshots.get(matchId);
+      if (!fallback) throw error;
+      console.error("Match revision read failed; using confirmed state", error);
+      return fallback;
     }
+  }
+
+  private resolveFinalDurable(matchId: string, durable?: MatchRecord): MatchRecord | undefined {
+    const confirmed = this.lockSnapshots.get(matchId);
+    if (confirmed && (!durable || confirmed.revision >= durable.revision)) {
+      return confirmed;
+    }
+    return durable;
+  }
+
+  private cleanupLock(matchId: string, tail: Promise<void>, release: () => void, durable?: MatchRecord): void {
+    const finalDurable = this.resolveFinalDurable(matchId, durable);
+    try {
+      if (finalDurable) this.settled?.(finalDurable);
+    } catch {
+      // Resource retirement is retryable on the next locked read.
+    }
+    release();
+    this.lockRevision.delete(matchId);
+    this.lockBaseRevision.delete(matchId);
+    this.lockPersisted.delete(matchId);
+    this.lockLastState.delete(matchId);
+    this.lockSnapshots.delete(matchId);
+    if (this.matchLocks.get(matchId) === tail) this.matchLocks.delete(matchId);
   }
 
   revisionFor(matchId: string): number | undefined {
