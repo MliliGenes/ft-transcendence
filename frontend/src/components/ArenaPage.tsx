@@ -388,6 +388,18 @@ function MatchCompletionSection({
   );
 }
 
+function ArenaFooter() {
+  return (
+    <footer className="mx-auto max-w-7xl border-t border-neutral-200 px-3 py-4 text-xs text-neutral-500 flex justify-between items-center">
+      <span>Code Arena</span>
+      <nav className="flex gap-4" aria-label="Legal">
+        <a href="/privacy" className="underline hover:text-neutral-700">Privacy Policy</a>
+        <a href="/terms" className="underline hover:text-neutral-700">Terms of Service</a>
+      </nav>
+    </footer>
+  );
+}
+
 function DevFixtureControls({ controls }: { controls: FixtureTransportControls | null }) {
   if (!controls) return null;
   return (
@@ -509,6 +521,7 @@ export function ArenaPage({ transport, onAuthSignal }: { transport: ArenaTranspo
         />
         <DevFixtureControls controls={fixtureControls} />
       </main>
+      <ArenaFooter />
     </div>
   );
 }

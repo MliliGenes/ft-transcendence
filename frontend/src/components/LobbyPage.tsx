@@ -389,6 +389,18 @@ function RoomEntryCard({
   );
 }
 
+function LobbyFooter() {
+  return (
+    <footer className="mt-8 border-t border-neutral-200 pt-4 text-xs text-neutral-500 flex justify-between items-center">
+      <span>Code Arena</span>
+      <nav className="flex gap-4" aria-label="Legal">
+        <a href="/privacy" className="underline hover:text-neutral-700">Privacy Policy</a>
+        <a href="/terms" className="underline hover:text-neutral-700">Terms of Service</a>
+      </nav>
+    </footer>
+  );
+}
+
 export function LobbyPage({
   client,
   userId,
@@ -466,6 +478,8 @@ export function LobbyPage({
           onJoinRoom={handleJoinRoom}
         />
       )}
+
+      <LobbyFooter />
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { AuthPage } from './pages/AuthPage.jsx';
 import { AccountPage } from './pages/AccountPage.jsx';
 import { VerifyEmailPage } from './pages/VerifyEmailPage.jsx';
 import { PasswordResetPage } from './pages/PasswordResetPage.jsx';
+import { PrivacyPage } from './pages/PrivacyPage.jsx';
+import { TermsPage } from './pages/TermsPage.jsx';
 import { Directory } from './components/Directory.jsx';
 import { Loading, Notice } from './components/Notice.jsx';
 
@@ -28,26 +30,36 @@ export function App() {
     '/verify-email',
     '/forgot-password',
     '/reset-password',
+    '/privacy',
+    '/terms',
   ].includes(path);
   const passwordReset = path === '/forgot-password' || path === '/reset-password';
+  const isPolicy = path === '/privacy' || path === '/terms';
+
   useEffect(() => {
     if (!known || status === 'loading' || status === 'error') return;
     if (
       status === 'authenticated' &&
       !passwordReset &&
+      !isPolicy &&
       path !== '/account' &&
       path !== '/verify-email'
     )
       navigate('/account', { replace: true });
-    if (status === 'anonymous' && (path === '/' || path === '/account'))
+    if (status === 'anonymous' && !isPolicy && (path === '/' || path === '/account'))
       navigate('/login', { replace: true });
-  }, [path, status, known, passwordReset]);
+  }, [path, status, known, passwordReset, isPolicy]);
+
   useEffect(() => {
     document.title = `${
       passwordReset
         ? 'Reset password'
         : path === '/verify-email'
         ? 'Verify email'
+        : path === '/privacy'
+        ? 'Privacy Policy'
+        : path === '/terms'
+        ? 'Terms of Service'
         : status === 'authenticated'
           ? 'Your profile'
           : path === '/register'
@@ -55,7 +67,9 @@ export function App() {
             : 'Log in'
     } · Fieldnote`;
   }, [path, status, passwordReset]);
+
   const authenticated = status === 'authenticated';
+
   return (
     <main className="shell" id="main-content">
       <a className="skip-link" href="#page-content">
@@ -92,10 +106,22 @@ export function App() {
         </div>
       </header>
       <section className="intro">
-        <p className="eyebrow">Your space</p>
-        <h1>{authenticated ? 'Make it yours.' : 'A place to connect.'}</h1>
+        <p className="eyebrow">{isPolicy ? 'Legal & Compliance' : 'Your space'}</p>
+        <h1>
+          {path === '/privacy'
+            ? 'Privacy Policy'
+            : path === '/terms'
+            ? 'Terms of Service'
+            : authenticated
+            ? 'Make it yours.'
+            : 'A place to connect.'}
+        </h1>
         <p className="lede">
-          {authenticated
+          {path === '/privacy'
+            ? 'How Fieldnote and Code Arena protect your data, credentials, and privacy.'
+            : path === '/terms'
+            ? 'The rules, sandbox boundaries, and fair-play policies governing our services.'
+            : authenticated
             ? 'Manage your profile, photos and the ways you sign in.'
             : 'Your account, your community. Start right here.'}
         </p>
@@ -140,6 +166,10 @@ export function App() {
               </section>
             ) : path === '/verify-email' ? (
               <VerifyEmailPage />
+            ) : path === '/privacy' ? (
+              <PrivacyPage />
+            ) : path === '/terms' ? (
+              <TermsPage />
             ) : authenticated ? (
               <AccountPage />
             ) : (
@@ -153,8 +183,32 @@ export function App() {
         </div>
       </div>
       <footer>
-        <span>Fieldnote</span>
-        <span>A little space for you.</span>
+        <div className="footer-meta">
+          <span>Fieldnote</span>
+          <span>·</span>
+          <span>A little space for you.</span>
+        </div>
+        <nav className="footer-links" aria-label="Legal">
+          <a
+            href="/privacy"
+            onClick={(event) => {
+              event.preventDefault();
+              navigate('/privacy');
+            }}
+          >
+            Privacy Policy
+          </a>
+          <span>·</span>
+          <a
+            href="/terms"
+            onClick={(event) => {
+              event.preventDefault();
+              navigate('/terms');
+            }}
+          >
+            Terms of Service
+          </a>
+        </nav>
       </footer>
     </main>
   );
