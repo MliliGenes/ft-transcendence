@@ -26,12 +26,14 @@ for i in {1..30}; do
   sleep 2
 done
 
-echo "=== 5. Seeding Test Accounts (Alice & Bob) ==="
+echo "=== 5. Seeding Test Accounts (Alice, Bob, Carol, Dave) ==="
 docker compose exec -T user-db psql -U arena_admin -d user_db -c "
 INSERT INTO \"User\" (\"id\", \"username\", \"email\", \"passwordHash\", \"role\", \"updatedAt\")
 VALUES
   (gen_random_uuid(), 'alice', 'alice@example.com', '\$2b\$12\$1e9zk19QlgNqrq0Vwx0etene8FnC0LUl8CFxw4igO/cIo83yoHKsq', 'USER', NOW()),
-  (gen_random_uuid(), 'bob', 'bob@example.com', '\$2b\$12\$1e9zk19QlgNqrq0Vwx0etene8FnC0LUl8CFxw4igO/cIo83yoHKsq', 'USER', NOW())
+  (gen_random_uuid(), 'bob', 'bob@example.com', '\$2b\$12\$1e9zk19QlgNqrq0Vwx0etene8FnC0LUl8CFxw4igO/cIo83yoHKsq', 'USER', NOW()),
+  (gen_random_uuid(), 'carol', 'carol@example.com', '\$2b\$12\$1e9zk19QlgNqrq0Vwx0etene8FnC0LUl8CFxw4igO/cIo83yoHKsq', 'USER', NOW()),
+  (gen_random_uuid(), 'dave', 'dave@example.com', '\$2b\$12\$1e9zk19QlgNqrq0Vwx0etene8FnC0LUl8CFxw4igO/cIo83yoHKsq', 'USER', NOW())
 ON CONFLICT (\"username\") DO NOTHING;
 "
 
