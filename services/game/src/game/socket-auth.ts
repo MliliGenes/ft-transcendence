@@ -144,6 +144,41 @@ function handshakeMatchId(client: Socket, field = "matchId"): string | undefined
   return chooseHandshakeValue(auth[field], query[field], `socket ${field}`);
 }
 
+async function authenticateTokenHandshake(
+  client: Socket,
+  verifier: SocketVerifier | undefined | null,
+  token: string,
+  options: SocketPrincipalOptions,
+): Promise<SocketPrincipal> {
+  if (!verifier || typeof verifier.verify !== "function") throw new Error("authentication required");
+  const verified = await verifier.verify(token);
+  if (!nonEmptyString(verified?.userId)) throw new Error("authentication required");
+  if (!Number.isSafeInteger(verified.expiresAt) || verified.expiresAt <= Date.now()) {
+    throw new Error("expired access token");
+  }
+  const matchId = handshakeMatchId(client);
+  if (options.matchIdRequired && !matchId) throw new Error("missing socket matchId");
+  const principal: SocketPrincipal = matchId
+    ? { userId: verified.userId, expiresAt: verified.expiresAt, matchId }
+    : { userId: verified.userId, expiresAt: verified.expiresAt };
+  attachSocketPrincipal(client, principal, token);
+  scheduleSocketExpiry(client);
+  return principal;
+}
+
+function authenticateDevHandshake(
+  client: Socket,
+  verifier: SocketVerifier | undefined | null,
+  options: SocketPrincipalOptions,
+): SocketPrincipal {
+  if (process.env.DEV_PRINCIPAL !== "true" || !isDevVerifier(verifier)) {
+    if (process.env.DEV_PRINCIPAL !== "true") throw new Error("authentication required");
+  }
+  const principal = principalFromHandshake(client, options);
+  attachSocketPrincipal(client, principal);
+  return principal;
+}
+
 /**
  * Verify the handshake `auth:{accessToken, matchId?}` at connect, attach
  * `{ userId, expiresAt, matchId }`, and store the token privately in
@@ -167,29 +202,8 @@ export async function authenticateHandshake(
   options: SocketPrincipalOptions = {},
 ): Promise<SocketPrincipal> {
   const token = handshakeToken(client);
-  if (token) {
-    if (!verifier || typeof verifier.verify !== "function") throw new Error("authentication required");
-    const verified = await verifier.verify(token);
-    if (!nonEmptyString(verified?.userId)) throw new Error("authentication required");
-    if (!Number.isSafeInteger(verified.expiresAt) || verified.expiresAt <= Date.now()) {
-      throw new Error("expired access token");
-    }
-    const matchId = handshakeMatchId(client);
-    if (options.matchIdRequired && !matchId) throw new Error("missing socket matchId");
-    const principal: SocketPrincipal = matchId
-      ? { userId: verified.userId, expiresAt: verified.expiresAt, matchId }
-      : { userId: verified.userId, expiresAt: verified.expiresAt };
-    attachSocketPrincipal(client, principal, token);
-    scheduleSocketExpiry(client);
-    return principal;
-  }
-  // No token: explicit dev-suite seam only.
-  if (process.env.DEV_PRINCIPAL !== "true" || !isDevVerifier(verifier)) {
-    if (process.env.DEV_PRINCIPAL !== "true") throw new Error("authentication required");
-  }
-  const principal = principalFromHandshake(client, options);
-  attachSocketPrincipal(client, principal);
-  return principal;
+  if (token) return authenticateTokenHandshake(client, verifier, token, options);
+  return authenticateDevHandshake(client, verifier, options);
 }
 
 function isDevVerifier(verifier: unknown): boolean {
@@ -197,6 +211,55 @@ function isDevVerifier(verifier: unknown): boolean {
   // direct-construction tests). Production (verifier present, seam off) never
   // reaches here because the token branch above throws first.
   return verifier === undefined || verifier === null || typeof (verifier as SocketVerifier)?.verify === "function";
+}
+
+function failSocket(client: Socket, message: string): Error {
+  try { client.disconnect(true); } catch { /* best-effort */ }
+  return new Error(message);
+}
+
+function validateStoredPrincipal(
+  client: Socket,
+  stored: SocketPrincipal | undefined,
+  matchIdRequired?: boolean,
+): SocketPrincipal {
+  if (!stored || !nonEmptyString(stored.userId)) throw failSocket(client, "unauthorized socket");
+  if (typeof stored.expiresAt !== "number" || stored.expiresAt <= Date.now()) {
+    throw failSocket(client, "expired socket session");
+  }
+  if (matchIdRequired && !nonEmptyString(stored.matchId)) throw failSocket(client, "unauthorized socket");
+  return stored;
+}
+
+function formatAuthorizedPrincipal(
+  stored: SocketPrincipal,
+  matchIdRequired?: boolean,
+): SocketPrincipal {
+  if (matchIdRequired) {
+    return { userId: stored.userId, expiresAt: stored.expiresAt, matchId: stored.matchId as string };
+  }
+  return { userId: stored.userId, expiresAt: stored.expiresAt, ...(stored.matchId ? { matchId: stored.matchId } : {}) };
+}
+
+async function reverifySocketToken(
+  client: Socket,
+  verifier: SocketVerifier | undefined | null,
+  token: string,
+  stored: SocketPrincipal,
+): Promise<void> {
+  if (!verifier || typeof verifier.verify !== "function") throw failSocket(client, "authentication required");
+  let verified: { userId: string; expiresAt: number };
+  try {
+    verified = await verifier.verify(token);
+  } catch {
+    throw failSocket(client, "unauthorized socket");
+  }
+  if (verified.userId !== stored.userId) throw failSocket(client, "unauthorized socket");
+  if (!Number.isSafeInteger(verified.expiresAt) || verified.expiresAt <= Date.now()) {
+    throw failSocket(client, "expired socket session");
+  }
+  stored.expiresAt = verified.expiresAt;
+  scheduleSocketExpiry(client);
 }
 
 /**
@@ -221,37 +284,16 @@ export async function authorizeSocketMessage(
   options: SocketPrincipalOptions = {},
 ): Promise<SocketPrincipal> {
   const data = client.data as SocketDataWithPrincipal;
-  const stored = data.arenaPrincipal;
-  const fail = (message: string): Error => {
-    try { client.disconnect(true); } catch { /* best-effort */ }
-    return new Error(message);
-  };
-  if (!stored || !nonEmptyString(stored.userId)) throw fail("unauthorized socket");
-  if (typeof stored.expiresAt !== "number" || stored.expiresAt <= Date.now()) throw fail("expired socket session");
-  if (options.matchIdRequired && !nonEmptyString(stored.matchId)) throw fail("unauthorized socket");
+  const stored = validateStoredPrincipal(client, data.arenaPrincipal, options.matchIdRequired);
   const token = typeof data.accessToken === "string" && data.accessToken.length > 0 ? data.accessToken : undefined;
   if (!token) {
     // DEV fixture: no upstream to re-verify against. Fail closed with the
     // seam off (defense in depth: handshake already fails closed first).
-    if (process.env.DEV_PRINCIPAL !== "true") throw fail("authentication required");
-    return options.matchIdRequired
-      ? { userId: stored.userId, expiresAt: stored.expiresAt, matchId: stored.matchId as string }
-      : { userId: stored.userId, expiresAt: stored.expiresAt, ...(stored.matchId ? { matchId: stored.matchId } : {}) };
+    if (process.env.DEV_PRINCIPAL !== "true") throw failSocket(client, "authentication required");
+    return formatAuthorizedPrincipal(stored, options.matchIdRequired);
   }
-  if (!verifier || typeof verifier.verify !== "function") throw fail("authentication required");
-  let verified: { userId: string; expiresAt: number };
-  try {
-    verified = await verifier.verify(token);
-  } catch {
-    throw fail("unauthorized socket");
-  }
-  if (verified.userId !== stored.userId) throw fail("unauthorized socket");
-  if (!Number.isSafeInteger(verified.expiresAt) || verified.expiresAt <= Date.now()) throw fail("expired socket session");
-  stored.expiresAt = verified.expiresAt;
-  scheduleSocketExpiry(client);
-  return options.matchIdRequired
-    ? { userId: stored.userId, expiresAt: stored.expiresAt, matchId: stored.matchId as string }
-    : { userId: stored.userId, expiresAt: stored.expiresAt, ...(stored.matchId ? { matchId: stored.matchId } : {}) };
+  await reverifySocketToken(client, verifier, token, stored);
+  return formatAuthorizedPrincipal(stored, options.matchIdRequired);
 }
 
 /** Per-recipient pre-emission gate: connected && unexpired && runtime serving. */
