@@ -429,44 +429,52 @@ export class LobbyStore implements ILobbyStore {
     })), this.clock());
   }
 
+  private async assertAdmissionAvailable(client: PoolClient, userId: string, inviteCode: string): Promise<void> {
+    const inQueue = await client.query(
+      `SELECT id FROM arena_queue_entries WHERE user_id = $1 AND status = 'waiting'`, [userId],
+    );
+    if ((inQueue.rowCount ?? 0) > 0) throw new LobbyError("already in queue", 409);
+
+    const inRoom = await client.query(
+      `SELECT r.id FROM arena_private_rooms r
+       JOIN arena_private_room_members m ON m.room_id = r.id
+       WHERE m.user_id = $1 AND r.status = 'open' AND r.code != $2 AND r.expires_at > $3`,
+      [userId, inviteCode, this.clock()],
+    );
+    if ((inRoom.rowCount ?? 0) > 0) throw new LobbyError("already in a private room", 409);
+
+    const activeMatch = await client.query(
+      `SELECT m.id FROM matches m, jsonb_array_elements(m.data->'participants') p
+       WHERE p->>'userId' = $1 AND m.data->>'roundPhase' != 'MATCH_COMPLETE'
+       LIMIT 1`, [userId],
+    );
+    if ((activeMatch.rowCount ?? 0) > 0) throw new LobbyError("already in an active match", 409);
+  }
+
+  private async joinLobbyWithExpirationHandling(client: PoolClient, lobby: PrivateLobby, userId: string): Promise<PrivateRoomMember> {
+    try {
+      return lobby.join(userId);
+    } catch (error) {
+      // Expiring an invitation is durable even though the admission fails.
+      if (lobby.room.status === "expired" && error instanceof LobbyError && error.code === 410) {
+        await client.query(`UPDATE arena_private_rooms SET status = 'expired' WHERE id = $1`, [lobby.room.id]);
+        await this.sql.commit(client);
+      }
+      throw error;
+    }
+  }
+
   async joinPrivateRoom(userId: string, inviteCode: string): Promise<RoomWithMembers & { full: boolean }> {
     const client = await this.pool.connect();
     try {
       await this.sql.begin(client);
       // Serialize this user's admissions across queue and room tables.
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`lobby:user:${userId}`]);
+      const normalizedCode = inviteCode.toUpperCase().trim();
+      await this.assertAdmissionAvailable(client, userId, normalizedCode);
 
-      const inQueue = await client.query(
-        `SELECT id FROM arena_queue_entries WHERE user_id = $1 AND status = 'waiting'`, [userId],
-      );
-      if ((inQueue.rowCount ?? 0) > 0) throw new LobbyError("already in queue", 409);
-
-      const inRoom = await client.query(
-        `SELECT r.id FROM arena_private_rooms r
-         JOIN arena_private_room_members m ON m.room_id = r.id
-         WHERE m.user_id = $1 AND r.status = 'open' AND r.code != $2 AND r.expires_at > $3`, [userId, inviteCode.toUpperCase().trim(), this.clock()],
-      );
-      if ((inRoom.rowCount ?? 0) > 0) throw new LobbyError("already in a private room", 409);
-
-      const activeMatch = await client.query(
-        `SELECT m.id FROM matches m, jsonb_array_elements(m.data->'participants') p
-         WHERE p->>'userId' = $1 AND m.data->>'roundPhase' != 'MATCH_COMPLETE'
-         LIMIT 1`, [userId],
-      );
-      if ((activeMatch.rowCount ?? 0) > 0) throw new LobbyError("already in an active match", 409);
-
-      const lobby = await this.loadPrivateLobby(client, inviteCode.toUpperCase().trim(), true);
-      let member: PrivateRoomMember;
-      try {
-        member = lobby.join(userId);
-      } catch (error) {
-        // Expiring an invitation is durable even though the admission fails.
-        if (lobby.room.status === "expired" && error instanceof LobbyError && error.code === 410) {
-          await client.query(`UPDATE arena_private_rooms SET status = 'expired' WHERE id = $1`, [lobby.room.id]);
-          await this.sql.commit(client);
-        }
-        throw error;
-      }
+      const lobby = await this.loadPrivateLobby(client, normalizedCode, true);
+      const member = await this.joinLobbyWithExpirationHandling(client, lobby, userId);
       await client.query(
         `INSERT INTO arena_private_room_members (room_id, user_id, side_id, ready, joined_at)
          VALUES ($1, $2, $3, $4, $5)`,
@@ -695,23 +703,48 @@ export class InMemoryLobbyStore implements ILobbyStore {
     return result;
   }
 
-  private async assertAvailable(userId: string, sameRoomId?: string): Promise<void> {
+  private assertNotInQueue(userId: string): void {
     for (const q of this.queue.values()) {
-      if (q.userId === userId && q.status === "waiting") throw new LobbyError("already in queue", 409);
+      if (q.userId === userId && q.status === "waiting") {
+        throw new LobbyError("already in queue", 409);
+      }
     }
+  }
+
+  private isUserInRoom(room: PrivateRoom, userId: string, sameRoomId?: string): boolean {
+    if (room.id === sameRoomId) return false;
+    if (room.status !== "open" || room.expiresAt <= this.clock()) return false;
+    return this.members.get(room.id)?.some((m) => m.userId === userId) ?? false;
+  }
+
+  private assertNotInRoom(userId: string, sameRoomId?: string): void {
     for (const room of this.rooms.values()) {
-      if (room.id !== sameRoomId && room.status === "open" && room.expiresAt > this.clock() &&
-          this.members.get(room.id)?.some(m => m.userId === userId)) {
+      if (this.isUserInRoom(room, userId, sameRoomId)) {
         throw new LobbyError("already in a private room", 409);
       }
     }
-    const activeMatchIds = await (this.matches?.listActiveIds ? this.matches.listActiveIds() : this.matches?.listIds() ?? []);
-    for (const id of activeMatchIds) {
-      const match = await this.matches!.load(id);
-      if (match && match.roundPhase !== "MATCH_COMPLETE" && match.participants.some(p => p.userId === userId)) {
+  }
+
+  private async listMatchIdsToCheck(): Promise<string[]> {
+    if (!this.matches) return [];
+    if (this.matches.listActiveIds) return await this.matches.listActiveIds();
+    return await this.matches.listIds();
+  }
+
+  private async assertNotInActiveMatch(userId: string): Promise<void> {
+    const matchIds = await this.listMatchIdsToCheck();
+    for (const id of matchIds) {
+      const match = await this.matches?.load(id);
+      if (match && match.roundPhase !== "MATCH_COMPLETE" && match.participants.some((p) => p.userId === userId)) {
         throw new LobbyError("already in an active match", 409);
       }
     }
+  }
+
+  private async assertAvailable(userId: string, sameRoomId?: string): Promise<void> {
+    this.assertNotInQueue(userId);
+    this.assertNotInRoom(userId, sameRoomId);
+    await this.assertNotInActiveMatch(userId);
   }
 
   private async completed(matchId: string | null): Promise<boolean> {
