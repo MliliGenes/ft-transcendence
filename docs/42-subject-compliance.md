@@ -1,7 +1,9 @@
 # 42 subject compliance matrix
 
-Last reviewed: 2026-10-22 against Aimane at `97e7492`, including the completed
-auth proof, starter/transport repairs and frontend result repair.
+Last reviewed: 2026-10-31 against Aimane at `96047eb`, including completed
+Privacy Policy and Terms of Service views, README 42 curriculum attribution and
+database documentation, cyclomatic complexity reduction (100% of functions have CC <= 10),
+and strict deep-module boundary enforcement.
 
 Authoritative source: [ft_transcendence v21.2](../requirements/ft_transcendence-v21.2.pdf).
 
@@ -86,15 +88,15 @@ multi-server Game operation is outside that scope.
 | Subject requirement | Current response | Status / remaining proof |
 | --- | --- | --- |
 | Frontend, backend, and database | Account and Arena React/Vite frontends, NestJS User Service/Game, and separate account/Game PostgreSQL storage are integrated. | Local integrated proof; clean-clone startup of the final team version remains pending. |
-| Meaningful team contributions | This branch preserves a traceable game snapshot and does not claim authorship for teammate branches. | Final README, ownership table, and Git history review required. |
+| Meaningful team contributions | Documented in README.md with detailed team ownership table (PO: sel-mlil, Tech Lead: ayousr, PM/Developer: aouellad), responsibilities, and project management practices. | Local integrated proof; final team review required. |
 | One-command container deployment | Compose defines seven services: Game PostgreSQL, account PostgreSQL, Redis, User Service, Game, private Judge worker and Nginx serving both frontends. | The seven-service base stack was exercised; an optional local mail fixture adds an eighth service. Final clean-machine configuration/startup proof remains pending. |
 | Latest stable Chrome with a clean console | Real-browser Account/Play/Lobby/Match journeys passed, including intentional outage/failure cases. | The 2026-10-22 Chromium forfeit run had no JavaScript errors. Final clean-console coverage on the selected Chrome release remains pending; this focused run and intentional outage logs do not cover every screen. |
-| Accessible Privacy Policy and Terms | Relevant, substantive Privacy Policy and Terms of Service views (`/privacy`, `/terms`) are implemented and accessible to authenticated and anonymous users across both frontends, with legal navigation links in footers. | Local integrated proof; final team review pending. |
+| Accessible Privacy Policy and Terms | Relevant, substantive Privacy Policy and Terms of Service views (`/privacy`, `/terms`) are implemented and accessible to authenticated and anonymous users across both frontends, with legal navigation links in footers. Characterization suite `test/navigation.test.mjs` (24/24 tests) passes. | Local integrated proof; final team review pending. |
 | Simultaneous users and race prevention | Match authority, revisions, evaluation IDs, persistence claims and four-player collaboration/isolation have tests and local integrated proof. | Final remote-client/concurrency demonstration remains pending. One Game owner per database is enforced; multiple active Game instances are not a release requirement. |
 | Responsive and accessible UI | Arena components and browser viewport checks exist. | Final accessibility review pending. |
 | Styling solution | Tailwind is used by Arena; root and standalone Account production builds passed. | Final team-version build/demonstration remains pending. |
 | Ignored secrets and `.env.example` | Secrets and generated TLS material are ignored; safe variable names are documented. | Imported evidence; secret scan and deployment review required. |
-| Documented database design | Game persistence and least-privilege bootstrap are documented; the imported User Service Prisma schema and separate database are present. | Final combined database guide and README diagram remain pending; account schema import is complete. |
+| Documented database design | Game persistence and least-privilege bootstrap are documented; the imported User Service Prisma schema and separate database are present. Combined database guide, schemas, and Mermaid architecture diagram are published in README.md. | Local integrated proof. |
 | Secure signup/login | User Service owns registration/login and verified principals. Password login → Play is real-service proved with DEV_PRINCIPAL=false. The public refresh cookie uses HttpOnly, Secure, SameSite=Lax and /api/auth/; CSRF and scoped credential limits have tests. | Local integrated password-auth proof; final clean-machine demonstration and live OAuth/SMTP checks remain pending. |
 | Frontend and backend validation | Game validates membership, phase, size, revision and identity. Auth repair tests cover principal failure handling, production identity guards and credential-route protections. | Focused repair checks/reviews passed; final integrated validation review remains pending, not a general security-audit claim. |
 | HTTPS for external backend connections | Nginx terminates HTTPS/WSS; only Nginx publishes host ports. Real password-login and gameplay proof used the HTTPS gateway. | Local integrated proof with a local certificate; trusted production certificate and public deployment remain pending. |
