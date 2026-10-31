@@ -9,6 +9,16 @@ function validAccessToken(value) {
   return typeof value?.accessToken === 'string' && value.accessToken.length > 0;
 }
 
+function isMatchingSession(current, expected) {
+  if (!current || !expected) return false;
+  return current.sessionKey === expected.sessionKey && current.accessToken === expected.accessToken;
+}
+
+function canClearSession(memory, sessionKey) {
+  if (!sessionKey) return true;
+  return memory?.sessionKey === sessionKey;
+}
+
 function uuid() {
   if (typeof crypto?.randomUUID === 'function') return crypto.randomUUID();
   return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
@@ -41,12 +51,7 @@ export function createMemorySession() {
     },
     rotate(tokens, expected) {
       const current = memory;
-      if (
-        !current ||
-        current.sessionKey !== expected?.sessionKey ||
-        current.accessToken !== expected?.accessToken
-      )
-        return null;
+      if (!isMatchingSession(current, expected)) return null;
       if (!validAccessToken(tokens))
         throw new Error('The server returned an incomplete session.');
       revision += 1;
@@ -55,7 +60,7 @@ export function createMemorySession() {
       return memory;
     },
     clear(sessionKey, reason) {
-      if (sessionKey && memory?.sessionKey !== sessionKey) return;
+      if (!canClearSession(memory, sessionKey)) return;
       generation += 1;
       memory = null;
       notify(null, reason);
