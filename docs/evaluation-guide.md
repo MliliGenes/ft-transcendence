@@ -5,6 +5,24 @@ This is the comprehensive, all-inclusive defense manual for peer evaluations and
 
 ---
 
+## 0. Zero-to-Running Environment Setup (Fresh Host / Clean Machine)
+
+If you are cloning this repository on a fresh evaluation machine or resetting your environment from scratch, run this single command:
+
+```bash
+npm run setup
+# Or directly: bash scripts/setup.sh
+```
+
+### What this automated setup does in ~60 seconds:
+1. **Generates Dev TLS Certificates**: Creates `localhost.crt` and `localhost.key` in `infra/nginx/certs/` using OpenSSL.
+2. **Configures `.env`**: Creates `.env` from `.env.example` and generates a valid 2048-bit PKCS#8 RSA keypair (`JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`) for token signing via Node.js crypto.
+3. **Builds & Starts Docker Stack**: Spins up all 7 microservices (`nginx`, `user-service`, `game`, `judge-worker`, `user-db`, `postgres`, `redis`) in detached mode.
+4. **Healthcheck Barrier**: Polls and waits until all core services report healthy.
+5. **Seeds Test Accounts**: Inserts pre-verified test accounts for **Alice** (`alice@example.com` / `Password123!`) and **Bob** (`bob@example.com` / `Password123!`) directly into `user_db`.
+
+---
+
 ## Quick Reference & Test Credentials
 
 | Account | Email | Password | Role / Purpose |

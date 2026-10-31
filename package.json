@@ -24,6 +24,7 @@
     "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present && npm run typecheck:example",
     "lint": "npm run lint --workspaces --if-present",
     "build": "npm run build:packages && npm run build --workspace arena-game && npm run build --workspace arena-judge-worker && npm run build --workspace arena-frontend",
+    "setup": "bash scripts/setup.sh",
     "certs": "bash scripts/gen-dev-certs.sh",
     "play": "bash scripts/play.sh",
     "up": "docker compose up --build",

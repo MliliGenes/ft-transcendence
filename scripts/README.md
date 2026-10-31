@@ -12,6 +12,8 @@ and distinguish observed results from untested stages.
 | Script | Entry point and purpose |
 | --- | --- |
 | [check-repository-boundary.mjs](./check-repository-boundary.mjs) | `npm run check:repository`; checks extraction, package/context layout and links in its selected Markdown inputs. |
+| [setup.sh](./setup.sh) | `npm run setup`; one-command fresh host setup (certs, RSA keys in `.env`, Docker stack, seeds Alice & Bob). |
+| [setup-env.mjs](./setup-env.mjs) | Generates 2048-bit RSA keys via Node.js crypto and initializes `.env`. |
 | [gen-dev-certs.sh](./gen-dev-certs.sh) | `npm run certs`; generates a local certificate and key. |
 | [https-smoke.sh](./https-smoke.sh) | `SMOKE_BASE=https://localhost bash scripts/https-smoke.sh`; legacy gateway probes. |
 | [manual-game-test.sh](./manual-game-test.sh) | `--help`, `--list`, `--group 1` through `--group 5`, or `--from 1` through `--from 20`; manual observation workflow. |
