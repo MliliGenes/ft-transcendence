@@ -252,26 +252,45 @@ export class TeamCollaboration {
   }
 
   snapshots(match: MatchRecord, round: RoundState, mySide: SideId): TeamSnapshot[] {
-    return Object.keys(round.activities).map((side) => {
-      const own = side === mySide;
-      const doc = round.teamDocs?.[side];
-      return {
-        side,
-        activity: this.activityOf(round, side),
-        submissions: round.attempts[side] ?? 0,
-        members: this.teamMembers(match, side).map((participant) => {
-          const record = own ? round.readiness?.[participant.userId] : undefined;
-          return {
-            userId: participant.userId,
-            presence: match.memberPresence?.[participant.userId] ?? "offline",
-            ready: record?.ready === true,
-            readyRevision: record?.ready === true ? (record.documentRevision ?? null) : null,
-          };
-        }),
-        documentRevision: own ? (doc?.revision ?? null) : null,
-        language: own ? (doc?.language ?? null) : null,
-      };
-    });
+    return Object.keys(round.activities).map((side) =>
+      this.buildTeamSnapshot(match, round, side, mySide),
+    );
+  }
+
+  private buildMemberSnapshot(
+    match: MatchRecord,
+    round: RoundState,
+    participant: Participant,
+    own: boolean,
+  ): TeamMemberSnapshot {
+    const record = own ? round.readiness?.[participant.userId] : undefined;
+    const isReady = record?.ready === true;
+    return {
+      userId: participant.userId,
+      presence: match.memberPresence?.[participant.userId] ?? "offline",
+      ready: isReady,
+      readyRevision: isReady ? (record.documentRevision ?? null) : null,
+    };
+  }
+
+  private buildTeamSnapshot(
+    match: MatchRecord,
+    round: RoundState,
+    side: SideId,
+    mySide: SideId,
+  ): TeamSnapshot {
+    const own = side === mySide;
+    const doc = round.teamDocs?.[side];
+    return {
+      side,
+      activity: this.activityOf(round, side),
+      submissions: round.attempts[side] ?? 0,
+      members: this.teamMembers(match, side).map((participant) =>
+        this.buildMemberSnapshot(match, round, participant, own),
+      ),
+      documentRevision: own ? (doc?.revision ?? null) : null,
+      language: own ? (doc?.language ?? null) : null,
+    };
   }
 
   private requireTeamMode(match: MatchRecord): void {
@@ -304,31 +323,53 @@ export class TeamCollaboration {
     return round.activities[side] ?? "coding";
   }
 
+  private isCollabCacheFresh(room: string, doc: TeamDocState): boolean {
+    const cached = this.loaded.get(room);
+    return Boolean(
+      this.collab.has(room) &&
+      cached?.revision === doc.revision &&
+      cached.language === doc.language,
+    );
+  }
+
+  private async applyStoredTeamDocument(
+    match: MatchRecord,
+    round: RoundState,
+    side: SideId,
+    room: string,
+    doc: TeamDocState,
+    stored: { appRevision: number; language: string; stateB64: string },
+  ): Promise<void> {
+    const cached = this.loaded.get(room);
+    if (cached && cached.revision > 1 && cached.language === stored.language) {
+      this.collab.refreshState(room, stored.stateB64);
+    } else {
+      this.collab.restoreState(room, stored.stateB64);
+    }
+    this.loaded.set(room, { revision: stored.appRevision, language: stored.language });
+    if (stored.appRevision !== doc.revision || stored.language !== doc.language) {
+      doc.revision = stored.appRevision;
+      doc.language = stored.language;
+      this.invalidate(match, round, side);
+      await this.persistence.saveMatch(match);
+    }
+  }
+
+  private seedInitialTeamDocument(round: RoundState, room: string, doc: TeamDocState): void {
+    if (doc.revision > 1) throw new IllegalStateError("saved team document is unavailable");
+    this.collab.destroy(room);
+    this.collab.seedOnce(room, this.starterFor(round, doc.language));
+    this.loaded.set(room, { ...doc });
+  }
+
   private async ensureLoaded(match: MatchRecord, round: RoundState, side: SideId, room: string): Promise<void> {
     const doc = this.teamDocOf(match, side);
-    const cached = this.loaded.get(room);
-    // A fresh Match can reference an edit committed by another Game engine.
-    // Keep same-revision Yjs state, including pending out-of-order frames.
-    if (this.collab.has(room) && cached?.revision === doc.revision && cached.language === doc.language) return;
+    if (this.isCollabCacheFresh(room, doc)) return;
     const stored = await this.persistence.loadTeamDocument(match.id, round.roundId, side);
     if (stored?.stateB64) {
-      if (cached && cached.revision > 1 && cached.language === stored.language) {
-        this.collab.refreshState(room, stored.stateB64);
-      } else {
-        this.collab.restoreState(room, stored.stateB64);
-      }
-      this.loaded.set(room, { revision: stored.appRevision, language: stored.language });
-      if (stored.appRevision !== doc.revision || stored.language !== doc.language) {
-        doc.revision = stored.appRevision;
-        doc.language = stored.language;
-        this.invalidate(match, round, side);
-        await this.persistence.saveMatch(match);
-      }
+      await this.applyStoredTeamDocument(match, round, side, room, doc, stored);
     } else {
-      if (doc.revision > 1) throw new IllegalStateError("saved team document is unavailable");
-      this.collab.destroy(room);
-      this.collab.seedOnce(room, this.starterFor(round, doc.language));
-      this.loaded.set(room, { ...doc });
+      this.seedInitialTeamDocument(round, room, doc);
     }
   }
 
