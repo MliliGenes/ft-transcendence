@@ -63,7 +63,12 @@ Validation:
 
 - `userId`: UUID
 - unknown body fields are rejected
-- the target must already exist as a non-deleted `ChatUser`
+- both users must exist in User service and must not be locally deleted
+
+If either user is missing from Chat's local profile copy, Chat fetches the public
+profile from User service and creates the local `ChatUser` before creating the
+DM. This is a lazy bootstrap path; RabbitMQ remains responsible for later profile
+updates and deletion synchronization.
 
 The two participant UUIDs are sorted before lookup, so both users resolve to the
 same DM row. An existing conversation is returned; otherwise it is created.
@@ -73,7 +78,8 @@ Responses:
 - `201 Created`: existing or newly created conversation
 - `400 Bad Request`: invalid body
 - `401 Unauthorized`: missing, invalid, or expired access token
-- `404 Not Found`: target user is missing or deleted from Chat's local user copy
+- `404 Not Found`: either user is missing or locally deleted
+- `503 Service Unavailable`: User service could not bootstrap a missing profile
 - `500 Internal Server Error`: current self-DM rejection uses a generic error
 
 ### List direct conversations
@@ -292,9 +298,19 @@ The gateway verifies the same RS256 issuer/audience contract as HTTP and joins
 the socket to the private room `user:<sub>`. Missing or invalid tokens reject the
 connection with `Unauthorized`.
 
-No client or server application events are implemented yet. OpenAPI describes
-HTTP request/response operations only; add an AsyncAPI document when live chat
-events are defined.
+After a new DM message is stored successfully, the server emits
+`message:created` to the private user rooms of both participants. This includes
+the sender so their other tabs and devices update. The payload is the complete
+stored `Message` object returned by the send endpoint.
+
+An idempotent retry returns the existing message and does not emit another
+event. Socket delivery is best effort: after reconnecting, clients reload
+authoritative message history through HTTP and deduplicate by `id` or
+`clientRequestId`.
+
+There are no client-to-server application events. OpenAPI describes HTTP
+operations; a dedicated AsyncAPI document can be added when the socket contract
+grows beyond this single event.
 
 ## Error shape
 
@@ -348,9 +364,14 @@ curl -X DELETE http://localhost:3000/chat/messages/<messageId> \
 
 ## Current limitations
 
-- User synchronization and RabbitMQ consumption are planned but not implemented.
+- Chat consumes `user.created`, `user.updated`, and `user.deleted` from the
+  durable `chat.user-events` RabbitMQ queue. It applies only events newer than
+  the local `sourceUpdatedAt`, clears profile fields on deletion, and keeps a
+  tombstone for deleted IDs. DM creation retains lazy public-profile bootstrap
+  for users that predate the queue or whose creation event was missed.
 - Message pagination does not return a finished cursor envelope.
 - Read markers are not monotonic yet.
-- Reactions, group management, live delivery, presence, and heartbeat/activity
+- Reactions, group management, presence, and heartbeat/activity
   behavior are not implemented.
-- The Socket.IO namespace authenticates connections but defines no chat events.
+- Live delivery passed a sender-room smoke test but not yet a two-participant
+  browser isolation test.

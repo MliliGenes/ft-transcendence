@@ -23,14 +23,17 @@ Implemented in the current codebase:
 - List the caller's DM conversations with `lastReadMessageId` and a derived `unreadCount`.
 - Send idempotent text messages, load message history, edit messages, and soft-delete messages.
 - Upsert a caller's last-read message for a DM.
+- Emit `message:created` to both DM participants after a successful insert; retries do not emit again.
+- Lazily bootstrap missing public `ChatUser` profiles from User service during DM creation.
+- Run Chat and its dedicated PostgreSQL database through root Compose, with Nginx routes for REST and Socket.IO.
+- Exercise DMs and live messages from the authenticated `/chat-test` frontend.
 - API reference files in `API.md` and `openAPI.json`.
 
 Still incomplete or awaiting stronger verification:
 
-- An idempotent message retry currently needs to return the complete stored message before broadcasting is added.
 - Message pagination still needs a finished response envelope and next cursor.
 - Read markers can currently move backward.
-- Socket token-expiry handling, User-service synchronization, recovery, block eligibility, deployment routing, and end-to-end integration remain unfinished.
+- Two-participant socket isolation, socket token expiry, profile reconciliation, block eligibility, and full end-to-end integration remain unfinished. RabbitMQ profile consumption is running, but the repair path for a missed publication still remains.
 
 ## What User service actually provides
 
@@ -124,11 +127,11 @@ No extra event bus, Redis, shared database, or generalized synchronization frame
 | Order | Feature we plan together | Status | Done when |
 | --- | --- | --- | --- |
 | 1 | Authentication and runnable foundation | In progress | A real User-service token reaches protected Chat HTTP/socket paths; invalid/expired/wrong issuer/audience tokens fail; socket expiry works; database migration and required constraints are verified. |
-| 2 | User event consumer | Not started | Create/update/delete populate `ChatUser`; duplicate, stale, delete-before-create, malformed payload, and DB-failure cases behave correctly. RabbitMQ reconnect resumes consumption. |
+| 2 | User event consumer | Implemented | `user.created`, `user.updated`, and `user.deleted` populate or tombstone `ChatUser`. Source timestamps reject stale/duplicate deliveries; malformed payloads are discarded; DB failures are requeued; the durable consumer reconnects automatically. |
 | 3 | Recovery and eligibility contracts | Not started | An older user can be bootstrapped; a missed profile/deletion event can be repaired; both block directions are checked; dependency failure does not grant access. Requires agreed User-service changes. |
 | 4 | Create/get a DM and list conversations | Implemented, verification incomplete | Concurrent creation gives one canonical pair; self-DM is rejected; only participants see their conversations; conversation summaries return the caller's read marker and unread count. |
 | 5 | Send, load, edit, delete, and mark messages read | Implemented, verification incomplete | Author comes from verified identity; access is checked; text bounds and history cursors are validated; retries do not duplicate messages; changed retry payloads are rejected; edit/delete ownership and unread calculations are verified. |
-| 6 | Live delivery and reconnect | Next | A newly committed message emits `message:created` once to both participants; retries do not re-emit; unrelated users receive nothing; reconnect reloads authoritative state through HTTP. |
+| 6 | Live delivery and reconnect | Implemented, integration verification incomplete | A newly committed message emits `message:created` once to both participants; retries do not re-emit; unrelated users receive nothing; reconnect reloads authoritative state through HTTP. |
 | 7 | Groups, channels, and roles | After live delivery | A group creator becomes an admin; authorized admins manage members and channels; members can access only their groups; live delivery reaches current members only. |
 | 8 | MVP integration check | Not started | The full flow works through the gateway with real User service, RabbitMQ, and PostgreSQL; endpoint/event documentation matches behavior and the client knows error/retry handling. |
 
@@ -136,23 +139,38 @@ For every row: agree on behavior and failure cases, you outline your approach, y
 
 ## Deployment work needed for the usable MVP
 
-The inspected [Compose file](../compose.yaml) includes User service and RabbitMQ, but no Chat service. The inspected [Nginx configuration](../nginx/default.conf) forwards `/api/` to User service and has no Chat route.
+Root Compose now includes `chat-service` and a dedicated `chat-db`. The Chat
+container applies Prisma migrations before starting. Nginx preserves `/chat/*`
+for REST and proxies `/socket.io/*` with WebSocket upgrade support. Only the User
+service's public JWT verification key is copied into Chat's environment.
 
-Plan Chat's container/database configuration, public verification key, broker credentials, HTTP routing, and Socket.IO transport routing. The `/chat` socket namespace is not itself the transport URL; choose and document the transport path with the client/proxy configuration. Verify the Socket.IO adapter dependency when making the gateway runnable. Never copy User's private signing key into Chat.
+The existing test frontend exposes `/chat-test` and connects to the `/chat`
+Socket.IO namespace through the `/socket.io` transport path. Remaining deployment
+work includes production secrets, broker consumption, stronger health/readiness
+policy, and deployment outside the local Compose environment.
 
 ## Heartbeat/activity note
 
 Keep this as a later feature checkpoint. First distinguish a live connection from actual user activity. Start with online/offline based on authenticated live connections and disconnect timeouts; all tabs/devices must disconnect before a user becomes offline. Add idle/last-seen semantics only after we agree what activity means and who may see it. It can move earlier without changing the identity or profile-event contracts.
 
-## Current next step: broadcast newly created messages
+## Current next step: verify live delivery, then build groups and channels
 
-1. Make the idempotency lookup return the complete existing message.
-2. Add a gateway method that emits `message:created` to a list of `user:<userId>` rooms.
-3. Call it only after `prisma.message.create()` succeeds; never emit from the retry branch.
-4. Emit to both DM participants, including the sender for their other connected tabs.
-5. Verify that two clients receive one event, a third user receives none, and retrying the same `clientRequestId` creates and emits nothing new.
-6. Document the socket handshake and `message:created` payload. Then begin groups and channels.
+1. Connect two authenticated clients and verify that both receive one `message:created` event after a send.
+2. Connect a third user and verify that the unrelated socket receives nothing.
+3. Retry the same `clientRequestId` and verify that no second event or message is produced.
+4. Disconnect and reconnect a participant, then reload authoritative history through HTTP.
+5. After this runtime proof, begin group creation, membership, roles, and channels.
+
+The single-client sender-room path has passed through Nginx with a real access
+token. The checklist above still requires two participant clients and an
+unrelated third client.
 
 ## Verification status
 
-This plan reflects source inspection and the work completed so far. The Chat build and OpenAPI structure have been checked, and individual HTTP flows have been exercised during development, but the full User service + Chat service + PostgreSQL + RabbitMQ + Socket.IO path has not passed an end-to-end integration run. Deployment routing, broker consumption, socket broadcast isolation, reconnect recovery, and several negative authorization cases remain unverified.
+This plan reflects source inspection and the work completed so far. Chat and the
+frontend build successfully; Compose validates; Chat migrations ran against its
+dedicated database; Nginx returned the frontend, protected Chat REST, and
+Socket.IO transport correctly. An authenticated smoke test created a DM, sent a
+message, and received `message:created` in the sender's socket room. RabbitMQ
+consumption, two-participant isolation, reconnect recovery, and several negative
+authorization cases remain unverified.

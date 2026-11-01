@@ -1,13 +1,13 @@
 import { JwtService } from '@nestjs/jwt';
 import {
-  OnGatewayConnection,
-  OnGatewayDisconnect,
   OnGatewayInit,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
 import { isUUID } from 'class-validator';
 import type { Namespace, Socket } from 'socket.io';
+import type { Message } from '../../generated/prisma/client.js';
+
 @WebSocketGateway({ namespace: '/chat' })
 export class ChatGateway implements OnGatewayInit {
   @WebSocketServer()
@@ -39,7 +39,7 @@ export class ChatGateway implements OnGatewayInit {
 
         socket.data.userId = payload.sub;
         next();
-      } catch (error) {
+      } catch {
         next(new Error('Unauthorized'));
       }
     });
@@ -53,5 +53,10 @@ export class ChatGateway implements OnGatewayInit {
   handleDisconnect(socket: Socket) {
     const userId = socket.data.userId as string;
     socket.leave(`user:${userId}`);
+  }
+
+  broadcastMessageCreated(userIds: string[], message: Message) {
+    const rooms = userIds.map((userId) => `user:${userId}`);
+    this.namespace.to(rooms).emit('message:created', message);
   }
 }

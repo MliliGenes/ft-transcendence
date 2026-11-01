@@ -1,7 +1,8 @@
 # Account interface
 
 React interface for registration, login, Discord authentication and linking,
-profile editing, avatar/banner uploads, and the public user directory.
+profile editing, avatar/banner uploads, the public user directory, and basic
+direct-message integration testing.
 
 ## Run locally
 
@@ -55,6 +56,11 @@ user appears; unblock them to clear the block. Also try rejecting and cancelling
 requests. The friends endpoint returns user IDs only, so deleting an accepted or
 declined friendship uses the manual **Friendship ID to delete** field; copy that
 ID from the request or action response first.
+
+The authenticated header also links to `/chat-test`. The chat tester can create
+or open a DM by user UUID, load its latest messages, send idempotent messages,
+and listen for `message:created` over Socket.IO. Open two accounts in separate
+browser profiles to verify delivery to both participant rooms.
 
 ```sh
 npm test

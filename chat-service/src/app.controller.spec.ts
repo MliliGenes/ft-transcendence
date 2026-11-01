@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 
@@ -15,8 +16,10 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('returns the service status message', () => {
+      expect(appController.getHello()).toEqual({
+        message: 'AM I THE BEST CAUSE I AM SAAD OR AM I SAD CAUSE I AM THE BEST?',
+      });
     });
   });
 });

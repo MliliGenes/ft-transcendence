@@ -72,7 +72,7 @@
         "tags": [
           "Conversations"
         ],
-        "description": "Creates one canonical DM for the authenticated user and target user, or returns the existing DM. Participant UUIDs are sorted before lookup. The target must exist as a non-deleted ChatUser. Self-DM currently reaches the generic 500 error handler.",
+        "description": "Creates one canonical DM for the authenticated user and target user, or returns the existing DM. Participant UUIDs are sorted before lookup. Missing local ChatUser profiles are lazily bootstrapped from User service; either user must exist there and must not be locally deleted. Self-DM currently reaches the generic 500 error handler.",
         "requestBody": {
           "required": true,
           "content": {
@@ -116,6 +116,16 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "description": "User service could not bootstrap a missing profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NestError"
+                }
+              }
+            }
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -878,7 +888,7 @@
     }
   },
   "x-socket-io": {
-    "namespace": "/chat`",
+    "namespace": "/chat",
     "authentication": {
       "handshakeAuthField": "token",
       "example": {
@@ -887,7 +897,15 @@
         }
       }
     },
-    "serverBehavior": "After authentication the socket joins user:<sub>.",
-    "applicationEvents": []
+    "serverBehavior": "After authentication the socket joins user:<sub>. A newly committed DM message is emitted once to both participant user rooms. An idempotent HTTP retry does not emit again.",
+    "applicationEvents": [
+      {
+        "name": "message:created",
+        "direction": "server-to-client",
+        "payload": {
+          "$ref": "#/components/schemas/Message"
+        }
+      }
+    ]
   }
 }

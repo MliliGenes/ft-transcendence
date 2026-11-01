@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export function navigate(path, { replace = false } = {}) {
-  if (!['/', '/login', '/register', '/account', '/verify-email', '/forgot-password', '/reset-password'].includes(path))
+  if (!['/', '/login', '/register', '/account', '/chat-test', '/verify-email', '/forgot-password', '/reset-password'].includes(path))
     path = '/account';
   window.history[replace ? 'replaceState' : 'pushState'](null, '', path);
   window.dispatchEvent(new PopStateEvent('popstate'));

@@ -9,6 +9,7 @@ services:
       - ./volumes/nginx/certs:/etc/nginx/certs
     depends_on:
       - user-service
+      - chat-service
       - auth-profile-web
 
   user-db:
@@ -23,11 +24,24 @@ services:
       start_period: 10s
       retries: 12
 
+  chat-db:
+    image: postgres:18-alpine
+    env_file: ./envs/chat-db.env
+    volumes:
+      - ./volumes/chat-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 12
+
   rabbitmq:
     image: rabbitmq:4-management
     hostname: rabbitmq
     env_file: ./envs/rabbitmq.env
     ports:
+      - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
     volumes:
       - ./volumes/rabbitmq:/var/lib/rabbitmq
@@ -57,18 +71,57 @@ services:
   user-service:
     build: ./user-service
     env_file:
-      - ./envs/user-service.env 
+      - ./envs/backend.env
+      - ./envs/user-service.env
+      - ./envs/user-auth.env
+      - ./envs/user-db.env
       - ./envs/rabbitmq.env
+    environment:
+      POSTGRES_HOST: user-db
+      POSTGRES_PORT: 5432
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
     depends_on:
       user-db:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
+  chat-service:
+    build: ./chat-service
+    env_file:
+      - ./envs/backend.env
+      - ./envs/chat-service.env
+      - ./envs/chat-db.env
+      - ./envs/rabbitmq.env
+    environment:
+      POSTGRES_HOST: chat-db
+      POSTGRES_PORT: 5432
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+    depends_on:
+      chat-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 12
+
   auth-profile-web:
     build: ./auth-profile-web
+    environment:
+      API_PROXY_TARGET: http://user-service:3000
+      VITE_API_URL: /api
+      VITE_CHAT_URL: /
     depends_on:
       - user-service
+      - chat-service
 
 networks:
   default:

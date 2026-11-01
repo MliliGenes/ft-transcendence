@@ -5,6 +5,7 @@ import { AuthPage } from './pages/AuthPage.jsx';
 import { AccountPage } from './pages/AccountPage.jsx';
 import { VerifyEmailPage } from './pages/VerifyEmailPage.jsx';
 import { PasswordResetPage } from './pages/PasswordResetPage.jsx';
+import { ChatPage } from './pages/ChatPage.jsx';
 import { Directory } from './components/Directory.jsx';
 import { Loading, Notice } from './components/Notice.jsx';
 
@@ -25,6 +26,7 @@ export function App() {
     '/login',
     '/register',
     '/account',
+    '/chat-test',
     '/verify-email',
     '/forgot-password',
     '/reset-password',
@@ -36,6 +38,7 @@ export function App() {
       status === 'authenticated' &&
       !passwordReset &&
       path !== '/account' &&
+      path !== '/chat-test' &&
       path !== '/verify-email'
     )
       navigate('/account', { replace: true });
@@ -48,7 +51,9 @@ export function App() {
         ? 'Reset password'
         : path === '/verify-email'
         ? 'Verify email'
-        : status === 'authenticated'
+        : path === '/chat-test'
+          ? 'Chat tester'
+          : status === 'authenticated'
           ? 'Your profile'
           : path === '/register'
             ? 'Create account'
@@ -71,11 +76,23 @@ export function App() {
           }}
         >
           fieldnote<span>/</span>
-          <span className="brand-section">account</span>
+          <span className="brand-section">
+            {path === '/chat-test' ? 'chat' : 'account'}
+          </span>
         </a>
         <div className="topbar-actions">
           {authenticated && (
             <>
+              <a
+                className="button button-secondary button-small"
+                href={path === '/chat-test' ? '/account' : '/chat-test'}
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigate(path === '/chat-test' ? '/account' : '/chat-test');
+                }}
+              >
+                {path === '/chat-test' ? 'Account' : 'Chat'}
+              </a>
               <span className="signed-in-as">@{profile.username}</span>
               <button
                 className="button button-secondary button-small"
@@ -90,10 +107,18 @@ export function App() {
       </header>
       <section className="intro">
         <p className="eyebrow">Your space</p>
-        <h1>{authenticated ? 'Make it yours.' : 'A place to connect.'}</h1>
+        <h1>
+          {path === '/chat-test'
+            ? 'Test live messages.'
+            : authenticated
+              ? 'Make it yours.'
+              : 'A place to connect.'}
+        </h1>
         <p className="lede">
-          {authenticated
-            ? 'Manage your profile, photos and the ways you sign in.'
+          {path === '/chat-test'
+            ? 'Open a direct conversation in two browser sessions and verify realtime delivery.'
+            : authenticated
+              ? 'Manage your profile, photos and the ways you sign in.'
             : 'Your account, your community. Start right here.'}
         </p>
       </section>
@@ -137,6 +162,8 @@ export function App() {
               </section>
             ) : path === '/verify-email' ? (
               <VerifyEmailPage />
+            ) : authenticated && path === '/chat-test' ? (
+              <ChatPage />
             ) : authenticated ? (
               <AccountPage />
             ) : (
