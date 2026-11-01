@@ -5,10 +5,14 @@ Run commands from the `ft-transcendence/` root.
 ```text
 compose.yaml
 envs/
-  user-db.env.example
+  backend.env.example     # shared backend runtime settings
+  backend.env             # local, ignored by Git
+  user-db.env.example     # credentials shared by user-db and user-service
   user-db.env             # local, ignored by Git
-  user-service.env.example
+  user-service.env.example # user-service settings and authentication material
   user-service.env        # local, ignored by Git
+  user-auth.env.example   # JWT keys and OAuth settings
+  user-auth.env           # local, ignored by Git
   auth-profile-web.env.example
   auth-profile-web.env    # local, ignored by Git
 volumes/
@@ -27,9 +31,9 @@ auth-profile-web/
 
 ## First startup
 
-Backend env files have been populated from the existing user-service `.env` on this machine. The original file remains for commands run outside Docker. Future changes to these copies are independent. The test frontend has its own `envs/auth-profile-web.env`.
+Each container receives only its own settings and the shared configuration files it needs. `backend.env` holds runtime settings such as `NODE_ENV` for both backend services. Database credentials are defined once in the matching `*-db.env` file and loaded by both its database and application container. RabbitMQ credentials are defined once in `rabbitmq.env` and loaded by RabbitMQ and the backend services. User-service signing keys and OAuth settings live in `user-auth.env`. Compose supplies internal service hostnames and ports directly in `compose.yaml`.
 
-On a fresh clone, copy each `envs/*.env.example` to the same name without `.example`. Set matching database credentials in both files, and supply the existing authentication system's RSA key pair in `user-service.env`. Run `node scripts/generate-jwt-keys.mjs` from `user-service/` to generate keys, then paste the PEM contents into `envs/user-service.env`. Update browser-facing URLs when wiring Nginx and the frontend.
+On a fresh clone, copy each needed `envs/*.env.example` to the same name without `.example`. Set shared backend settings in `backend.env`. Set each database credential once in its `*-db.env` file and RabbitMQ credentials once in `rabbitmq.env`. Put user-service signing keys and OAuth settings in `user-auth.env`. Run `node scripts/generate-jwt-keys.mjs` from `user-service/` to generate keys, then paste the PEM contents into `envs/user-auth.env`.
 
 ```sh
 docker compose config --quiet

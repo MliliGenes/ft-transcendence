@@ -8,7 +8,9 @@ import { Module } from '@nestjs/common';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const publicKey = config.getOrThrow<string>('JWT_PUBLIC_KEY');
+        const publicKey = config
+          .getOrThrow<string>('JWT_PUBLIC_KEY')
+          .replace(/\\n/g, '\n');
 
         return {
           publicKey,

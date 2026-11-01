@@ -8,10 +8,16 @@ import { SendMessageDto } from './dtos/message.dto.js';
 import { GetMessagesQueryDto } from './dtos/get-messages-query.dto.js';
 import { createHash } from 'crypto';
 import { EditMessageDto } from './dtos/edit-message.dto.js';
+import { ChatGateway } from './gateway/chat.gateway.js';
+import { UserProfilesService } from './user-profiles.service.js';
 
 @Injectable()
 export class ChatService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly chatGateway: ChatGateway,
+    private readonly userProfiles: UserProfilesService,
+  ) {}
 
   async getMessages(
     userId: string,
@@ -48,20 +54,12 @@ export class ChatService {
       throw new Error('Cannot create a DM with yourself.');
     }
 
-    const targetUser = await this.prisma.chatUser.findUnique({
-      where: { id: otherUserId.toLowerCase() },
-      select: { deletedAt: true },
-    });
-
-    if (!targetUser || targetUser.deletedAt !== null) {
-      // TODO: fallbacks to the user-service so we can fetch the user from there ofc if it exists
-      throw new NotFoundException('User not found');
-    }
-
     const [dmUserAId, dmUserBId] = [
       userId.toLowerCase(),
       otherUserId.toLowerCase(),
     ].sort();
+
+    await this.userProfiles.ensureActiveUsers([dmUserAId, dmUserBId]);
 
     const existingConversation = await this.prisma.conversation.findUnique({
       where: {
@@ -156,7 +154,11 @@ export class ChatService {
       },
     });
 
-    if (!conversation) {
+    if (
+      !conversation ||
+      !conversation.dmUserAId ||
+      !conversation.dmUserBId
+    ) {
       throw new NotFoundException('Conversation not found');
     }
 
@@ -168,9 +170,6 @@ export class ChatService {
       where: {
         authorId: userId,
         clientRequestId: msg.clientRequestId,
-      },
-      select: {
-        requestHash: true,
       },
     });
 
@@ -193,6 +192,11 @@ export class ChatService {
         requestHash,
       },
     });
+
+    this.chatGateway.broadcastMessageCreated(
+      [conversation.dmUserAId, conversation.dmUserBId],
+      newMessage,
+    );
 
     return newMessage;
   }

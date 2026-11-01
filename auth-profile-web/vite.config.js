@@ -8,10 +8,28 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         '/api': {
-          target: env.API_PROXY_TARGET || 'http://localhost:3000',
+          target:
+            process.env.API_PROXY_TARGET ||
+            env.API_PROXY_TARGET ||
+            'http://localhost:3000',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api(?=\/|$)/, ''),
           cookiePathRewrite: '/',
+        },
+        '^/chat/': {
+          target:
+            process.env.CHAT_PROXY_TARGET ||
+            env.CHAT_PROXY_TARGET ||
+            'http://localhost:3001',
+          changeOrigin: true,
+        },
+        '/socket.io': {
+          target:
+            process.env.CHAT_PROXY_TARGET ||
+            env.CHAT_PROXY_TARGET ||
+            'http://localhost:3001',
+          changeOrigin: true,
+          ws: true,
         },
       },
     },
