@@ -13,10 +13,15 @@ import type {
 } from 'amqp-connection-manager';
 import type { ConsumeMessage } from 'amqplib';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { parseUserEvent, type UserEvent } from './user-event.js';
+import {
+  parseUserEvent,
+  USER_EVENT_TYPES,
+  type UserEvent,
+} from './user-event.js';
 
 const USER_EVENTS_EXCHANGE = 'user.events';
 const CHAT_USER_EVENTS_QUEUE = 'chat.user-events';
+const USER_EVENTS_ROUTING_KEY = 'user.#';
 
 @Injectable()
 export class UserEventsConsumer implements OnModuleInit, OnModuleDestroy {
@@ -59,7 +64,7 @@ export class UserEventsConsumer implements OnModuleInit, OnModuleDestroy {
         await channel.bindQueue(
           CHAT_USER_EVENTS_QUEUE,
           USER_EVENTS_EXCHANGE,
-          'user.#',
+          USER_EVENTS_ROUTING_KEY,
         );
         await channel.prefetch(1);
         await channel.consume(
@@ -111,10 +116,12 @@ export class UserEventsConsumer implements OnModuleInit, OnModuleDestroy {
     const common = {
       sourceUpdatedAt,
       deletedAt:
-        event.eventType === 'user.deleted' ? new Date(event.occurredAt) : null,
+        event.eventType === USER_EVENT_TYPES.DELETED
+          ? new Date(event.occurredAt)
+          : null,
     };
     const profile =
-      event.eventType === 'user.deleted'
+      event.eventType === USER_EVENT_TYPES.DELETED
         ? { username: null, displayName: null, avatarUrl: null }
         : {
             username: event.data.username,

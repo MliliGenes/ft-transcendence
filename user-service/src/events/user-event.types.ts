@@ -1,3 +1,9 @@
+export const USER_EVENT_TYPES = {
+  CREATED: 'user.created',
+  UPDATED: 'user.updated',
+  DELETED: 'user.deleted',
+} as const;
+
 export type UserProfileSnapshot = {
   id: string;
   username: string;
@@ -16,14 +22,16 @@ type UserProfileData = {
 export type UserEvent =
   | {
       eventId: string;
-      eventType: 'user.created' | 'user.updated';
+      eventType:
+        | typeof USER_EVENT_TYPES.CREATED
+        | typeof USER_EVENT_TYPES.UPDATED;
       version: string;
       occurredAt: string;
       data: UserProfileData;
     }
   | {
       eventId: string;
-      eventType: 'user.deleted';
+      eventType: typeof USER_EVENT_TYPES.DELETED;
       version: string;
       occurredAt: string;
       data: { userId: string };
