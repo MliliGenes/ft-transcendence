@@ -12,11 +12,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard.js';
+import { EnsureActiveUserGuard } from './ensure-active-user.guard.js';
 import { GroupsService } from './groups.service.js';
 import { CreateGroupDto } from './dtos/create-group.dto.js';
 import { UpdateGroupDto } from './dtos/update-group.dto.js';
 
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, EnsureActiveUserGuard)
 @Controller('chat/groups')
 export class GroupsController {
   constructor(private readonly groupsService: GroupsService) {}

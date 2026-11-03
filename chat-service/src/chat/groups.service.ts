@@ -2,18 +2,14 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateGroupDto } from './dtos/create-group.dto.js';
 import { group } from 'console';
-import { UserProfilesService } from './user-profiles.service.js';
 
 @Injectable()
 export class GroupsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly userProfilesService: UserProfilesService,
   ) {}
 
   async createGroup(createGroupDto: CreateGroupDto, userId: string) {
-    await this.userProfilesService.ensureActiveUsers([userId]);
-
     const group = await this.prisma.group.create({
       data: {
         name: createGroupDto.name,
@@ -32,8 +28,6 @@ export class GroupsService {
   }
 
   async getGroup(groupId: string, userId: string) {
-    await this.userProfilesService.ensureActiveUsers([userId]);
-
     const group = await this.prisma.group.findUnique({
       where: {
         id: groupId,
@@ -60,8 +54,6 @@ export class GroupsService {
   }
 
   async getGroups(userId: string) {
-    await this.userProfilesService.ensureActiveUsers([userId]);
-
     const groups = await this.prisma.group.findMany({
       where: {
         members: { some: { userId } },
@@ -76,8 +68,6 @@ export class GroupsService {
   }
 
   async updateGroup(groupId: string, userId: string, updateGroupDto: any) {
-    await this.userProfilesService.ensureActiveUsers([userId]);
-
     const group = await this.prisma.group.findUnique({
       where: {
         id: groupId,
@@ -109,8 +99,6 @@ export class GroupsService {
   }
 
   async deleteGroup(groupId: string, userId: string) {
-    await this.userProfilesService.ensureActiveUsers([userId]);
-
     const group = await this.prisma.group.findUnique({
       where: {
         id: groupId,
