@@ -24,6 +24,8 @@ export class ChatService {
     conversationId: string,
     _query: GetMessagesQueryDto,
   ) {
+    await this.userProfiles.ensureActiveUsers([userId]);
+
     const conversation = await this.prisma.conversation.findFirst({
       where: {
         id: conversationId,
@@ -86,6 +88,8 @@ export class ChatService {
   }
 
   async getConversations(userId: string) {
+    await this.userProfiles.ensureActiveUsers([userId]);
+
     const conversations = await this.prisma.conversation.findMany({
       where: {
         OR: [{ dmUserAId: userId }, { dmUserBId: userId }],
@@ -147,6 +151,8 @@ export class ChatService {
     msg: SendMessageDto,
     conversationId: string,
   ) {
+    await this.userProfiles.ensureActiveUsers([userId]);
+
     const conversation = await this.prisma.conversation.findUnique({
       where: {
         id: conversationId,
@@ -206,6 +212,8 @@ export class ChatService {
     messageId: string,
     body: EditMessageDto,
   ) {
+    await this.userProfiles.ensureActiveUsers([userId]);
+
     const result = await this.prisma.message.updateMany({
       where: {
         id: messageId,
@@ -229,6 +237,8 @@ export class ChatService {
   }
 
   async deleteMessage(userId: string, messageId: string) {
+    await this.userProfiles.ensureActiveUsers([userId]);
+
     const result = await this.prisma.message.updateMany({
       where: {
         id: messageId,
@@ -248,6 +258,8 @@ export class ChatService {
   }
 
   async markRead(userId: string, conversationId: string, _messageId: string) {
+    await this.userProfiles.ensureActiveUsers([userId]);
+
     const message = await this.prisma.message.findFirst({
       where: { id: _messageId, conversationId },
       select: { id: true },

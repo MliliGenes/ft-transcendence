@@ -12,10 +12,15 @@ import type {
   ChannelWrapper,
 } from 'amqp-connection-manager';
 import { randomUUID } from 'node:crypto';
-import type { UserEvent, UserProfileSnapshot } from './user-event.types.js';
+import {
+  USER_EVENT_TYPES,
+  type UserEvent,
+  type UserProfileSnapshot,
+} from './user-event.types.js';
 
 const USER_EVENTS_EXCHANGE = 'user.events';
 const CHAT_USER_EVENTS_QUEUE = 'chat.user-events';
+const USER_EVENTS_ROUTING_KEY = 'user.#';
 
 @Injectable()
 export class RabbitMqEventsService implements OnModuleInit, OnModuleDestroy {
@@ -54,7 +59,7 @@ export class RabbitMqEventsService implements OnModuleInit, OnModuleDestroy {
         await channel.bindQueue(
           CHAT_USER_EVENTS_QUEUE,
           USER_EVENTS_EXCHANGE,
-          'user.#',
+          USER_EVENTS_ROUTING_KEY,
         );
       },
     });
@@ -68,18 +73,18 @@ export class RabbitMqEventsService implements OnModuleInit, OnModuleDestroy {
   }
 
   publishCreated(user: UserProfileSnapshot): Promise<boolean> {
-    return this.publishProfile('user.created', user);
+    return this.publishProfile(USER_EVENT_TYPES.CREATED, user);
   }
 
   publishUpdated(user: UserProfileSnapshot): Promise<boolean> {
-    return this.publishProfile('user.updated', user);
+    return this.publishProfile(USER_EVENT_TYPES.UPDATED, user);
   }
 
   publishDeleted(userId: string): Promise<boolean> {
     const occurredAt = new Date().toISOString();
     return this.publish({
       eventId: randomUUID(),
-      eventType: 'user.deleted',
+      eventType: USER_EVENT_TYPES.DELETED,
       version: occurredAt,
       occurredAt,
       data: { userId },
@@ -87,7 +92,9 @@ export class RabbitMqEventsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private publishProfile(
-    eventType: 'user.created' | 'user.updated',
+    eventType:
+      | typeof USER_EVENT_TYPES.CREATED
+      | typeof USER_EVENT_TYPES.UPDATED,
     user: UserProfileSnapshot,
   ): Promise<boolean> {
     return this.publish({
