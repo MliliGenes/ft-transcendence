@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PresenceService } from '../src/chat/presence.service.js';
+import { PresenceService } from '../src/chat/presence/presence.service.js';
 
 describe('PresenceService', () => {
   afterEach(() => vi.useRealTimers());

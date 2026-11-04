@@ -13,8 +13,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
-import { AuthGuard } from '../auth/auth.guard.js';
-import { EnsureActiveUserGuard } from './ensure-active-user.guard.js';
+import { AuthGuard } from '../../auth/auth.guard.js';
+import { EnsureActiveUserGuard } from '../ensure-active-user.guard.js';
 import { GroupsService } from './groups.service.js';
 import { CreateGroupDto } from './dtos/create-group.dto.js';
 import { UpdateGroupDto } from './dtos/update-group.dto.js';
