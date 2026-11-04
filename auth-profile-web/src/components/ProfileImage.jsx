@@ -14,7 +14,7 @@ export function ProfileImage({
     API_URL,
     revision || user.updatedAt,
   );
-  const name = user.displayName || user.username;
+  const name = user.displayName || user.username || 'Unknown user';
   const className = banner
     ? 'profile-banner'
     : small
