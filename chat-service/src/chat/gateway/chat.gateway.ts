@@ -10,8 +10,8 @@ import {
 import { isUUID } from 'class-validator';
 import type { Namespace, Socket } from 'socket.io';
 import type { Message } from '../../generated/prisma/client.js';
-import { PresenceAudienceService } from '../presence-audience.service.js';
-import { PresenceService, type PresenceChange } from '../presence.service.js';
+import { PresenceAudienceService } from '../presence/presence-audience.service.js';
+import { PresenceService, type PresenceChange } from '../presence/presence.service.js';
 
 @WebSocketGateway({ namespace: '/chat' })
 export class ChatGateway implements OnGatewayInit, OnModuleDestroy {

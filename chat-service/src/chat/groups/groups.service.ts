@@ -4,13 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateGroupDto } from './dtos/create-group.dto.js';
 import { UpdateGroupDto } from './dtos/update-group.dto.js';
 import { CreateChannelDto } from './dtos/create-channel.dto.js';
 import { UpdateChannelDto } from './dtos/update-channel.dto.js';
-import { UserProfilesService } from './user-profiles.service.js';
-import type { Prisma } from '../generated/prisma/client.js';
+import { UserProfilesService } from '../user-profiles.service.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 
 type GroupDb = PrismaService | Prisma.TransactionClient;
 
