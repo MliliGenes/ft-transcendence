@@ -21,6 +21,7 @@ import { SendMessageDto } from './dtos/message.dto.js';
 import { GetMessagesQueryDto } from './dtos/get-messages-query.dto.js';
 import { MarkReadDto } from './dtos/mark-read.dto.js';
 import { EditMessageDto } from './dtos/edit-message.dto.js';
+import type { Request as ExpressRequest } from 'express';
 
 @Controller('chat')
 @UseGuards(AuthGuard, EnsureActiveUserGuard)
@@ -30,27 +31,36 @@ export class ChatController {
   ) {}
 
   @Post('conversations/dm')
-  createOrGetDm(@Request() req: Request & { user: { sub: string } }, @Body() body: CreateDmDto) {
-    return this.chatService.createOrGetDm( req.user.sub, body.userId);
+  createOrGetDm(@Request() req: ExpressRequest & { user: { sub: string } }, @Body() body: CreateDmDto) {
+    return this.chatService.createOrGetDm(
+      req.user.sub,
+      body.userId,
+      req.headers.authorization ?? '',
+    );
   }
 
   @Get('conversations')
-  getConversations(@Request() req: Request & { user: { sub: string } }) {
+  getConversations(@Request() req: ExpressRequest & { user: { sub: string } }) {
     return this.chatService.getConversations(req.user.sub);
   }
 
   @Post('conversations/:conversationId/messages')
   createMessage(
-    @Request() req: Request & { user: { sub: string } },
+    @Request() req: ExpressRequest & { user: { sub: string } },
     @Param('conversationId') _conversationId: string,
     @Body() message: SendMessageDto
   ) {
-    return this.chatService.sendMessage(req.user.sub, message, _conversationId);
+    return this.chatService.sendMessage(
+      req.user.sub,
+      message,
+      _conversationId,
+      req.headers.authorization ?? '',
+    );
   }
 
   @Get('conversations/:conversationId/messages')
   getMessages(
-    @Request() req: Request & { user: { sub: string } },
+    @Request() req: ExpressRequest & { user: { sub: string } },
     @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
     @Query() query: GetMessagesQueryDto,
   ) {
@@ -59,7 +69,7 @@ export class ChatController {
 
   @Patch('conversations/:conversationId/read-state')
   markRead(
-    @Request() req: Request & { user: { sub: string } },
+    @Request() req: ExpressRequest & { user: { sub: string } },
     @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
     @Body() body: MarkReadDto,
   ) {
@@ -68,7 +78,7 @@ export class ChatController {
 
   @Patch('messages/:messageId')
   editMessage(
-    @Request() req: Request & { user: { sub: string } },
+    @Request() req: ExpressRequest & { user: { sub: string } },
     @Param('messageId', new ParseUUIDPipe({ version: '4' })) messageId: string,
     @Body() body: EditMessageDto,
   ) {
@@ -78,7 +88,7 @@ export class ChatController {
   @Delete('messages/:messageId')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteMessage(
-    @Request() req: Request & { user: { sub: string } },
+    @Request() req: ExpressRequest & { user: { sub: string } },
     @Param('messageId', new ParseUUIDPipe({ version: '4' })) messageId: string,
   ) {
     return this.chatService.deleteMessage(req.user.sub, messageId);

@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
@@ -58,6 +59,35 @@ export class UserProfilesService {
       where: { id: { in: ids }, deletedAt: null },
     });
     if (activeUsers !== ids.length) throw new NotFoundException('User not found');
+  }
+
+  async ensureCanContact(otherUserId: string, authorization: string) {
+    const url = new URL(
+      `/social/blocks/check/${encodeURIComponent(otherUserId)}`,
+      this.userServiceUrl,
+    );
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: { authorization },
+        signal: AbortSignal.timeout(3000),
+      });
+    } catch {
+      throw new ServiceUnavailableException('User service is unavailable');
+    }
+    if (!response.ok)
+      throw new ServiceUnavailableException('User service is unavailable');
+
+    const result: unknown = await response.json().catch(() => null);
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      typeof (result as { blocked?: unknown }).blocked !== 'boolean'
+    ) {
+      throw new ServiceUnavailableException('User service returned invalid data');
+    }
+    if ((result as { blocked: boolean }).blocked)
+      throw new ForbiddenException('You cannot contact this user');
   }
 
   private async fetchPublicUser(userId: string): Promise<PublicUser> {

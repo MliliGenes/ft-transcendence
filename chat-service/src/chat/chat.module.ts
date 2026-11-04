@@ -7,9 +7,10 @@ import { AuthModule } from '../auth/auth.module.js';
 import { UserProfilesService } from './user-profiles.service.js';
 import { GroupsService } from './groups.service.js';
 import { EnsureActiveUserGuard } from './ensure-active-user.guard.js';
+import { PresenceModule } from './presence.module.js';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, PresenceModule],
   providers: [
     ChatService,
     GroupsService,

@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthProvider.jsx';
 import { chatRequest, connectChatSocket } from '../lib/chat.js';
 import { sessionStore } from '../lib/runtime.js';
 import { Loading, Notice } from '../components/Notice.jsx';
+import { ProfileImage } from '../components/ProfileImage.jsx';
 
 function upsertMessage(messages, message) {
   const next = messages.filter(
@@ -17,13 +18,56 @@ function upsertMessage(messages, message) {
   );
 }
 
+function PresenceDot({ status = 'OFFLINE', label }) {
+  return (
+    <i
+      className={`presence-dot presence-dot-${status.toLowerCase()}`}
+      role="img"
+      aria-label={`${label} ${status.toLowerCase()}`}
+      title={`${label}: ${status.toLowerCase()}`}
+    />
+  );
+}
+
+function trackPresenceActivity(socket) {
+  let lastSentAt = 0;
+  const sendActivity = () => {
+    if (!socket.connected || document.visibilityState !== 'visible') return;
+    const now = Date.now();
+    if (now - lastSentAt < 30_000) return;
+    lastSentAt = now;
+    socket.emit('presence:activity');
+  };
+  const activityEvents = ['pointerdown', 'keydown', 'touchstart', 'focus'];
+  activityEvents.forEach((eventName) =>
+    document.addEventListener(eventName, sendActivity, { passive: true }),
+  );
+  document.addEventListener('visibilitychange', sendActivity);
+  socket.on('connect', sendActivity);
+  return () => {
+    activityEvents.forEach((eventName) =>
+      document.removeEventListener(eventName, sendActivity),
+    );
+    document.removeEventListener('visibilitychange', sendActivity);
+    socket.off('connect', sendActivity);
+  };
+}
+
 export function ChatPage() {
-  const { profile } = useAuth();
+  const { profile, revision } = useAuth();
   const [conversations, setConversations] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState('');
+  const [channels, setChannels] = useState([]);
+  const [members, setMembers] = useState([]);
   const [selectedId, setSelectedId] = useState('');
+  const [selectedKind, setSelectedKind] = useState('');
   const selectedIdRef = useRef('');
   const [messages, setMessages] = useState([]);
   const [targetId, setTargetId] = useState('');
+  const [groupName, setGroupName] = useState('');
+  const [memberId, setMemberId] = useState('');
+  const [channelName, setChannelName] = useState('');
   const [content, setContent] = useState('');
   const pendingRequest = useRef(null);
   const lastMarkedMessage = useRef(new Map());
@@ -31,10 +75,30 @@ export function ChatPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [socketState, setSocketState] = useState('connecting');
+  const [presenceStatus, setPresenceStatus] = useState('OFFLINE');
+  const [presenceByUserId, setPresenceByUserId] = useState({});
 
   const loadConversations = useCallback(async (signal) => {
     const data = await chatRequest('/chat/conversations', { signal });
     setConversations(data);
+    return data;
+  }, []);
+
+  const loadGroups = useCallback(async (signal) => {
+    const data = await chatRequest('/chat/groups', { signal });
+    setGroups(data);
+    return data;
+  }, []);
+
+  const loadGroupMembers = useCallback(async (groupId, signal) => {
+    const data = await chatRequest(`/chat/groups/${groupId}/members`, { signal });
+    setMembers(data);
+    return data;
+  }, []);
+
+  const loadGroupChannels = useCallback(async (groupId, signal) => {
+    const data = await chatRequest(`/chat/groups/${groupId}/channels`, { signal });
+    setChannels(data);
     return data;
   }, []);
 
@@ -51,6 +115,13 @@ export function ChatPage() {
           conversation.id === conversationId
             ? { ...conversation, lastReadMessageId: messageId, unreadCount: 0 }
             : conversation,
+        ),
+      );
+      setChannels((current) =>
+        current.map((channel) =>
+          channel.id === conversationId
+            ? { ...channel, lastReadMessageId: messageId, unreadCount: 0 }
+            : channel,
         ),
       );
     } catch (failure) {
@@ -74,6 +145,14 @@ export function ChatPage() {
   }, [loadConversations]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    loadGroups(controller.signal).catch((failure) => {
+      if (!controller.signal.aborted) setError(failure);
+    });
+    return () => controller.abort();
+  }, [loadGroups]);
+
+  useEffect(() => {
     selectedIdRef.current = selectedId;
     if (!selectedId) {
       setMessages([]);
@@ -84,7 +163,11 @@ export function ChatPage() {
     chatRequest(`/chat/conversations/${selectedId}/messages?limit=50`, {
       signal: controller.signal,
     })
-      .then((data) => setMessages([...data].reverse()))
+      .then(async (data) => {
+        setMessages([...data].reverse());
+        if (selectedKind === 'CHANNEL' && data.length > 0)
+          await markRead(selectedId, data[0].id);
+      })
       .catch((failure) => {
         if (!controller.signal.aborted) setError(failure);
       })
@@ -92,10 +175,10 @@ export function ChatPage() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [selectedId]);
+  }, [markRead, selectedId, selectedKind]);
 
   useEffect(() => {
-    if (!selectedId || messages.length === 0) return;
+    if (selectedKind !== 'DM' || !selectedId || messages.length === 0) return;
     const newestMessage = messages[messages.length - 1];
     if (newestMessage.conversationId !== selectedId) return;
     const markVisibleMessages = () => {
@@ -106,23 +189,43 @@ export function ChatPage() {
     document.addEventListener('visibilitychange', markVisibleMessages);
     return () =>
       document.removeEventListener('visibilitychange', markVisibleMessages);
-  }, [markRead, messages, selectedId]);
+  }, [markRead, messages, selectedId, selectedKind]);
 
   useEffect(() => {
     let socket;
+    let stopTrackingPresence = () => {};
     const connect = (session) => {
+      stopTrackingPresence();
       socket?.disconnect();
       if (!session) {
         setSocketState('disconnected');
+        setPresenceStatus('OFFLINE');
+        setPresenceByUserId({});
         return;
       }
       setSocketState('connecting');
       socket = connectChatSocket(session.accessToken);
+      stopTrackingPresence = trackPresenceActivity(socket);
       socket.on('connect', () => setSocketState('connected'));
-      socket.on('disconnect', () => setSocketState('disconnected'));
+      socket.on('disconnect', () => {
+        setSocketState('disconnected');
+        setPresenceStatus('OFFLINE');
+        setPresenceByUserId({});
+      });
       socket.on('connect_error', (failure) => {
         setSocketState('error');
         setError(failure);
+      });
+      socket.on('presence:snapshot', ({ users = [] }) => {
+        const statuses = Object.fromEntries(
+          users.map(({ userId, status }) => [userId, status]),
+        );
+        setPresenceByUserId(statuses);
+        setPresenceStatus(statuses[profile?.id] || 'OFFLINE');
+      });
+      socket.on('presence:changed', ({ userId, status }) => {
+        setPresenceByUserId((current) => ({ ...current, [userId]: status }));
+        if (userId === profile?.id) setPresenceStatus(status);
       });
       socket.on('message:created', (message) => {
         if (selectedIdRef.current === message.conversationId)
@@ -134,9 +237,10 @@ export function ChatPage() {
     const unsubscribe = sessionStore.subscribe(connect);
     return () => {
       unsubscribe();
+      stopTrackingPresence();
       socket?.disconnect();
     };
-  }, [loadConversations]);
+  }, [loadConversations, profile?.id]);
 
   async function createDm(event) {
     event.preventDefault();
@@ -150,6 +254,89 @@ export function ChatPage() {
       });
       await loadConversations();
       setSelectedId(conversation.id);
+      setSelectedKind('DM');
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createGroup(event) {
+    event.preventDefault();
+    if (busy || !groupName.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const group = await chatRequest('/chat/groups', {
+        method: 'POST',
+        json: { name: groupName.trim() },
+      });
+      const updatedGroups = await loadGroups();
+      setSelectedGroupId(group.id);
+      setChannels(group.channels);
+      await loadGroupMembers(group.id);
+      setSelectedId('');
+      setSelectedKind('');
+      setGroupName('');
+      if (!updatedGroups.some((item) => item.id === group.id))
+        setGroups((current) => [group, ...current]);
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function selectGroup(groupId) {
+    setSelectedGroupId(groupId);
+    setSelectedId('');
+    setSelectedKind('');
+    setChannels([]);
+    setMembers([]);
+    if (!groupId) return;
+    try {
+      await Promise.all([
+        loadGroupChannels(groupId),
+        loadGroupMembers(groupId),
+      ]);
+    } catch (failure) {
+      setError(failure);
+    }
+  }
+
+  async function addGroupMember(event) {
+    event.preventDefault();
+    if (busy || !selectedGroupId || !memberId.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await chatRequest(`/chat/groups/${selectedGroupId}/members`, {
+        method: 'POST',
+        json: { userId: memberId.trim() },
+      });
+      setMemberId('');
+      await loadGroups();
+      await loadGroupMembers(selectedGroupId);
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createChannel(event) {
+    event.preventDefault();
+    if (busy || !selectedGroupId || !channelName.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const channel = await chatRequest(
+        `/chat/groups/${selectedGroupId}/channels`,
+        { method: 'POST', json: { name: channelName.trim() } },
+      );
+      setChannels((current) => [...current, channel]);
+      setChannelName('');
     } catch (failure) {
       setError(failure);
     } finally {
@@ -191,14 +378,23 @@ export function ChatPage() {
     >
       <div className="section-heading">
         <div>
-          <h2 id="chat-heading">Direct-message tester</h2>
+          <h2 id="chat-heading">Chat tester</h2>
           <p className="muted">
-            Socket: <strong>{socketState}</strong>
+            Socket: <strong>{socketState}</strong> · Presence:{' '}
+            <span className="presence-indicator" role="status" aria-live="polite">
+              <span
+                className={`presence-dot presence-dot-${presenceStatus.toLowerCase()}`}
+                aria-hidden="true"
+              />
+              <strong>{presenceStatus.toLowerCase()}</strong>
+            </span>
           </p>
         </div>
         <button
           className="button button-secondary button-small"
-          onClick={() => loadConversations().catch(setError)}
+          onClick={() =>
+            Promise.all([loadConversations(), loadGroups()]).catch(setError)
+          }
           disabled={busy}
         >
           Refresh
@@ -219,6 +415,65 @@ export function ChatPage() {
           <button className="button button-primary">Open direct message</button>
         </fieldset>
       </form>
+      <details className="group-chat-tester" open>
+        <summary>Group channel tester</summary>
+        <form onSubmit={createGroup}>
+          <fieldset disabled={busy}>
+            <label>
+              New group name
+              <input
+                value={groupName}
+                onChange={(event) => setGroupName(event.target.value)}
+                maxLength={100}
+              />
+            </label>
+            <button className="button button-secondary">Create group</button>
+          </fieldset>
+        </form>
+        <label>
+          Your groups
+          <select
+            value={selectedGroupId}
+            onChange={(event) => void selectGroup(event.target.value)}
+          >
+            <option value="">Select a group</option>
+            {groups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {selectedGroupId && (
+          <>
+            <form onSubmit={addGroupMember}>
+              <fieldset disabled={busy}>
+                <label>
+                  Add member by user UUID
+                  <input
+                    value={memberId}
+                    onChange={(event) => setMemberId(event.target.value)}
+                  />
+                </label>
+                <button className="button button-secondary">Add member</button>
+              </fieldset>
+            </form>
+            <form onSubmit={createChannel}>
+              <fieldset disabled={busy}>
+                <label>
+                  New channel name
+                  <input
+                    value={channelName}
+                    onChange={(event) => setChannelName(event.target.value)}
+                    maxLength={80}
+                  />
+                </label>
+                <button className="button button-secondary">Create channel</button>
+              </fieldset>
+            </form>
+          </>
+        )}
+      </details>
       <div className="chat-layout">
         <nav className="conversation-list" aria-label="Direct conversations">
           <h3>Conversations</h3>
@@ -226,19 +481,36 @@ export function ChatPage() {
             <p className="muted">No conversations yet.</p>
           ) : (
             conversations.map((conversation) => {
-              const otherId =
+              const otherUser =
                 conversation.dmUserAId === profile.id
-                  ? conversation.dmUserBId
-                  : conversation.dmUserAId;
+                  ? conversation.dmUserB
+                  : conversation.dmUserA;
+              const displayName =
+                otherUser?.displayName || otherUser?.username || 'Unknown user';
               return (
                 <button
                   key={conversation.id}
                   className={
                     conversation.id === selectedId ? 'conversation-active' : ''
                   }
-                  onClick={() => setSelectedId(conversation.id)}
+                  onClick={() => {
+                    setSelectedId(conversation.id);
+                    setSelectedKind('DM');
+                  }}
                 >
-                  <span>{otherId}</span>
+                  <ProfileImage
+                    user={otherUser || { username: displayName }}
+                    small
+                    revision={revision}
+                  />
+                  <PresenceDot
+                    status={presenceByUserId[otherUser?.id]}
+                    label={displayName}
+                  />
+                  <span>
+                    {displayName}
+                    {otherUser?.username && <small>@{otherUser.username}</small>}
+                  </span>
                   {conversation.unreadCount > 0 && (
                     <strong>{conversation.unreadCount}</strong>
                   )}
@@ -246,27 +518,71 @@ export function ChatPage() {
               );
             })
           )}
+          <h3>Group channels</h3>
+          {channels.map((channel) => (
+            <button
+              key={channel.id}
+              className={channel.id === selectedId ? 'conversation-active' : ''}
+              onClick={() => {
+                setSelectedId(channel.id);
+                setSelectedKind('CHANNEL');
+              }}
+            >
+              # {channel.name}
+              {channel.unreadCount > 0 && <strong>{channel.unreadCount}</strong>}
+            </button>
+          ))}
+          {members.length > 0 && (
+            <div className="group-member-list">
+              <h3>Members</h3>
+              {members.map(({ user }) => (
+                <div className="group-member-row" key={user.id}>
+                  <ProfileImage user={user} small revision={revision} />
+                  <PresenceDot
+                    status={presenceByUserId[user.id]}
+                    label={user.displayName || user.username || 'User'}
+                  />
+                  <span>
+                    {user.displayName || user.username || 'Unknown user'}
+                    {user.username && <small>@{user.username}</small>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </nav>
         <div className="message-panel">
           {!selectedId ? (
-            <p className="muted empty-state">Open or select a conversation.</p>
+            <p className="muted empty-state">Open or select a conversation or group channel.</p>
           ) : loading ? (
             <Loading text="Loading messages…" />
           ) : (
             <ol className="message-list" aria-live="polite">
-              {messages.map((message) => (
-                <li
-                  key={message.id}
-                  className={
-                    message.authorId === profile.id ? 'message-mine' : ''
-                  }
-                >
-                  <span>
-                    {message.authorId === profile.id ? 'You' : 'Them'}
-                  </span>
-                  <p>{message.deletedAt ? 'Message deleted' : message.content}</p>
-                </li>
-              ))}
+              {messages.map((message) => {
+                const author =
+                  message.author ||
+                  (message.authorId === profile.id
+                    ? profile
+                    : { username: 'Unknown user' });
+                const displayName =
+                  message.authorId === profile.id
+                    ? 'You'
+                    : author.displayName || author.username || 'Unknown user';
+                return (
+                  <li
+                    key={message.id}
+                    className={
+                      message.authorId === profile.id ? 'message-mine' : ''
+                    }
+                  >
+                    <div className="message-author">
+                      <ProfileImage user={author} small revision={revision} />
+                      <span>{displayName}</span>
+                    </div>
+                    <p>{message.deletedAt ? 'Message deleted' : message.content}</p>
+                  </li>
+                );
+              })}
             </ol>
           )}
           <form className="message-form" onSubmit={sendMessage}>

@@ -7,7 +7,9 @@
     "x-documentation-notes": [
       "Message history currently returns a raw newest-first array containing up to limit + 1 rows; the lookahead row and cursor envelope are not finalized.",
       "Message edits require the original author and reject soft-deleted messages.",
-      "A successful same-payload message retry currently returns only requestHash instead of the original Message object."
+      "Group management is implemented with authenticated, active-user guarded routes. Group creation creates the creator as ADMIN and a general channel in the same nested database write.",
+      "Group invitations are deferred; admins add existing active users directly. The last group admin cannot be demoted or removed.",
+      "Message sends are authorized for DM participants or current group members in channel conversations; new messages are emitted to their private user rooms. Group channels are not included in the DM conversation list; channel unread state is available from the group channel list."
     ]
   },
   "servers": [
@@ -32,6 +34,10 @@
     {
       "name": "Read state",
       "description": "Per-user conversation read markers"
+    },
+    {
+      "name": "Groups",
+      "description": "Private group membership, roles, and channels"
     }
   ],
   "security": [
@@ -117,6 +123,9 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
           "503": {
             "description": "User service could not bootstrap a missing profile",
             "content": {
@@ -126,9 +135,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -140,7 +146,7 @@
         "tags": [
           "Conversations"
         ],
-        "description": "Returns conversations where the authenticated user is one of the two DM participants. Each item includes the caller's nullable last-read message ID and a derived unread count. Unread messages are non-deleted messages authored by another user after the marker in (createdAt, id) order; without a marker, all such messages are unread. The response does not include group channels, participant profiles, latest-message summaries, or a guaranteed sort order.",
+        "description": "Returns conversations where the authenticated user is one of the two DM participants. Each item includes the caller's nullable last-read message ID and a derived unread count. Unread messages are non-deleted messages authored by another user after the marker in (createdAt, id) order; without a marker, all such messages are unread. The response does not include group channels, participant profiles, latest-message summaries, or a guaranteed sort order. Each DM includes public profile summaries for both participants.",
         "responses": {
           "200": {
             "description": "Direct conversations visible to the caller",
@@ -188,7 +194,7 @@
         "tags": [
           "Messages"
         ],
-        "description": "Persists a message for an authenticated DM participant. clientRequestId scopes idempotency to the author. A same-ID request with a different conversation/content hash returns 409. A same-payload retry currently returns RequestHashOnly rather than the original Message.",
+        "description": "Persists a message for an authenticated DM participant or a current member of the group that owns a CHANNEL conversation. The server emits a newly stored message to the DM participants or current group members through their private user rooms. clientRequestId scopes idempotency to the author. A same-ID request with a different conversation/content hash returns 409; an identical retry returns the existing message and does not emit again.",
         "requestBody": {
           "required": true,
           "content": {
@@ -205,22 +211,15 @@
         },
         "responses": {
           "201": {
-            "description": "New message, or the current reduced response for an identical retry",
+            "description": "New message or the stored message returned for an identical retry",
             "content": {
               "application/json": {
                 "schema": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/Message"
-                    },
-                    {
-                      "$ref": "#/components/schemas/RequestHashOnly"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/Message"
                 },
                 "examples": {
                   "created": {
-                    "summary": "New message",
+                    "summary": "Stored message",
                     "value": {
                       "id": "6681dc8a-eb00-4502-abc4-24706c2fa433",
                       "conversationId": "1ee9b51b-c93d-45da-ab9d-03eb1a76302d",
@@ -232,12 +231,6 @@
                       "clientRequestId": "908a6c18-78fc-45bf-9677-d5c7eb1317d3",
                       "requestHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                       "version": 1
-                    }
-                  },
-                  "identicalRetry": {
-                    "summary": "Current retry response",
-                    "value": {
-                      "requestHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                     }
                   }
                 }
@@ -332,7 +325,7 @@
         "tags": [
           "Read state"
         ],
-        "description": "Validates that messageId belongs to the supplied conversation and that the caller is a DM participant, then upserts ConversationReadState by (conversationId, userId). The current implementation permits the marker to move backward and does not support group membership here.",
+        "description": "Validates that messageId belongs to the supplied conversation and that the caller is a DM participant or a current member of the owning group, then upserts ConversationReadState by (conversationId, userId). The current implementation permits the marker to move backward.",
         "requestBody": {
           "required": true,
           "content": {
@@ -472,6 +465,733 @@
           }
         }
       }
+    },
+    "/chat/groups": {
+      "get": {
+        "operationId": "listGroups",
+        "summary": "List the caller's groups",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Returns groups where the authenticated active user is a member, including the caller's role and channel summaries.",
+        "responses": {
+          "200": {
+            "description": "Groups visible to the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GroupSummary"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createGroup",
+        "summary": "Create a group",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Creates a group, makes the caller an ADMIN, and creates its general text channel in one database operation.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGroupRequest"
+              },
+              "example": {
+                "name": "Study group",
+                "description": "Study notes",
+                "rules": "Be respectful"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Group created with its general channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/chat/groups/{groupId}": {
+      "parameters": [
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "description": "Group to access",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getGroup",
+        "summary": "Get group details",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Requires group membership.",
+        "responses": {
+          "200": {
+            "description": "Group details and channels",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Group"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateGroup",
+        "summary": "Update group details",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Only group admins can update the name, description, or rules. Omitted fields are unchanged; explicit null clears description or rules.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateGroupRequest"
+              },
+              "example": {
+                "name": "Updated group",
+                "description": null
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Group"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteGroup",
+        "summary": "Delete a group",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Only a group admin can delete the group. Related channels and messages are removed by database cascades.",
+        "responses": {
+          "204": {
+            "description": "Group deleted"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/chat/groups/{groupId}/members": {
+      "parameters": [
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "description": "Group to access",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listGroupMembers",
+        "summary": "List group members",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Requires group membership. Member results contain only public profile fields.",
+        "responses": {
+          "200": {
+            "description": "Group members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GroupMember"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "addGroupMember",
+        "summary": "Add a group member",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Only group admins can add an existing active User-service account. New members receive MEMBER role. Invitations are not implemented.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddGroupMemberRequest"
+              },
+              "example": {
+                "userId": "4a13e0f8-8632-489a-b85a-552d886b41ea"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Membership created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupMembership"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "description": "User service is unavailable"
+          }
+        }
+      }
+    },
+    "/chat/groups/{groupId}/members/me": {
+      "parameters": [
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "description": "Group to access",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "leaveGroup",
+        "summary": "Leave a group",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Removes the authenticated user from the group. The last admin cannot leave until another member is promoted or the group is deleted.",
+        "responses": {
+          "204": {
+            "description": "Membership removed"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/chat/groups/{groupId}/members/{userId}": {
+      "parameters": [
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "description": "Group to access",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "description": "Member to remove",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "removeGroupMember",
+        "summary": "Remove a group member",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Only group admins can remove another member. Removing the last admin is rejected.",
+        "responses": {
+          "204": {
+            "description": "Membership removed"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/chat/groups/{groupId}/members/{userId}/role": {
+      "parameters": [
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "description": "Group to access",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "description": "Member whose role changes",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "updateGroupMemberRole",
+        "summary": "Change a member role",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Only group admins can set a member role to ADMIN or MEMBER. The last admin cannot be demoted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateGroupMemberRoleRequest"
+              },
+              "example": {
+                "role": "ADMIN"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated membership",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupMembership"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/chat/groups/{groupId}/channels": {
+      "parameters": [
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "description": "Group to access",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listGroupChannels",
+        "summary": "List group channels",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Requires group membership. Each channel includes the caller's lastReadMessageId and the count of non-deleted messages from other members after that marker.",
+        "responses": {
+          "200": {
+            "description": "Channels in creation order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChannelReadState"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createGroupChannel",
+        "summary": "Create a channel",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Only group admins can create text channels.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChannelRequest"
+              },
+              "example": {
+                "name": "announcements",
+                "topic": "Group updates"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Channel created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Channel"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/chat/groups/{groupId}/channels/{channelId}": {
+      "parameters": [
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "description": "Group to access",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "channelId",
+          "in": "path",
+          "required": true,
+          "description": "Channel within this group",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getGroupChannel",
+        "summary": "Get channel details",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Requires group membership; the channel must belong to the specified group.",
+        "responses": {
+          "200": {
+            "description": "Channel details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Channel"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateGroupChannel",
+        "summary": "Update a channel",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Only group admins can update channel name or topic. Omitted fields are unchanged; explicit null clears topic.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChannelRequest"
+              },
+              "example": {
+                "topic": "Project planning"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Channel"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteGroupChannel",
+        "summary": "Delete a channel",
+        "tags": [
+          "Groups"
+        ],
+        "description": "Only group admins can delete a channel. Related messages are removed by database cascades.",
+        "responses": {
+          "204": {
+            "description": "Channel deleted"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -510,6 +1230,36 @@
         "in": "query",
         "required": false,
         "description": "Message UUID used as a Prisma cursor; that message is skipped.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "GroupId": {
+        "name": "groupId",
+        "in": "path",
+        "required": true,
+        "description": "Group to access",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ChannelId": {
+        "name": "channelId",
+        "in": "path",
+        "required": true,
+        "description": "Channel within this group",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "UserId": {
+        "name": "userId",
+        "in": "path",
+        "required": true,
+        "description": "Group member",
         "schema": {
           "type": "string",
           "format": "uuid"
@@ -676,7 +1426,9 @@
             "type": "object",
             "required": [
               "lastReadMessageId",
-              "unreadCount"
+              "unreadCount",
+              "dmUserA",
+              "dmUserB"
             ],
             "properties": {
               "lastReadMessageId": {
@@ -691,6 +1443,28 @@
                 "type": "integer",
                 "minimum": 0,
                 "description": "Non-deleted messages from other users after the caller's read marker"
+              },
+              "dmUserA": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ChatProfile"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Public profile for participant A"
+              },
+              "dmUserB": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ChatProfile"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Public profile for participant B"
               }
             }
           }
@@ -709,7 +1483,8 @@
           "deletedAt",
           "clientRequestId",
           "requestHash",
-          "version"
+          "version",
+          "author"
         ],
         "properties": {
           "id": {
@@ -763,19 +1538,9 @@
           "version": {
             "type": "integer",
             "minimum": 1
-          }
-        }
-      },
-      "RequestHashOnly": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "requestHash"
-        ],
-        "properties": {
-          "requestHash": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
+          },
+          "author": {
+            "$ref": "#/components/schemas/ChatProfile"
           }
         }
       },
@@ -804,6 +1569,517 @@
           },
           "error": {
             "type": "string"
+          }
+        }
+      },
+      "CreateGroupRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          },
+          "rules": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 4000
+          }
+        }
+      },
+      "UpdateGroupRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          },
+          "rules": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 4000
+          }
+        }
+      },
+      "AddGroupMemberRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "userId"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "UpdateGroupMemberRoleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "MEMBER"
+            ]
+          }
+        }
+      },
+      "CreateChannelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "topic": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          }
+        }
+      },
+      "UpdateChannelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "topic": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          }
+        }
+      },
+      "Group": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "rules",
+          "createdAt",
+          "updatedAt",
+          "channels"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          },
+          "rules": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 4000
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelSummary"
+            }
+          }
+        }
+      },
+      "GroupCreated": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "rules",
+          "createdAt",
+          "updatedAt",
+          "channels"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rules": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelSummary"
+            }
+          }
+        }
+      },
+      "GroupSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "members",
+          "channels"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "members": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "role"
+              ],
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "ADMIN",
+                    "MEMBER"
+                  ]
+                }
+              }
+            }
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelSummary"
+            }
+          }
+        }
+      },
+      "ChannelSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "topic"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80
+          },
+          "topic": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          }
+        }
+      },
+      "Channel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "groupId",
+          "name",
+          "topic",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80
+          },
+          "topic": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ChannelReadState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "groupId",
+          "name",
+          "topic",
+          "createdAt",
+          "lastReadMessageId",
+          "unreadCount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80
+          },
+          "topic": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastReadMessageId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "GroupMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "joinedAt",
+          "user"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "MEMBER"
+            ]
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "username",
+              "displayName",
+              "avatarUrl"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "username": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "avatarUrl": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "GroupMembership": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "groupId",
+          "userId",
+          "role",
+          "joinedAt"
+        ],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "MEMBER"
+            ]
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ChatProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "username",
+          "displayName",
+          "avatarUrl"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "avatarUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri-reference"
           }
         }
       }
@@ -857,7 +2133,7 @@
         }
       },
       "Conflict": {
-        "description": "The client request ID was reused with another message payload",
+        "description": "Operation conflicts with a message idempotency or group membership rule",
         "content": {
           "application/json": {
             "schema": {
@@ -865,7 +2141,7 @@
             },
             "example": {
               "statusCode": 409,
-              "message": "Request ID was already used for another message",
+              "message": "A group must have at least one admin",
               "error": "Conflict"
             }
           }
@@ -884,6 +2160,21 @@
             }
           }
         }
+      },
+      "Forbidden": {
+        "description": "Caller is a group member but lacks admin permission",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/NestError"
+            },
+            "example": {
+              "statusCode": 403,
+              "message": "Only group admins can perform this action",
+              "error": "Forbidden"
+            }
+          }
+        }
       }
     }
   },
@@ -897,7 +2188,7 @@
         }
       }
     },
-    "serverBehavior": "After authentication the socket joins user:<sub>. A newly committed DM message is emitted once to both participant user rooms. An idempotent HTTP retry does not emit again.",
+    "serverBehavior": "After authentication the socket joins user:<sub>. A newly committed DM message is emitted to both DM participants, and a newly committed group-channel message is emitted to the current group members, using their private user rooms. An idempotent HTTP retry does not emit again.",
     "applicationEvents": [
       {
         "name": "message:created",

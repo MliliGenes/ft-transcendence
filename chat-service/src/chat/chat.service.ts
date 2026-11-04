@@ -30,7 +30,10 @@ export class ChatService {
         OR: [
           { dmUserAId: userId },
           { dmUserBId: userId },
-          { group: { is: { members: { some: { userId } } } } },
+          {
+            kind: 'CHANNEL',
+            group: { is: { members: { some: { userId } } } },
+          },
         ],
       },
       select: { id: true },
@@ -45,11 +48,20 @@ export class ChatService {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: _query.limit + 1,
       ...(_query.before ? { cursor: { id: _query.before }, skip: 1 } : {}),
+      include: {
+        author: {
+          select: { id: true, username: true, displayName: true, avatarUrl: true },
+        },
+      },
     });
     return messages;
   }
 
-  async createOrGetDm(userId: string, otherUserId: string) {
+  async createOrGetDm(
+    userId: string,
+    otherUserId: string,
+    authorization: string,
+  ) {
     if (userId === otherUserId) {
       throw new Error('Cannot create a DM with yourself.');
     }
@@ -59,6 +71,7 @@ export class ChatService {
       otherUserId.toLowerCase(),
     ].sort();
 
+    await this.userProfiles.ensureCanContact(otherUserId, authorization);
     await this.userProfiles.ensureActiveUsers([otherUserId]);
 
     const existingConversation = await this.prisma.conversation.findUnique({
@@ -91,6 +104,12 @@ export class ChatService {
         OR: [{ dmUserAId: userId }, { dmUserBId: userId }],
       },
       include: {
+        dmUserA: {
+          select: { id: true, username: true, displayName: true, avatarUrl: true },
+        },
+        dmUserB: {
+          select: { id: true, username: true, displayName: true, avatarUrl: true },
+        },
         readStates: {
           where: { userId },
           select: { lastReadMessageId: true },
@@ -146,20 +165,44 @@ export class ChatService {
     userId: string,
     msg: SendMessageDto,
     conversationId: string,
+    authorization?: string,
   ) {
-    const conversation = await this.prisma.conversation.findUnique({
+    const conversation = await this.prisma.conversation.findFirst({
       where: {
         id: conversationId,
-        AND: [{ OR: [{ dmUserAId: userId }, { dmUserBId: userId }] }],
+        OR: [
+          {
+            kind: 'DM',
+            OR: [{ dmUserAId: userId }, { dmUserBId: userId }],
+          },
+          {
+            kind: 'CHANNEL',
+            group: { is: { members: { some: { userId } } } },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        kind: true,
+        dmUserAId: true,
+        dmUserBId: true,
+        group: {
+          select: { members: { select: { userId: true } } },
+        },
       },
     });
 
-    if (
-      !conversation ||
-      !conversation.dmUserAId ||
-      !conversation.dmUserBId
-    ) {
-      throw new NotFoundException('Conversation not found');
+    if (!conversation) throw new NotFoundException('Conversation not found');
+
+    if (conversation.kind === 'DM') {
+      const otherUserId =
+        conversation.dmUserAId === userId
+          ? conversation.dmUserBId
+          : conversation.dmUserAId;
+      if (!otherUserId) throw new NotFoundException('Conversation not found');
+      if (!authorization)
+        throw new NotFoundException('Conversation not found');
+      await this.userProfiles.ensureCanContact(otherUserId, authorization);
     }
 
     const requestHash = createHash('sha256')
@@ -170,6 +213,11 @@ export class ChatService {
       where: {
         authorId: userId,
         clientRequestId: msg.clientRequestId,
+      },
+      include: {
+        author: {
+          select: { id: true, username: true, displayName: true, avatarUrl: true },
+        },
       },
     });
 
@@ -191,12 +239,21 @@ export class ChatService {
         clientRequestId: msg.clientRequestId,
         requestHash,
       },
+      include: {
+        author: {
+          select: { id: true, username: true, displayName: true, avatarUrl: true },
+        },
+      },
     });
 
-    this.chatGateway.broadcastMessageCreated(
-      [conversation.dmUserAId, conversation.dmUserBId],
-      newMessage,
-    );
+    const recipientIds =
+      conversation.kind === 'DM'
+        ? [conversation.dmUserAId, conversation.dmUserBId].filter(
+            (id): id is string => id !== null,
+          )
+        : (conversation.group?.members.map(({ userId: memberId }) => memberId) ?? []);
+
+    this.chatGateway.broadcastMessageCreated(recipientIds, newMessage);
 
     return newMessage;
   }
@@ -225,6 +282,11 @@ export class ChatService {
 
     return this.prisma.message.findUniqueOrThrow({
       where: { id: messageId },
+      include: {
+        author: {
+          select: { id: true, username: true, displayName: true, avatarUrl: true },
+        },
+      },
     });
   }
 
@@ -260,7 +322,14 @@ export class ChatService {
     const conversation = await this.prisma.conversation.findFirst({
       where: {
         id: conversationId,
-        OR: [{ dmUserAId: userId }, { dmUserBId: userId }],
+        OR: [
+          { dmUserAId: userId },
+          { dmUserBId: userId },
+          {
+            kind: 'CHANNEL',
+            group: { is: { members: { some: { userId } } } },
+          },
+        ],
       },
       select: { id: true },
     });

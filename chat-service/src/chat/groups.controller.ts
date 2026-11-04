@@ -3,19 +3,27 @@ import {
   Controller,
   Delete,
   Get,
-  NotImplementedException,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
-  Req,
+  Request,
   UseGuards,
 } from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { EnsureActiveUserGuard } from './ensure-active-user.guard.js';
 import { GroupsService } from './groups.service.js';
 import { CreateGroupDto } from './dtos/create-group.dto.js';
 import { UpdateGroupDto } from './dtos/update-group.dto.js';
+import { CreateChannelDto } from './dtos/create-channel.dto.js';
+import { UpdateChannelDto } from './dtos/update-channel.dto.js';
+import { AddGroupMemberDto } from './dtos/add-group-member.dto.js';
+import { UpdateGroupMemberRoleDto } from './dtos/update-group-member-role.dto.js';
+
+type AuthenticatedRequest = ExpressRequest & { user: { sub: string } };
 
 @UseGuards(AuthGuard, EnsureActiveUserGuard)
 @Controller('chat/groups')
@@ -24,26 +32,21 @@ export class GroupsController {
 
   @Post()
   createGroup(
-    @Body() createGroupDto: CreateGroupDto,
-    @Req() req: Request & { user: { sub: string } },
+    @Body() body: CreateGroupDto,
+    @Request() req: AuthenticatedRequest,
   ) {
-    return this.groupsService.createGroup(createGroupDto, req.user.sub);
+    return this.groupsService.createGroup(body, req.user.sub);
   }
 
   @Get()
-  getGroups(@Req() req: Request & { user: { sub: string } }) {
+  getGroups(@Request() req: AuthenticatedRequest) {
     return this.groupsService.getGroups(req.user.sub);
-  }
-
-  @Get('invitations')
-  getInvitations() {
-    throw new NotImplementedException();
   }
 
   @Get(':groupId')
   getGroup(
     @Param('groupId', ParseUUIDPipe) groupId: string,
-    @Req() req: Request & { user: { sub: string } },
+    @Request() req: AuthenticatedRequest,
   ) {
     return this.groupsService.getGroup(groupId, req.user.sub);
   }
@@ -51,74 +54,120 @@ export class GroupsController {
   @Patch(':groupId')
   updateGroup(
     @Param('groupId', ParseUUIDPipe) groupId: string,
-    @Req() req: Request & { user: { sub: string } },
-    @Body() updateGroupDto: UpdateGroupDto,
+    @Body() body: UpdateGroupDto,
+    @Request() req: AuthenticatedRequest,
   ) {
-    return this.groupsService.updateGroup(
-      groupId,
-      req.user.sub,
-      updateGroupDto,
-    );
+    return this.groupsService.updateGroup(groupId, req.user.sub, body);
   }
 
   @Delete(':groupId')
-  deleteGroup() {
-    throw new NotImplementedException();
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteGroup(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupsService.deleteGroup(groupId, req.user.sub);
   }
 
   @Get(':groupId/members')
-  getMembers() {
-    throw new NotImplementedException();
+  getMembers(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupsService.getMembers(groupId, req.user.sub);
+  }
+
+  @Post(':groupId/members')
+  addMember(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Body() body: AddGroupMemberDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupsService.addMember(groupId, req.user.sub, body.userId);
+  }
+
+  @Patch(':groupId/members/:userId/role')
+  updateMemberRole(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() body: UpdateGroupMemberRoleDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupsService.updateMemberRole(
+      groupId,
+      req.user.sub,
+      userId,
+      body.role,
+    );
   }
 
   @Delete(':groupId/members/me')
-  leaveGroup() {
-    throw new NotImplementedException();
+  @HttpCode(HttpStatus.NO_CONTENT)
+  leaveGroup(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupsService.removeMember(groupId, req.user.sub, req.user.sub);
   }
 
   @Delete(':groupId/members/:userId')
-  removeMember() {
-    throw new NotImplementedException();
-  }
-
-  @Post(':groupId/invitations')
-  inviteMember() {
-    throw new NotImplementedException();
-  }
-
-  @Post(':groupId/invitations/:invitationId/accept')
-  acceptInvitation() {
-    throw new NotImplementedException();
-  }
-
-  // The invitee declines, or an authorized owner/admin revokes the invitation.
-  @Delete(':groupId/invitations/:invitationId')
-  deleteInvitation() {
-    throw new NotImplementedException();
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeMember(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupsService.removeMember(groupId, req.user.sub, userId);
   }
 
   @Post(':groupId/channels')
-  createChannel() {
-    throw new NotImplementedException();
+  createChannel(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Body() body: CreateChannelDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupsService.createChannel(groupId, req.user.sub, body);
   }
 
   @Get(':groupId/channels')
-  getChannels() {
-    throw new NotImplementedException();
+  getChannels(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupsService.getChannels(groupId, req.user.sub);
   }
 
   @Get(':groupId/channels/:channelId')
-  getChannel() {
-    throw new NotImplementedException();
+  getChannel(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('channelId', ParseUUIDPipe) channelId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupsService.getChannel(groupId, channelId, req.user.sub);
   }
 
   @Patch(':groupId/channels/:channelId')
-  updateChannel() {
-    throw new NotImplementedException();
+  updateChannel(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('channelId', ParseUUIDPipe) channelId: string,
+    @Body() body: UpdateChannelDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupsService.updateChannel(
+      groupId,
+      channelId,
+      req.user.sub,
+      body,
+    );
   }
 
   @Delete(':groupId/channels/:channelId')
-  deleteChannel() {
-    throw new NotImplementedException();
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteChannel(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('channelId', ParseUUIDPipe) channelId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupsService.deleteChannel(groupId, channelId, req.user.sub);
   }
 }
