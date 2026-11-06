@@ -17,6 +17,9 @@ model User {
   displayName String?  // fallback for OAuth users who skip profile setup
   avatarUrl   String?
   bannerUrl   String?
+  bio         String?  @db.VarChar(190)
+  statusText  String?  @db.VarChar(100)
+  statusIcon  String?  @db.VarChar(50)
   role        UserRole   @default(USER)
 
   passwordHash String?  // nullable — OAuth-only users won't have one

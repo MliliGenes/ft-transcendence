@@ -7,6 +7,9 @@ export type AccountProfile = {
   displayName: string | null;
   avatarUrl: string | null;
   bannerUrl: string | null;
+  bio: string | null;
+  statusText: string | null;
+  statusIcon: string | null;
   emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -16,7 +19,7 @@ export type AccountProfile = {
   hasGithub: boolean;
 };
 
-export type UpdateAccount = Partial<Pick<AccountProfile, "username" | "email" | "firstName" | "lastName" | "displayName">>;
+export type UpdateAccount = Partial<Pick<AccountProfile, "username" | "email" | "firstName" | "lastName" | "displayName" | "bio" | "statusText" | "statusIcon">>;
 export type ImageKind = "avatar" | "banner";
 
 export function profileName(profile: Pick<AccountProfile, "username" | "displayName" | "firstName" | "lastName">) {

@@ -25,6 +25,9 @@ const adminUserSelect = {
   displayName: true,
   avatarUrl: true,
   bannerUrl: true,
+  bio: true,
+  statusText: true,
+  statusIcon: true,
   emailVerifiedAt: true,
   createdAt: true,
   updatedAt: true,
@@ -149,6 +152,9 @@ export class SuperadminService {
           firstName: dto.firstName,
           lastName: dto.lastName,
           displayName: dto.displayName,
+          bio: dto.bio,
+          statusText: dto.statusText,
+          statusIcon: dto.statusIcon,
           ...(dto.email !== undefined && dto.email !== current.email
             ? { emailVerifiedAt: null }
             : {}),

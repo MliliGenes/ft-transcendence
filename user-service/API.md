@@ -274,6 +274,9 @@
         "displayName": "Player One",
         "avatarUrl": null,
         "bannerUrl": null,
+        "bio": null,
+        "statusText": null,
+        "statusIcon": null,
         "createdAt": "2026-09-29T12:00:00.000Z"
       }
     ],
@@ -308,6 +311,9 @@
     "displayName": "Ada",
     "avatarUrl": "/accounts/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/avatar",
     "bannerUrl": null,
+    "bio": null,
+    "statusText": null,
+    "statusIcon": null,
     "emailVerifiedAt": null,
     "createdAt": "2026-09-29T12:00:00.000Z",
     "updatedAt": "2026-09-29T12:00:00.000Z"
@@ -323,7 +329,7 @@
 
   `PATCH /accounts/me`
 
-  Requires an access token. Send only the fields to change; omitted fields remain unchanged. `firstName`, `lastName`, and `displayName` can be cleared with `null`.
+  Requires an access token. Send only the fields to change; omitted fields remain unchanged. Nullable profile fields can be cleared with `null`.
 
   Request:
 
@@ -333,7 +339,10 @@
     "email": "new@example.com",
     "firstName": "Ada",
     "lastName": null,
-    "displayName": "Ada"
+    "displayName": "Ada",
+    "bio": "Building small things on the web.",
+    "statusText": "Taking a coffee break",
+    "statusIcon": "IconCoffee"
   }
   ```
 
@@ -342,8 +351,11 @@
   - `username`: optional, 3-30 characters
   - `email`: optional, valid email address
   - `firstName`, `lastName`, `displayName`: optional string or `null`, 1-50 characters when present
+  - `bio`: optional string or `null`, at most 190 characters
+  - `statusText`: optional string or `null`, at most 100 characters; it persists until edited or cleared
+  - `statusIcon`: optional approved Tabler export name or `null`: `IconCode`, `IconCoffee`, `IconMoon`, `IconMusic`, or `IconDeviceGamepad2`
   - At least one field must be provided.
-  - Role, image URLs, password, status, verification fields, and IDs cannot be changed here. Unknown fields are rejected even when included alongside valid fields. The target account comes from the verified JWT, not the body.
+  - Role, image URLs, password, verification fields, and IDs cannot be changed here. Unknown fields are rejected even when included alongside valid fields. The target account comes from the verified JWT, not the body.
 
   Supplying a different email clears `emailVerifiedAt`. Sending the same email, or omitting it, preserves verification. Both self-service and admin updates follow this rule. Email verification itself is not implemented or enforced yet; login immediately uses the updated address.
 
@@ -460,7 +472,7 @@
 
   `:id` must be a UUID.
 
-  Public endpoint. Response (`200 OK`): the same public profile fields as each entry in `GET /accounts`: `id`, `username`, `displayName`, `avatarUrl`, `bannerUrl`, and `createdAt`. Email, first/last names, verification fields, timestamps other than `createdAt`, and authentication data are excluded.
+  Public endpoint. Response (`200 OK`): the same public profile fields as each entry in `GET /accounts`: `id`, `username`, `displayName`, `avatarUrl`, `bannerUrl`, `bio`, `statusText`, `statusIcon`, and `createdAt`. Email, first/last names, verification fields, timestamps other than `createdAt`, and authentication data are excluded.
 
   Other responses:
 
@@ -632,8 +644,8 @@
   Returns `{ users, total, page, limit, totalPages }`. The total uses the same
   filters as the list. List entries and detail responses include id, username,
   email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,
-  emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,
-  and two-factor secrets are never included.
+  bio, statusText, statusIcon, emailVerifiedAt, createdAt, and updatedAt. Password
+  hashes, tokens, image bytes, and two-factor secrets are never included.
 
   ### Create, edit, and delete
 
@@ -651,8 +663,11 @@
   Role is optional and defaults to USER. Password validation matches registration.
   Creation hashes the password but does not issue tokens or create a login session.
 
-  Profile PATCH accepts username, email, firstName, lastName, and displayName.
-  Omitted fields stay unchanged; optional names can be cleared with null. Email
+  Profile PATCH accepts username, email, firstName, lastName, displayName, bio,
+  statusText, and statusIcon. Omitted fields stay unchanged; nullable profile
+  fields can be cleared with null. Bio is limited to 190 characters, statusText
+  to 100 characters, and statusIcon to the approved Tabler names listed above.
+  Status text persists until edited or cleared and has no expiry. Email
   changes clear verification, while resubmitting the same email preserves it.
   Password, role, URLs, and verification timestamps are rejected here.
 
@@ -711,6 +726,9 @@
     "displayName": "Ada",
     "avatarUrl": null,
     "bannerUrl": null,
+    "bio": null,
+    "statusText": null,
+    "statusIcon": null,
     "emailVerifiedAt": null,
     "createdAt": "2026-09-29T12:00:00.000Z",
     "updatedAt": "2026-09-29T12:00:00.000Z"
