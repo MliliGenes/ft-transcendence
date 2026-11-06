@@ -1,0 +1,35 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.6.2
+2 info using node@v24.13.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:D:\ft-transcendence\client\.npmrc
+5 silly config load:file:C:\Users\sel-box\.npmrc
+6 silly config load:file:C:\Users\sel-box\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm uninstall lucide-react
+8 verbose argv "uninstall" "lucide-react" "--ignore-scripts" "--no-audit" "--no-fund" "--cache" ".npm-cache"
+9 verbose logfile logs-max:10 dir:D:\ft-transcendence\client\.npm-cache\_logs\2026-11-06T09_47_04_419Z-
+10 verbose logfile D:\ft-transcendence\client\.npm-cache\_logs\2026-11-06T09_47_04_419Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 silly idealTree buildDeps
+14 silly fetch manifest @emnapi/runtime@^1.11.3
+15 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fruntime cache-miss
+16 http cache https://registry.npmjs.org/@emnapi%2fruntime 176ms (cache hit)
+17 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fruntime set size:136102 disposed:false
+18 silly placeDep ROOT @emnapi/runtime@1.11.3 OK for: @img/sharp-wasm32@0.35.5 want: ^1.11.3
+19 silly fetch manifest @emnapi/core@^1.7.1 || ^2.0.0-alpha.4
+20 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fcore cache-miss
+21 http cache https://registry.npmjs.org/@emnapi%2fcore 30ms (cache hit)
+22 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fcore set size:136106 disposed:false
+23 silly placeDep ROOT @emnapi/core@1.11.3 OK for: @napi-rs/wasm-runtime@1.2.5 want: ^1.7.1 || ^2.0.0-alpha.4
+24 silly reify mark retired [ 'D:\\ft-transcendence\\client\\node_modules\\lucide-react' ]
+25 silly reify moves {
+25 silly reify   'D:\\ft-transcendence\\client\\node_modules\\lucide-react': 'D:\\ft-transcendence\\client\\node_modules\\.lucide-react-M28xi1ak'
+25 silly reify }
+26 silly REMOVE node_modules/lucide-react
+27 verbose cwd D:\ft-transcendence\client
+28 verbose os Windows_NT 10.0.26300
+29 verbose node v24.13.0
+30 verbose npm  v11.6.2
+31 verbose exit 0
+32 info ok

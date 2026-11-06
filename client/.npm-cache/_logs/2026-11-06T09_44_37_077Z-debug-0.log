@@ -1,0 +1,133 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.6.2
+2 info using node@v24.13.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:D:\ft-transcendence\client\.npmrc
+5 silly config load:file:C:\Users\sel-box\.npmrc
+6 silly config load:file:C:\Users\sel-box\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install @tabler/icons-react
+8 verbose argv "install" "@tabler/icons-react" "--ignore-scripts" "--no-audit" "--no-fund" "--cache" ".npm-cache"
+9 verbose logfile logs-max:10 dir:D:\ft-transcendence\client\.npm-cache\_logs\2026-11-06T09_44_37_077Z-
+10 verbose logfile D:\ft-transcendence\client\.npm-cache\_logs\2026-11-06T09_44_37_077Z-debug-0.log
+11 silly logfile done cleaning log files
+12 http fetch GET https://registry.npmjs.org/npm attempt 1 failed with ECONNREFUSED
+13 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+14 silly idealTree buildDeps
+15 silly fetch manifest @tabler/icons-react@*
+16 silly packumentCache full:https://registry.npmjs.org/@tabler%2ficons-react cache-miss
+17 silly placeDep ROOT @tabler/icons-react@ OK for: client@0.1.0 want: *
+18 silly fetch manifest @emnapi/runtime@^1.11.3
+19 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fruntime cache-miss
+20 silly placeDep node_modules/@img/sharp-wasm32 @emnapi/runtime@ OK for: @img/sharp-wasm32@0.35.5 want: ^1.11.3
+21 silly fetch manifest @emnapi/core@^1.7.1 || ^2.0.0-alpha.4
+22 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fcore cache-miss
+23 silly fetch manifest @emnapi/runtime@^1.7.1 || ^2.0.0-alpha.4
+24 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fruntime cache-miss
+25 silly placeDep ROOT @emnapi/core@ OK for: @napi-rs/wasm-runtime@1.2.5 want: ^1.7.1 || ^2.0.0-alpha.4
+26 warn ERESOLVE overriding peer dependency {
+26 warn ERESOLVE   code: 'ERESOLVE',
+26 warn ERESOLVE   edge: {
+26 warn ERESOLVE     type: 'peer',
+26 warn ERESOLVE     name: '@emnapi/core',
+26 warn ERESOLVE     spec: '^1.7.1 || ^2.0.0-alpha.4',
+26 warn ERESOLVE     error: 'INVALID',
+26 warn ERESOLVE     from: {
+26 warn ERESOLVE       name: '@napi-rs/wasm-runtime',
+26 warn ERESOLVE       version: '1.2.5',
+26 warn ERESOLVE       location: 'node_modules/@napi-rs/wasm-runtime',
+26 warn ERESOLVE       isWorkspace: false,
+26 warn ERESOLVE       dependents: [Array]
+26 warn ERESOLVE     }
+26 warn ERESOLVE   },
+26 warn ERESOLVE   dep: {
+26 warn ERESOLVE     name: '@emnapi/core',
+26 warn ERESOLVE     version: undefined,
+26 warn ERESOLVE     errors: [ [NotCachedError] ],
+26 warn ERESOLVE     package: {},
+26 warn ERESOLVE     whileInstalling: {
+26 warn ERESOLVE       name: '@napi-rs/wasm-runtime',
+26 warn ERESOLVE       version: '1.2.5',
+26 warn ERESOLVE       path: 'D:\\ft-transcendence\\client\\node_modules\\@napi-rs\\wasm-runtime'
+26 warn ERESOLVE     },
+26 warn ERESOLVE     location: 'node_modules/@emnapi/core',
+26 warn ERESOLVE     isWorkspace: false,
+26 warn ERESOLVE     dependents: [ [Object] ]
+26 warn ERESOLVE   },
+26 warn ERESOLVE   force: false,
+26 warn ERESOLVE   isMine: false,
+26 warn ERESOLVE   strictPeerDeps: false,
+26 warn ERESOLVE   current: {
+26 warn ERESOLVE     name: '@emnapi/core',
+26 warn ERESOLVE     version: undefined,
+26 warn ERESOLVE     errors: [ [NotCachedError] ],
+26 warn ERESOLVE     package: {},
+26 warn ERESOLVE     location: 'node_modules/@emnapi/core',
+26 warn ERESOLVE     isWorkspace: false,
+26 warn ERESOLVE     dependents: []
+26 warn ERESOLVE   }
+26 warn ERESOLVE }
+27 silly placeDep ROOT @emnapi/runtime@ OK for: @napi-rs/wasm-runtime@1.2.5 want: ^1.7.1 || ^2.0.0-alpha.4
+28 warn ERESOLVE overriding peer dependency {
+28 warn ERESOLVE   code: 'ERESOLVE',
+28 warn ERESOLVE   edge: {
+28 warn ERESOLVE     type: 'peer',
+28 warn ERESOLVE     name: '@emnapi/runtime',
+28 warn ERESOLVE     spec: '^1.7.1 || ^2.0.0-alpha.4',
+28 warn ERESOLVE     error: 'INVALID',
+28 warn ERESOLVE     from: {
+28 warn ERESOLVE       name: '@napi-rs/wasm-runtime',
+28 warn ERESOLVE       version: '1.2.5',
+28 warn ERESOLVE       location: 'node_modules/@napi-rs/wasm-runtime',
+28 warn ERESOLVE       isWorkspace: false,
+28 warn ERESOLVE       dependents: [Array]
+28 warn ERESOLVE     }
+28 warn ERESOLVE   },
+28 warn ERESOLVE   dep: {
+28 warn ERESOLVE     name: '@emnapi/runtime',
+28 warn ERESOLVE     version: undefined,
+28 warn ERESOLVE     errors: [ [NotCachedError] ],
+28 warn ERESOLVE     package: {},
+28 warn ERESOLVE     whileInstalling: {
+28 warn ERESOLVE       name: '@napi-rs/wasm-runtime',
+28 warn ERESOLVE       version: '1.2.5',
+28 warn ERESOLVE       path: 'D:\\ft-transcendence\\client\\node_modules\\@napi-rs\\wasm-runtime'
+28 warn ERESOLVE     },
+28 warn ERESOLVE     location: 'node_modules/@emnapi/runtime',
+28 warn ERESOLVE     isWorkspace: false,
+28 warn ERESOLVE     dependents: [ [Object] ]
+28 warn ERESOLVE   },
+28 warn ERESOLVE   force: false,
+28 warn ERESOLVE   isMine: false,
+28 warn ERESOLVE   strictPeerDeps: false,
+28 warn ERESOLVE   current: {
+28 warn ERESOLVE     name: '@emnapi/runtime',
+28 warn ERESOLVE     version: undefined,
+28 warn ERESOLVE     errors: [ [NotCachedError] ],
+28 warn ERESOLVE     package: {},
+28 warn ERESOLVE     location: 'node_modules/@emnapi/runtime',
+28 warn ERESOLVE     isWorkspace: false,
+28 warn ERESOLVE     dependents: []
+28 warn ERESOLVE   }
+28 warn ERESOLVE }
+29 verbose stack Error: request to https://registry.npmjs.org/@tabler%2ficons-react failed: cache mode is 'only-if-cached' but no cached response is available.
+29 verbose stack     at cacheFetch (C:\Program Files\nodejs\node_modules\npm\node_modules\make-fetch-happen\lib\cache\index.js:12:13)
+29 verbose stack     at async fetch (C:\Program Files\nodejs\node_modules\npm\node_modules\make-fetch-happen\lib\fetch.js:98:7)
+29 verbose stack     at async RegistryFetcher.packument (C:\Program Files\nodejs\node_modules\npm\node_modules\pacote\lib\registry.js:90:19)
+29 verbose stack     at async RegistryFetcher.manifest (C:\Program Files\nodejs\node_modules\npm\node_modules\pacote\lib\registry.js:128:23)
+29 verbose stack     at async #fetchManifest (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\build-ideal-tree.js:1227:20)
+29 verbose stack     at async #nodeFromEdge (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\build-ideal-tree.js:1065:19)
+29 verbose stack     at async #buildDepStep (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\build-ideal-tree.js:929:11)
+29 verbose stack     at async Arborist.buildIdealTree (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\build-ideal-tree.js:182:7)
+29 verbose stack     at async Promise.all (index 1)
+29 verbose stack     at async Arborist.reify (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\arborist\reify.js:114:5)
+30 error code ENOTCACHED
+31 error request to https://registry.npmjs.org/@tabler%2ficons-react failed: cache mode is 'only-if-cached' but no cached response is available.
+32 silly unfinished npm timer reify 1793958278869
+33 silly unfinished npm timer reify:loadTrees 1793958278869
+34 verbose cwd D:\ft-transcendence\client
+35 verbose os Windows_NT 10.0.26300
+36 verbose node v24.13.0
+37 verbose npm  v11.6.2
+38 verbose exit 1
+39 verbose code 1
+40 error A complete log of this run can be found in: D:\ft-transcendence\client\.npm-cache\_logs\2026-11-06T09_44_37_077Z-debug-0.log

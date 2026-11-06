@@ -1193,6 +1193,49 @@
             }
           }
         }
+      },
+      "delete": {
+        "operationId": "deleteAccountsMeAvatar",
+        "summary": "Remove avatar",
+        "tags": [
+          "Accounts"
+        ],
+        "description": "Removes only the authenticated user's avatar. No request body is needed. Deletes the stored image and sets avatarUrl to null in one transaction, leaving the other image unchanged. Repeated removal succeeds even when the image is already absent. The public image endpoint returns 404 until another image is uploaded. Publishes a user-profile update to other services.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Image removed or already absent. Empty response body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "example": "no-store"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ImageRemovalUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/ImageRemovalAccountNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ImageRemovalInternalError"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl -X DELETE http://localhost:3000/accounts/me/avatar -H \"Authorization: Bearer <accessToken>\""
+          }
+        ]
       }
     },
     "/accounts/me/banner": {
@@ -1245,6 +1288,49 @@
             }
           }
         }
+      },
+      "delete": {
+        "operationId": "deleteAccountsMeBanner",
+        "summary": "Remove banner",
+        "tags": [
+          "Accounts"
+        ],
+        "description": "Removes only the authenticated user's banner. No request body is needed. Deletes the stored image and sets bannerUrl to null in one transaction, leaving the other image unchanged. Repeated removal succeeds even when the image is already absent. The public image endpoint returns 404 until another image is uploaded.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Image removed or already absent. Empty response body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "example": "no-store"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ImageRemovalUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/ImageRemovalAccountNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ImageRemovalInternalError"
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "curl",
+            "source": "curl -X DELETE http://localhost:3000/accounts/me/banner -H \"Authorization: Bearer <accessToken>\""
+          }
+        ]
       }
     },
     "/accounts/{id}/avatar": {
@@ -3735,6 +3821,72 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT"
+      }
+    },
+    "responses": {
+      "ImageRemovalUnauthorized": {
+        "description": "Missing, invalid, or expired Bearer access token.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ImageRemovalError"
+            },
+            "example": {
+              "message": "A Bearer access token is required",
+              "statusCode": 401,
+              "error": "Unauthorized"
+            }
+          }
+        }
+      },
+      "ImageRemovalAccountNotFound": {
+        "description": "The authenticated account does not exist.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ImageRemovalError"
+            },
+            "example": {
+              "message": "Account not found",
+              "statusCode": 404,
+              "error": "Not Found"
+            }
+          }
+        }
+      },
+      "ImageRemovalInternalError": {
+        "description": "Unexpected storage failure. A failed database transaction rolls back image and URL changes.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ImageRemovalError"
+            },
+            "example": {
+              "message": "Internal server error",
+              "statusCode": 500
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ImageRemovalError": {
+        "type": "object",
+        "required": [
+          "statusCode",
+          "message"
+        ],
+        "properties": {
+          "statusCode": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
       }
     }
   }

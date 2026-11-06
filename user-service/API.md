@@ -403,6 +403,31 @@
 
   Other responses are the same as avatar upload, with `413 Payload Too Large` applying to the 5 MiB banner limit.
 
+  ### Remove Avatar or Banner
+
+  `DELETE /accounts/me/avatar`
+
+  `DELETE /accounts/me/banner`
+
+  Requires `Authorization: Bearer <accessToken>`. No request body is needed. Each endpoint acts only on the authenticated user's account.
+
+  ```bash
+  curl -X DELETE http://localhost:3000/accounts/me/avatar \
+    -H "Authorization: Bearer <accessToken>"
+
+  curl -X DELETE http://localhost:3000/accounts/me/banner \
+    -H "Authorization: Bearer <accessToken>"
+  ```
+
+  Deletes the selected stored image and sets its profile URL (`avatarUrl` or `bannerUrl`) to `null` in one transaction. The other image is unchanged. Removing an image that is already absent also succeeds. Avatar removal publishes a user-profile update to other services. The corresponding public image endpoint returns `404` after removal, until another image is uploaded.
+
+  Responses:
+
+  - `204 No Content`: image removed or already absent; empty body and `Cache-Control: no-store`
+  - `401 Unauthorized`: missing, invalid, or expired access token
+  - `404 Not Found`: account does not exist
+  - `500 Internal Server Error`: unexpected storage failure; a failed database transaction rolls back both image and URL changes
+
   ### Public Avatar Image
 
   `GET /accounts/:id/avatar`

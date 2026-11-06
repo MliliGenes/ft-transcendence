@@ -56,8 +56,6 @@ services:
     build: ./minio
     command: ["server", "/data", "--console-address", ":9001"]
     env_file: ./envs/minio.env
-    environment:
-      MINIO_API_CORS_ALLOW_ORIGIN: https://localhost,http://localhost:5173
     ports:
       - "127.0.0.1:9000:9000"
       - "127.0.0.1:9001:9001"
@@ -78,11 +76,6 @@ services:
       - ./envs/user-auth.env
       - ./envs/user-db.env
       - ./envs/rabbitmq.env
-    environment:
-      POSTGRES_HOST: user-db
-      POSTGRES_PORT: 5432
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
     depends_on:
       user-db:
         condition: service_healthy
@@ -96,11 +89,6 @@ services:
       - ./envs/chat-service.env
       - ./envs/chat-db.env
       - ./envs/rabbitmq.env
-    environment:
-      POSTGRES_HOST: chat-db
-      POSTGRES_PORT: 5432
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
     depends_on:
       chat-db:
         condition: service_healthy
@@ -132,10 +120,7 @@ services:
       - auth-profile-web-node-modules:/app/node_modules
     ports:
       - "127.0.0.1:5173:5173"
-    environment:
-      API_PROXY_TARGET: http://user-service:3000
-      CHAT_PROXY_TARGET: http://chat-service:3000
-      VITE_API_URL: /api
+    env_file: ./envs/auth-profile-web.env
     depends_on:
       - user-service
       - chat-service

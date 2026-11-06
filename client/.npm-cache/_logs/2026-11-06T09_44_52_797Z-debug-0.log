@@ -1,0 +1,53 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.6.2
+2 info using node@v24.13.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:D:\ft-transcendence\client\.npmrc
+5 silly config load:file:C:\Users\sel-box\.npmrc
+6 silly config load:file:C:\Users\sel-box\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install @tabler/icons-react
+8 verbose argv "install" "@tabler/icons-react" "--ignore-scripts" "--no-audit" "--no-fund" "--cache" ".npm-cache"
+9 verbose logfile logs-max:10 dir:D:\ft-transcendence\client\.npm-cache\_logs\2026-11-06T09_44_52_797Z-
+10 verbose logfile D:\ft-transcendence\client\.npm-cache\_logs\2026-11-06T09_44_52_797Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 silly idealTree buildDeps
+14 silly fetch manifest @tabler/icons-react@*
+15 silly packumentCache full:https://registry.npmjs.org/@tabler%2ficons-react cache-miss
+16 http fetch GET 200 https://registry.npmjs.org/@tabler%2ficons-react 659ms (cache miss)
+17 silly packumentCache full:https://registry.npmjs.org/@tabler%2ficons-react set size:undefined disposed:false
+18 silly fetch manifest react@19.3.0
+19 silly packumentCache full:https://registry.npmjs.org/react cache-miss
+20 http fetch GET 200 https://registry.npmjs.org/react 271ms (cache miss)
+21 silly packumentCache full:https://registry.npmjs.org/react set size:undefined disposed:false
+22 silly placeDep ROOT @tabler/icons-react@3.50.0 OK for: client@0.1.0 want: *
+23 silly fetch manifest @tabler/icons@3.50.0
+24 silly packumentCache full:https://registry.npmjs.org/@tabler%2ficons cache-miss
+25 http fetch GET 200 https://registry.npmjs.org/@tabler%2ficons 142ms (cache miss)
+26 silly packumentCache full:https://registry.npmjs.org/@tabler%2ficons set size:undefined disposed:false
+27 silly fetch manifest @emnapi/runtime@^1.11.3
+28 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fruntime cache-miss
+29 http fetch GET 200 https://registry.npmjs.org/@emnapi%2fruntime 42ms (cache miss)
+30 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fruntime set size:undefined disposed:false
+31 silly placeDep ROOT @emnapi/runtime@1.11.3 OK for: @img/sharp-wasm32@0.35.5 want: ^1.11.3
+32 silly fetch manifest @emnapi/core@^1.7.1 || ^2.0.0-alpha.4
+33 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fcore cache-miss
+34 http fetch GET 200 https://registry.npmjs.org/@emnapi%2fcore 58ms (cache miss)
+35 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fcore set size:undefined disposed:false
+36 silly placeDep ROOT @emnapi/core@1.11.3 OK for: @napi-rs/wasm-runtime@1.2.5 want: ^1.7.1 || ^2.0.0-alpha.4
+37 silly placeDep ROOT @tabler/icons@3.50.0 OK for: @tabler/icons-react@3.50.0 want: 3.50.0
+38 silly reify moves {}
+39 http cache @tabler/icons@https://registry.npmjs.org/@tabler/icons/-/icons-3.50.0.tgz 0ms (cache hit)
+40 http cache @tabler/icons-react@https://registry.npmjs.org/@tabler/icons-react/-/icons-react-3.50.0.tgz 0ms (cache hit)
+41 silly tarball no local data for @tabler/icons@https://registry.npmjs.org/@tabler/icons/-/icons-3.50.0.tgz. Extracting by manifest.
+42 silly tarball no local data for @tabler/icons-react@https://registry.npmjs.org/@tabler/icons-react/-/icons-react-3.50.0.tgz. Extracting by manifest.
+43 http fetch GET 200 https://registry.npmjs.org/@tabler/icons-react/-/icons-react-3.50.0.tgz 9616ms (cache miss)
+44 http fetch GET 200 https://registry.npmjs.org/@tabler/icons/-/icons-3.50.0.tgz 14506ms (cache miss)
+45 silly ADD node_modules/@tabler/icons
+46 silly ADD node_modules/@tabler/icons-react
+47 verbose cwd D:\ft-transcendence\client
+48 verbose os Windows_NT 10.0.26300
+49 verbose node v24.13.0
+50 verbose npm  v11.6.2
+51 verbose exit 0
+52 info ok

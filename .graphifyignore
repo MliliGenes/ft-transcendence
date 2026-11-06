@@ -1,0 +1,7 @@
+**/src/generated/**
+**/node_modules/**
+**/dist/**
+**/coverage/**
+**/.agents/**
+**/.codex/**
+graphify-out/**
