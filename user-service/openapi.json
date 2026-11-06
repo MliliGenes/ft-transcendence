@@ -764,7 +764,7 @@
         "tags": [
           "Accounts"
         ],
-        "description": "### List Users\n\n  `GET /accounts?page=1&limit=10`\n\n  Public endpoint; no access token required.\n\n  Pagination parameters:\n\n  - `page`: integer from 1 to 1,000,000; defaults to `1`\n  - `limit`: integer from 1 to 100; defaults to `10`\n\n  Response (`200 OK`):\n\n  ```json\n  {\n    \"users\": [\n      {\n        \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n        \"username\": \"player1\",\n        \"displayName\": \"Player One\",\n        \"avatarUrl\": null,\n        \"bannerUrl\": null,\n        \"createdAt\": \"2026-09-29T12:00:00.000Z\"\n      }\n    ],\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 10,\n    \"totalPages\": 1\n  }\n  ```\n\n  Invalid query parameters return `400 Bad Request`.",
+        "description": "### List Users\n\n  `GET /accounts?page=1&limit=10`\n\n  Public endpoint; no access token required.\n\n  Pagination parameters:\n\n  - `page`: integer from 1 to 1,000,000; defaults to `1`\n  - `limit`: integer from 1 to 100; defaults to `10`\n\n  Response (`200 OK`):\n\n  ```json\n  {\n    \"users\": [\n      {\n        \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n        \"username\": \"player1\",\n        \"displayName\": \"Player One\",\n        \"avatarUrl\": null,\n        \"bannerUrl\": null,\n        \"bio\": null,\n        \"statusText\": null,\n        \"statusIcon\": null,\n        \"createdAt\": \"2026-09-29T12:00:00.000Z\"\n      }\n    ],\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 10,\n    \"totalPages\": 1\n  }\n  ```\n\n  Invalid query parameters return `400 Bad Request`.",
         "security": [],
         "responses": {
           "200": {
@@ -802,6 +802,35 @@
                           },
                           "createdAt": {
                             "type": "string"
+                          },
+                          "bio": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 190
+                          },
+                          "statusText": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 100
+                          },
+                          "statusIcon": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 50,
+                            "enum": [
+                              "IconCode",
+                              "IconCoffee",
+                              "IconMoon",
+                              "IconMusic",
+                              "IconDeviceGamepad2",
+                              null
+                            ]
                           }
                         }
                       }
@@ -874,7 +903,7 @@
         "tags": [
           "Accounts"
         ],
-        "description": "### Current Account\n\n  `GET /accounts/me`\n\n  Requires an access token:\n\n  ```http\n  Authorization: Bearer <accessToken>\n  ```\n\n  Response (`200 OK`):\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"email\": \"user@example.com\",\n    \"username\": \"player1\",\n    \"firstName\": \"Ada\",\n    \"lastName\": \"Lovelace\",\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": \"/accounts/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/avatar\",\n    \"bannerUrl\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Other responses:\n\n  - `401 Unauthorized`: missing, invalid, or expired access token\n  - `404 Not Found`: authenticated user no longer exists",
+        "description": "### Current Account\n\n  `GET /accounts/me`\n\n  Requires an access token:\n\n  ```http\n  Authorization: Bearer <accessToken>\n  ```\n\n  Response (`200 OK`):\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"email\": \"user@example.com\",\n    \"username\": \"player1\",\n    \"firstName\": \"Ada\",\n    \"lastName\": \"Lovelace\",\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": \"/accounts/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/avatar\",\n    \"bannerUrl\": null,\n    \"bio\": null,\n    \"statusText\": null,\n    \"statusIcon\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Other responses:\n\n  - `401 Unauthorized`: missing, invalid, or expired access token\n  - `404 Not Found`: authenticated user no longer exists",
         "security": [
           {
             "bearerAuth": []
@@ -938,6 +967,35 @@
                     },
                     "hasGithub": {
                       "type": "boolean"
+                    },
+                    "bio": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 190
+                    },
+                    "statusText": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 100
+                    },
+                    "statusIcon": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 50,
+                      "enum": [
+                        "IconCode",
+                        "IconCoffee",
+                        "IconMoon",
+                        "IconMusic",
+                        "IconDeviceGamepad2",
+                        null
+                      ]
                     }
                   }
                 },
@@ -956,7 +1014,10 @@
                   "role": "USER",
                   "hasPassword": true,
                   "hasDiscord": false,
-                  "hasGithub": false
+                  "hasGithub": false,
+                  "bio": null,
+                  "statusText": null,
+                  "statusIcon": null
                 }
               }
             }
@@ -975,7 +1036,7 @@
         "tags": [
           "Accounts"
         ],
-        "description": "### Update Current Account\n\n  `PATCH /accounts/me`\n\n  Requires an access token. Send only the fields to change; omitted fields remain unchanged. `firstName`, `lastName`, and `displayName` can be cleared with `null`.\n\n  Request:\n\n  ```json\n  {\n    \"username\": \"new-player-name\",\n    \"email\": \"new@example.com\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\"\n  }\n  ```\n\n  Validation:\n\n  - `username`: optional, 3-30 characters\n  - `email`: optional, valid email address\n  - `firstName`, `lastName`, `displayName`: optional string or `null`, 1-50 characters when present\n  - At least one field must be provided.\n  - Role, image URLs, password, status, verification fields, and IDs cannot be changed here. Unknown fields are rejected even when included alongside valid fields. The target account comes from the verified JWT, not the body.\n\n  Supplying a different email clears `emailVerifiedAt`. Sending the same email, or omitting it, preserves verification. Both self-service and admin updates follow this rule. Email verification itself is not implemented or enforced yet; login immediately uses the updated address.\n\n  Responses:\n\n  - `200 OK`: updated private account\n  - `400 Bad Request`: invalid, empty, or protected-field body\n  - `401 Unauthorized`: missing, invalid, or expired access token\n  - `404 Not Found`: account does not exist\n  - `409 Conflict`: email or username is already in use",
+        "description": "### Update Current Account\n\n  `PATCH /accounts/me`\n\n  Requires an access token. Send only the fields to change; omitted fields remain unchanged. Nullable profile fields can be cleared with `null`.\n\n  Request:\n\n  ```json\n  {\n    \"username\": \"new-player-name\",\n    \"email\": \"new@example.com\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"bio\": \"Building small things on the web.\",\n    \"statusText\": \"Taking a coffee break\",\n    \"statusIcon\": \"IconCoffee\"\n  }\n  ```\n\n  Validation:\n\n  - `username`: optional, 3-30 characters\n  - `email`: optional, valid email address\n  - `firstName`, `lastName`, `displayName`: optional string or `null`, 1-50 characters when present\n  - `bio`: optional string or `null`, at most 190 characters\n  - `statusText`: optional string or `null`, at most 100 characters; it persists until edited or cleared\n  - `statusIcon`: optional approved Tabler export name or `null`: `IconCode`, `IconCoffee`, `IconMoon`, `IconMusic`, or `IconDeviceGamepad2`\n  - At least one field must be provided.\n  - Role, image URLs, password, verification fields, and IDs cannot be changed here. Unknown fields are rejected even when included alongside valid fields. The target account comes from the verified JWT, not the body.\n\n  Supplying a different email clears `emailVerifiedAt`. Sending the same email, or omitting it, preserves verification. Both self-service and admin updates follow this rule. Email verification itself is not implemented or enforced yet; login immediately uses the updated address.\n\n  Responses:\n\n  - `200 OK`: updated private account\n  - `400 Bad Request`: invalid, empty, or protected-field body\n  - `401 Unauthorized`: missing, invalid, or expired access token\n  - `404 Not Found`: account does not exist\n  - `409 Conflict`: email or username is already in use",
         "security": [
           {
             "bearerAuth": []
@@ -1039,6 +1100,35 @@
                     },
                     "hasGithub": {
                       "type": "boolean"
+                    },
+                    "bio": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 190
+                    },
+                    "statusText": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 100
+                    },
+                    "statusIcon": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 50,
+                      "enum": [
+                        "IconCode",
+                        "IconCoffee",
+                        "IconMoon",
+                        "IconMusic",
+                        "IconDeviceGamepad2",
+                        null
+                      ]
                     }
                   }
                 },
@@ -1057,7 +1147,10 @@
                   "role": "USER",
                   "hasPassword": true,
                   "hasDiscord": false,
-                  "hasGithub": false
+                  "hasGithub": false,
+                  "bio": "Building small things on the web.",
+                  "statusText": "Taking a coffee break",
+                  "statusIcon": "IconCoffee"
                 }
               }
             }
@@ -1099,6 +1192,35 @@
                   },
                   "displayName": {
                     "type": "string"
+                  },
+                  "bio": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 190
+                  },
+                  "statusText": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 100
+                  },
+                  "statusIcon": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 50,
+                    "enum": [
+                      "IconCode",
+                      "IconCoffee",
+                      "IconMoon",
+                      "IconMusic",
+                      "IconDeviceGamepad2",
+                      null
+                    ]
                   }
                 },
                 "additionalProperties": false,
@@ -1109,7 +1231,10 @@
                 "email": "new@example.com",
                 "firstName": "Ada",
                 "lastName": null,
-                "displayName": "Ada"
+                "displayName": "Ada",
+                "bio": "Building small things on the web.",
+                "statusText": "Taking a coffee break",
+                "statusIcon": "IconCoffee"
               }
             }
           }
@@ -1455,6 +1580,35 @@
                     },
                     "createdAt": {
                       "type": "string"
+                    },
+                    "bio": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 190
+                    },
+                    "statusText": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 100
+                    },
+                    "statusIcon": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 50,
+                      "enum": [
+                        "IconCode",
+                        "IconCoffee",
+                        "IconMoon",
+                        "IconMusic",
+                        "IconDeviceGamepad2",
+                        null
+                      ]
                     }
                   }
                 },
@@ -1683,6 +1837,35 @@
                     },
                     "updatedAt": {
                       "type": "string"
+                    },
+                    "bio": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 190
+                    },
+                    "statusText": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 100
+                    },
+                    "statusIcon": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 50,
+                      "enum": [
+                        "IconCode",
+                        "IconCoffee",
+                        "IconMoon",
+                        "IconMusic",
+                        "IconDeviceGamepad2",
+                        null
+                      ]
                     }
                   }
                 },
@@ -1698,7 +1881,10 @@
                   "bannerUrl": null,
                   "emailVerifiedAt": null,
                   "createdAt": "2026-09-29T12:00:00.000Z",
-                  "updatedAt": "2026-09-29T12:00:00.000Z"
+                  "updatedAt": "2026-09-29T12:00:00.000Z",
+                  "bio": null,
+                  "statusText": null,
+                  "statusIcon": null
                 }
               }
             }
@@ -1734,7 +1920,7 @@
         "tags": [
           "Superadmin"
         ],
-        "description": "## Superadmin API\n\n  Every endpoint requires `Authorization: Bearer <accessToken>` and the current\n  `SUPERADMIN` database role. Missing/invalid credentials return 401; ordinary\n  users receive 403. Responses use `Cache-Control: no-store`.\n\n  | Method | Endpoint                     | Action                            |\n  | ------ | ---------------------------- | --------------------------------- |\n  | GET    | `/superadmin/stats`          | Dashboard counters                |\n  | GET    | `/superadmin/users`          | Filtered, sorted, paginated users |\n  | GET    | `/superadmin/users/:id`      | User details                      |\n  | POST   | `/superadmin/users`          | Create a user (201)               |\n  | PATCH  | `/superadmin/users/:id`      | Edit allowed profile fields       |\n  | PATCH  | `/superadmin/users/:id/role` | Change role                       |\n  | DELETE | `/superadmin/users/:id`      | Permanently delete user (204)     |\n\n  Stats return `totalUsers`, `regularUsers`, `superadmins`, `newUsersLast7Days`,\n  `newUsersLast30Days`, and `asOf`. Registration counts use rolling 7/30-day windows\n  ending at `asOf`, counting currently existing accounts. They are not login/activity\n  counts. Ban statistics and live presence are not implemented.\n\n  ### Search and filters\n\n  Example:\n\n  ```http\n  GET /superadmin/users?search=alex&role=USER&sortBy=username&sortOrder=asc&page=1&limit=20\n  ```\n\n  - `search`: up to 100 characters; case-insensitive substring of username, email,\n    or display name. Send plain text, not surrounding `%` characters. User-supplied\n    `%`, `_`, and backslashes are escaped to match literally.\n  - `role`: `USER` or `SUPERADMIN`.\n  - `createdFrom`, `createdTo`: inclusive ISO date/time bounds. Date-only values\n    mean midnight UTC; use full timestamps when including an entire final day.\n    Reversed ranges return 400.\n  - `sortBy`: `createdAt` (default), `updatedAt`, `username`, `email`, or `role`.\n  - `sortOrder`: `asc` or `desc` (default). User ID breaks ties consistently.\n  - `page`: 1-1,000,000 (default 1); `limit`: 1-100 (default 10).\n\n  Returns `{ users, total, page, limit, totalPages }`. The total uses the same\n  filters as the list. List entries and detail responses include id, username,\n  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,\n  emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,\n  and two-factor secrets are never included.\n\n  ### Create, edit, and delete\n\n  Create body:\n\n  ```json\n  {\n    \"username\": \"new_player\",\n    \"email\": \"player@example.com\",\n    \"password\": \"long-password\",\n    \"role\": \"USER\"\n  }\n  ```\n\n  Role is optional and defaults to USER. Password validation matches registration.\n  Creation hashes the password but does not issue tokens or create a login session.\n\n  Profile PATCH accepts username, email, firstName, lastName, and displayName.\n  Omitted fields stay unchanged; optional names can be cleared with null. Email\n  changes clear verification, while resubmitting the same email preserves it.\n  Password, role, URLs, and verification timestamps are rejected here.\n\n  Role PATCH accepts `{ \"role\": \"SUPERADMIN\" }` or `{ \"role\": \"USER\" }`.\n  Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing\n  user returns 404.\n\n  Deletion removes refresh tokens and provider records; images, two-factor settings,\n  and recovery codes cascade. The last superadmin cannot be deleted or demoted\n  (409). Admin mutations share a PostgreSQL transaction advisory lock so competing\n  requests cannot both remove the final admins; the caller's role is rechecked\n  inside that transaction. Superadmins must use this guarded deletion endpoint,\n  not `DELETE /accounts/me`, to preserve that protection.\n\n  No accounts are automatically promoted. To promote an existing testing account, run\n  `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.\n  The script reads the database settings from `.env`, preserves the password, and is\n  safe to rerun. Register the account first if it does not exist. The role guard\n  checks the database, so an existing valid access token works immediately. Ban/unban,\n  MQ notifications, and the admin dashboard frontend are deferred.\n\n  ### Dashboard response example\n\n  `GET /superadmin/stats` returns 200:\n\n  ```json\n  {\n    \"totalUsers\": 12,\n    \"regularUsers\": 11,\n    \"superadmins\": 1,\n    \"newUsersLast7Days\": 3,\n    \"newUsersLast30Days\": 8,\n    \"asOf\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  ### User details and edit examples\n\n  `GET /superadmin/users/:id` returns the same full admin user shape as\n  list entries. Create, profile edit, and role edit also return this shape:\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"username\": \"player1\",\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": null,\n    \"bannerUrl\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Profile update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"displayName\":\"New display name\",\"lastName\":null}\n  ```\n\n  Role update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/role\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"role\":\"SUPERADMIN\"}\n  ```\n\n  Delete uses the same user URL with DELETE and no body; success returns 204 with\n  an empty response. Deleting or demoting the last superadmin returns 409.\n  An admin may delete/demote themselves through these endpoints if another\n  superadmin remains. Subsequent admin requests check the current database role.\n  Private account responses and superadmin user responses include role.\n  Registration/login and public account responses do not.\n\n  ### Testing the superadmin endpoints\n\n  1. Register a testing account using the normal registration endpoint.\n  2. Run `npm run bootstrap:superadmin -- existing-user@example.com` locally.\n  3. Use that account's valid access token in Postman's Bearer Token authorization.\n  4. Try GET stats, then search/list, then user details and edits.\n  5. Use a separate USER account to verify the admin endpoints return 403.\n\n  The bootstrap command changes only the role and update timestamp. It does not\n  create an account, reset a password, or issue tokens. It matches the supplied\n  email exactly after trimming surrounding spaces.",
+        "description": "## Superadmin API\n\n  Every endpoint requires `Authorization: Bearer <accessToken>` and the current\n  `SUPERADMIN` database role. Missing/invalid credentials return 401; ordinary\n  users receive 403. Responses use `Cache-Control: no-store`.\n\n  | Method | Endpoint                     | Action                            |\n  | ------ | ---------------------------- | --------------------------------- |\n  | GET    | `/superadmin/stats`          | Dashboard counters                |\n  | GET    | `/superadmin/users`          | Filtered, sorted, paginated users |\n  | GET    | `/superadmin/users/:id`      | User details                      |\n  | POST   | `/superadmin/users`          | Create a user (201)               |\n  | PATCH  | `/superadmin/users/:id`      | Edit allowed profile fields       |\n  | PATCH  | `/superadmin/users/:id/role` | Change role                       |\n  | DELETE | `/superadmin/users/:id`      | Permanently delete user (204)     |\n\n  Stats return `totalUsers`, `regularUsers`, `superadmins`, `newUsersLast7Days`,\n  `newUsersLast30Days`, and `asOf`. Registration counts use rolling 7/30-day windows\n  ending at `asOf`, counting currently existing accounts. They are not login/activity\n  counts. Ban statistics and live presence are not implemented.\n\n  ### Search and filters\n\n  Example:\n\n  ```http\n  GET /superadmin/users?search=alex&role=USER&sortBy=username&sortOrder=asc&page=1&limit=20\n  ```\n\n  - `search`: up to 100 characters; case-insensitive substring of username, email,\n    or display name. Send plain text, not surrounding `%` characters. User-supplied\n    `%`, `_`, and backslashes are escaped to match literally.\n  - `role`: `USER` or `SUPERADMIN`.\n  - `createdFrom`, `createdTo`: inclusive ISO date/time bounds. Date-only values\n    mean midnight UTC; use full timestamps when including an entire final day.\n    Reversed ranges return 400.\n  - `sortBy`: `createdAt` (default), `updatedAt`, `username`, `email`, or `role`.\n  - `sortOrder`: `asc` or `desc` (default). User ID breaks ties consistently.\n  - `page`: 1-1,000,000 (default 1); `limit`: 1-100 (default 10).\n\n  Returns `{ users, total, page, limit, totalPages }`. The total uses the same\n  filters as the list. List entries and detail responses include id, username,\n  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,\n  emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,\n  and two-factor secrets are never included.\n\n  ### Create, edit, and delete\n\n  Create body:\n\n  ```json\n  {\n    \"username\": \"new_player\",\n    \"email\": \"player@example.com\",\n    \"password\": \"long-password\",\n    \"role\": \"USER\"\n  }\n  ```\n\n  Role is optional and defaults to USER. Password validation matches registration.\n  Creation hashes the password but does not issue tokens or create a login session.\n\n  Profile PATCH accepts username, email, firstName, lastName, displayName, bio, statusText, and statusIcon.\n  Omitted fields stay unchanged; optional names can be cleared with null. Email\n  changes clear verification, while resubmitting the same email preserves it.\n  Password, role, URLs, and verification timestamps are rejected here.\n\n  Role PATCH accepts `{ \"role\": \"SUPERADMIN\" }` or `{ \"role\": \"USER\" }`.\n  Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing\n  user returns 404.\n\n  Deletion removes refresh tokens and provider records; images, two-factor settings,\n  and recovery codes cascade. The last superadmin cannot be deleted or demoted\n  (409). Admin mutations share a PostgreSQL transaction advisory lock so competing\n  requests cannot both remove the final admins; the caller's role is rechecked\n  inside that transaction. Superadmins must use this guarded deletion endpoint,\n  not `DELETE /accounts/me`, to preserve that protection.\n\n  No accounts are automatically promoted. To promote an existing testing account, run\n  `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.\n  The script reads the database settings from `.env`, preserves the password, and is\n  safe to rerun. Register the account first if it does not exist. The role guard\n  checks the database, so an existing valid access token works immediately. Ban/unban,\n  MQ notifications, and the admin dashboard frontend are deferred.\n\n  ### Dashboard response example\n\n  `GET /superadmin/stats` returns 200:\n\n  ```json\n  {\n    \"totalUsers\": 12,\n    \"regularUsers\": 11,\n    \"superadmins\": 1,\n    \"newUsersLast7Days\": 3,\n    \"newUsersLast30Days\": 8,\n    \"asOf\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  ### User details and edit examples\n\n  `GET /superadmin/users/:id` returns the same full admin user shape as\n  list entries. Create, profile edit, and role edit also return this shape:\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"username\": \"player1\",\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": null,\n    \"bannerUrl\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Profile update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"displayName\":\"New display name\",\"lastName\":null}\n  ```\n\n  Role update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/role\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"role\":\"SUPERADMIN\"}\n  ```\n\n  Delete uses the same user URL with DELETE and no body; success returns 204 with\n  an empty response. Deleting or demoting the last superadmin returns 409.\n  An admin may delete/demote themselves through these endpoints if another\n  superadmin remains. Subsequent admin requests check the current database role.\n  Private account responses and superadmin user responses include role.\n  Registration/login and public account responses do not.\n\n  ### Testing the superadmin endpoints\n\n  1. Register a testing account using the normal registration endpoint.\n  2. Run `npm run bootstrap:superadmin -- existing-user@example.com` locally.\n  3. Use that account's valid access token in Postman's Bearer Token authorization.\n  4. Try GET stats, then search/list, then user details and edits.\n  5. Use a separate USER account to verify the admin endpoints return 403.\n\n  The bootstrap command changes only the role and update timestamp. It does not\n  create an account, reset a password, or issue tokens. It matches the supplied\n  email exactly after trimming surrounding spaces.",
         "security": [
           {
             "bearerAuth": []
@@ -1795,6 +1981,35 @@
                     },
                     "updatedAt": {
                       "type": "string"
+                    },
+                    "bio": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 190
+                    },
+                    "statusText": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 100
+                    },
+                    "statusIcon": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 50,
+                      "enum": [
+                        "IconCode",
+                        "IconCoffee",
+                        "IconMoon",
+                        "IconMusic",
+                        "IconDeviceGamepad2",
+                        null
+                      ]
                     }
                   }
                 },
@@ -1810,7 +2025,10 @@
                   "bannerUrl": null,
                   "emailVerifiedAt": null,
                   "createdAt": "2026-09-29T12:00:00.000Z",
-                  "updatedAt": "2026-09-29T12:00:00.000Z"
+                  "updatedAt": "2026-09-29T12:00:00.000Z",
+                  "bio": null,
+                  "statusText": null,
+                  "statusIcon": null
                 }
               }
             }
@@ -1934,7 +2152,7 @@
         "tags": [
           "Superadmin"
         ],
-        "description": "## Superadmin API\n\n  Every endpoint requires `Authorization: Bearer <accessToken>` and the current\n  `SUPERADMIN` database role. Missing/invalid credentials return 401; ordinary\n  users receive 403. Responses use `Cache-Control: no-store`.\n\n  | Method | Endpoint                     | Action                            |\n  | ------ | ---------------------------- | --------------------------------- |\n  | GET    | `/superadmin/stats`          | Dashboard counters                |\n  | GET    | `/superadmin/users`          | Filtered, sorted, paginated users |\n  | GET    | `/superadmin/users/:id`      | User details                      |\n  | POST   | `/superadmin/users`          | Create a user (201)               |\n  | PATCH  | `/superadmin/users/:id`      | Edit allowed profile fields       |\n  | PATCH  | `/superadmin/users/:id/role` | Change role                       |\n  | DELETE | `/superadmin/users/:id`      | Permanently delete user (204)     |\n\n  Stats return `totalUsers`, `regularUsers`, `superadmins`, `newUsersLast7Days`,\n  `newUsersLast30Days`, and `asOf`. Registration counts use rolling 7/30-day windows\n  ending at `asOf`, counting currently existing accounts. They are not login/activity\n  counts. Ban statistics and live presence are not implemented.\n\n  ### Search and filters\n\n  Example:\n\n  ```http\n  GET /superadmin/users?search=alex&role=USER&sortBy=username&sortOrder=asc&page=1&limit=20\n  ```\n\n  - `search`: up to 100 characters; case-insensitive substring of username, email,\n    or display name. Send plain text, not surrounding `%` characters. User-supplied\n    `%`, `_`, and backslashes are escaped to match literally.\n  - `role`: `USER` or `SUPERADMIN`.\n  - `createdFrom`, `createdTo`: inclusive ISO date/time bounds. Date-only values\n    mean midnight UTC; use full timestamps when including an entire final day.\n    Reversed ranges return 400.\n  - `sortBy`: `createdAt` (default), `updatedAt`, `username`, `email`, or `role`.\n  - `sortOrder`: `asc` or `desc` (default). User ID breaks ties consistently.\n  - `page`: 1-1,000,000 (default 1); `limit`: 1-100 (default 10).\n\n  Returns `{ users, total, page, limit, totalPages }`. The total uses the same\n  filters as the list. List entries and detail responses include id, username,\n  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,\n  emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,\n  and two-factor secrets are never included.\n\n  ### Create, edit, and delete\n\n  Create body:\n\n  ```json\n  {\n    \"username\": \"new_player\",\n    \"email\": \"player@example.com\",\n    \"password\": \"long-password\",\n    \"role\": \"USER\"\n  }\n  ```\n\n  Role is optional and defaults to USER. Password validation matches registration.\n  Creation hashes the password but does not issue tokens or create a login session.\n\n  Profile PATCH accepts username, email, firstName, lastName, and displayName.\n  Omitted fields stay unchanged; optional names can be cleared with null. Email\n  changes clear verification, while resubmitting the same email preserves it.\n  Password, role, URLs, and verification timestamps are rejected here.\n\n  Role PATCH accepts `{ \"role\": \"SUPERADMIN\" }` or `{ \"role\": \"USER\" }`.\n  Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing\n  user returns 404.\n\n  Deletion removes refresh tokens and provider records; images, two-factor settings,\n  and recovery codes cascade. The last superadmin cannot be deleted or demoted\n  (409). Admin mutations share a PostgreSQL transaction advisory lock so competing\n  requests cannot both remove the final admins; the caller's role is rechecked\n  inside that transaction. Superadmins must use this guarded deletion endpoint,\n  not `DELETE /accounts/me`, to preserve that protection.\n\n  No accounts are automatically promoted. To promote an existing testing account, run\n  `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.\n  The script reads the database settings from `.env`, preserves the password, and is\n  safe to rerun. Register the account first if it does not exist. The role guard\n  checks the database, so an existing valid access token works immediately. Ban/unban,\n  MQ notifications, and the admin dashboard frontend are deferred.\n\n  ### Dashboard response example\n\n  `GET /superadmin/stats` returns 200:\n\n  ```json\n  {\n    \"totalUsers\": 12,\n    \"regularUsers\": 11,\n    \"superadmins\": 1,\n    \"newUsersLast7Days\": 3,\n    \"newUsersLast30Days\": 8,\n    \"asOf\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  ### User details and edit examples\n\n  `GET /superadmin/users/:id` returns the same full admin user shape as\n  list entries. Create, profile edit, and role edit also return this shape:\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"username\": \"player1\",\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": null,\n    \"bannerUrl\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Profile update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"displayName\":\"New display name\",\"lastName\":null}\n  ```\n\n  Role update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/role\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"role\":\"SUPERADMIN\"}\n  ```\n\n  Delete uses the same user URL with DELETE and no body; success returns 204 with\n  an empty response. Deleting or demoting the last superadmin returns 409.\n  An admin may delete/demote themselves through these endpoints if another\n  superadmin remains. Subsequent admin requests check the current database role.\n  Private account responses and superadmin user responses include role.\n  Registration/login and public account responses do not.\n\n  ### Testing the superadmin endpoints\n\n  1. Register a testing account using the normal registration endpoint.\n  2. Run `npm run bootstrap:superadmin -- existing-user@example.com` locally.\n  3. Use that account's valid access token in Postman's Bearer Token authorization.\n  4. Try GET stats, then search/list, then user details and edits.\n  5. Use a separate USER account to verify the admin endpoints return 403.\n\n  The bootstrap command changes only the role and update timestamp. It does not\n  create an account, reset a password, or issue tokens. It matches the supplied\n  email exactly after trimming surrounding spaces.",
+        "description": "## Superadmin API\n\n  Every endpoint requires `Authorization: Bearer <accessToken>` and the current\n  `SUPERADMIN` database role. Missing/invalid credentials return 401; ordinary\n  users receive 403. Responses use `Cache-Control: no-store`.\n\n  | Method | Endpoint                     | Action                            |\n  | ------ | ---------------------------- | --------------------------------- |\n  | GET    | `/superadmin/stats`          | Dashboard counters                |\n  | GET    | `/superadmin/users`          | Filtered, sorted, paginated users |\n  | GET    | `/superadmin/users/:id`      | User details                      |\n  | POST   | `/superadmin/users`          | Create a user (201)               |\n  | PATCH  | `/superadmin/users/:id`      | Edit allowed profile fields       |\n  | PATCH  | `/superadmin/users/:id/role` | Change role                       |\n  | DELETE | `/superadmin/users/:id`      | Permanently delete user (204)     |\n\n  Stats return `totalUsers`, `regularUsers`, `superadmins`, `newUsersLast7Days`,\n  `newUsersLast30Days`, and `asOf`. Registration counts use rolling 7/30-day windows\n  ending at `asOf`, counting currently existing accounts. They are not login/activity\n  counts. Ban statistics and live presence are not implemented.\n\n  ### Search and filters\n\n  Example:\n\n  ```http\n  GET /superadmin/users?search=alex&role=USER&sortBy=username&sortOrder=asc&page=1&limit=20\n  ```\n\n  - `search`: up to 100 characters; case-insensitive substring of username, email,\n    or display name. Send plain text, not surrounding `%` characters. User-supplied\n    `%`, `_`, and backslashes are escaped to match literally.\n  - `role`: `USER` or `SUPERADMIN`.\n  - `createdFrom`, `createdTo`: inclusive ISO date/time bounds. Date-only values\n    mean midnight UTC; use full timestamps when including an entire final day.\n    Reversed ranges return 400.\n  - `sortBy`: `createdAt` (default), `updatedAt`, `username`, `email`, or `role`.\n  - `sortOrder`: `asc` or `desc` (default). User ID breaks ties consistently.\n  - `page`: 1-1,000,000 (default 1); `limit`: 1-100 (default 10).\n\n  Returns `{ users, total, page, limit, totalPages }`. The total uses the same\n  filters as the list. List entries and detail responses include id, username,\n  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,\n  bio, statusText, statusIcon, emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,\n  and two-factor secrets are never included.\n\n  ### Create, edit, and delete\n\n  Create body:\n\n  ```json\n  {\n    \"username\": \"new_player\",\n    \"email\": \"player@example.com\",\n    \"password\": \"long-password\",\n    \"role\": \"USER\"\n  }\n  ```\n\n  Role is optional and defaults to USER. Password validation matches registration.\n  Creation hashes the password but does not issue tokens or create a login session.\n\n  Profile PATCH accepts username, email, firstName, lastName, and displayName.\n  Omitted fields stay unchanged; optional names can be cleared with null. Email\n  changes clear verification, while resubmitting the same email preserves it.\n  Password, role, URLs, and verification timestamps are rejected here.\n\n  Role PATCH accepts `{ \"role\": \"SUPERADMIN\" }` or `{ \"role\": \"USER\" }`.\n  Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing\n  user returns 404.\n\n  Deletion removes refresh tokens and provider records; images, two-factor settings,\n  and recovery codes cascade. The last superadmin cannot be deleted or demoted\n  (409). Admin mutations share a PostgreSQL transaction advisory lock so competing\n  requests cannot both remove the final admins; the caller's role is rechecked\n  inside that transaction. Superadmins must use this guarded deletion endpoint,\n  not `DELETE /accounts/me`, to preserve that protection.\n\n  No accounts are automatically promoted. To promote an existing testing account, run\n  `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.\n  The script reads the database settings from `.env`, preserves the password, and is\n  safe to rerun. Register the account first if it does not exist. The role guard\n  checks the database, so an existing valid access token works immediately. Ban/unban,\n  MQ notifications, and the admin dashboard frontend are deferred.\n\n  ### Dashboard response example\n\n  `GET /superadmin/stats` returns 200:\n\n  ```json\n  {\n    \"totalUsers\": 12,\n    \"regularUsers\": 11,\n    \"superadmins\": 1,\n    \"newUsersLast7Days\": 3,\n    \"newUsersLast30Days\": 8,\n    \"asOf\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  ### User details and edit examples\n\n  `GET /superadmin/users/:id` returns the same full admin user shape as\n  list entries. Create, profile edit, and role edit also return this shape:\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"username\": \"player1\",\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": null,\n    \"bannerUrl\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Profile update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"displayName\":\"New display name\",\"lastName\":null}\n  ```\n\n  Role update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/role\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"role\":\"SUPERADMIN\"}\n  ```\n\n  Delete uses the same user URL with DELETE and no body; success returns 204 with\n  an empty response. Deleting or demoting the last superadmin returns 409.\n  An admin may delete/demote themselves through these endpoints if another\n  superadmin remains. Subsequent admin requests check the current database role.\n  Private account responses and superadmin user responses include role.\n  Registration/login and public account responses do not.\n\n  ### Testing the superadmin endpoints\n\n  1. Register a testing account using the normal registration endpoint.\n  2. Run `npm run bootstrap:superadmin -- existing-user@example.com` locally.\n  3. Use that account's valid access token in Postman's Bearer Token authorization.\n  4. Try GET stats, then search/list, then user details and edits.\n  5. Use a separate USER account to verify the admin endpoints return 403.\n\n  The bootstrap command changes only the role and update timestamp. It does not\n  create an account, reset a password, or issue tokens. It matches the supplied\n  email exactly after trimming surrounding spaces.",
         "security": [
           {
             "bearerAuth": []
@@ -2000,6 +2218,35 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "bio": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 190
+                          },
+                          "statusText": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 100
+                          },
+                          "statusIcon": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 50,
+                            "enum": [
+                              "IconCode",
+                              "IconCoffee",
+                              "IconMoon",
+                              "IconMusic",
+                              "IconDeviceGamepad2",
+                              null
+                            ]
                           }
                         }
                       }
@@ -2032,7 +2279,10 @@
                       "bannerUrl": null,
                       "emailVerifiedAt": null,
                       "createdAt": "2026-09-29T12:00:00.000Z",
-                      "updatedAt": "2026-09-29T12:00:00.000Z"
+                      "updatedAt": "2026-09-29T12:00:00.000Z",
+                      "bio": null,
+                      "statusText": null,
+                      "statusIcon": null
                     }
                   ],
                   "total": 1,
@@ -2579,6 +2829,35 @@
                       },
                       "createdAt": {
                         "type": "string"
+                      },
+                      "bio": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 190
+                      },
+                      "statusText": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 100
+                      },
+                      "statusIcon": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 50,
+                        "enum": [
+                          "IconCode",
+                          "IconCoffee",
+                          "IconMoon",
+                          "IconMusic",
+                          "IconDeviceGamepad2",
+                          null
+                        ]
                       }
                     }
                   }

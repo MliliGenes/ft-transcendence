@@ -10,6 +10,7 @@ import { NookLogo } from "@/components/nook-logo";
 import { AccountAvatar } from "./account-avatar";
 import { AccountStatus } from "./account-status";
 import { ProfileImageEditor } from "./profile-image-editor";
+import { PROFILE_STATUS_ICONS, type ProfileStatusIcon } from "./profile-status";
 import { accountApi, profileImageUrl, profileName, type AccountProfile, type ImageKind, type UpdateAccount } from "@/lib/accounts/client";
 import { accountError, useAccount } from "@/lib/accounts/use-account";
 
@@ -20,7 +21,7 @@ const groups = [
 ];
 
 function profileDraft(profile: AccountProfile) {
-  return { displayName: profile.displayName ?? "", username: profile.username, firstName: profile.firstName ?? "", lastName: profile.lastName ?? "", email: profile.email };
+  return { displayName: profile.displayName ?? "", username: profile.username, firstName: profile.firstName ?? "", lastName: profile.lastName ?? "", email: profile.email, bio: profile.bio ?? "", statusText: profile.statusText ?? "", statusIcon: profile.statusIcon };
 }
 
 export function SettingsView() {
@@ -43,6 +44,11 @@ function SettingsPanel({ account, profile }: { account: ReturnType<typeof useAcc
     const value = key === "username" || key === "email" ? draft[key].trim() : draft[key].trim() || null;
     if (value !== profile[key]) Object.assign(update, { [key]: value });
   }
+  for (const key of ["bio", "statusText"] as const) {
+    const value = draft[key].trim() || null;
+    if (value !== profile[key]) Object.assign(update, { [key]: value });
+  }
+  if (draft.statusIcon !== profile.statusIcon) update.statusIcon = draft.statusIcon;
   const dirty = Object.keys(update).length > 0;
   const save = useMutation({
     mutationFn: (data: UpdateAccount) => account.request(token => accountApi.updateMe(token, data)),
@@ -133,6 +139,18 @@ function SettingsPanel({ account, profile }: { account: ReturnType<typeof useAcc
                     <input id={`settings-${field.key}`} name={field.key} type={field.key === "email" ? "email" : "text"} value={draft[field.key]} onChange={event => { setDraft({ ...draft, [field.key]: event.target.value }); setMessage(""); save.reset(); }} maxLength={field.max} minLength={field.key === "username" ? 3 : undefined} required={field.key === "username" || field.key === "email"} autoComplete={field.autoComplete} autoCapitalize={field.key === "username" || field.key === "email" ? "none" : undefined} className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none" />
                   </span>
                 </label>)}
+                <label htmlFor="settings-bio" className="sm:col-span-2">
+                  <span className="mb-2 flex items-center justify-between text-xs font-medium"><span>Bio</span><span className="text-nook-text-muted">{draft.bio.length}/190</span></span>
+                  <textarea id="settings-bio" value={draft.bio} onChange={event => { setDraft({ ...draft, bio: event.target.value }); setMessage(""); save.reset(); }} maxLength={190} rows={3} className="min-h-24 w-full resize-y border border-nook-control-border bg-nook-surface px-3 py-2 text-sm outline-none focus:border-primary" />
+                </label>
+                <div className="sm:col-span-2">
+                  <label htmlFor="settings-status" className="mb-2 flex items-center justify-between text-xs font-medium"><span>Custom status</span><span className="text-nook-text-muted">{draft.statusText.length}/100</span></label>
+                  <input id="settings-status" value={draft.statusText} onChange={event => { setDraft({ ...draft, statusText: event.target.value }); setMessage(""); save.reset(); }} maxLength={100} className="min-h-11 w-full border border-nook-control-border bg-nook-surface px-3 text-sm outline-none focus:border-primary" />
+                  <div role="group" aria-label="Status icon" className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" aria-label="No status icon" title="No icon" aria-pressed={draft.statusIcon === null} onClick={() => { setDraft({ ...draft, statusIcon: null }); setMessage(""); save.reset(); }} className={`grid size-10 place-items-center border ${draft.statusIcon === null ? "border-primary bg-primary/10 text-primary" : "border-border text-nook-text-secondary hover:bg-nook-surface"}`}><IconX size={16} stroke={1.75} aria-hidden="true" /></button>
+                    {(Object.entries(PROFILE_STATUS_ICONS) as [ProfileStatusIcon, typeof PROFILE_STATUS_ICONS[ProfileStatusIcon]][]).map(([name, Icon]) => <button key={name} type="button" aria-label={name.replace(/^Icon/, "")} aria-pressed={draft.statusIcon === name} onClick={() => { setDraft({ ...draft, statusIcon: name }); setMessage(""); save.reset(); }} className={`grid size-10 place-items-center border ${draft.statusIcon === name ? "border-primary bg-primary/10 text-primary" : "border-border text-nook-text-secondary hover:bg-nook-surface"}`}><Icon size={16} stroke={1.75} aria-hidden="true" /></button>)}
+                  </div>
+                </div>
               </fieldset>
               {save.isError && <p role="alert" className="mt-5 text-sm text-destructive">{accountError(save.error)}</p>}
               <div className="mt-7 flex justify-end gap-3">

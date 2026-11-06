@@ -33,6 +33,9 @@ const publicProfileSelect = {
   displayName: true,
   avatarUrl: true,
   bannerUrl: true,
+  bio: true,
+  statusText: true,
+  statusIcon: true,
   createdAt: true,
 } satisfies Prisma.UserSelect;
 
@@ -45,6 +48,9 @@ const accountSelect = {
   displayName: true,
   avatarUrl: true,
   bannerUrl: true,
+  bio: true,
+  statusText: true,
+  statusIcon: true,
   role: true,
   emailVerifiedAt: true,
   createdAt: true,
@@ -193,6 +199,9 @@ export class AccountsService {
       firstName: dto.firstName,
       lastName: dto.lastName,
       displayName: dto.displayName,
+      bio: dto.bio,
+      statusText: dto.statusText,
+      statusIcon: dto.statusIcon,
     };
 
     try {
