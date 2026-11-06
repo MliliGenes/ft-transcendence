@@ -102,6 +102,7 @@ model Message {
   conversationId String    @db.Uuid
   authorId       String    @db.Uuid
   content        String?   @db.VarChar(2000)
+  attachments    String[]  @default([])
   createdAt      DateTime  @default(now())
   editedAt       DateTime?
   deletedAt      DateTime?

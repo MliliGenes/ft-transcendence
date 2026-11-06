@@ -58,6 +58,18 @@ export class ChatController {
     );
   }
 
+  @Post('conversations/:conversationId/attachments/upload-url')
+  createAttachmentUploadUrl(
+    @Request() req: ExpressRequest & { user: { sub: string } },
+    @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
+  ) {
+    return this.chatService.createAttachmentUploadUrl(
+      req.user.sub,
+      conversationId,
+      req.headers.authorization ?? '',
+    );
+  }
+
   @Get('conversations/:conversationId/messages')
   getMessages(
     @Request() req: ExpressRequest & { user: { sub: string } },
