@@ -11,12 +11,9 @@ describe('PresenceService', () => {
 
     expect(presence.connect('user-1', 'socket-1')).toEqual({
       userId: 'user-1',
-      status: 'AWAY',
-    });
-    expect(presence.recordActivity('user-1', 'socket-1')).toEqual({
-      userId: 'user-1',
       status: 'ONLINE',
     });
+    expect(presence.recordActivity('user-1', 'socket-1')).toBeNull();
     expect(presence.connect('user-1', 'socket-2')).toBeNull();
 
     vi.advanceTimersByTime(5 * 60 * 1000);
