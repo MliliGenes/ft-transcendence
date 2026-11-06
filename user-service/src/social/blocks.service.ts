@@ -82,4 +82,18 @@ export class BlocksService {
 
     return blocks.map(({ blocked }) => blocked);
   }
+
+  async isBlockedBetween(userId: string, otherUserId: string) {
+    if (userId === otherUserId) return false;
+    const block = await this.prisma.block.findFirst({
+      where: {
+        OR: [
+          { blockerId: userId, blockedId: otherUserId },
+          { blockerId: otherUserId, blockedId: userId },
+        ],
+      },
+      select: { id: true },
+    });
+    return Boolean(block);
+  }
 }
