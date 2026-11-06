@@ -44,6 +44,19 @@ export class SocialController {
     return this.blocksService.unblockUser(request.user.sub, userId);
   }
 
+  @Get('blocks/check/:userId')
+  async checkBlockBetweenUsers(
+    @Req() request: GetFriendshipsRequest,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+  ) {
+    return {
+      blocked: await this.blocksService.isBlockedBetween(
+        request.user.sub,
+        userId,
+      ),
+    };
+  }
+
   @Get('blocks')
   getBlocks(@Req() request: GetFriendshipsRequest) {
     return this.blocksService.getBlocks(request.user.sub);
