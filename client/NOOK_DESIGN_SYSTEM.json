@@ -1,0 +1,545 @@
+{
+  "meta": {
+    "name": "Nook design system",
+    "version": "1.0.0",
+    "snapshotDate": "2026-11-06",
+    "theme": "dark",
+    "status": "Agreed visual direction with explicit implementation defaults",
+    "description": "A calm, spacious social and gaming platform: pure black, neutral gray surfaces, white text, restrained orange accents, Inter, Tabler Icons, and square corners.",
+    "format": "Plain JSON. Numeric dimensions are CSS pixels unless the key states another unit. Component token names reference keys in colors.",
+    "scope": [
+      "landing",
+      "login",
+      "signup",
+      "passwordRecovery",
+      "feed",
+      "search",
+      "chat",
+      "play",
+      "profile",
+      "settings",
+      "notifications"
+    ],
+    "notes": [
+      "The latest square-corner decision overrides the older 6px radius guidance.",
+      "Circular avatars and small status dots are deliberate exceptions.",
+      "Exact default sizes below select concrete values within the agreed design ranges; they are not pixel measurements from generated images.",
+      "Mobile layout design is deferred. Preserve semantic structure and avoid choices that prevent later adaptation.",
+      "This document specifies presentation, not which backend features are implemented."
+    ]
+  },
+  "principles": {
+    "hierarchy": [
+      "spacing",
+      "typography",
+      "surfaceContrast",
+      "optionalSeparators"
+    ],
+    "canvas": "Always pure black for the default theme.",
+    "accentUsage": [
+      "primaryAction",
+      "activeNavigation",
+      "selectedControl",
+      "unreadMarker",
+      "keyboardFocus"
+    ],
+    "density": "Generous negative space; no widgets added solely to fill empty areas.",
+    "borders": "Use sparingly. Use a visible control border where an outline is needed to identify an input.",
+    "imagery": "Natural, muted photography. Let user imagery provide personality without forcing an orange filter.",
+    "avoid": [
+      "pixelFonts",
+      "pixelIcons",
+      "ASCII navigation",
+      "neon",
+      "glow",
+      "glassmorphism",
+      "decorativeGradients",
+      "roundedCards",
+      "pillButtons",
+      "defaultPurpleOrBlueAccents",
+      "unnecessaryShadows"
+    ]
+  },
+  "colors": {
+    "background": "#000000",
+    "surface": "#121212",
+    "surfaceRaised": "#1C1C1C",
+    "surfaceHover": "#262626",
+    "text": "#F5F5F5",
+    "textSecondary": "#B3B3B3",
+    "textMuted": "#999999",
+    "accent": "#F16B3A",
+    "accentHover": "#FF8052",
+    "accentPressed": "#DD592B",
+    "onAccent": "#000000",
+    "accentSubtle": "rgb(241 107 58 / 12%)",
+    "borderSubtle": "#292929",
+    "controlBorder": "#767676",
+    "focus": "#F16B3A",
+    "success": "#63C58B",
+    "warning": "#E5B45C",
+    "danger": "#F08080"
+  },
+  "cssVariables": {
+    "--nook-bg": "#000000",
+    "--nook-surface": "#121212",
+    "--nook-surface-raised": "#1C1C1C",
+    "--nook-surface-hover": "#262626",
+    "--nook-text": "#F5F5F5",
+    "--nook-text-secondary": "#B3B3B3",
+    "--nook-text-muted": "#999999",
+    "--nook-accent": "#F16B3A",
+    "--nook-accent-hover": "#FF8052",
+    "--nook-accent-pressed": "#DD592B",
+    "--nook-on-accent": "#000000",
+    "--nook-accent-subtle": "rgb(241 107 58 / 12%)",
+    "--nook-border-subtle": "#292929",
+    "--nook-control-border": "#767676",
+    "--nook-focus": "#F16B3A",
+    "--nook-success": "#63C58B",
+    "--nook-warning": "#E5B45C",
+    "--nook-danger": "#F08080",
+    "--nook-radius": "0px"
+  },
+  "typography": {
+    "family": {
+      "sans": [
+        "Inter",
+        "ui-sans-serif",
+        "system-ui",
+        "sans-serif"
+      ],
+      "mono": [
+        "ui-monospace",
+        "SFMono-Regular",
+        "Menlo",
+        "Consolas",
+        "monospace"
+      ]
+    },
+    "fontLoading": "Load Inter once at application level; retain system fallbacks.",
+    "weights": {
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600
+    },
+    "letterSpacingEm": {
+      "heading": -0.025,
+      "body": 0
+    },
+    "styles": {
+      "hero": {
+        "sizePx": 72,
+        "allowedRangePx": [
+          64,
+          80
+        ],
+        "lineHeight": 1.05,
+        "weight": 600
+      },
+      "pageTitle": {
+        "sizePx": 40,
+        "allowedRangePx": [
+          36,
+          44
+        ],
+        "lineHeight": 1.15,
+        "weight": 600
+      },
+      "sectionHeading": {
+        "sizePx": 24,
+        "allowedRangePx": [
+          20,
+          24
+        ],
+        "lineHeight": 1.3,
+        "weight": 600
+      },
+      "body": {
+        "sizePx": 16,
+        "lineHeight": 1.6,
+        "weight": 400
+      },
+      "input": {
+        "sizePx": 16,
+        "lineHeight": 1.6,
+        "weight": 400
+      },
+      "navigation": {
+        "sizePx": 14,
+        "allowedRangePx": [
+          14,
+          16
+        ],
+        "lineHeight": 1.4,
+        "weight": 500
+      },
+      "button": {
+        "sizePx": 14,
+        "allowedRangePx": [
+          14,
+          16
+        ],
+        "lineHeight": 1.4,
+        "weight": 500
+      },
+      "metadata": {
+        "sizePx": 13,
+        "allowedRangePx": [
+          13,
+          14
+        ],
+        "lineHeight": 1.5,
+        "weight": 400
+      }
+    },
+    "readingMeasureCh": [
+      60,
+      70
+    ],
+    "tabularNumeralsFor": [
+      "scores",
+      "clocks",
+      "counts"
+    ],
+    "monospaceUsage": [
+      "code",
+      "technicalValues"
+    ],
+    "copy": "Sentence case; concise labels; no all-caps paragraphs."
+  },
+  "spacing": {
+    "baseUnitPx": 4,
+    "scalePx": [
+      0,
+      4,
+      8,
+      12,
+      16,
+      24,
+      32,
+      48,
+      64,
+      96
+    ],
+    "relatedContentGapPx": 24,
+    "relatedContentGapRangePx": [
+      16,
+      24
+    ],
+    "sectionGapPx": 64,
+    "sectionGapRangePx": [
+      48,
+      64
+    ],
+    "panelPaddingPx": 24,
+    "panelPaddingRangePx": [
+      24,
+      32
+    ]
+  },
+  "shape": {
+    "radiusPx": {
+      "button": 0,
+      "input": 0,
+      "select": 0,
+      "dialog": 0,
+      "popover": 0,
+      "card": 0,
+      "media": 0,
+      "badge": 0,
+      "tooltip": 0,
+      "toast": 0,
+      "checkbox": 0
+    },
+    "avatarRadius": "50%",
+    "statusDotRadius": "50%",
+    "defaultShadow": "none",
+    "overlayShadow": "Optional and restrained, only when separation requires it.",
+    "separatorWidthPx": 1
+  },
+  "layout": {
+    "designPriority": "desktopFirst",
+    "mainMaxWidthPx": 1280,
+    "desktopGutterPx": 64,
+    "desktopGutterRangePx": [
+      48,
+      64
+    ],
+    "sidebarWidthPx": 216,
+    "sidebarWidthRangePx": [
+      200,
+      224
+    ],
+    "authFormWidthPx": 420,
+    "authFormWidthRangePx": [
+      400,
+      440
+    ],
+    "feedColumnWidthPx": 680,
+    "feedColumnWidthRangePx": [
+      640,
+      720
+    ],
+    "chatWidth": "Use available viewport width.",
+    "navigation": {
+      "main": [
+        "Feed",
+        "Search",
+        "Chat",
+        "Play",
+        "Profile"
+      ],
+      "bottom": [
+        "Account",
+        "Settings"
+      ],
+      "activeStyle": "Subtle charcoal surface with an orange icon or a small orange marker."
+    },
+    "futureResponsiveGuidance": {
+      "status": "Guidance only; mobile screen design comes later.",
+      "tabletGutterPx": 32,
+      "mobileGutterRangePx": [
+        16,
+        24
+      ],
+      "collapseOrder": [
+        "optionalRightRail",
+        "secondaryDetailsPanel"
+      ],
+      "chat": "Use separate list and thread views on small screens.",
+      "auth": "Hide the optional editorial photo panel on small screens.",
+      "preventPageHorizontalOverflow": true
+    }
+  },
+  "icons": {
+    "library": "Tabler Icons",
+    "reactPackage": "@tabler/icons-react",
+    "style": "outline",
+    "color": "currentColor",
+    "strokeWidthPx": 1.75,
+    "sizesPx": {
+      "inline": 16,
+      "default": 20,
+      "prominent": 24
+    },
+    "mapping": {
+      "feed": "IconHome2",
+      "search": "IconSearch",
+      "chat": "IconMessageCircle",
+      "play": "IconDeviceGamepad2",
+      "profile": "IconUser",
+      "settings": "IconSettings",
+      "notifications": "IconBell",
+      "attachment": "IconPaperclip",
+      "emoji": "IconMoodSmile",
+      "send": "IconSend",
+      "add": "IconPlus",
+      "more": "IconDots",
+      "editAvatarOrBanner": "IconCamera",
+      "externalLink": "IconExternalLink"
+    },
+    "brandIcons": "Use official GitHub and Discord SVG assets; default to monochrome.",
+    "accessibility": "Icon-only controls need accessible names and generous hit areas."
+  },
+  "components": {
+    "button": {
+      "heightPx": 48,
+      "heightRangePx": [
+        44,
+        48
+      ],
+      "radiusPx": 0,
+      "variants": {
+        "primary": {
+          "background": "accent",
+          "foreground": "onAccent",
+          "hoverBackground": "accentHover",
+          "pressedBackground": "accentPressed"
+        },
+        "secondary": {
+          "background": "surfaceRaised",
+          "foreground": "text",
+          "hoverBackground": "surfaceHover"
+        },
+        "ghost": {
+          "background": "transparent",
+          "foreground": "textSecondary",
+          "hoverBackground": "surface"
+        }
+      },
+      "rules": [
+        "One primary action per local task.",
+        "Keep disabled and loading states distinct.",
+        "Preserve the label while an action is loading."
+      ]
+    },
+    "input": {
+      "heightPx": 48,
+      "radiusPx": 0,
+      "background": "surface",
+      "foreground": "text",
+      "placeholderColor": "textMuted",
+      "borderColor": "controlBorder",
+      "label": "Persistent visible label; placeholder is not a label.",
+      "errorColor": "danger"
+    },
+    "dialog": {
+      "radiusPx": 0,
+      "background": "surfaceRaised",
+      "foreground": "text",
+      "paddingPx": 32,
+      "closeControl": "Visible close action with an accessible name.",
+      "behavior": [
+        "Trap focus while open.",
+        "Return focus to the trigger when closed."
+      ]
+    },
+    "popover": {
+      "radiusPx": 0,
+      "background": "surfaceRaised",
+      "foreground": "text",
+      "paddingPx": 24
+    },
+    "tabs": {
+      "background": "transparent",
+      "inactiveColor": "textSecondary",
+      "activeColor": "text",
+      "indicatorColor": "accent",
+      "style": "Small underline or marker; no outline around every tab."
+    },
+    "avatar": {
+      "shape": "circle",
+      "fallback": "Readable initials or a consistent default avatar."
+    },
+    "badge": {
+      "radiusPx": 0,
+      "background": "surfaceRaised",
+      "foreground": "textSecondary",
+      "use": "Short, meaningful metadata only."
+    },
+    "card": {
+      "radiusPx": 0,
+      "background": "surface",
+      "paddingPx": 24,
+      "border": "Optional subtle separator; not the default grouping mechanism.",
+      "shadow": "none"
+    },
+    "toast": {
+      "radiusPx": 0,
+      "background": "surfaceRaised",
+      "foreground": "text",
+      "behavior": "Quiet confirmation; errors remain close to the relevant field or action."
+    },
+    "navigationItem": {
+      "radiusPx": 0,
+      "defaultColor": "textSecondary",
+      "activeColor": "accent",
+      "selectedBackground": "surface",
+      "labelVisible": true
+    },
+    "tooltip": {
+      "radiusPx": 0,
+      "background": "surfaceRaised",
+      "foreground": "text",
+      "rule": "Never hide essential instructions exclusively in a tooltip."
+    },
+    "post": {
+      "background": "background",
+      "spacing": "Use generous separation; no mandatory card around each post."
+    },
+    "message": {
+      "background": "background",
+      "grouping": "Group by author and time; avoid boxing every message.",
+      "composer": "Pin within the conversation area."
+    },
+    "notificationItem": {
+      "background": "transparent",
+      "unreadIndicatorColor": "accent",
+      "rule": "Pair unread state with readable context, not color alone."
+    }
+  },
+  "motion": {
+    "durationMs": {
+      "fast": 120,
+      "default": 150,
+      "slow": 180
+    },
+    "properties": [
+      "color",
+      "background-color",
+      "opacity"
+    ],
+    "style": "Subtle and functional.",
+    "reducedMotion": "Respect prefers-reduced-motion; remove nonessential movement.",
+    "avoid": [
+      "loopingBackgroundEffects",
+      "largeDecorativeMovement",
+      "animatedGradients",
+      "decorativeLoadingAnimations"
+    ],
+    "loading": "Use layout-preserving skeletons or a quiet progress indicator when useful."
+  },
+  "accessibility": {
+    "target": "WCAG AA contrast; verify actual foreground/background pairs.",
+    "minimumTouchTargetPx": 44,
+    "focus": {
+      "widthPx": 2,
+      "offsetPx": 2,
+      "color": "focus"
+    },
+    "requirements": [
+      "Keyboard navigation",
+      "Visible focus",
+      "Semantic controls",
+      "Associated field labels",
+      "Text or icon alongside status colors",
+      "Readable error messages",
+      "Accessible names for icon-only controls"
+    ]
+  },
+  "pagePatterns": {
+    "landing": "Slim header, spacious hero, one primary CTA, restrained product preview, short feature sections, quiet footer.",
+    "auth": "No app sidebar. Narrow form with optional muted editorial photo. Login, signup, and recovery share structure.",
+    "home": "Feed is the default signed-in surface inside the shared application shell.",
+    "feed": "Readable central column, quiet composer, generous post spacing, useful optional right rail.",
+    "search": "Prominent filled search field, restrained tabs, spacious user/content results, clear actions.",
+    "chat": "Conversation/channel list, main thread, optional details panel, anchored composer.",
+    "play": "Make the active game the focal point; keep controls and match details secondary.",
+    "profile": "Restrained banner, circular avatar, clear identity and bio, relevant actions, small content tab set.",
+    "settings": "Secondary settings navigation, readable form column, clear save feedback; private data stays in owner views.",
+    "notifications": "Compact bell popover for recent items, clear unread state and destinations; use a full inbox when needed."
+  },
+  "shadcn": {
+    "purpose": "Semantic dark-theme mapping, with square corners applied to every rectangular component.",
+    "valueFormat": "CSS color strings. Convert explicitly if an integration expects HSL channels.",
+    "dark": {
+      "background": "#000000",
+      "foreground": "#F5F5F5",
+      "card": "#121212",
+      "card-foreground": "#F5F5F5",
+      "popover": "#1C1C1C",
+      "popover-foreground": "#F5F5F5",
+      "primary": "#F16B3A",
+      "primary-foreground": "#000000",
+      "secondary": "#1C1C1C",
+      "secondary-foreground": "#F5F5F5",
+      "muted": "#121212",
+      "muted-foreground": "#999999",
+      "accent": "#262626",
+      "accent-foreground": "#F5F5F5",
+      "destructive": "#F08080",
+      "destructive-foreground": "#000000",
+      "border": "#292929",
+      "input": "#767676",
+      "ring": "#F16B3A"
+    },
+    "radius": "0rem",
+    "note": "The shadcn accent role is a neutral interactive surface here. Primary carries Nook orange."
+  },
+  "contentAndScope": {
+    "mockupContent": "Names, posts, counts, game artwork, and optional controls in generated mockups are placeholders.",
+    "featureClaims": "A design does not establish that an endpoint or feature exists.",
+    "profileThemes": "Nitro-like customization is a separate later feature; it does not change the default shell palette."
+  }
+}

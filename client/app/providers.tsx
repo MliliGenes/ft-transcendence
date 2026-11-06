@@ -6,6 +6,7 @@ import {
   QueryClientProvider,
 } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { AuthProvider } from "@/components/auth/auth-provider";
 
 function makeQueryClient() {
   return new QueryClient({
@@ -28,7 +29,7 @@ function getQueryClient() {
 export default function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={getQueryClient()}>
-      {children}
+      <AuthProvider>{children}</AuthProvider>
     </QueryClientProvider>
   );
 }
