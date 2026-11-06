@@ -1,6 +1,9 @@
 # Local credentials; commit only examples.
 /envs/*.env
 
+# Dependencies in the client and service workspaces.
+node_modules/
+
 # Persistent container data; keep directory placeholders.
 /volumes/**
 !/volumes/**/
