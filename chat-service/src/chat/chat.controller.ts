@@ -21,6 +21,7 @@ import { SendMessageDto } from './dtos/message.dto.js';
 import { GetMessagesQueryDto } from './dtos/get-messages-query.dto.js';
 import { MarkReadDto } from './dtos/mark-read.dto.js';
 import { EditMessageDto } from './dtos/edit-message.dto.js';
+import { CreateAttachmentUploadUrlDto } from './dtos/create-attachment-upload-url.dto.js';
 import type { Request as ExpressRequest } from 'express';
 
 @Controller('chat')
@@ -62,10 +63,40 @@ export class ChatController {
   createAttachmentUploadUrl(
     @Request() req: ExpressRequest & { user: { sub: string } },
     @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
+    @Body() body: CreateAttachmentUploadUrlDto,
   ) {
     return this.chatService.createAttachmentUploadUrl(
       req.user.sub,
       conversationId,
+      req.headers.authorization ?? '',
+      body.contentType,
+    );
+  }
+
+  @Get('conversations/:conversationId/attachments/download-url')
+  createAttachmentDownloadUrl(
+    @Request() req: ExpressRequest & { user: { sub: string } },
+    @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
+    @Query('objectKey') objectKey: string,
+  ) {
+    return this.chatService.createAttachmentDownloadUrl(
+      req.user.sub,
+      conversationId,
+      objectKey,
+      req.headers.authorization ?? '',
+    );
+  }
+
+  @Get('conversations/:conversationId/attachments/preview-url')
+  createAttachmentPreviewUrl(
+    @Request() req: ExpressRequest & { user: { sub: string } },
+    @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
+    @Query('objectKey') objectKey: string,
+  ) {
+    return this.chatService.createAttachmentPreviewUrl(
+      req.user.sub,
+      conversationId,
+      objectKey,
       req.headers.authorization ?? '',
     );
   }

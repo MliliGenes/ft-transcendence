@@ -31,6 +31,7 @@ function clientOptions(
     endPoint: required(config, endpointKey),
     port: port(config, portKey),
     useSSL: useSsl(config, sslKey),
+    region: config.get<string>('MINIO_REGION') ?? 'us-east-1',
     accessKey: required(config, 'MINIO_ACCESS_KEY'),
     secretKey: required(config, 'MINIO_SECRET_KEY'),
   };

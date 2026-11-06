@@ -29,6 +29,82 @@ function PresenceDot({ status = 'OFFLINE', label }) {
   );
 }
 
+function MessageAttachment({ conversationId, objectKey, index, setError }) {
+  const item = useRef(null);
+  const [details, setDetails] = useState(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const loadPreview = async () => {
+      try {
+        const query = new URLSearchParams({ objectKey });
+        const attachment = await chatRequest(
+          `/chat/conversations/${conversationId}/attachments/preview-url?${query}`,
+          { signal: controller.signal },
+        );
+        setDetails(attachment);
+      } catch (failure) {
+        if (!controller.signal.aborted) setError(failure);
+      }
+    };
+
+    if (typeof IntersectionObserver === 'undefined' || !item.current) {
+      void loadPreview();
+      return () => controller.abort();
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        observer.disconnect();
+        void loadPreview();
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(item.current);
+    return () => {
+      observer.disconnect();
+      controller.abort();
+    };
+  }, [conversationId, objectKey, setError]);
+
+  async function downloadAttachment() {
+    try {
+      const query = new URLSearchParams({ objectKey });
+      const { url } = await chatRequest(
+        `/chat/conversations/${conversationId}/attachments/download-url?${query}`,
+      );
+      window.location.assign(url);
+    } catch (failure) {
+      setError(failure);
+    }
+  }
+
+  return (
+    <li ref={item}>
+      {details?.previewUrl && (
+        <img
+          className="message-attachment-image"
+          src={details.previewUrl}
+          alt={`Image attachment ${index + 1}`}
+          loading="lazy"
+        />
+      )}
+      {details ? (
+        <button
+          type="button"
+          className="button button-secondary button-small"
+          onClick={() => void downloadAttachment()}
+        >
+          Download attachment {index + 1}
+        </button>
+      ) : (
+        <span className="muted">Attachment {index + 1}</span>
+      )}
+    </li>
+  );
+}
+
 function trackPresenceActivity(socket) {
   let lastSentAt = 0;
   const sendActivity = () => {
@@ -69,6 +145,9 @@ export function ChatPage() {
   const [memberId, setMemberId] = useState('');
   const [channelName, setChannelName] = useState('');
   const [content, setContent] = useState('');
+  const [files, setFiles] = useState([]);
+  const fileInput = useRef(null);
+  const uploadedObjectKeys = useRef(new Map());
   const pendingRequest = useRef(null);
   const lastMarkedMessage = useRef(new Map());
   const [loading, setLoading] = useState(true);
@@ -154,6 +233,10 @@ export function ChatPage() {
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
+    setFiles([]);
+    uploadedObjectKeys.current.clear();
+    pendingRequest.current = null;
+    if (fileInput.current) fileInput.current.value = '';
     if (!selectedId) {
       setMessages([]);
       return;
@@ -348,21 +431,49 @@ export function ChatPage() {
     event.preventDefault();
     const text = content.trim();
     if (!text || !selectedId || busy) return;
+    const conversationId = selectedId;
     const clientRequestId = pendingRequest.current || crypto.randomUUID();
     pendingRequest.current = clientRequestId;
     setBusy(true);
     setError(null);
     try {
+      const attachments = [];
+      for (const file of files) {
+        let objectKey = uploadedObjectKeys.current.get(file);
+        if (!objectKey) {
+          const upload = await chatRequest(
+            `/chat/conversations/${conversationId}/attachments/upload-url`,
+            { method: 'POST', json: { contentType: file.type } },
+          );
+          const form = new FormData();
+          Object.entries(upload.fields).forEach(([key, value]) =>
+            form.append(key, value),
+          );
+          form.append('file', file);
+          const response = await fetch(upload.uploadUrl, {
+            method: 'POST',
+            body: form,
+          });
+          if (!response.ok)
+            throw new Error(`File upload failed (${response.status}).`);
+          objectKey = upload.objectKey;
+          uploadedObjectKeys.current.set(file, objectKey);
+        }
+        attachments.push(objectKey);
+      }
       const message = await chatRequest(
-        `/chat/conversations/${selectedId}/messages`,
+        `/chat/conversations/${conversationId}/messages`,
         {
           method: 'POST',
-          json: { content: text, clientRequestId },
+          json: { content: text, clientRequestId, attachments },
         },
       );
       setMessages((current) => upsertMessage(current, message));
       pendingRequest.current = null;
       setContent('');
+      setFiles([]);
+      if (fileInput.current) fileInput.current.value = '';
+      uploadedObjectKeys.current.clear();
       await loadConversations();
     } catch (failure) {
       setError(failure);
@@ -580,6 +691,19 @@ export function ChatPage() {
                       <span>{displayName}</span>
                     </div>
                     <p>{message.deletedAt ? 'Message deleted' : message.content}</p>
+                    {!message.deletedAt && message.attachments?.length > 0 && (
+                      <ul className="message-attachments">
+                        {message.attachments.map((objectKey, index) => (
+                          <MessageAttachment
+                            key={objectKey}
+                            conversationId={message.conversationId}
+                            objectKey={objectKey}
+                            index={index}
+                            setError={setError}
+                          />
+                        ))}
+                      </ul>
+                    )}
                   </li>
                 );
               })}
@@ -599,6 +723,49 @@ export function ChatPage() {
                 placeholder="Write a test message"
               />
             </label>
+            <label>
+              Attach files (up to 5, 10 MB each)
+              <input
+                ref={fileInput}
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                disabled={!selectedId || busy}
+                onChange={(event) => {
+                  const selected = Array.from(event.target.files || []);
+                  const allowedTypes = new Set([
+                    'image/jpeg',
+                    'image/png',
+                    'image/webp',
+                    'image/gif',
+                    'application/pdf',
+                  ]);
+                  if (
+                    selected.length > 5 ||
+                    selected.some(
+                      (file) => !allowedTypes.has(file.type) || file.size > 10 * 1024 * 1024,
+                    )
+                  ) {
+                    setError(new Error('Choose up to 5 supported files, each 10 MB or smaller.'));
+                    event.target.value = '';
+                    return;
+                  }
+                  setError(null);
+                  setFiles(selected);
+                  uploadedObjectKeys.current.clear();
+                  pendingRequest.current = null;
+                }}
+              />
+            </label>
+            {files.length > 0 && (
+              <ul className="selected-attachments">
+                {files.map((file) => (
+                  <li key={`${file.name}-${file.lastModified}`}>
+                    {file.name} ({Math.ceil(file.size / 1024)} KB)
+                  </li>
+                ))}
+              </ul>
+            )}
             <button
               className="button button-primary"
               disabled={!selectedId || !content.trim() || busy}

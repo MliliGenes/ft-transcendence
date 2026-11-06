@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Client } from 'minio';
 import { ConfigService } from '@nestjs/config';
@@ -7,6 +7,13 @@ import { minioBucket } from './minio.config.js';
 
 const UPLOAD_URL_TTL_SECONDS = 5 * 60;
 const DOWNLOAD_URL_TTL_SECONDS = 5 * 60;
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const INLINE_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
 
 @Injectable()
 export class MinioService {
@@ -20,15 +27,28 @@ export class MinioService {
     this.bucket = minioBucket(config);
   }
 
-  async createUploadUrl(conversationId: string, userId: string) {
+  async createUploadUrl(
+    conversationId: string,
+    userId: string,
+    contentType: string,
+  ) {
     const objectKey = `attachments/${conversationId}/${userId}/${randomUUID()}`;
-    const url = await this.presignClient.presignedPutObject(
-      this.bucket,
-      objectKey,
-      UPLOAD_URL_TTL_SECONDS,
-    );
+    const policy = this.presignClient.newPostPolicy();
+    policy.setBucket(this.bucket);
+    policy.setKey(objectKey);
+    policy.setContentType(contentType);
+    policy.setContentLengthRange(1, MAX_UPLOAD_BYTES);
+    policy.setExpires(new Date(Date.now() + UPLOAD_URL_TTL_SECONDS * 1000));
+    const { postURL, formData } = await this.presignClient.presignedPostPolicy(policy);
 
-    return { objectKey, url, expiresInSeconds: UPLOAD_URL_TTL_SECONDS };
+    return {
+      objectKey,
+      uploadUrl: postURL,
+      method: 'POST' as const,
+      fields: formData,
+      expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
+      maxBytes: MAX_UPLOAD_BYTES,
+    };
   }
 
   createDownloadUrl(objectKey: string) {
@@ -36,7 +56,41 @@ export class MinioService {
       this.bucket,
       objectKey,
       DOWNLOAD_URL_TTL_SECONDS,
+      { 'response-content-disposition': 'attachment' },
     );
+  }
+
+  async createInlineImageUrl(objectKey: string, contentType: string) {
+    if (!INLINE_IMAGE_TYPES.has(contentType)) return null;
+    return this.presignClient.presignedGetObject(
+      this.bucket,
+      objectKey,
+      DOWNLOAD_URL_TTL_SECONDS,
+      {
+        'response-content-disposition': 'inline',
+        'response-content-type': contentType,
+      },
+    );
+  }
+
+  async verifyUploadedAttachment(
+    objectKey: string,
+    conversationId: string,
+    userId: string,
+  ) {
+    const prefix = `attachments/${conversationId}/${userId}/`;
+    const objectId = objectKey.startsWith(prefix)
+      ? objectKey.slice(prefix.length)
+      : '';
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(objectId)) {
+      throw new BadRequestException('Invalid attachment reference');
+    }
+
+    const object = await this.client.statObject(this.bucket, objectKey);
+    if (object.size < 1 || object.size > MAX_UPLOAD_BYTES) {
+      throw new BadRequestException('Attachment size is invalid');
+    }
+    return object;
   }
 
   getObjectInfo(objectKey: string) {

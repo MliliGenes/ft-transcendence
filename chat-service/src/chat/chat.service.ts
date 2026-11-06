@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -25,9 +26,72 @@ export class ChatService {
     userId: string,
     conversationId: string,
     authorization: string,
+    contentType: string,
   ) {
     await this.getAccessibleConversation(userId, conversationId, authorization);
-    return this.minio.createUploadUrl(conversationId, userId);
+    return this.minio.createUploadUrl(conversationId, userId, contentType);
+  }
+
+  async createAttachmentDownloadUrl(
+    userId: string,
+    conversationId: string,
+    objectKey: string,
+    authorization: string,
+  ) {
+    await this.assertAttachmentAccessible(
+      userId,
+      conversationId,
+      objectKey,
+      authorization,
+    );
+    return { url: await this.minio.createDownloadUrl(objectKey) };
+  }
+
+  async createAttachmentPreviewUrl(
+    userId: string,
+    conversationId: string,
+    objectKey: string,
+    authorization: string,
+  ) {
+    await this.assertAttachmentAccessible(
+      userId,
+      conversationId,
+      objectKey,
+      authorization,
+    );
+    const object = await this.minio.getObjectInfo(objectKey);
+    const contentType = Object.entries(object.metaData ?? {}).find(
+      ([key]) => key.toLowerCase() === 'content-type',
+    )?.[1];
+    const safeContentType =
+      typeof contentType === 'string' ? contentType.split(';')[0].trim().toLowerCase() : '';
+    return {
+      contentType: safeContentType || 'application/octet-stream',
+      previewUrl: safeContentType
+        ? await this.minio.createInlineImageUrl(objectKey, safeContentType)
+        : null,
+    };
+  }
+
+  private async assertAttachmentAccessible(
+    userId: string,
+    conversationId: string,
+    objectKey: string,
+    authorization: string,
+  ) {
+    if (
+      typeof objectKey !== 'string' ||
+      objectKey.length > 200 ||
+      !objectKey.startsWith('attachments/')
+    ) {
+      throw new BadRequestException('Invalid attachment reference');
+    }
+    await this.getAccessibleConversation(userId, conversationId, authorization);
+    const message = await this.prisma.message.findFirst({
+      where: { conversationId, deletedAt: null, attachments: { has: objectKey } },
+      select: { id: true },
+    });
+    if (!message) throw new NotFoundException('Attachment not found');
   }
 
   async getMessages(
@@ -184,8 +248,9 @@ export class ChatService {
       authorization,
     );
 
+    const attachments = msg.attachments ?? [];
     const requestHash = createHash('sha256')
-      .update(JSON.stringify([conversationId, msg.content]))
+      .update(JSON.stringify([conversationId, msg.content, attachments]))
       .digest('hex');
 
     const existingMessage = await this.prisma.message.findFirst({
@@ -210,11 +275,18 @@ export class ChatService {
       return existingMessage;
     }
 
+    await Promise.all(
+      attachments.map((objectKey) =>
+        this.minio.verifyUploadedAttachment(objectKey, conversationId, userId),
+      ),
+    );
+
     const newMessage = await this.prisma.message.create({
       data: {
         conversationId,
         authorId: userId,
         content: msg.content,
+        attachments,
         clientRequestId: msg.clientRequestId,
         requestHash,
       },

@@ -18,7 +18,9 @@ export class PresenceService {
   connect(userId: string, socketId: string): PresenceChange | null {
     const sockets = this.socketsByUser.get(userId) ?? new Map();
     this.socketsByUser.set(userId, sockets);
-    sockets.set(socketId, Date.now() - AWAY_AFTER_MS);
+    // A newly connected socket represents fresh activity. Starting it at the
+    // away threshold makes a connected user appear away until their first input.
+    sockets.set(socketId, Date.now());
     return this.updateStatus(userId);
   }
 
