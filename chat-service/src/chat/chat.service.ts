@@ -10,6 +10,7 @@ import { createHash } from 'crypto';
 import { EditMessageDto } from './dtos/edit-message.dto.js';
 import { ChatGateway } from './gateway/chat.gateway.js';
 import { UserProfilesService } from './user-profiles.service.js';
+import { MinioService } from '../minio/minio.service.js';
 
 @Injectable()
 export class ChatService {
@@ -17,7 +18,17 @@ export class ChatService {
     private readonly prisma: PrismaService,
     private readonly chatGateway: ChatGateway,
     private readonly userProfiles: UserProfilesService,
+    private readonly minio: MinioService,
   ) {}
+
+  async createAttachmentUploadUrl(
+    userId: string,
+    conversationId: string,
+    authorization: string,
+  ) {
+    await this.getAccessibleConversation(userId, conversationId, authorization);
+    return this.minio.createUploadUrl(conversationId, userId);
+  }
 
   async getMessages(
     userId: string,
@@ -167,43 +178,11 @@ export class ChatService {
     conversationId: string,
     authorization?: string,
   ) {
-    const conversation = await this.prisma.conversation.findFirst({
-      where: {
-        id: conversationId,
-        OR: [
-          {
-            kind: 'DM',
-            OR: [{ dmUserAId: userId }, { dmUserBId: userId }],
-          },
-          {
-            kind: 'CHANNEL',
-            group: { is: { members: { some: { userId } } } },
-          },
-        ],
-      },
-      select: {
-        id: true,
-        kind: true,
-        dmUserAId: true,
-        dmUserBId: true,
-        group: {
-          select: { members: { select: { userId: true } } },
-        },
-      },
-    });
-
-    if (!conversation) throw new NotFoundException('Conversation not found');
-
-    if (conversation.kind === 'DM') {
-      const otherUserId =
-        conversation.dmUserAId === userId
-          ? conversation.dmUserBId
-          : conversation.dmUserAId;
-      if (!otherUserId) throw new NotFoundException('Conversation not found');
-      if (!authorization)
-        throw new NotFoundException('Conversation not found');
-      await this.userProfiles.ensureCanContact(otherUserId, authorization);
-    }
+    const conversation = await this.getAccessibleConversation(
+      userId,
+      conversationId,
+      authorization,
+    );
 
     const requestHash = createHash('sha256')
       .update(JSON.stringify([conversationId, msg.content]))
@@ -256,6 +235,52 @@ export class ChatService {
     this.chatGateway.broadcastMessageCreated(recipientIds, newMessage);
 
     return newMessage;
+  }
+
+  private async getAccessibleConversation(
+    userId: string,
+    conversationId: string,
+    authorization?: string,
+  ) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        OR: [
+          {
+            kind: 'DM',
+            OR: [{ dmUserAId: userId }, { dmUserBId: userId }],
+          },
+          {
+            kind: 'CHANNEL',
+            group: { is: { members: { some: { userId } } } },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        kind: true,
+        dmUserAId: true,
+        dmUserBId: true,
+        group: {
+          select: { members: { select: { userId: true } } },
+        },
+      },
+    });
+
+    if (!conversation) throw new NotFoundException('Conversation not found');
+
+    if (conversation.kind === 'DM') {
+      const otherUserId =
+        conversation.dmUserAId === userId
+          ? conversation.dmUserBId
+          : conversation.dmUserAId;
+      if (!otherUserId) throw new NotFoundException('Conversation not found');
+      if (!authorization)
+        throw new NotFoundException('Conversation not found');
+      await this.userProfiles.ensureCanContact(otherUserId, authorization);
+    }
+
+    return conversation;
   }
 
   async editMessage(
