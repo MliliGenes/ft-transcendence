@@ -265,6 +265,24 @@ export class AccountsService {
     return image;
   }
 
+  async removeImage(id: string, kind: UserImageKind): Promise<void> {
+    const user = await this.prisma.$transaction(async (tx) => {
+      // Use the same account lock as uploads and account deletion.
+      const users = await tx.$queryRaw<{ id: string }[]>`
+        SELECT "id" FROM "User" WHERE "id" = ${id} FOR UPDATE
+      `;
+      if (users.length === 0) throw new NotFoundException('Account not found');
+
+      await tx.userImage.deleteMany({ where: { userId: id, kind } });
+      return tx.user.update({
+        where: { id },
+        data: kind === 'AVATAR' ? { avatarUrl: null } : { bannerUrl: null },
+        select: accountSelect,
+      });
+    });
+    if (kind === 'AVATAR') await this.events?.publishUpdated(user);
+  }
+
   async storeImage(id: string, kind: UserImageKind, file?: UploadedImage) {
     if (!file?.buffer?.length) {
       throw new BadRequestException(

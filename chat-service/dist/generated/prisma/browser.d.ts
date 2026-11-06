@@ -1,0 +1,11 @@
+import * as Prisma from './internal/prismaNamespaceBrowser.js';
+export { Prisma };
+export * as $Enums from './enums.js';
+export * from './enums.js';
+export type ChatUser = Prisma.ChatUserModel;
+export type Group = Prisma.GroupModel;
+export type GroupMember = Prisma.GroupMemberModel;
+export type Conversation = Prisma.ConversationModel;
+export type ConversationReadState = Prisma.ConversationReadStateModel;
+export type Message = Prisma.MessageModel;
+export type Reaction = Prisma.ReactionModel;

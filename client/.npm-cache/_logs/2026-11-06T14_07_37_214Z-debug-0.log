@@ -1,0 +1,57 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.6.2
+2 info using node@v24.13.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:D:\ft-transcendence\client\.npmrc
+5 silly config load:file:C:\Users\sel-box\.npmrc
+6 silly config load:file:C:\Users\sel-box\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install react-easy-crop
+8 verbose argv "install" "react-easy-crop" "--offline" "false" "--cache" ".npm-cache" "--no-audit" "--no-fund" "--fetch-retries" "0" "--fetch-timeout" "20000"
+9 verbose logfile logs-max:10 dir:D:\ft-transcendence\client\.npm-cache\_logs\2026-11-06T14_07_37_214Z-
+10 verbose logfile D:\ft-transcendence\client\.npm-cache\_logs\2026-11-06T14_07_37_214Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 silly idealTree buildDeps
+14 silly fetch manifest react-easy-crop@*
+15 silly packumentCache full:https://registry.npmjs.org/react-easy-crop cache-miss
+16 http fetch GET 200 https://registry.npmjs.org/react-easy-crop 14391ms (cache miss)
+17 silly packumentCache full:https://registry.npmjs.org/react-easy-crop set size:undefined disposed:false
+18 silly fetch manifest react@19.3.0
+19 silly packumentCache full:https://registry.npmjs.org/react cache-miss
+20 http fetch GET 200 https://registry.npmjs.org/react 88ms (cache revalidated)
+21 silly packumentCache full:https://registry.npmjs.org/react set size:7112377 disposed:false
+22 silly fetch manifest react-dom@19.3.0
+23 silly packumentCache full:https://registry.npmjs.org/react-dom cache-miss
+24 http fetch GET 200 https://registry.npmjs.org/react-dom 1797ms (cache miss)
+25 silly packumentCache full:https://registry.npmjs.org/react-dom set size:undefined disposed:false
+26 silly placeDep ROOT react-easy-crop@6.2.4 OK for: client@0.1.0 want: *
+27 silly fetch manifest normalize-wheel@^1.0.1
+28 silly packumentCache full:https://registry.npmjs.org/normalize-wheel cache-miss
+29 http fetch GET 200 https://registry.npmjs.org/normalize-wheel 58ms (cache miss)
+30 silly packumentCache full:https://registry.npmjs.org/normalize-wheel set size:undefined disposed:false
+31 silly fetch manifest @emnapi/runtime@^1.11.3
+32 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fruntime cache-miss
+33 http fetch GET 200 https://registry.npmjs.org/@emnapi%2fruntime 56ms (cache revalidated)
+34 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fruntime set size:136102 disposed:false
+35 silly placeDep ROOT @emnapi/runtime@1.11.3 OK for: @img/sharp-wasm32@0.35.5 want: ^1.11.3
+36 silly fetch manifest @emnapi/core@^1.7.1 || ^2.0.0-alpha.4
+37 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fcore cache-miss
+38 http fetch GET 200 https://registry.npmjs.org/@emnapi%2fcore 51ms (cache revalidated)
+39 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fcore set size:136106 disposed:false
+40 silly placeDep ROOT @emnapi/core@1.11.3 OK for: @napi-rs/wasm-runtime@1.2.5 want: ^1.7.1 || ^2.0.0-alpha.4
+41 silly placeDep ROOT normalize-wheel@1.0.1 OK for: react-easy-crop@6.2.4 want: ^1.0.1
+42 silly reify moves {}
+43 http cache normalize-wheel@https://registry.npmjs.org/normalize-wheel/-/normalize-wheel-1.0.1.tgz 0ms (cache hit)
+44 http cache react-easy-crop@https://registry.npmjs.org/react-easy-crop/-/react-easy-crop-6.2.4.tgz 0ms (cache hit)
+45 silly tarball no local data for normalize-wheel@https://registry.npmjs.org/normalize-wheel/-/normalize-wheel-1.0.1.tgz. Extracting by manifest.
+46 silly tarball no local data for react-easy-crop@https://registry.npmjs.org/react-easy-crop/-/react-easy-crop-6.2.4.tgz. Extracting by manifest.
+47 http fetch GET 200 https://registry.npmjs.org/normalize-wheel/-/normalize-wheel-1.0.1.tgz 52ms (cache miss)
+48 http fetch GET 200 https://registry.npmjs.org/react-easy-crop/-/react-easy-crop-6.2.4.tgz 195ms (cache miss)
+49 silly ADD node_modules/normalize-wheel
+50 silly ADD node_modules/react-easy-crop
+51 verbose cwd D:\ft-transcendence\client
+52 verbose os Windows_NT 10.0.26300
+53 verbose node v24.13.0
+54 verbose npm  v11.6.2
+55 verbose exit 0
+56 info ok

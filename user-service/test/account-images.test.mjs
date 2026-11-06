@@ -10,6 +10,7 @@ import request from 'supertest';
 import sharp from 'sharp';
 import { AppModule } from '../dist/app/app.module.js';
 import { PrismaService } from '../dist/prisma/prisma.service.js';
+import { RabbitMqEventsService } from '../dist/events/rabbitmq-events.service.js';
 
 test('avatar and banner uploads', async (t) => {
   const keys = generateKeyPairSync('rsa', {
@@ -19,6 +20,7 @@ test('avatar and banner uploads', async (t) => {
   });
   const id = '15f154f1-b37f-4fe7-955f-e8f4de3ceb8d';
   const images = new Map();
+  const updates = [];
   let user = {
     id,
     username: 'tester',
@@ -33,6 +35,10 @@ test('avatar and banner uploads', async (t) => {
       return user ? [{ id }] : [];
     },
     userImage: {
+      deleteMany: async ({ where }) => {
+        assert.equal(where.userId, id);
+        return { count: Number(images.delete(where.kind)) };
+      },
       findUnique: async ({ where, select }) => {
         assert.deepEqual(select, { data: true, contentType: true });
         const image =
@@ -77,6 +83,8 @@ test('avatar and banner uploads', async (t) => {
   const module = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PrismaService)
     .useValue(prisma)
+    .overrideProvider(RabbitMqEventsService)
+    .useValue({ publishUpdated: async (profile) => updates.push(profile) })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({
@@ -232,8 +240,65 @@ test('avatar and banner uploads', async (t) => {
         .expect(400);
     }
   });
-  await t.test('a deleted account cannot upload', async () => {
+  await t.test('removal requires authentication and cannot target another user', async () => {
+    for (const kind of ['avatar', 'banner']) {
+      await request(server).delete(`/accounts/me/${kind}`).expect(401);
+      await request(server)
+        .delete(`/accounts/me/${kind}`)
+        .auth('invalid', { type: 'bearer' })
+        .expect(401);
+      await request(server)
+        .delete(`/accounts/${id}/${kind}`)
+        .auth(token, { type: 'bearer' })
+        .expect(404);
+    }
+    assert.equal(images.size, 2);
+  });
+  await t.test('removal rolls back if clearing the URL fails', async () => {
+    const avatar = images.get('AVATAR');
+    const url = user.avatarUrl;
+    const eventCount = updates.length;
+    failUpdate = true;
+    await request(server)
+      .delete('/accounts/me/avatar')
+      .auth(token, { type: 'bearer' })
+      .expect(500);
+    failUpdate = false;
+    assert.equal(images.get('AVATAR'), avatar);
+    assert.equal(user.avatarUrl, url);
+    assert.equal(updates.length, eventCount);
+  });
+  await t.test('removes only the selected image and allows repeated removal', async () => {
+    for (const kind of ['avatar', 'banner']) {
+      const other = kind === 'avatar' ? 'banner' : 'avatar';
+      const otherImage = images.get(other.toUpperCase());
+      const otherUrl = user[`${other}Url`];
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const eventCount = updates.length;
+        const response = await request(server)
+          .delete(`/accounts/me/${kind}`)
+          .auth(token, { type: 'bearer' })
+          .expect(204);
+        assert.equal(response.text, '');
+        assert.equal(response.headers['cache-control'], 'no-store');
+        assert.equal(user[`${kind}Url`], null);
+        assert.equal(images.has(kind.toUpperCase()), false);
+        assert.equal(images.get(other.toUpperCase()), otherImage);
+        assert.equal(user[`${other}Url`], otherUrl);
+        assert.equal(updates.length, eventCount + (kind === 'avatar' ? 1 : 0));
+        if (kind === 'avatar') assert.equal(updates.at(-1).avatarUrl, null);
+      }
+      await request(server).get(`/accounts/${id}/${kind}`).expect(404);
+    }
+  });
+  await t.test('a deleted account cannot upload or remove images', async () => {
     user = null;
+    for (const kind of ['avatar', 'banner']) {
+      await request(server)
+        .delete(`/accounts/me/${kind}`)
+        .auth(token, { type: 'bearer' })
+        .expect(404);
+    }
     await upload('avatar').expect(404);
     await request(server).get(`/accounts/${id}/avatar`).expect(404);
     await request(server).get(`/accounts/${id}/banner`).expect(404);

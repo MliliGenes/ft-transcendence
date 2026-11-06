@@ -110,6 +110,22 @@ export class AccountsController {
     return this.accountsService.storeImage(request.user.sub, 'BANNER', file);
   }
 
+  @Delete('me/avatar')
+  @UseGuards(AccessTokenGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Header('Cache-Control', 'no-store')
+  async removeAvatar(@Req() request: AuthenticatedRequest): Promise<void> {
+    await this.accountsService.removeImage(request.user.sub, 'AVATAR');
+  }
+
+  @Delete('me/banner')
+  @UseGuards(AccessTokenGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Header('Cache-Control', 'no-store')
+  async removeBanner(@Req() request: AuthenticatedRequest): Promise<void> {
+    await this.accountsService.removeImage(request.user.sub, 'BANNER');
+  }
+
   @Get()
   getUsers(@Query() query: PaginationDto) {
     return this.accountsService.getUsers(query);

@@ -21,6 +21,7 @@ export function ProfileImageEditor({ kind, profile, trigger, request, onProfile,
   onMessage: (message: string) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const mounted = useRef(true);
   const [source, setSource] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -31,6 +32,10 @@ export function ProfileImageEditor({ kind, profile, trigger, request, onProfile,
   const current = profileImageUrl(profile, kind);
   const isAvatar = kind === "avatar";
 
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   useEffect(() => () => { if (source) URL.revokeObjectURL(source); }, [source]);
 
   async function choose(event: ChangeEvent<HTMLInputElement>) {
@@ -41,6 +46,10 @@ export function ProfileImageEditor({ kind, profile, trigger, request, onProfile,
     setError("");
     try {
       const src = await prepareImage(file, kind);
+      if (!mounted.current) {
+        URL.revokeObjectURL(src);
+        return;
+      }
       setCrop({ x: 0, y: 0 });
       setZoom(1);
       setArea(null);

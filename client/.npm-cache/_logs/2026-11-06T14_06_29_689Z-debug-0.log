@@ -1,0 +1,18 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.6.2
+2 info using node@v24.13.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:D:\ft-transcendence\client\.npmrc
+5 silly config load:file:C:\Users\sel-box\.npmrc
+6 silly config load:file:C:\Users\sel-box\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install react-easy-crop
+8 verbose argv "install" "react-easy-crop" "--offline" "false" "--cache" ".npm-cache" "--no-audit" "--no-fund"
+9 verbose logfile logs-max:10 dir:D:\ft-transcendence\client\.npm-cache\_logs\2026-11-06T14_06_29_689Z-
+10 verbose logfile D:\ft-transcendence\client\.npm-cache\_logs\2026-11-06T14_06_29_689Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 silly idealTree buildDeps
+14 silly fetch manifest react-easy-crop@*
+15 silly packumentCache full:https://registry.npmjs.org/react-easy-crop cache-miss
+16 http fetch GET https://registry.npmjs.org/react-easy-crop attempt 1 failed with ECONNREFUSED
+17 http fetch GET https://registry.npmjs.org/react-easy-crop attempt 2 failed with ECONNREFUSED
