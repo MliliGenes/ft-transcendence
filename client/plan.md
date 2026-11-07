@@ -7,7 +7,7 @@ This is the working progress tracker for the Nook web client. Update this file a
 
 ## Product direction
 
-Nook is a calm, dark social and gaming space for friends and interest groups. The agreed visual source of truth is [`NOOK_DESIGN_SYSTEM.json`](./NOOK_DESIGN_SYSTEM.json). The client uses Next.js App Router, Tabler icons, shared UI primitives, and the gateway's same-origin `/api` routes.
+Nook is a calm social and gaming space with light and dark themes for friends and interest groups. The agreed visual source of truth is [`NOOK_DESIGN_SYSTEM.json`](./NOOK_DESIGN_SYSTEM.json). The client uses Next.js App Router, Tabler icons, shared UI primitives, and the gateway's same-origin `/api` routes. Theme selection defaults to System and is available in every page header; both palettes retain the same orange primary color.
 
 Profile/settings implementation reference: [PROFILE_DESIGN_SPEC.md](./PROFILE_DESIGN_SPEC.md), based on `NOOK_UI/profile/Nook User Settings Dark UI Grid.png`. Execution was approved. The implementation uses existing square-corner tokens and a fixed 3:1 banner crop matching the API; other crop presets remain deferred.
 

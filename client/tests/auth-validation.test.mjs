@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { validateAuth } from "../lib/auth/validation.ts";
+import { validateAuth, validateNewPassword } from "../lib/auth/validation.ts";
 
 const valid = { username: "player1", email: "user@example.com", password: "abcdefgh" };
 
@@ -30,4 +30,10 @@ test("login does not impose new registration length restrictions", () => {
   assert.ok(validateAuth("login", { ...valid, password: "a".repeat(73) }).password);
   assert.ok(validateAuth("login", { ...valid, password: "" }).password);
   assert.ok(validateAuth("login", { ...valid, email: "bad" }).email);
+});
+
+test("password updates use the backend character and UTF-8 byte limits", () => {
+  assert.equal(validateNewPassword("abcdefgh"), undefined);
+  assert.equal(validateNewPassword("short"), "Use 8–32 characters.");
+  assert.equal(validateNewPassword("😀".repeat(19)), "Password must be no more than 72 UTF-8 bytes.");
 });

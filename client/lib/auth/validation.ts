@@ -2,6 +2,13 @@ export type AuthMode = "login" | "register";
 export type AuthField = "username" | "email" | "password";
 export type AuthErrors = Partial<Record<AuthField, string>>;
 
+export function validateNewPassword(password: string) {
+  const length = Array.from(password).length;
+  if (length < 8 || length > 32) return "Use 8–32 characters.";
+  if (new TextEncoder().encode(password).length > 72) return "Password must be no more than 72 UTF-8 bytes.";
+  return undefined;
+}
+
 // Contract: user-service/openapi.json; login byte limit confirmed in LoginDto.
 // Client checks are feedback only; the service must validate again on submission.
 export function validateAuth(mode: AuthMode, values: Record<AuthField, string>): AuthErrors {

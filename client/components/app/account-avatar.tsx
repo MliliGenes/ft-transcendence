@@ -1,19 +1,23 @@
-"use client";
+import Image from "next/image";
+import Avatar from "boring-avatars";
 
-import { ProfileAvatar } from "./profile-avatar";
-import { profileImageUrl, type AccountProfile } from "@/lib/accounts/client";
+const colors = ["#F16B3A", "#171717", "#737373", "#D4D4D4", "#F5F5F5"];
 
-export function AccountAvatar({ profile, size = 40, className = "" }: {
-  profile: AccountProfile;
-  size?: number;
+export function AccountAvatar({
+  source,
+  seed,
+  label,
+  size,
+  className,
+}: {
+  source: string | null;
+  seed: string;
+  label: string;
+  size: number;
   className?: string;
 }) {
-  const url = profileImageUrl(profile, "avatar");
-  return <span className={`block shrink-0 overflow-hidden rounded-full bg-nook-surface ${className}`} style={{ width: size, height: size }}>
-    {url
-      // User images are served through the API with no-store headers.
-      // eslint-disable-next-line @next/next/no-img-element
-      ? <img key={url} src={url} alt={`${profile.username}'s avatar`} width={size} height={size} referrerPolicy="no-referrer" className="size-full object-cover" />
-      : <ProfileAvatar username={profile.username} size={size} className="size-full" />}
-  </span>;
+  if (!source) {
+    return <Avatar name={seed} variant="pixel" colors={colors} size={size} square className={className} role="img" aria-label={label} focusable="false" />;
+  }
+  return <Image src={source} alt={label} width={size} height={size} unoptimized className={className} />;
 }

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { ProfileView } from "@/components/app/profile-view";
+import { PublicProfile } from "@/components/app/public-profile";
 
 export const metadata: Metadata = { title: "Profile — Nook" };
 
 export default function ProfilePage() {
-  return <ProfileView />;
+  return <PublicProfile ownerRoute />;
 }

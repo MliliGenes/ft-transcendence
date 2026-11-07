@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { ChatWorkspace } from "@/components/app/chat-workspace";
+import { ComingSoon } from "@/components/app/coming-soon";
 
 export const metadata: Metadata = { title: "Chat — Nook" };
 
 export default function ChatPage() {
-  return <ChatWorkspace />;
+  return <ComingSoon title="Chat" />;
 }

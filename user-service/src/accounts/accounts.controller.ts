@@ -23,6 +23,7 @@ import { AccessTokenGuard } from '../auth/guards/access-token.guard.js';
 import type { AuthenticatedRequest } from '../auth/guards/access-token.guard.js';
 import { AccountsService } from './accounts.service.js';
 import { PaginationDto } from './dto/pagination.dto.js';
+import { AccountSearchDto } from './dto/account-search.dto.js';
 import { UpdateAccountDto } from './dto/update-account.dto.js';
 import {
   SetPasswordDto,
@@ -132,8 +133,8 @@ export class AccountsController {
   }
 
   @Get('search')
-  searchUsers(@Query('username') username: string) {
-    return this.accountsService.searchUsersByUsername(username);
+  searchUsers(@Query() query: AccountSearchDto) {
+    return this.accountsService.searchUsers(query);
   }
 
   // Keep the literal /me route above this parameter route.

@@ -25,6 +25,7 @@ import { RabbitMqEventsService } from '../events/rabbitmq-events.service.js';
 import type { UpdateAccountDto } from './dto/update-account.dto.js';
 
 import type { PaginationDto } from './dto/pagination.dto.js';
+import type { AccountSearchDto } from './dto/account-search.dto.js';
 
 // Public profile fields shared with other services; private details stay in /me.
 const publicProfileSelect = {
@@ -109,23 +110,27 @@ export class AccountsService {
     return { users, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async searchUsersByUsername(username: string) {
-    const term = username?.trim();
-    if (!term) {
-      throw new BadRequestException('Username query is required');
-    }
-
-    return this.prisma.user.findMany({
-      where: {
-        username: {
-          contains: term,
-          mode: 'insensitive',
-        },
-      },
-      take: 10,
-      orderBy: [{ username: 'asc' }, { id: 'asc' }],
-      select: publicProfileSelect,
-    });
+  async searchUsers({ username, page, limit }: AccountSearchDto) {
+    const where: Prisma.UserWhereInput = {
+      OR: [
+        { username: { contains: username, mode: 'insensitive' } },
+        { displayName: { contains: username, mode: 'insensitive' } },
+      ],
+    };
+    const [users, total] = await this.prisma.$transaction(
+      [
+        this.prisma.user.findMany({
+          where,
+          skip: (page - 1) * limit,
+          take: limit,
+          orderBy: [{ username: 'asc' }, { id: 'asc' }],
+          select: publicProfileSelect,
+        }),
+        this.prisma.user.count({ where }),
+      ],
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+    return { users, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   async getUser(id: string) {

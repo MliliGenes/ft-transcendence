@@ -1,188 +1,109 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
-import { IconAt, IconBell, IconBrandDiscord, IconBrandGithub, IconCamera, IconCheck, IconChevronRight, IconEye, IconLink, IconLock, IconLogout, IconMail, IconMountain, IconPalette, IconPhoto, IconShield, IconUser, IconX } from "@tabler/icons-react";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { IconArrowUpRight, IconCheck, IconLock, IconMail, IconUser } from "@tabler/icons-react";
+import { ConnectedAccounts } from "@/components/app/connected-accounts";
+import { useAuth } from "@/components/auth/auth-provider";
+import { ThemeSelector } from "@/components/theme-selector";
 import { Button } from "@/components/ui/button";
-import { NookLogo } from "@/components/nook-logo";
-import { AccountAvatar } from "./account-avatar";
-import { AccountStatus } from "./account-status";
-import { ProfileImageEditor } from "./profile-image-editor";
-import { PROFILE_STATUS_ICONS, type ProfileStatusIcon } from "./profile-status";
-import { accountApi, profileImageUrl, profileName, type AccountProfile, type ImageKind, type UpdateAccount } from "@/lib/accounts/client";
-import { accountError, useAccount } from "@/lib/accounts/use-account";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { currentAccountQueryKey, useCurrentAccount } from "@/hooks/use-current-account";
+import { accountApi } from "@/lib/accounts/client";
+import { validateNewPassword } from "@/lib/auth/validation";
 
-const groups = [
-  { label: "My Account", items: [{ id: "profile", label: "Profile", icon: IconUser }, { id: "account", label: "Account", icon: IconLock }, { id: "security", label: "Security", icon: IconShield, unavailable: true }] },
-  { label: "Social", items: [{ id: "connections", label: "Connections", icon: IconLink }] },
-  { label: "App", items: [{ id: "notifications", label: "Notifications", icon: IconBell, unavailable: true }, { id: "appearance", label: "Appearance", icon: IconPalette, unavailable: true }, { id: "privacy", label: "Privacy", icon: IconEye, unavailable: true }] },
-];
-
-function profileDraft(profile: AccountProfile) {
-  return { displayName: profile.displayName ?? "", username: profile.username, firstName: profile.firstName ?? "", lastName: profile.lastName ?? "", email: profile.email, bio: profile.bio ?? "", statusText: profile.statusText ?? "", statusIcon: profile.statusIcon };
+function Panel({ id, title, description, children }: { id: string; title: string; description: string; children: ReactNode }) {
+  return <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-24 border border-border bg-card p-5 md:p-7"><header className="mb-5"><h2 id={`${id}-title`} className="text-xl font-semibold">{title}</h2><p className="mt-1 text-sm text-muted-foreground">{description}</p></header>{children}</section>;
 }
 
 export function SettingsView() {
-  const account = useAccount();
-  if (!account.query.data || !account.session) return <AccountStatus account={account} />;
-  return <SettingsPanel key={account.query.data.id} account={account} profile={account.query.data} />;
-}
+  const { session, isRestoring, requestWithSession } = useAuth();
+  const account = useCurrentAccount();
+  const queryClient = useQueryClient();
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordFeedback, setPasswordFeedback] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const key = currentAccountQueryKey(session?.user.id);
 
-function SettingsPanel({ account, profile }: { account: ReturnType<typeof useAccount>; profile: AccountProfile }) {
-  const router = useRouter();
-  const [section, setSection] = useState("profile");
-  const [draft, setDraft] = useState(() => profileDraft(profile));
-  const [message, setMessage] = useState("");
-  const [focusField, setFocusField] = useState("");
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [editor, setEditor] = useState<{ kind: ImageKind; trigger: HTMLElement } | null>(null);
-  const banner = profileImageUrl(profile, "banner");
-  const update: UpdateAccount = {};
-  for (const key of ["username", "email", "displayName", "firstName", "lastName"] as const) {
-    const value = key === "username" || key === "email" ? draft[key].trim() : draft[key].trim() || null;
-    if (value !== profile[key]) Object.assign(update, { [key]: value });
-  }
-  for (const key of ["bio", "statusText"] as const) {
-    const value = draft[key].trim() || null;
-    if (value !== profile[key]) Object.assign(update, { [key]: value });
-  }
-  if (draft.statusIcon !== profile.statusIcon) update.statusIcon = draft.statusIcon;
-  const dirty = Object.keys(update).length > 0;
-  const save = useMutation({
-    mutationFn: (data: UpdateAccount) => account.request(token => accountApi.updateMe(token, data)),
-    onSuccess: updated => {
-      account.setProfile(updated);
-      setDraft(profileDraft(updated));
-      setMessage(updated.email !== profile.email ? "Changes saved. Your new email address needs verification." : "Changes saved.");
+  const password = useMutation({
+    mutationFn: () => requestWithSession(token => {
+      if (!account.data) throw new Error("Your account could not be loaded.");
+      return account.data.hasPassword
+        ? accountApi.changePassword(token, oldPassword, newPassword)
+        : accountApi.setPassword(token, newPassword);
+    }),
+    onSuccess: () => {
+      queryClient.setQueryData(key, (current: typeof account.data) => current ? { ...current, hasPassword: true } : current);
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordError("");
+      setPasswordFeedback(account.data?.hasPassword ? "Your password has been changed." : "Password added to your account.");
     },
+    onError: error => setPasswordError(error instanceof Error ? error.message : "Unable to update your password. Please try again."),
   });
 
-  useEffect(() => {
-    if (section === "profile" && focusField) document.getElementById(`settings-${focusField}`)?.focus();
-  }, [section, focusField]);
-
-  function submit(event: FormEvent<HTMLFormElement>) {
+  function submitPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
-    if (dirty) save.mutate(update);
+    setPasswordFeedback("");
+    setPasswordError("");
+    const validationError = validateNewPassword(newPassword);
+    if (validationError) {
+      setPasswordError(validationError);
+      return;
+    }
+    if (account.data?.hasPassword && !oldPassword) {
+      setPasswordError("Enter your current password.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("The new passwords do not match.");
+      return;
+    }
+    password.mutate();
   }
 
-  function edit(field: string) {
-    setFocusField(field);
-    setSection("profile");
-  }
+  if (isRestoring) return <div role="status" className="mx-auto w-full max-w-4xl p-6 text-sm text-muted-foreground">Loading settings…</div>;
+  if (!session) return <div className="mx-auto w-full max-w-4xl p-6 text-sm text-muted-foreground">Log in to manage your settings. <Button render={<Link href="/login" />} className="ml-3 min-h-11">Log in</Button></div>;
+  if (account.isPending) return <div role="status" className="mx-auto w-full max-w-4xl p-6 text-sm text-muted-foreground">Loading settings…</div>;
+  if (account.error || !account.data) return <div role="alert" className="mx-auto w-full max-w-4xl p-6 text-sm text-destructive">Unable to load your settings. <Button variant="outline" onClick={() => account.refetch()} className="ml-3">Try again</Button></div>;
 
-  const fields = [
-    { key: "displayName" as const, label: "Display Name", autoComplete: "nickname", max: 50 },
-    { key: "username" as const, label: "Username", autoComplete: "username", max: 30, icon: IconAt },
-    { key: "firstName" as const, label: "First Name", autoComplete: "given-name", max: 50 },
-    { key: "lastName" as const, label: "Last Name", autoComplete: "family-name", max: 50 },
-    { key: "email" as const, label: "Email", autoComplete: "email", max: 254, icon: IconMail },
-  ];
-
-  return <div className="mx-auto w-full max-w-[1200px] p-3 sm:p-6 lg:p-8">
-    <section aria-label="User settings" className="min-w-0 border border-border bg-background [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-ring">
-      <header className="flex min-h-12 items-center gap-4 border-b border-border px-4">
-        <NookLogo className="text-lg" /><span className="border-l border-border pl-4 text-xs text-nook-text-secondary">User Settings</span>
-        <Link href="/profile" aria-label="Close settings and return to profile" className="ml-auto grid size-11 place-items-center text-nook-text-secondary hover:text-foreground"><IconX size={20} /></Link>
+  return (
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-5 py-8 md:px-8 md:py-12">
+      <header>
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">Your Nook</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">Settings</h1>
+        <nav aria-label="Settings sections" className="mt-6 flex flex-wrap gap-2 text-sm">
+          {["account", "security", "connections", "appearance"].map(section => <a key={section} href={`#${section}`} className="inline-flex min-h-10 items-center border border-border bg-background px-3 capitalize hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">{section}</a>)}
+        </nav>
       </header>
-      <div className="grid min-h-[640px] md:grid-cols-[216px_minmax(0,1fr)] lg:grid-cols-[232px_minmax(0,1fr)]">
-        <aside className="border-b border-border p-4 md:border-r md:border-b-0">
-          <div className="mb-4 flex items-center gap-3 border-b border-border pb-5">
-            <AccountAvatar profile={profile} size={44} className="border border-border" />
-            <div className="min-w-0"><p className="truncate text-sm font-semibold">{profile.username}</p><p className="mt-0.5 text-xs text-nook-text-muted">{profile.role === "SUPERADMIN" ? "Superadmin" : profile.role === "ADMIN" ? "Admin" : "Member"}</p></div>
-          </div>
-          <nav aria-label="Settings sections" className="hidden md:block">
-            {groups.map(group => <div key={group.label} className="mb-4 border-b border-border pb-4">
-              <p className="mb-2 px-2 text-xs text-nook-text-muted">{group.label}</p>
-              {group.items.map(item => <button key={item.id} type="button" disabled={"unavailable" in item && item.unavailable} title={"unavailable" in item ? "Coming soon" : undefined} aria-current={section === item.id ? "page" : undefined} onClick={() => setSection(item.id)} className={`flex min-h-10 w-full items-center gap-3 px-3 text-left text-sm disabled:cursor-not-allowed disabled:text-nook-text-muted ${section === item.id ? "bg-primary font-medium text-primary-foreground" : "text-nook-text-secondary enabled:hover:bg-nook-surface"}`}>
-                <item.icon size={17} stroke={1.75} aria-hidden="true" />{item.label}{"unavailable" in item && <span className="ml-auto text-[10px]">Soon</span>}
-              </button>)}
-            </div>)}
-          </nav>
-          <label className="mb-4 block md:hidden"><span className="mb-2 block text-xs text-nook-text-muted">Settings section</span><select value={section} onChange={event => setSection(event.target.value)} className="min-h-11 w-full border border-border bg-nook-surface px-3 text-sm"><option value="profile">Profile</option><option value="account">Account</option><option value="connections">Connections</option></select></label>
-          <button type="button" disabled={loggingOut || save.isPending || Boolean(editor)} onClick={async () => {
-            setLoggingOut(true);
-            try { await account.logout(); } catch { /* The local session is cleared even if logout is unreachable. */ }
-            router.replace("/login");
-          }} className="flex min-h-11 items-center gap-3 px-3 text-sm text-primary disabled:opacity-50"><IconLogout size={17} aria-hidden="true" />{loggingOut ? "Logging out…" : "Log Out"}</button>
-        </aside>
 
-        <div className="min-w-0 px-4 py-6 sm:p-7 lg:p-8">
-          <h1 className="text-2xl font-semibold tracking-tight">{section === "profile" ? "Edit Profile" : section === "account" ? "Account" : "Connections"}</h1>
-          <p className="mt-1 text-sm text-nook-text-muted">{section === "profile" ? "Update your public information on Nook." : section === "account" ? "Manage your account information." : "Your connected accounts on Nook."}</p>
-
-          {section === "profile" && <>
-            <div className="relative mt-6 mb-20">
-              <div className="relative flex h-36 items-center justify-center overflow-hidden border border-border bg-nook-surface sm:h-44">
-                {banner
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={banner} alt="Your profile banner" referrerPolicy="no-referrer" className="absolute inset-0 size-full object-cover" />
-                  : <IconMountain size={32} stroke={1.25} className="text-nook-text-muted" aria-label="No banner uploaded" />}
-                <Button variant="outline" onClick={event => setEditor({ kind: "banner", trigger: event.currentTarget })} disabled={save.isPending} className="absolute top-3 right-3 min-h-10 border-border bg-background/90 px-3"><IconPhoto />Change Banner</Button>
-              </div>
-              <div className="absolute -bottom-14 left-4">
-                <AccountAvatar profile={profile} size={116} className="border-4 border-background outline outline-border" />
-                <button type="button" aria-label="Change Avatar" onClick={event => setEditor({ kind: "avatar", trigger: event.currentTarget })} disabled={save.isPending} className="absolute right-0 bottom-0 grid size-11 place-items-center rounded-full border border-border bg-nook-surface-raised hover:bg-nook-surface-hover disabled:opacity-50"><IconCamera size={20} /></button>
-              </div>
-            </div>
-            <p className="mb-5 text-xs leading-5 text-nook-text-muted">Image changes save immediately. Use Save Changes for the fields below.</p>
-            <form onSubmit={submit}>
-              <fieldset disabled={save.isPending} className="grid gap-x-5 gap-y-5 sm:grid-cols-2 disabled:opacity-70">
-                <legend className="sr-only">Profile information</legend>
-                {fields.map(field => <label key={field.key} htmlFor={`settings-${field.key}`} className={field.key === "email" ? "sm:col-span-2" : ""}>
-                  <span className="mb-2 block text-xs font-medium">{field.label}</span>
-                  <span className="flex min-h-11 items-center gap-2 border border-nook-control-border bg-nook-surface px-3 focus-within:border-primary">
-                    {field.icon && <field.icon size={17} className="shrink-0 text-nook-text-muted" aria-hidden="true" />}
-                    <input id={`settings-${field.key}`} name={field.key} type={field.key === "email" ? "email" : "text"} value={draft[field.key]} onChange={event => { setDraft({ ...draft, [field.key]: event.target.value }); setMessage(""); save.reset(); }} maxLength={field.max} minLength={field.key === "username" ? 3 : undefined} required={field.key === "username" || field.key === "email"} autoComplete={field.autoComplete} autoCapitalize={field.key === "username" || field.key === "email" ? "none" : undefined} className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none" />
-                  </span>
-                </label>)}
-                <label htmlFor="settings-bio" className="sm:col-span-2">
-                  <span className="mb-2 flex items-center justify-between text-xs font-medium"><span>Bio</span><span className="text-nook-text-muted">{draft.bio.length}/190</span></span>
-                  <textarea id="settings-bio" value={draft.bio} onChange={event => { setDraft({ ...draft, bio: event.target.value }); setMessage(""); save.reset(); }} maxLength={190} rows={3} className="min-h-24 w-full resize-y border border-nook-control-border bg-nook-surface px-3 py-2 text-sm outline-none focus:border-primary" />
-                </label>
-                <div className="sm:col-span-2">
-                  <label htmlFor="settings-status" className="mb-2 flex items-center justify-between text-xs font-medium"><span>Custom status</span><span className="text-nook-text-muted">{draft.statusText.length}/100</span></label>
-                  <input id="settings-status" value={draft.statusText} onChange={event => { setDraft({ ...draft, statusText: event.target.value }); setMessage(""); save.reset(); }} maxLength={100} className="min-h-11 w-full border border-nook-control-border bg-nook-surface px-3 text-sm outline-none focus:border-primary" />
-                  <div role="group" aria-label="Status icon" className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" aria-label="No status icon" title="No icon" aria-pressed={draft.statusIcon === null} onClick={() => { setDraft({ ...draft, statusIcon: null }); setMessage(""); save.reset(); }} className={`grid size-10 place-items-center border ${draft.statusIcon === null ? "border-primary bg-primary/10 text-primary" : "border-border text-nook-text-secondary hover:bg-nook-surface"}`}><IconX size={16} stroke={1.75} aria-hidden="true" /></button>
-                    {(Object.entries(PROFILE_STATUS_ICONS) as [ProfileStatusIcon, typeof PROFILE_STATUS_ICONS[ProfileStatusIcon]][]).map(([name, Icon]) => <button key={name} type="button" aria-label={name.replace(/^Icon/, "")} aria-pressed={draft.statusIcon === name} onClick={() => { setDraft({ ...draft, statusIcon: name }); setMessage(""); save.reset(); }} className={`grid size-10 place-items-center border ${draft.statusIcon === name ? "border-primary bg-primary/10 text-primary" : "border-border text-nook-text-secondary hover:bg-nook-surface"}`}><Icon size={16} stroke={1.75} aria-hidden="true" /></button>)}
-                  </div>
-                </div>
-              </fieldset>
-              {save.isError && <p role="alert" className="mt-5 text-sm text-destructive">{accountError(save.error)}</p>}
-              <div className="mt-7 flex justify-end gap-3">
-                <Button type="button" variant="outline" size="lg" disabled={!dirty || save.isPending} onClick={() => { setDraft(profileDraft(profile)); setMessage(""); save.reset(); }} className="min-h-11 px-4">Cancel</Button>
-                <Button type="submit" size="lg" disabled={!dirty || save.isPending} className="min-h-11 px-5">{save.isPending ? "Saving…" : "Save Changes"}</Button>
-              </div>
-            </form>
-          </>}
-
-          {section === "account" && <div className="mt-6 space-y-3">
-            {[
-              { field: "email", label: "Email", value: profile.email, icon: IconMail },
-              { field: "username", label: "Username", value: profile.username, icon: IconAt },
-              { field: "displayName", label: "Display Name", value: profileName(profile), icon: IconUser },
-              { field: "firstName", label: "Name", value: [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Not set", icon: IconUser },
-            ].map(row => <button key={row.field} type="button" onClick={() => edit(row.field)} className="flex min-h-20 w-full items-center gap-4 border border-border bg-nook-surface px-4 py-4 text-left hover:bg-nook-surface-raised">
-              <row.icon size={22} stroke={1.5} className="shrink-0 text-nook-text-secondary" aria-hidden="true" /><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{row.label}</span><span className="mt-1 block truncate text-xs text-nook-text-muted">{row.value}</span></span>
-              {row.field === "email" && <span className={`hidden items-center gap-1 px-2 py-1 text-xs sm:inline-flex ${profile.emailVerifiedAt ? "bg-nook-success/15 text-nook-success" : "bg-nook-surface-raised text-nook-text-muted"}`}>{profile.emailVerifiedAt && <IconCheck size={13} />}{profile.emailVerifiedAt ? "Verified" : "Not verified"}</span>}
-              <IconChevronRight size={18} className="shrink-0 text-nook-text-muted" aria-hidden="true" />
-            </button>)}
-          </div>}
-
-          {section === "connections" && <div className="mt-6 space-y-3">
-            {[{ label: "GitHub", connected: profile.hasGithub, icon: IconBrandGithub }, { label: "Discord", connected: profile.hasDiscord, icon: IconBrandDiscord }].map(provider => <div key={provider.label} className="flex min-h-20 items-center gap-4 border border-border bg-nook-surface px-4 py-4">
-              <provider.icon size={28} className="shrink-0" aria-hidden="true" /><div className="flex-1"><p className="text-sm font-medium">{provider.label}</p><p className="mt-1 text-xs text-nook-text-muted">{provider.connected ? "Connected" : "Not connected"}</p></div>{provider.connected && <IconCheck size={20} className="text-nook-success" aria-label="Connected" />}
-            </div>)}
-            <p className="text-xs leading-5 text-nook-text-muted">Connection management is coming soon.</p>
-          </div>}
-          <p role="status" aria-live="polite" className="mt-5 min-h-5 text-sm text-nook-success">{message}</p>
+      <Panel id="account" title="Account" description="Manage your account information.">
+        <div className="divide-y divide-border border-y border-border">
+          <div className="flex flex-wrap items-center justify-between gap-4 py-4"><div className="flex items-center gap-3"><IconMail aria-hidden="true" className="text-muted-foreground" /><div><p className="text-sm font-medium">Email</p><p className="mt-1 text-sm text-muted-foreground">{account.data.email}</p></div></div><div className="flex items-center gap-3"><span className={`text-xs ${account.data.emailVerifiedAt ? "text-nook-success" : "text-muted-foreground"}`}>{account.data.emailVerifiedAt ? "Verified" : "Not verified"}</span><Button variant="outline" render={<Link href="/profile/edit#email" />} className="min-h-10">Edit</Button></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-4 py-4"><div className="flex items-center gap-3"><IconUser aria-hidden="true" className="text-muted-foreground" /><div><p className="text-sm font-medium">Username</p><p className="mt-1 text-sm text-muted-foreground">@{account.data.username}</p></div></div><Button variant="outline" render={<Link href="/profile/edit#username" />} className="min-h-10 gap-2">Edit profile <IconArrowUpRight size={15} aria-hidden="true" /></Button></div>
+          <div className="flex flex-wrap items-center justify-between gap-4 py-4"><div><p className="text-sm font-medium">Display name</p><p className="mt-1 text-sm text-muted-foreground">{account.data.displayName || "Not set"}</p></div><Button variant="outline" render={<Link href="/profile/edit#displayName" />} className="min-h-10">Edit profile</Button></div>
         </div>
-      </div>
-    </section>
-    {editor && <ProfileImageEditor kind={editor.kind} profile={profile} trigger={editor.trigger} request={account.request} onProfile={account.setProfile} onMessage={setMessage} onClose={() => setEditor(null)} />}
-  </div>;
+      </Panel>
+
+      <Panel id="security" title="Security" description="Use a password to keep access to your account secure.">
+        <form onSubmit={submitPassword} className="max-w-xl space-y-4">
+          {account.data.hasPassword && <div className="space-y-2"><Label htmlFor="old-password">Current password</Label><Input id="old-password" type="password" autoComplete="current-password" value={oldPassword} onChange={event => setOldPassword(event.target.value)} /></div>}
+          <div className="space-y-2"><Label htmlFor="new-password">{account.data.hasPassword ? "New password" : "Set a password"}</Label><Input id="new-password" type="password" autoComplete="new-password" minLength={8} maxLength={32} value={newPassword} onChange={event => setNewPassword(event.target.value)} /><p className="text-xs text-muted-foreground">8–32 characters, up to 72 UTF-8 bytes.</p></div>
+          <div className="space-y-2"><Label htmlFor="confirm-password">Confirm new password</Label><Input id="confirm-password" type="password" autoComplete="new-password" minLength={8} maxLength={32} value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} /></div>
+          {passwordError && <p role="alert" className="text-sm text-destructive">{passwordError}</p>}
+          {passwordFeedback && <p role="status" className="flex items-center gap-2 text-sm text-nook-success"><IconCheck size={16} aria-hidden="true" />{passwordFeedback}</p>}
+          <Button type="submit" disabled={password.isPending} className="min-h-11 gap-2">{password.isPending ? "Saving…" : <><IconLock size={16} aria-hidden="true" />{account.data.hasPassword ? "Change password" : "Set password"}</>}</Button>
+        </form>
+      </Panel>
+
+      <Panel id="connections" title="Connections" description="Link accounts you can use to sign in to Nook."><ConnectedAccounts showHeader={false} /></Panel>
+
+      <Panel id="appearance" title="Appearance" description="Choose how Nook looks on this device."><div className="flex flex-wrap items-center justify-between gap-4"><p className="text-sm text-muted-foreground">Your theme preference applies across Nook.</p><div className="flex items-center gap-3"><span className="text-sm">Theme</span><ThemeSelector /></div></div></Panel>
+    </div>
+  );
 }

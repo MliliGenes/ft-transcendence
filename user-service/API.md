@@ -817,7 +817,7 @@ These routes are present in the service and included in openapi.json.
 
 ### Search accounts
 
-`GET /accounts/search?username=player` is public. The query is trimmed and must be nonempty (400 otherwise). It performs case-insensitive username substring search and returns an array of at most ten public profiles, sorted by username then ID. No pagination envelope is returned.
+  `GET /accounts/search?username=player&page=1&limit=10` is public. The trimmed `username` query is required, 1-100 characters, and performs case-insensitive substring matching against username or display name. `page` defaults to 1 (maximum 1,000,000); `limit` defaults to 10 (maximum 100). Results contain public profile fields and are sorted by username then ID. The response uses `{ "users", "total", "page", "limit", "totalPages" }`, matching `GET /accounts`.
 
 ### Set or change password
 

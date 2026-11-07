@@ -11,6 +11,7 @@ import { AppModule } from '../dist/app/app.module.js';
 import { PrismaService } from '../dist/prisma/prisma.service.js';
 import { Prisma } from '../dist/generated/prisma/client.js';
 import { AccountsService } from '../dist/accounts/accounts.service.js';
+import { RabbitMqEventsService } from '../dist/events/rabbitmq-events.service.js';
 
 test('account endpoints use the authenticated identity and validate changes', async (t) => {
   const keys = generateKeyPairSync('rsa', {
@@ -267,7 +268,7 @@ test('account endpoints use the authenticated identity and validate changes', as
   );
 });
 
-test('account search by username returns public matches', async (t) => {
+test('account search matches public username and display name results with pagination', async (t) => {
   const keys = generateKeyPairSync('rsa', {
     modulusLength: 2048,
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
@@ -277,32 +278,51 @@ test('account search by username returns public matches', async (t) => {
   const module = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PrismaService)
     .useValue({
+      $transaction: async (queries) => Promise.all(queries),
       user: {
-        findMany: async ({ where, take, select }) => {
-          assert.equal(where.username.contains, 'ali');
-          assert.equal(where.username.mode, 'insensitive');
-          assert.equal(take, 10);
+        findMany: async ({ where, skip, take, orderBy, select }) => {
+          assert.deepEqual(where, {
+            OR: [
+              { username: { contains: 'ali', mode: 'insensitive' } },
+              { displayName: { contains: 'ali', mode: 'insensitive' } },
+            ],
+          });
+          assert.equal(skip, 2);
+          assert.equal(take, 2);
+          assert.deepEqual(orderBy, [{ username: 'asc' }, { id: 'asc' }]);
           assert.deepEqual(select, {
             id: true,
             username: true,
             displayName: true,
             avatarUrl: true,
             bannerUrl: true,
+            bio: true,
+            statusText: true,
+            statusIcon: true,
             createdAt: true,
           });
           return [
             {
               id: 'user-1',
               username: 'alice',
-              displayName: 'Alice',
+              displayName: 'A Person',
               avatarUrl: null,
               bannerUrl: null,
+              bio: null,
+              statusText: null,
+              statusIcon: null,
               createdAt: new Date('2024-01-01T00:00:00Z'),
             },
           ];
         },
+        count: async ({ where }) => {
+          assert.deepEqual(where.OR.map((field) => Object.keys(field)[0]), ['username', 'displayName']);
+          return 3;
+        },
       },
     })
+    .overrideProvider(RabbitMqEventsService)
+    .useValue({})
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({
@@ -314,15 +334,33 @@ test('account search by username returns public matches', async (t) => {
 
   const app = module.createNestApplication();
   t.after(() => app.close());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
   await app.init();
 
   const response = await request(app.getHttpServer())
-    .get('/accounts/search?username=ali')
+    .get('/accounts/search?username=%20ali%20&page=2&limit=2')
     .expect(200);
 
-  assert.equal(response.body[0].username, 'alice');
-  assert.equal(response.body[0].displayName, 'Alice');
-  assert.equal(response.body[0].passwordHash, undefined);
+  assert.equal(response.body.users[0].username, 'alice');
+  assert.equal(response.body.users[0].displayName, 'A Person');
+  assert.deepEqual({ total: response.body.total, page: response.body.page, limit: response.body.limit, totalPages: response.body.totalPages }, {
+    total: 3,
+    page: 2,
+    limit: 2,
+    totalPages: 2,
+  });
+  assert.equal(response.body.users[0].passwordHash, undefined);
+  assert.equal(response.body.users[0].email, undefined);
+  await request(app.getHttpServer()).get('/accounts/search?username=%20').expect(400);
+  await request(app.getHttpServer()).get(`/accounts/search?username=${'a'.repeat(101)}`).expect(400);
+  await request(app.getHttpServer()).get('/accounts/search?username=ali&page=0').expect(400);
+  await request(app.getHttpServer()).get('/accounts/search?username=ali&limit=101').expect(400);
 });
 
 test('friendship mutations require the caller to be part of the relationship', async () => {

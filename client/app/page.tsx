@@ -1,5 +1,6 @@
 import { IconArrowDown, IconArrowRight, IconDeviceGamepad2, IconLogin2, IconPhoto, IconMessageCircle, IconUserPlus, IconUsers } from "@tabler/icons-react";
 import { NookLogo } from "@/components/nook-logo";
+import { ThemeSelector } from "@/components/theme-selector";
 
 const features = [
   {
@@ -38,7 +39,7 @@ function ImagePlaceholder({ label, className = "" }: { label: string; className?
 
 export default function Home() {
   return (
-    <div id="top" className="min-h-screen bg-background text-foreground [&_a]:focus-visible:outline-2 [&_a]:focus-visible:outline-offset-4 [&_a]:focus-visible:outline-ring">
+    <div id="top" className="min-h-screen text-foreground [&_a]:focus-visible:outline-2 [&_a]:focus-visible:outline-offset-4 [&_a]:focus-visible:outline-ring">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-6 focus:top-6 focus:z-50 focus:bg-primary focus:p-3 focus:text-primary-foreground">
         Skip to content
       </a>
@@ -51,15 +52,16 @@ export default function Home() {
           <a href="#features" className="inline-flex min-h-11 items-center text-nook-text-secondary hover:text-foreground">Explore</a>
           <a href="#community" className="inline-flex min-h-11 items-center text-nook-text-secondary hover:text-foreground">About Nook</a>
         </nav>
-        <nav aria-label="Account" className="flex items-center gap-4 text-sm md:gap-6">
+        <nav aria-label="Account" className="flex items-center gap-2 text-sm sm:gap-4 md:gap-6">
           <a href="/login" className="inline-flex min-h-11 items-center gap-2 text-nook-text-secondary hover:text-foreground"><IconLogin2 size={18} stroke={1.75} aria-hidden="true" />Log in</a>
           <a href="/register" className="inline-flex min-h-12 items-center justify-center gap-2 bg-primary px-5 font-medium text-primary-foreground transition-colors hover:bg-nook-accent-hover active:bg-nook-accent-pressed"><IconUserPlus size={18} stroke={1.75} aria-hidden="true" />Register</a>
+          <ThemeSelector />
         </nav>
       </header>
 
       <main id="main" className="mx-auto w-full max-w-7xl px-6 md:px-12 lg:px-16">
         <section aria-labelledby="hero-title" className="pb-12 pt-16 text-center md:pb-16 md:pt-24">
-          <p className="mb-6 text-xs font-medium uppercase tracking-[0.2em] text-primary">A little closer. A little more together.</p>
+          <p className="mb-6 text-xs font-medium uppercase tracking-[0.2em] text-nook-accent-text">A little closer. A little more together.</p>
           <h1 id="hero-title" className="mx-auto max-w-4xl text-5xl leading-[1.05] font-semibold tracking-[-0.025em] sm:text-6xl md:text-7xl">
             A place for<br className="sm:hidden" /> your people<span className="text-primary">.</span>
           </h1>
@@ -104,7 +106,7 @@ export default function Home() {
           {/* Replace this placeholder with a community photo when ready. */}
           <ImagePlaceholder label="Life around Nook" className="aspect-[5/4] w-full" />
           <div>
-            <p className="mb-5 text-xs font-medium uppercase tracking-[0.18em] text-primary">Find your corner</p>
+            <p className="mb-5 text-xs font-medium uppercase tracking-[0.18em] text-nook-accent-text">Find your corner</p>
             <h2 id="community-title" className="text-3xl leading-tight font-semibold tracking-tight md:text-4xl">Big interests.<br />Small circles.<br />Room to be yourself.</h2>
             <p className="mt-6 max-w-md text-base leading-7 text-nook-text-secondary">Nook brings social life and play into one place. For the friends you already know, the people who share your interests, and the conversations you’ll pick up tomorrow.</p>
             <p className="mt-4 max-w-md text-base leading-7 text-nook-text-secondary">No big occasion needed. Just show up, share a little, and spend some time together.</p>
