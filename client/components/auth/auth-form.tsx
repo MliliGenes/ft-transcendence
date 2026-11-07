@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconArrowRight, IconBrandDiscord, IconBrandGithub, IconEye, IconEyeOff, IconLock, IconMail, IconUser } from "@tabler/icons-react";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { validateAuth, type AuthErrors, type AuthMode } from "@/lib/auth/validation";
 import { authApi, AuthRequestError } from "@/lib/auth/client";
 import { useAuth } from "@/components/auth/auth-provider";
+import { oauthNoticeMessage, rememberOAuthProvider, takeOAuthNotice, type OAuthProvider } from "@/lib/auth/oauth";
 
 export function AuthForm({ mode }: { mode: AuthMode }) {
   const registering = mode === "register";
@@ -18,7 +19,17 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [visible, setVisible] = useState(false);
   const [errors, setErrors] = useState<AuthErrors>({});
   const [formError, setFormError] = useState("");
+  const [formNotice, setFormNotice] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const notice = takeOAuthNotice("login");
+    if (notice) queueMicrotask(() => setFormError(oauthNoticeMessage(notice)));
+    if (sessionStorage.getItem("nook:password-reset-success")) {
+      sessionStorage.removeItem("nook:password-reset-success");
+      queueMicrotask(() => setFormNotice("Your password has been reset. Sign in with your new password."));
+    }
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -31,6 +42,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     });
     setErrors(nextErrors);
     setFormError("");
+    setFormNotice("");
     const firstInvalid = Object.keys(nextErrors)[0];
     if (firstInvalid) (form.elements.namedItem(firstInvalid) as HTMLInputElement)?.focus();
     if (firstInvalid) return;
@@ -52,21 +64,21 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   return (
     <section aria-labelledby="auth-title" className="w-full max-w-[420px]">
       <div className="mb-10 text-center">
-        <p className="mb-4 text-xs font-medium uppercase tracking-[0.18em] text-primary">{registering ? "Find your corner" : "Your people are here"}</p>
+        <p className="mb-4 text-xs font-medium uppercase tracking-[0.18em] text-nook-accent-text">{registering ? "Find your corner" : "Your people are here"}</p>
         <h1 id="auth-title" className="text-4xl leading-tight font-semibold tracking-[-0.025em]">{registering ? "Make yourself at home." : "Welcome back."}</h1>
         <p className="mt-4 text-base leading-relaxed text-nook-text-secondary">{registering ? "Create your Nook account. A little closer to your people." : "Log in to your Nook account."}</p>
       </div>
 
-      <div className="space-y-3" role="group" aria-label="Other sign-in options" aria-describedby="oauth-notice">
-        <Button type="button" variant="outline" disabled className="h-12 w-full gap-2 border-nook-border-subtle bg-nook-surface-raised text-sm text-foreground disabled:opacity-100">
-          <IconBrandGithub size={18} stroke={1.75} aria-hidden="true" />
-          Continue with GitHub
-        </Button>
-        <Button type="button" variant="outline" disabled className="h-12 w-full gap-2 border-nook-border-subtle bg-nook-surface-raised text-sm text-foreground disabled:opacity-100">
-          <IconBrandDiscord size={18} stroke={1.75} aria-hidden="true" />
-          Continue with Discord
-        </Button>
-        <p id="oauth-notice" className="text-center text-xs leading-5 text-nook-text-muted">GitHub and Discord sign-in are coming soon.</p>
+      <div className="space-y-3" role="group" aria-label="Other sign-in options">
+        {([
+          { provider: "github", label: "GitHub", Icon: IconBrandGithub },
+          { provider: "discord", label: "Discord", Icon: IconBrandDiscord },
+        ] satisfies { provider: OAuthProvider; label: string; Icon: typeof IconBrandGithub }[]).map(({ provider, label, Icon }) => (
+          <Button key={provider} type="button" variant="outline" render={<a href={`/api/auth/${provider}`} onClick={() => rememberOAuthProvider(provider)} />} className="h-12 w-full gap-2 border-nook-border-subtle bg-nook-surface-raised text-sm text-foreground">
+            <Icon size={18} stroke={1.75} aria-hidden="true" />
+            Continue with {label}
+          </Button>
+        ))}
       </div>
 
       <div className="my-8 flex items-center gap-4 text-xs text-nook-text-muted">
@@ -96,7 +108,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           {errors.email && <p id="email-error" role="alert" className="text-sm text-destructive">{errors.email}</p>}
         </div>
         <div className="space-y-2.5">
-          <Label htmlFor="password">Password</Label>
+          <div className="flex items-center justify-between"><Label htmlFor="password">Password</Label>{!registering && <Link href="/forgot-password" className="inline-flex min-h-11 items-center text-xs text-nook-accent-text underline underline-offset-4">Forgot password?</Link>}</div>
           <div className="relative">
             <IconLock size={18} stroke={1.75} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-nook-text-muted" />
             <Input id="password" name="password" type={visible ? "text" : "password"} required autoComplete={registering ? "new-password" : "current-password"} placeholder={registering ? "Create a password" : "Your password"} aria-invalid={Boolean(errors.password)} aria-describedby={[registering ? "password-hint" : "", errors.password ? "password-error" : ""].filter(Boolean).join(" ") || undefined} className="h-12 bg-nook-surface pr-12 pl-10 text-base" onChange={() => setErrors(current => ({ ...current, password: undefined }))} />
@@ -107,13 +119,14 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           {registering && <p id="password-hint" className="text-xs leading-5 text-nook-text-muted">8–32 characters, up to 72 UTF-8 bytes. Emojis can use multiple bytes.</p>}
           {errors.password && <p id="password-error" role="alert" className="text-sm text-destructive">{errors.password}</p>}
         </div>
+        {formNotice && <p role="status" className="text-sm leading-5 text-nook-success">{formNotice}</p>}
         {formError && <p role="alert" className="text-sm leading-5 text-destructive">{formError}</p>}
         <Button type="submit" disabled={busy} className="h-12 w-full gap-2 text-sm hover:bg-nook-accent-hover active:bg-nook-accent-pressed">{busy ? "Please wait…" : registering ? "Create account" : "Log in"}{!busy && <IconArrowRight size={18} stroke={1.75} aria-hidden="true" />}</Button>
       </form>
 
       <p className="mt-8 text-center text-sm text-nook-text-secondary">
         {registering ? "Already have an account? " : "New to Nook? "}
-        <Link href={registering ? "/login" : "/register"} className="inline-flex min-h-11 items-center text-primary underline-offset-4 hover:underline">{registering ? "Log in" : "Create an account"}</Link>
+        <Link href={registering ? "/login" : "/register"} className="inline-flex min-h-11 items-center text-nook-accent-text underline underline-offset-4">{registering ? "Log in" : "Create an account"}</Link>
       </p>
     </section>
   );

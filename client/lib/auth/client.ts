@@ -14,13 +14,17 @@ export class AuthRequestError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`/api/auth/${path}`, {
       ...init,
       credentials: "include",
-      headers: { Accept: "application/json", ...init?.headers },
+      headers: {
+        Accept: "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...init?.headers,
+      },
       cache: "no-store",
     });
   } catch {
@@ -36,9 +40,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     const detail = Array.isArray(body.message) ? body.message[0] : body.message;
     const message = response.status === 401
-      ? "Email or password is incorrect."
+      ? path === "login" ? "Email or password is incorrect." : "Your session has expired. Please log in again."
       : response.status === 409
-        ? "That email or username is already in use."
+        ? path === "register" ? "That email or username is already in use."
+          : path.endsWith("/link") ? "That provider is already connected to another Nook account."
+            : "That account is already connected to another Nook account."
         : response.status === 400 && detail
           ? detail
           : "Unable to complete that request. Please try again.";
@@ -61,4 +67,11 @@ export const authApi = {
     post<AuthSession>("register", { username, email, password }),
   refresh: () => post<AuthSession>("refresh"),
   logout: () => post<void>("logout"),
+  requestPasswordReset: (email: string) => post<{ requested: boolean }>("password-reset/request", { email }),
+  confirmPasswordReset: (token: string, newPassword: string) =>
+    post<{ confirmed: boolean }>("password-reset/confirm", { token, newPassword }),
+  linkProvider: (provider: "discord" | "github", accessToken: string) =>
+    request<{ authorizationUrl: string }>(`${provider}/link`, { method: "POST" }, accessToken),
+  unlinkProvider: (provider: "discord" | "github", accessToken: string) =>
+    request<void>(`${provider}/link`, { method: "DELETE" }, accessToken),
 };

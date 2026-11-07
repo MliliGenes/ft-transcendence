@@ -2790,11 +2790,11 @@
     "/accounts/search": {
       "get": {
         "operationId": "searchAccounts",
-        "summary": "Search accounts by username",
+        "summary": "Search accounts by username or display name",
         "tags": [
           "Accounts"
         ],
-        "description": "Public case-insensitive substring search. Trims query; requires nonempty username. Returns at most ten public profiles ordered by username then ID.",
+        "description": "Public case-insensitive substring search over username and display name. The username query is trimmed and must be 1-100 characters. Results are paginated and ordered by username then ID.",
         "security": [],
         "responses": {
           "200": {
@@ -2802,10 +2802,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
+                  "type": "object",
+                  "required": ["users", "total", "page", "limit", "totalPages"],
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
                       "id": {
                         "type": "string"
                       },
@@ -2859,7 +2863,13 @@
                           null
                         ]
                       }
-                    }
+                        }
+                      }
+                    },
+                    "total": { "type": "integer" },
+                    "page": { "type": "integer" },
+                    "limit": { "type": "integer" },
+                    "totalPages": { "type": "integer" }
                   }
                 }
               }
@@ -2876,9 +2886,22 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "maxLength": 100
             },
             "example": "player"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 1000000, "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 10 }
           }
         ]
       }

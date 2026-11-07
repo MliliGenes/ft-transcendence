@@ -4,12 +4,16 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useQueryClient } from "@tanstack/react-query";
 import { authApi, type AuthSession } from "@/lib/auth/client";
 
+type AuthenticatedRequest = <T>(send: (accessToken: string) => Promise<T>) => Promise<T>;
+
 type AuthContextValue = {
   session: AuthSession | null;
   isRestoring: boolean;
   setSession: (session: AuthSession) => void;
+  clearSession: () => void;
   refreshSession: () => Promise<AuthSession>;
   logout: () => Promise<void>;
+  requestWithSession: AuthenticatedRequest;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -40,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Avoid racing a refresh request against a login or registration submit.
     if (attemptedRestore.current) return;
     attemptedRestore.current = true;
-    if (window.location.pathname === "/login" || window.location.pathname === "/register") {
+    if (["/login", "/register", "/forgot-password", "/reset-password"].includes(window.location.pathname)) {
       Promise.resolve().then(() => setIsRestoring(false));
       return;
     }
@@ -59,7 +63,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [queryClient]);
 
-  const value = useMemo(() => ({ session, isRestoring, setSession, refreshSession, logout }), [session, isRestoring, refreshSession, logout]);
+  const clearSession = useCallback(() => {
+    setSession(null);
+    queryClient.clear();
+  }, [queryClient]);
+
+  const requestWithSession = useCallback<AuthenticatedRequest>(async send => {
+    if (!session) throw new Error("Log in to manage your connected accounts.");
+    try {
+      return await send(session.accessToken);
+    } catch (error) {
+      if (!(error instanceof Error) || !("status" in error) || error.status !== 401) throw error;
+      const refreshed = await refreshSession();
+      return send(refreshed.accessToken);
+    }
+  }, [session, refreshSession]);
+
+  const value = useMemo(() => ({ session, isRestoring, setSession, clearSession, refreshSession, logout, requestWithSession }), [session, isRestoring, clearSession, refreshSession, logout, requestWithSession]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

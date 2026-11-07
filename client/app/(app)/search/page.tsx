@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { SearchPeople } from "@/components/app/search-people";
+import { SearchView } from "@/components/app/search-view";
 
 export const metadata: Metadata = { title: "Find your people — Nook" };
 
 export default function SearchPage() {
-  return <SearchPeople />;
+  return <SearchView />;
 }

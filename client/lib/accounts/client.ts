@@ -1,4 +1,6 @@
-export type AccountProfile = {
+import { AuthRequestError } from "@/lib/auth/client";
+
+export type UserAccount = {
   id: string;
   email: string;
   username: string;
@@ -13,65 +15,156 @@ export type AccountProfile = {
   emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  role: string;
   hasPassword: boolean;
   hasDiscord: boolean;
   hasGithub: boolean;
 };
 
-export type UpdateAccount = Partial<Pick<AccountProfile, "username" | "email" | "firstName" | "lastName" | "displayName" | "bio" | "statusText" | "statusIcon">>;
-export type ImageKind = "avatar" | "banner";
+export type PublicAccount = Pick<UserAccount,
+  "id" | "username" | "displayName" | "avatarUrl" | "bannerUrl" | "bio" | "statusText" | "statusIcon" | "createdAt"
+>;
 
-export function profileName(profile: Pick<AccountProfile, "username" | "displayName" | "firstName" | "lastName">) {
-  return profile.displayName || [profile.firstName, profile.lastName].filter(Boolean).join(" ") || profile.username;
-}
+export type PublicAccountPage = {
+  users: PublicAccount[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
 
-export function profileImageUrl(profile: Pick<AccountProfile, "id" | "avatarUrl" | "bannerUrl" | "updatedAt">, kind: ImageKind) {
-  const url = profile[kind === "avatar" ? "avatarUrl" : "bannerUrl"];
-  if (!url) return undefined;
-  if (url === `/accounts/${profile.id}/${kind}`) return `/api${url}?v=${encodeURIComponent(profile.updatedAt)}`;
-  // OAuth avatars may be hosted by the identity provider.
-  return url.startsWith("https://") ? url : undefined;
-}
+export type AccountUpdate = Partial<Pick<UserAccount,
+  "email" | "username" | "firstName" | "lastName" | "displayName" | "bio" | "statusText" | "statusIcon"
+>>;
 
-export class AccountRequestError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
-    this.name = "AccountRequestError";
+type ImageKind = "avatar" | "banner";
+
+function parseAccount(value: unknown): UserAccount {
+  const nullableFields = ["firstName", "lastName", "displayName", "avatarUrl", "bannerUrl", "bio", "statusText", "statusIcon", "emailVerifiedAt"] as const;
+  if (typeof value !== "object" || value === null) {
+    throw new AuthRequestError("Unable to load your account. Please try again.", 502);
   }
+  const account = value as Record<string, unknown>;
+  if (typeof account.id !== "string" || typeof account.email !== "string" || typeof account.username !== "string"
+    || typeof account.createdAt !== "string" || typeof account.updatedAt !== "string"
+    || typeof account.hasPassword !== "boolean" || typeof account.hasDiscord !== "boolean" || typeof account.hasGithub !== "boolean"
+    || nullableFields.some(field => !(field in account) || (account[field] !== null && typeof account[field] !== "string"))) {
+    throw new AuthRequestError("Unable to load your account. Please try again.", 502);
+  }
+  return account as UserAccount;
 }
 
-async function requestAccount<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
+async function accountResponse(promise: Promise<unknown>) {
+  return parseAccount(await promise);
+}
+
+function parsePublicAccount(value: unknown): PublicAccount {
+  if (typeof value !== "object" || value === null) {
+    throw new AuthRequestError("Unable to load this profile. Please try again.", 502);
+  }
+  const account = value as Record<string, unknown>;
+  const nullableFields = ["displayName", "avatarUrl", "bannerUrl", "bio", "statusText", "statusIcon"] as const;
+  if (typeof account.id !== "string" || typeof account.username !== "string" || typeof account.createdAt !== "string"
+    || nullableFields.some(field => !(field in account) || (account[field] !== null && typeof account[field] !== "string"))) {
+    throw new AuthRequestError("Unable to load this profile. Please try again.", 502);
+  }
+  return {
+    id: account.id as string,
+    username: account.username as string,
+    displayName: account.displayName as string | null,
+    avatarUrl: account.avatarUrl as string | null,
+    bannerUrl: account.bannerUrl as string | null,
+    bio: account.bio as string | null,
+    statusText: account.statusText as string | null,
+    statusIcon: account.statusIcon as string | null,
+    createdAt: account.createdAt as string,
+  };
+}
+
+async function publicAccountRequest(id: string): Promise<PublicAccount> {
   let response: Response;
   try {
-    response = await fetch(`/api/accounts/${path}`, {
-      ...init,
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...init.headers },
+    response = await fetch(`/api/accounts/${encodeURIComponent(id)}`, {
+      headers: { Accept: "application/json" },
+      credentials: "include",
       cache: "no-store",
     });
   } catch {
-    throw new AccountRequestError("Unable to reach your profile. Check your connection and try again.", 0);
+    throw new AuthRequestError("Unable to reach Nook. Check your connection and try again.", 0);
+  }
+  if (!response.ok) {
+    throw new AuthRequestError(response.status === 404 ? "This profile could not be found." : "Unable to load this profile. Please try again.", response.status);
+  }
+  return parsePublicAccount(await response.json());
+}
+
+async function publicAccountsRequest(path: string): Promise<PublicAccountPage> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/accounts${path}`, {
+      headers: { Accept: "application/json" },
+      credentials: "include",
+      cache: "no-store",
+    });
+  } catch {
+    throw new AuthRequestError("Unable to reach Nook. Check your connection and try again.", 0);
+  }
+  if (!response.ok) {
+    throw new AuthRequestError("Unable to find people. Please try again.", response.status);
+  }
+  const value: unknown = await response.json();
+  if (typeof value !== "object" || value === null || !Array.isArray((value as Record<string, unknown>).users)) {
+    throw new AuthRequestError("Unable to load people. Please try again.", 502);
+  }
+  const page = value as Record<string, unknown>;
+  if (!["total", "page", "limit", "totalPages"].every(field => typeof page[field] === "number")) {
+    throw new AuthRequestError("Unable to load people. Please try again.", 502);
+  }
+  return {
+    users: (page.users as unknown[]).map(parsePublicAccount),
+    total: page.total as number,
+    page: page.page as number,
+    limit: page.limit as number,
+    totalPages: page.totalPages as number,
+  };
+}
+
+async function accountRequest<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/accounts${path}`, {
+      ...init,
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        ...init?.headers,
+      },
+      cache: "no-store",
+    });
+  } catch {
+    throw new AuthRequestError("Unable to reach Nook. Check your connection and try again.", 0);
   }
 
   if (!response.ok) {
-    let detail: string | string[] | undefined;
+    let detail = "";
     try {
-      detail = (await response.json() as { message?: string | string[] }).message;
+      const body: unknown = await response.json();
+      if (typeof body === "object" && body !== null && "message" in body) {
+        const message = body.message;
+        detail = Array.isArray(message) ? String(message[0] ?? "") : typeof message === "string" ? message : "";
+      }
     } catch {
-      // Use a safe fallback when the service does not return JSON.
+      // Fall through to a safe status-based message.
     }
-    const message = response.status === 401
-      ? "Your session expired. Log in again to continue."
-      : response.status === 404
-        ? "Your profile could not be found."
-      : response.status === 409
-        ? "That username or email is already in use."
-        : response.status === 400 && detail
-          ? Array.isArray(detail) ? detail[0] : detail
-          : response.status === 413
-            ? "That image is too large. Choose a smaller file."
-            : "Unable to load or update your profile. Please try again.";
-    throw new AccountRequestError(message, response.status);
+
+    const message = response.status === 401 ? "Your session has expired. Please log in again."
+      : response.status === 404 ? "Your account could not be found."
+        : response.status === 409 ? "That email or username is already in use."
+          : response.status === 403 ? "Your current password is incorrect."
+          : response.status === 413 ? "That image is too large. Choose a smaller file."
+            : response.status === 400 && detail ? detail
+              : "Unable to complete that request. Please try again.";
+    throw new AuthRequestError(message, response.status);
   }
 
   if (response.status === 204) return undefined as T;
@@ -79,19 +172,30 @@ async function requestAccount<T>(path: string, token: string, init: RequestInit 
 }
 
 export const accountApi = {
-  getMe: (token: string) => requestAccount<AccountProfile>("me", token),
-  updateMe: (token: string, update: UpdateAccount) => requestAccount<AccountProfile>("me", token, {
+  getMe: (accessToken: string) => accountResponse(accountRequest<unknown>("/me", accessToken)),
+  getPublic: publicAccountRequest,
+  getPeople: (page: number, limit = 10) => publicAccountsRequest(`?page=${page}&limit=${limit}`),
+  searchPeople: (username: string, page: number, limit = 10) => publicAccountsRequest(`/search?username=${encodeURIComponent(username)}&page=${page}&limit=${limit}`),
+  updateMe: (accessToken: string, changes: AccountUpdate) => accountResponse(accountRequest<unknown>("/me", accessToken, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(update),
+    body: JSON.stringify(changes),
+  })),
+  uploadImage: (accessToken: string, kind: ImageKind, file: File) => {
+    const body = new FormData();
+    body.set("file", file);
+    return accountResponse(accountRequest<unknown>(`/me/${kind}`, accessToken, { method: "PUT", body }));
+  },
+  removeImage: (accessToken: string, kind: ImageKind) =>
+    accountRequest<void>(`/me/${kind}`, accessToken, { method: "DELETE" }),
+  setPassword: (accessToken: string, newPassword: string) => accountRequest<void>("/me/password", accessToken, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newPassword }),
   }),
-  uploadAvatar: (token: string, file: File) => uploadImage("me/avatar", token, file),
-  uploadBanner: (token: string, file: File) => uploadImage("me/banner", token, file),
-  removeImage: (token: string, kind: ImageKind) => requestAccount<void>(`me/${kind}`, token, { method: "DELETE" }),
+  changePassword: (accessToken: string, oldPassword: string, newPassword: string) => accountRequest<void>("/me/password", accessToken, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ oldPassword, newPassword }),
+  }),
 };
-
-function uploadImage(path: string, token: string, file: File) {
-  const form = new FormData();
-  form.set("file", file);
-  return requestAccount<AccountProfile>(path, token, { method: "PUT", body: form });
-}

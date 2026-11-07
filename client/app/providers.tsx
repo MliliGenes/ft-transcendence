@@ -6,7 +6,9 @@ import {
   QueryClientProvider,
 } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { OAuthReturnHandler } from "@/components/auth/oauth-return-handler";
 
 function makeQueryClient() {
   return new QueryClient({
@@ -28,8 +30,13 @@ function getQueryClient() {
 
 export default function Providers({ children }: { children: ReactNode }) {
   return (
-    <QueryClientProvider client={getQueryClient()}>
-      <AuthProvider>{children}</AuthProvider>
-    </QueryClientProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <QueryClientProvider client={getQueryClient()}>
+        <AuthProvider>
+          <OAuthReturnHandler />
+          {children}
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
