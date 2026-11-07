@@ -1,0 +1,175 @@
+proposal:
+  title: Nook Chat - Discord familiarity without Discord clutter
+  status: proposed for review
+  date: 2026-11-07
+  companion: CHAT_INTEGRATION_PLAN.toon
+  concept_image: NOOK_UI/chat/chat-concept.png
+  image_fidelity: Concept shows composition rather than exact tokens; specification governs square corners and subtle selected backgrounds
+  intent: Adapt Discord conversation hierarchy to Nook's existing social app and actual service contracts
+  research_method: Official public Discord product references; local Discord app was not inspected because the desktop-control runtime was unavailable
+  scope: Design only; no production components or backend changes
+  example_data: Any names messages groups counts and avatars in concept images are fictional presentation data
+
+references[3]{id,url,lesson}:
+  desktop,"https://discord.com/blog/player-release-q12025",Readable density and clear channel context; avoid copying voice controls
+  navigation,"https://discord.com/blog/refining-discords-mobile-experience-with-your-feedback",Keep people and groups discoverable together across desktop and mobile
+  mobile,"https://support.discord.com/hc/en-us/articles/12654190110999-New-Mobile-App-Updates-Layout",Use conversation headers to reveal details without permanently occupying the small screen
+
+direction:
+  recommendation: One existing app rail plus one contextual chat directory; never add a second permanent server-icon rail
+  reason: Nook already has navigation for Feed Search Chat Play Profile and Settings; another icon rail would compete with it
+  borrowed: Stable channel context; left-aligned message timeline; restrained unread markers; contextual member details; persistent composer
+  not_borrowed: Discord branding; purple accents; Nitro; voice controls; server boosts; dense toolbars; unsupported features
+  terminology: Use Groups rather than Servers; use Members for group participants; use New message rather than Invite for a DM
+  primary_screen: DM conversation is the first release; group channel is an extension of the same workspace
+
+desktop_layout:
+  app_navigation: Preserve expanded and collapsed sidebar behavior; collapsed rail stays 64px with centered 44px controls
+  global_header: Preserve 64px app header with sidebar toggle and theme selector; no duplicated logout or theme controls inside chat
+  directory: 280px target width; no drag-to-resize requirement in first release
+  timeline: Flexible width with min-width zero; reserve at least 480px before offering a docked details panel
+  details: Optional 248px panel only when chat workspace can fit directory plus timeline plus panel; otherwise use a modal Sheet
+  width_policy: Judge available workspace width after the app sidebar; expanded sidebar must not squeeze the conversation into unreadable columns
+  height_policy: Workspace fills remaining dynamic viewport height; directory and timeline scroll independently; composer remains in normal flex layout
+  separators: Thin semantic borders between columns; no floating dashboard cards around every message
+  default_details: Closed; opens through a labeled Members or Details button; closing returns width to the conversation
+  header_alignment: Directory header and thread header both 56px high beneath the existing app header
+
+directory:
+  header: Chat heading and one New message icon button with tooltip and accessible name
+  filter: Input labeled Filter chats; filters loaded DM peer names and group/channel names only
+  filter_limit: This is not global people search and not message-content search; use the New message dialog to find people
+  direct_messages: Upper section; 48px rows with 32px square avatar and peer display name plus username
+  groups: Lower section; expandable named groups with letter-mark fallback; selected group reveals a flat channel list
+  channel_rows: 44px rows with hash icon and channel name; no channel categories because no category model exists
+  unread: Semibold name plus compact numeric badge where the backend provides unreadCount; accessible full count label
+  active: Subtle orange background and 2px orange left edge plus aria-current; use readable neutral text in light mode
+  footer: Quiet Create group action once groups ship; no duplicate account bar with microphone or headphones
+  no_previews: Do not show invented last-message snippets or latest-message timestamps; backend list lacks them
+  sorting: Deterministic alphabetic DM peer order as specified in the integration plan; channels keep API creation order
+  group_unread: Do not invent group totals from summary data; show channel badges when their read-state endpoint has been loaded
+  no_group_icons_api: Initials are presentation-only; no group avatar upload action without an endpoint
+
+dm_screen:
+  header_left: Square avatar; display name; username and Online Away Offline or Unknown text
+  header_right: View profile action and Details toggle; no phone camera pin or message-search icons
+  first_message_state: This is the start of your conversation with this person; small profile link and composer ready below
+  details: Public identity summary and View profile; no email provider status mutual-group claims or invented activity
+  presence: Use socket presence only; static profile status text is not a connection indicator
+
+channel_screen:
+  header_left: Hash icon and channel name; group name and truncated topic on a secondary line
+  header_right: Members button with real fetched count; group/channel management menu where authorized
+  timeline: Same renderer and composer as DMs; author identity displayed for each message group
+  details_sections: About with group description and rules; Members with public identity and ADMIN or MEMBER labels
+  member_navigation: Selecting a member opens their public profile; optional Message action uses the same DM creation flow
+  membership_count: Derive count from loaded membership data; do not show a count while data is unknown
+  admin_actions: Edit group; add member; change role; remove member; create edit delete channel; delete group
+  member_actions: View details and Leave group; explain last-admin conflict instead of showing a dead end
+  direct_add: Label the action Add member; clearly explain that it adds an existing user immediately rather than sending an invitation
+
+timeline:
+  alignment: All messages left aligned including the current user's; no alternating bubble layout
+  message_header: 36px square avatar; medium-weight display name; subdued time; optional edited label
+  text: 15px Inter with roughly 22px line height; plain text with preserved newlines and safe wrapping
+  author_grouping: Consecutive same-author messages within five minutes may share avatar/header; break at date unread and deletion boundaries
+  grouping_accessibility: Each message retains author and timestamp in its accessible representation even when visually grouped
+  spacing: 16px horizontal padding on mobile and 24px on desktop; 16px between author blocks and 4px between continuations
+  max_measure: Keep text readable rather than stretching sentences across a very wide monitor; do not add a card around the text
+  dates: Centered date separator; timestamps use viewer locale with full date/time available accessibly
+  unread_boundary: Labeled New messages divider based on confirmed read marker; omit if the boundary is not in loaded history
+  own_actions: Small overflow menu appears on hover or focus; Edit and Delete only for own undeleted messages
+  touch_actions: Provide a visible reachable overflow button on touch; long-press is never the only access path
+  no_actions_toolbar: No reply reaction pin forward or bookmark controls without contracts
+  deleted: Muted Message deleted tombstone; no remaining preview of deleted attachments
+  failed_send: Pending row says Not sent with Retry action; retry refers to same frozen logical send
+  older: Load older messages control at top; maintain scroll anchor; show retry in place on failure
+  new_messages: If user is reading older history show a New messages jump control; do not force scrolling
+
+composer:
+  surface: One square bordered neutral surface inset 16px from thread edges
+  content: Multiline input with Message this person or Message channel placeholder; visible accessible Send button
+  send_button: Orange background with black text; 44px minimum target; disabled while current draft cannot be sent
+  attachment_button: Paperclip control appears only when attachment milestone and storage gates are complete
+  height: Start at about 52px; grow to about 160px then scroll internally; respect mobile safe-area inset and keyboard
+  keyboard: Enter sends; Shift+Enter newline; IME composition does not submit; leave room for explanatory helper text
+  draft_feedback: Character count near the limit; descriptive validation error; draft retained after network failure
+  attachment_tray: Above input; square image thumbnail or PDF tile; uploading progress pending failed and remove states
+  attachment_copy: Up to 5 files; 10 MiB each; JPEG PNG WebP GIF PDF; message text required
+  stored_attachment: Neutral Attachment label unless authoritative filename metadata becomes available; image preview and explicit Download action
+  no_fake_security: Do not display end-to-end encrypted or antivirus-scanned claims
+
+dialogs[8]{name,fields_or_content,actions,contract_limit}:
+  New message,Friends suggestions and debounced public people search,Open conversation,Exclude self; allow only what backend contact policy permits
+  Create group,Name description rules,Create group,Creator becomes admin and general channel is created by backend
+  Edit group,Name description rules,Save and Cancel,Admin only; no icon upload or public invite link
+  Add member,Search existing users and show already-member state,Add member,Immediate membership rather than invitation
+  Edit channel,Name and topic,Save and Cancel,Admin only; no private channel or permission overrides
+  Member actions,Current role and permitted changes,Promote Demote Remove,Only ADMIN and MEMBER roles; last-admin conflict explained
+  Delete confirmation,Name of target and effect on content,Cancel and explicit Delete,Group/channel deletion removes messages; leaving is separate
+  Attachment preview,Permitted image plus Download and Close,Download and Close,PDF download only; expired URLs can be refreshed
+
+responsive:
+  desktop: Show directory and thread when remaining workspace width is at least 760px; details docks only above 1040px remaining workspace
+  compact: Hide permanent directory when remaining workspace is narrower than 760px; thread header offers Back to chats
+  mobile_home: Single Chat directory with the same DM and group sections; existing Nook navigation remains its drawer
+  mobile_thread: Conversation fills content area; Back to chats at top; name/topic and Details control; composer at bottom
+  mobile_details: Accessible Sheet with close button and focus trap; return focus to Details trigger
+  mobile_channels: Group expansion reveals channels in directory; selecting channel enters thread; Back returns to prior group selection
+  navigation: Preserve URL selection and browser history; no gesture-only navigation
+  zoom: At 200 percent zoom switch to compact layout rather than horizontally scrolling columns
+
+visual_system:
+  dark: Black canvas; existing surface and raised-surface tokens for directory composer and details; light neutral text
+  light: White canvas; light-gray contextual surfaces; near-black text; visible input boundaries
+  accent: "#F16B3A"
+  accent_rule: Reserve for active state send action unread marker and focus; small text stays neutral when orange lacks contrast
+  shapes: Square panels buttons and avatar images; retain tiny circular presence indicators only
+  avatars: Reuse AccountAvatar and its square boring-avatars pixel fallback; normalize local/provider URLs through existing helper
+  documentation_drift: Existing design-system note permits circular avatars but current component and user preference are square; preserve the current component
+  typography: Inter for labels and messages; existing monospace only for subtle metadata where useful
+  atmosphere: Preserve shared orange-dot/glare identity in empty states and margins; use opaque reading surfaces behind message text
+  motion: Subtle state transitions only; no moving particles beneath chat history; respect reduced-motion preference
+  icons: Existing Tabler line icons at 20px for navigation and 16px for secondary metadata; no second icon library
+  implementation: Existing shadcn Base UI Button Input Textarea Badge DropdownMenu Dialog Sheet Tooltip and Skeleton; reuse native scrolling
+
+states[10]{state,presentation,action}:
+  signed_out,Sign in to start a conversation,Log in
+  empty_directory,Your conversations will appear here,New message
+  no_selection,Choose a conversation or start a new one,New message
+  empty_channel,Start the conversation in this channel,Focus composer
+  loading,Restrained row or message skeletons,No fake unread count
+  reconnecting,Small persistent Reconnecting banner,Keep history and draft visible
+  failed_send,Inline Not sent row,Retry same logical send
+  forbidden,You cannot contact this person or your permissions changed,Return to chats or refresh membership
+  missing_thread,This conversation is unavailable,Back to chats
+  session_expired,Sign in again to continue,Disconnect socket and clear private cache
+
+service_fit[12]{feature,design_support,guardrail}:
+  Direct conversations,DM list and New message flow,No fake last-message summary
+  Message history,Chronological timeline and Load older,Respect legacy lookahead adapter
+  Send retries,Pending and Failed rows,One request ID per logical send
+  Edit and delete,Own-message overflow actions,Other clients refresh eventually until event contract exists
+  Unread,Directory count and New messages divider,Not recipient read receipts
+  Presence,Dot plus readable status text,Unknown when snapshot absent or connection lost
+  Groups,Expandable named groups and details,No public discovery or server branding uploads
+  Channels,Flat hash-prefixed list,No categories voice channels or permission overrides
+  Membership,Member list and role-aware menus,Only ADMIN and MEMBER
+  Attachments,Upload tray previews and download,Show only after HTTPS storage validation
+  Search,Filter loaded chats and find people in New message,No message-content search
+  Relationships,Friends suggestions and public-profile links,Friendship is not automatically a chat permission boundary
+
+release_screens[7]{id,screen,milestone}:
+  S1,DM directory with empty selection,DM core
+  S2,Active DM with unread and send states,DM core
+  S3,New message dialog with people search,DM core
+  S4,Group channel with details panel,Groups
+  S5,Group administration and member conflicts,Groups
+  S6,Attachment tray preview and failure states,Attachments
+  S7,Mobile directory thread and details in both themes,Every milestone
+
+review:
+  recommendation_to_approve: Unified directory and Discord-style message rows inside Nook's existing shell
+  deliberate_omissions: Separate server rail; permanent member sidebar; fake previews; calls; typing; reactions; threads; custom presence setting; notification preferences
+  next_step: Review DM and group-channel concepts before writing production components
+  acceptance: Every visible control maps to an existing supported contract or a purely local presentation action

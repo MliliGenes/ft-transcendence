@@ -11,12 +11,13 @@ export type Friendship = {
 };
 
 export type FriendshipState = {
-  friends: Pick<PublicAccount, "id" | "username" | "displayName" | "avatarUrl" | "bannerUrl">[];
+  friends: (Pick<PublicAccount, "id" | "username" | "displayName" | "avatarUrl" | "bannerUrl"> & { friendshipId: string })[];
   incoming: Friendship[];
   outgoing: Friendship[];
 };
 
 export const friendshipQueryKey = (userId?: string) => ["social", "friendships", userId] as const;
+export const blocksQueryKey = (userId?: string) => ["social", "blocks", userId] as const;
 
 async function request<T>(path: string, accessToken: string, method = "GET"): Promise<T> {
   let response: Response;
@@ -31,13 +32,16 @@ async function request<T>(path: string, accessToken: string, method = "GET"): Pr
     throw new AuthRequestError("Unable to reach Nook. Check your connection and try again.", 0);
   }
   if (!response.ok) {
-    throw new AuthRequestError(response.status === 409 ? "A friend request or friendship already exists." : "Unable to update this friendship. Please try again.", response.status);
+    throw new AuthRequestError(response.status === 409 ? "A friend request or friendship already exists." : response.status === 403 ? "You cannot connect with this user." : "Unable to complete this social action. Please try again.", response.status);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
 export const socialApi = {
+  getBlocks: (accessToken: string) => request<Pick<PublicAccount, "id" | "username" | "displayName" | "avatarUrl">[]>("blocks", accessToken),
+  blockUser: (id: string, accessToken: string) => request<unknown>(`blocks/${encodeURIComponent(id)}`, accessToken, "POST"),
+  unblockUser: (id: string, accessToken: string) => request<unknown>(`blocks/${encodeURIComponent(id)}`, accessToken, "DELETE"),
   getFriendshipState: async (accessToken: string): Promise<FriendshipState> => {
     const [friends, incoming, outgoing] = await Promise.all([
       request<FriendshipState["friends"]>("friendships", accessToken),
