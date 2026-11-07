@@ -1,5 +1,6 @@
 plan:
   title: Nook chat integration
+  design_companion: CHAT_DESIGN_PROPOSAL.toon
   status: proposed
   reviewed_on: 2026-11-07
   deliverable: Planning only; no application or backend changes authorized by this document

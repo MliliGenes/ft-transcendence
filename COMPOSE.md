@@ -75,7 +75,7 @@ Frontend source changes require an image rebuild; no source bind mount is config
 
 ## Local HTTPS and OAuth
 
-The Nginx entrypoint generates a self-signed certificate for `localhost` and `127.0.0.1` only when both certificate files are absent. It retains them under `volumes/nginx/certs/`, checks the config with `nginx -t`, then starts Nginx. Your browser will show a certificate warning until you accept or trust this local certificate. No system trust settings are changed automatically. Port 80 is not published; type `https://localhost` explicitly.
+The Nginx entrypoint generates a self-signed certificate for `localhost` and `127.0.0.1` only when both certificate files are absent. It retains them under `volumes/nginx/certs/`, checks the config with `nginx -t`, then starts Nginx. Your browser will show a certificate warning until you accept or trust this local certificate. No system trust settings are changed automatically. Port 80 is not published; type `https://localhost` explicitly. The same certificate secures the loopback-only MinIO S3 proxy at `https://localhost:9443`; MinIO remains HTTP-only inside Compose.
 
 The backend Compose env uses `NODE_ENV=production` again because the public callbacks now use HTTPS, with `AUTH_FRONTEND_URL=https://localhost`. Register these URLs in the matching provider applications:
 

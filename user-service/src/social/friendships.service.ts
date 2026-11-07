@@ -43,11 +43,12 @@ export class FriendshipsService {
       select: friendshipSelect,
     });
 
-    return friendships.map((friendship) =>
-      friendship.requesterId === userId
+    return friendships.map((friendship) => ({
+      ...(friendship.requesterId === userId
         ? friendship.addressee
-        : friendship.requester,
-    );
+        : friendship.requester),
+      friendshipId: friendship.id,
+    }));
   }
 
   async createFriendship(requesterId: string, addresseeId: string) {

@@ -56,11 +56,11 @@ Chat performs the same access and message-reference checks, then returns a five-
 
 ## Why two MinIO clients and endpoints exist
 
-Chat runs inside Compose and reaches MinIO at `MINIO_ENDPOINT=minio`, port `9000`. That is the internal service DNS name and is used for object checks and storage operations.
+Chat runs inside Compose and reaches MinIO at `MINIO_ENDPOINT=minio`, port `9000`. That is the internal service DNS name and is used for object checks and storage operations. MinIO's S3 API port is not published to the host.
 
-The browser cannot resolve the Compose hostname. A second client uses `MINIO_PUBLIC_ENDPOINT` (locally `localhost`) when signing URLs. Its host/port/SSL settings must describe the address the browser can actually reach. Keep MinIO credentials on the server; the browser receives only a time-limited signed URL and policy fields.
+The browser cannot resolve the Compose hostname. A second client uses `MINIO_PUBLIC_ENDPOINT` (locally `localhost`), `MINIO_PUBLIC_PORT=9443`, and `MINIO_PUBLIC_USE_SSL=true` when signing URLs. Nginx terminates HTTPS on `https://localhost:9443` using the same local certificate as Nook, then proxies the S3 API to MinIO over the private Compose network. The proxy preserves the request Host header so it matches the signed URL. Keep MinIO credentials on the server; the browser receives only a time-limited signed URL and policy fields.
 
-Because the browser posts directly to MinIO, MinIO CORS must allow the app's origin. Compose configures the local origins in `MINIO_API_CORS_ALLOW_ORIGIN`. CORS controls browser access; it does not replace Chat's authentication or authorization checks.
+Because the browser posts directly to MinIO through Nginx, MinIO CORS must allow the app's origin. Compose configures the local origins in `MINIO_API_CORS_ALLOW_ORIGIN`. Nginx accepts upload bodies up to 12 MiB to accommodate the 10 MiB file limit plus multipart overhead, and disables request/response buffering for the S3 route. CORS controls browser access; it does not replace Chat's authentication or authorization checks.
 
 ## Code map
 

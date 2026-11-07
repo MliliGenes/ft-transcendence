@@ -449,6 +449,7 @@ test('friendship creation rejects self requests and handles existing relationshi
     }],
   ]);
   let targetExists = true;
+  let targetBlocked = false;
   const friendships = new FriendshipsService({
     friendship: {
       findFirst: async ({ where }) => {
@@ -468,6 +469,7 @@ test('friendship creation rejects self requests and handles existing relationshi
     $transaction: async (work) =>
       work({
         $queryRaw: async () => [],
+        block: { findFirst: async () => targetBlocked ? { id: 'block-ab' } : null },
         user: {
           findUnique: async () => (targetExists ? { id: 'user-a' } : null),
         },
@@ -490,6 +492,13 @@ test('friendship creation rejects self requests and handles existing relationshi
     (error) => error?.name === 'BadRequestException',
   );
 
+  targetBlocked = true;
+  await assert.rejects(
+    () => friendships.createFriendship('user-a', 'user-b'),
+    (error) => error?.name === 'ForbiddenException',
+  );
+  targetBlocked = false;
+
   targetExists = false;
   await assert.rejects(
     () => friendships.createFriendship('user-a', 'missing-user'),
@@ -507,4 +516,22 @@ test('friendship creation rejects self requests and handles existing relationshi
     () => friendships.createFriendship('user-c', 'user-d'),
     (error) => error?.name === 'ConflictException',
   );
+});
+
+test('friends expose the relationship ID for removal from either side', async () => {
+  const { FriendshipsService } = await import('../dist/social/friendships.service.js');
+  const alice = { id: 'user-a', username: 'alice' };
+  const bob = { id: 'user-b', username: 'bob' };
+  const service = new FriendshipsService({
+    friendship: {
+      findMany: async ({ where, select }) => {
+        assert.equal(where.status, 'ACCEPTED');
+        assert.equal(select.id, true);
+        assert.equal(select.requester.select.passwordHash, undefined);
+        return [{ id: 'relationship-ab', requesterId: alice.id, addresseeId: bob.id, requester: alice, addressee: bob }];
+      },
+    },
+  });
+  assert.deepEqual(await service.getFriendships(alice.id), [{ ...bob, friendshipId: 'relationship-ab' }]);
+  assert.deepEqual(await service.getFriendships(bob.id), [{ ...alice, friendshipId: 'relationship-ab' }]);
 });

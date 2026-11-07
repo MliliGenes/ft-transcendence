@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Tabs } from "@base-ui/react/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { IconCalendar, IconCheck, IconCode, IconCoffee, IconDeviceGamepad2, IconMoon, IconMusic, IconUserPlus } from "@tabler/icons-react";
+import { IconCalendar, IconCode, IconCoffee, IconDeviceGamepad2, IconMessageCircle, IconMoon, IconMusic, IconUserPlus } from "@tabler/icons-react";
 import ReactMarkdown from "react-markdown";
 import { AccountAvatar } from "@/components/app/account-avatar";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,8 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { useCurrentAccount } from "@/hooks/use-current-account";
 import { accountApi, type PublicAccount, type UserAccount } from "@/lib/accounts/client";
 import { accountImageSource } from "@/lib/accounts/images";
-import { friendshipQueryKey, socialApi } from "@/lib/social/client";
+import { blocksQueryKey, friendshipQueryKey, socialApi } from "@/lib/social/client";
+import { chatApi } from "@/lib/chat/client";
 
 const iconByName = {
   IconCode,
@@ -49,6 +51,7 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
   const { session, isRestoring, requestWithSession } = useAuth();
   const currentAccount = useCurrentAccount();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const targetId = id ?? session?.user.id ?? "";
   const isOwner = ownerRoute || (!!session && session.user.id === targetId);
   const publicProfile = useQuery({
@@ -64,7 +67,7 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
     retry: false,
   });
   const friendshipAction = useMutation({
-    mutationFn: ({ action, friendshipId }: { action: "add" | "accept" | "decline" | "cancel"; friendshipId?: string }) => requestWithSession(token => {
+    mutationFn: ({ action, friendshipId }: { action: "add" | "accept" | "decline" | "cancel" | "remove"; friendshipId?: string }) => requestWithSession(token => {
       if (action === "add") return socialApi.addFriend(targetId, token);
       if (!friendshipId) throw new Error("This request is no longer available.");
       if (action === "accept") return socialApi.acceptFriend(friendshipId, token);
@@ -72,6 +75,29 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
       return socialApi.removeFriendship(friendshipId, token);
     }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: friendshipQueryKey(session?.user.id) }),
+  });
+  const blocks = useQuery({
+    queryKey: blocksQueryKey(session?.user.id),
+    queryFn: () => requestWithSession(token => socialApi.getBlocks(token)),
+    enabled: !!session && !isRestoring && !isOwner,
+    retry: false,
+  });
+  const blockAction = useMutation({
+    mutationFn: (unblock: boolean) => requestWithSession(token => unblock ? socialApi.unblockUser(targetId, token) : socialApi.blockUser(targetId, token)),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: blocksQueryKey(session?.user.id) }),
+        queryClient.invalidateQueries({ queryKey: friendshipQueryKey(session?.user.id) }),
+        queryClient.invalidateQueries({ queryKey: ["chat"] }),
+      ]);
+    },
+  });
+  const messageAction = useMutation({
+    mutationFn: () => requestWithSession(token => chatApi.openDm(targetId, token)),
+    onSuccess: async conversation => {
+      await queryClient.invalidateQueries({ queryKey: ["chat", "conversations", session?.user.id] });
+      router.push(`/chat?conversation=${encodeURIComponent(conversation.id)}`);
+    },
   });
 
   if (isRestoring) return <LoadingProfile />;
@@ -94,7 +120,9 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
   const StatusIcon = profile.statusIcon && profile.statusIcon in iconByName
     ? iconByName[profile.statusIcon as keyof typeof iconByName]
     : null;
-  const friend = friendships.data?.friends.some(item => item.id === profile.id) ?? false;
+  const friend = friendships.data?.friends.find(item => item.id === profile.id);
+  const blocked = blocks.data?.some(item => item.id === profile.id) ?? false;
+  const busy = friendshipAction.isPending || blockAction.isPending || messageAction.isPending;
   const incoming = friendships.data?.incoming.find(item => item.requesterId === profile.id);
   const outgoing = friendships.data?.outgoing.find(item => item.addresseeId === profile.id);
   const friendActionError = friendshipAction.error instanceof Error ? friendshipAction.error.message : "Unable to update this friendship. Please try again.";
@@ -116,12 +144,19 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
           <div className="ml-auto flex w-full flex-wrap gap-2 sm:w-auto">
             {isOwner ? <Button render={<Link href="/profile/edit" />} variant="outline" className="min-h-11">Edit profile</Button>
               : !session ? <Button render={<Link href="/login" />} variant="outline" className="min-h-11">Log in to connect</Button>
+                : blocks.isPending ? <Button disabled variant="outline" className="min-h-11">Checking connection…</Button>
+                  : blocks.error ? <Button variant="outline" className="min-h-11" onClick={() => blocks.refetch()}>Retry connection</Button>
+                    : blocked ? <Button disabled={busy} variant="outline" className="min-h-11" onClick={() => blockAction.mutate(true)}>Unblock user</Button>
                 : friendships.isPending ? <Button disabled variant="outline" className="min-h-11">Checking friendship…</Button>
                   : friendships.error ? <Button variant="outline" className="min-h-11" onClick={() => friendships.refetch()}>Retry friendship</Button>
-                    : friend ? <Button disabled variant="outline" className="min-h-11"><IconCheck size={16} aria-hidden="true" /> Friends</Button>
-                      : incoming ? <><Button disabled={friendshipAction.isPending} className="min-h-11" onClick={() => friendshipAction.mutate({ action: "accept", friendshipId: incoming.id })}>Accept request</Button><Button disabled={friendshipAction.isPending} variant="outline" className="min-h-11" onClick={() => friendshipAction.mutate({ action: "decline", friendshipId: incoming.id })}>Decline</Button></>
-                        : outgoing ? <Button disabled={friendshipAction.isPending} variant="outline" className="min-h-11" onClick={() => friendshipAction.mutate({ action: "cancel", friendshipId: outgoing.id })}>Cancel request</Button>
-                          : <Button disabled={friendshipAction.isPending} className="min-h-11" onClick={() => friendshipAction.mutate({ action: "add" })}><IconUserPlus size={16} aria-hidden="true" />{friendshipAction.isPending ? "Sending…" : "Add friend"}</Button>}
+                    : friend ? <Button disabled={busy || !friend.friendshipId} variant="outline" className="min-h-11" onClick={() => { if (window.confirm(`Remove ${displayName} from your friends?`)) friendshipAction.mutate({ action: "remove", friendshipId: friend.friendshipId }); }}>Remove friend</Button>
+                      : incoming ? <><Button disabled={busy} className="min-h-11" onClick={() => friendshipAction.mutate({ action: "accept", friendshipId: incoming.id })}>Accept request</Button><Button disabled={busy} variant="outline" className="min-h-11" onClick={() => friendshipAction.mutate({ action: "decline", friendshipId: incoming.id })}>Decline</Button></>
+                        : outgoing ? <Button disabled={busy} variant="outline" className="min-h-11" onClick={() => friendshipAction.mutate({ action: "cancel", friendshipId: outgoing.id })}>Cancel request</Button>
+                          : <Button disabled={busy} className="min-h-11" onClick={() => friendshipAction.mutate({ action: "add" })}><IconUserPlus size={16} aria-hidden="true" />{friendshipAction.isPending ? "Sending…" : "Add friend"}</Button>}
+            {!isOwner && session && blocks.isSuccess && !blocked && <>
+              <Button disabled={busy} variant="outline" className="min-h-11" onClick={() => messageAction.mutate()}><IconMessageCircle size={16} aria-hidden="true" />{messageAction.isPending ? "Opening…" : "Message"}</Button>
+              <Button disabled={busy} variant="outline" className="min-h-11 text-destructive" onClick={() => { if (window.confirm(`Block ${displayName}? This also removes your friendship and prevents direct messages.`)) blockAction.mutate(false); }}>Block user</Button>
+            </>}
           </div>
         </div>
         <div className="mt-4 min-w-0">
@@ -131,6 +166,7 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
         {profile.bio && <div className="profile-markdown mt-4 max-w-3xl text-sm leading-6 text-foreground [&_a]:underline [&_a]:decoration-primary [&_a]:underline-offset-2 [&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-primary [&_blockquote]:pl-4 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_h1]:mb-2 [&_h1]:text-xl [&_h2]:mb-2 [&_h2]:text-lg [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p+p]:mt-3 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:bg-muted [&_pre]:p-3"><ReactMarkdown>{profile.bio}</ReactMarkdown></div>}
         <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><IconCalendar size={16} aria-hidden="true" /> Joined {joinedDate(profile.createdAt)}</p>
         {friendshipAction.error && <p role="alert" className="mt-3 text-sm text-destructive">{friendActionError}</p>}
+        {(blockAction.error || messageAction.error) && <p role="alert" className="mt-3 text-sm text-destructive">{(blockAction.error ?? messageAction.error)?.message}</p>}
         {friendships.error && <p role="alert" className="mt-3 text-sm text-destructive">Could not load friendship status. Retry to see whether you are already connected.</p>}
       </header>
 
