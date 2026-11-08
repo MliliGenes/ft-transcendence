@@ -70,6 +70,10 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* Accent glow: decorative only. Contrast always comes from colour and borders. */
+  --shadow-glow-sm: var(--nook-glow-sm);
+  --shadow-glow: var(--nook-glow);
+  --shadow-glow-focus: var(--nook-glow-focus);
 }
 
 :root {
@@ -112,7 +116,10 @@
   --border: #D4D4D4;
   --input: #737373;
   --ring: #171717;
-  --radius: 0rem;
+  --radius: 0.25rem;
+  --nook-glow-sm: 0 0 6px rgb(241 107 58 / 22%);
+  --nook-glow: 0 0 0 1px rgb(241 107 58 / 25%), 0 0 14px rgb(241 107 58 / 14%);
+  --nook-glow-focus: 0 0 12px rgb(241 107 58 / 20%);
   --sidebar: var(--nook-surface);
   --sidebar-foreground: var(--nook-text-secondary);
   --sidebar-primary: var(--nook-accent);
@@ -169,7 +176,10 @@
   --border: #292929;
   --input: #767676;
   --ring: #F16B3A;
-  --radius: 0rem;
+  --radius: 0.25rem;
+  --nook-glow-sm: 0 0 8px rgb(241 107 58 / 35%);
+  --nook-glow: 0 0 0 1px rgb(241 107 58 / 40%), 0 0 18px rgb(241 107 58 / 22%);
+  --nook-glow-focus: 0 0 14px rgb(241 107 58 / 30%);
   --sidebar: var(--nook-surface);
   --sidebar-foreground: var(--nook-text-secondary);
   --sidebar-primary: var(--nook-accent);
@@ -219,4 +229,21 @@
   background-image:
     radial-gradient(ellipse 60% 52% at 50% 30%, rgb(241 107 58 / 16%), transparent 100%),
     radial-gradient(circle, rgb(241 107 58 / 30%) 1px, transparent 1.25px);
+}
+
+/* Windows High Contrast and similar modes: drop decorative glows so the
+   system focus outline and colours are the only signal. */
+@media (forced-colors: active) {
+  * {
+    box-shadow: none !important;
+  }
+  .app-atmosphere {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .app-atmosphere {
+    display: none;
+  }
 }

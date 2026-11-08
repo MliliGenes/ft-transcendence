@@ -1,1 +1,1 @@
-Chat service documentation is in [docs/README.md](docs/README.md).
+Chat service documentation is in [docs/chat-service/README.md](../docs/chat-service/README.md).

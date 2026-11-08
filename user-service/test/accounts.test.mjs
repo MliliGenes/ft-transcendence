@@ -357,10 +357,77 @@ test('account search matches public username and display name results with pagin
   });
   assert.equal(response.body.users[0].passwordHash, undefined);
   assert.equal(response.body.users[0].email, undefined);
-  await request(app.getHttpServer()).get('/accounts/search?username=%20').expect(400);
   await request(app.getHttpServer()).get(`/accounts/search?username=${'a'.repeat(101)}`).expect(400);
   await request(app.getHttpServer()).get('/accounts/search?username=ali&page=0').expect(400);
   await request(app.getHttpServer()).get('/accounts/search?username=ali&limit=101').expect(400);
+  await request(app.getHttpServer()).get('/accounts/search?sortBy=email').expect(400);
+  await request(app.getHttpServer()).get('/accounts/search?sortOrder=up').expect(400);
+  await request(app.getHttpServer()).get('/accounts/search?joinedWithin=2d').expect(400);
+  await request(app.getHttpServer()).get('/accounts/search?hasStatus=yes').expect(400);
+});
+
+test('account search applies filters and sorting, and browses without a term', async (t) => {
+  const keys = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+  });
+  const calls = [];
+
+  const module = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(PrismaService)
+    .useValue({
+      $transaction: async (queries) => Promise.all(queries),
+      user: {
+        findMany: async (args) => {
+          calls.push(args);
+          return [];
+        },
+        count: async () => 0,
+      },
+    })
+    .overrideProvider(RabbitMqEventsService)
+    .useValue({})
+    .overrideProvider(ConfigService)
+    .useValue(
+      new ConfigService({
+        JWT_PRIVATE_KEY: keys.privateKey,
+        JWT_PUBLIC_KEY: keys.publicKey,
+      }),
+    )
+    .compile();
+
+  const app = module.createNestApplication();
+  t.after(() => app.close());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+  await app.init();
+
+  const before = Date.now();
+  await request(app.getHttpServer())
+    .get('/accounts/search?username=ali&sortBy=createdAt&sortOrder=desc&joinedWithin=30d&hasStatus=true&hasBio=false')
+    .expect(200);
+  const filtered = calls.at(-1);
+  assert.deepEqual(filtered.orderBy, [{ createdAt: 'desc' }, { id: 'asc' }]);
+  const [termCondition, joinedCondition, statusCondition, bioCondition] = filtered.where.AND;
+  assert.deepEqual(termCondition.OR.map((field) => Object.keys(field)[0]), ['username', 'displayName']);
+  const since = joinedCondition.createdAt.gte.getTime();
+  assert.ok(since <= before - 30 * 86_400_000 + 5_000 && since >= before - 30 * 86_400_000 - 5_000);
+  assert.deepEqual(statusCondition, { NOT: [{ statusText: null }, { statusText: '' }] });
+  assert.deepEqual(bioCondition, { OR: [{ bio: null }, { bio: '' }] });
+
+  await request(app.getHttpServer()).get('/accounts/search?sortBy=displayName').expect(200);
+  const browse = calls.at(-1);
+  assert.deepEqual(browse.where, {});
+  assert.deepEqual(browse.orderBy, [{ displayName: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }]);
+
+  await request(app.getHttpServer()).get('/accounts/search?username=%20').expect(200);
+  assert.deepEqual(calls.at(-1).where, {});
 });
 
 test('friendship mutations require the caller to be part of the relationship', async () => {

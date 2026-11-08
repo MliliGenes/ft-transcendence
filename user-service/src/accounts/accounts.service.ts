@@ -25,7 +25,9 @@ import { RabbitMqEventsService } from '../events/rabbitmq-events.service.js';
 import type { UpdateAccountDto } from './dto/update-account.dto.js';
 
 import type { PaginationDto } from './dto/pagination.dto.js';
-import type { AccountSearchDto } from './dto/account-search.dto.js';
+import type { AccountSearchDto, JoinedWithin } from './dto/account-search.dto.js';
+
+const JOINED_WITHIN_DAYS: Record<JoinedWithin, number> = { '7d': 7, '30d': 30, '365d': 365 };
 
 // Public profile fields shared with other services; private details stay in /me.
 const publicProfileSelect = {
@@ -110,20 +112,50 @@ export class AccountsService {
     return { users, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async searchUsers({ username, page, limit }: AccountSearchDto) {
-    const where: Prisma.UserWhereInput = {
-      OR: [
-        { username: { contains: username, mode: 'insensitive' } },
-        { displayName: { contains: username, mode: 'insensitive' } },
-      ],
-    };
+  async searchUsers({
+    username,
+    sortBy = 'username',
+    sortOrder = 'asc',
+    joinedWithin,
+    hasStatus,
+    hasBio,
+    page,
+    limit,
+  }: AccountSearchDto) {
+    const conditions: Prisma.UserWhereInput[] = [];
+    if (username) {
+      conditions.push({
+        OR: [
+          { username: { contains: username, mode: 'insensitive' } },
+          { displayName: { contains: username, mode: 'insensitive' } },
+        ],
+      });
+    }
+    if (joinedWithin) {
+      const days = JOINED_WITHIN_DAYS[joinedWithin];
+      conditions.push({ createdAt: { gte: new Date(Date.now() - days * 86_400_000) } });
+    }
+    if (hasStatus === true) conditions.push({ NOT: [{ statusText: null }, { statusText: '' }] });
+    if (hasStatus === false) conditions.push({ OR: [{ statusText: null }, { statusText: '' }] });
+    if (hasBio === true) conditions.push({ NOT: [{ bio: null }, { bio: '' }] });
+    if (hasBio === false) conditions.push({ OR: [{ bio: null }, { bio: '' }] });
+    const where: Prisma.UserWhereInput =
+      conditions.length === 0 ? {} : conditions.length === 1 ? conditions[0] : { AND: conditions };
+
+    // displayName is optional, so put members without one at the end.
+    const primarySort: Prisma.UserOrderByWithRelationInput =
+      sortBy === 'displayName'
+        ? { displayName: { sort: sortOrder, nulls: 'last' } }
+        : { [sortBy]: sortOrder };
+
     const [users, total] = await this.prisma.$transaction(
       [
         this.prisma.user.findMany({
           where,
           skip: (page - 1) * limit,
           take: limit,
-          orderBy: [{ username: 'asc' }, { id: 'asc' }],
+          // id breaks ties so pages never repeat or skip a member.
+          orderBy: [primarySort, { id: 'asc' }],
           select: publicProfileSelect,
         }),
         this.prisma.user.count({ where }),

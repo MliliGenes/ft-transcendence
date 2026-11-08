@@ -240,23 +240,44 @@
   },
   "shape": {
     "radiusPx": {
-      "button": 0,
-      "input": 0,
-      "select": 0,
-      "dialog": 0,
-      "popover": 0,
-      "card": 0,
-      "media": 0,
-      "badge": 0,
-      "tooltip": 0,
-      "toast": 0,
-      "checkbox": 0
+      "button": 4,
+      "input": 4,
+      "select": 4,
+      "dialog": 7,
+      "popover": 4,
+      "card": 6,
+      "media": 4,
+      "badge": 3,
+      "tooltip": 3,
+      "toast": 6,
+      "checkbox": 3
     },
     "avatarRadius": "50%",
     "statusDotRadius": "50%",
     "defaultShadow": "none",
     "overlayShadow": "Optional and restrained, only when separation requires it.",
-    "separatorWidthPx": 1
+    "separatorWidthPx": 1,
+    "radiusToken": "--radius: 0.25rem; Tailwind scale md≈3px, lg=4px, xl≈6px, 2xl≈7px.",
+    "glow": {
+      "tokens": [
+        "--nook-glow-sm",
+        "--nook-glow",
+        "--nook-glow-focus"
+      ],
+      "utilities": [
+        "shadow-glow-sm",
+        "shadow-glow",
+        "shadow-glow-focus"
+      ],
+      "use": "Decorative accent glow on primary-button hover, keyboard focus halo, active navigation, unread badges, online status and upload progress. Never the only signal; removed under forced-colors.",
+      "references": [
+        "Linear (subtle radius, focus glow)",
+        "Vercel Geist (focus halo)",
+        "Raycast (active-item glow, ambient light)",
+        "Supabase (primary hover glow)",
+        "Discord (online dot halo)"
+      ]
+    }
   },
   "layout": {
     "designPriority": "desktopFirst",
@@ -349,7 +370,7 @@
         44,
         48
       ],
-      "radiusPx": 0,
+      "radiusPx": 4,
       "variants": {
         "primary": {
           "background": "accent",
@@ -376,7 +397,7 @@
     },
     "input": {
       "heightPx": 48,
-      "radiusPx": 0,
+      "radiusPx": 4,
       "background": "surface",
       "foreground": "text",
       "placeholderColor": "textMuted",
@@ -385,7 +406,7 @@
       "errorColor": "danger"
     },
     "dialog": {
-      "radiusPx": 0,
+      "radiusPx": 7,
       "background": "surfaceRaised",
       "foreground": "text",
       "paddingPx": 32,
@@ -396,7 +417,7 @@
       ]
     },
     "popover": {
-      "radiusPx": 0,
+      "radiusPx": 4,
       "background": "surfaceRaised",
       "foreground": "text",
       "paddingPx": 24
@@ -413,26 +434,26 @@
       "fallback": "Readable initials or a consistent default avatar."
     },
     "badge": {
-      "radiusPx": 0,
+      "radiusPx": 3,
       "background": "surfaceRaised",
       "foreground": "textSecondary",
       "use": "Short, meaningful metadata only."
     },
     "card": {
-      "radiusPx": 0,
+      "radiusPx": 6,
       "background": "surface",
       "paddingPx": 24,
       "border": "Optional subtle separator; not the default grouping mechanism.",
       "shadow": "none"
     },
     "toast": {
-      "radiusPx": 0,
+      "radiusPx": 6,
       "background": "surfaceRaised",
       "foreground": "text",
       "behavior": "Quiet confirmation; errors remain close to the relevant field or action."
     },
     "navigationItem": {
-      "radiusPx": 0,
+      "radiusPx": 3,
       "defaultColor": "textSecondary",
       "activeColor": "accent",
       "selectedBackground": "surface",
@@ -657,7 +678,10 @@
         "--border": "#D4D4D4",
         "--input": "#737373",
         "--ring": "#171717",
-        "--radius": "0rem",
+        "--radius": "0.25rem",
+        "--nook-glow-sm": "0 0 6px rgb(241 107 58 / 22%)",
+        "--nook-glow": "0 0 0 1px rgb(241 107 58 / 25%), 0 0 14px rgb(241 107 58 / 14%)",
+        "--nook-glow-focus": "0 0 12px rgb(241 107 58 / 20%)",
         "--sidebar": "var(--nook-surface)",
         "--sidebar-foreground": "var(--nook-text-secondary)",
         "--sidebar-primary": "var(--nook-accent)",
@@ -734,7 +758,10 @@
         "--border": "#292929",
         "--input": "#767676",
         "--ring": "#F16B3A",
-        "--radius": "0rem",
+        "--radius": "0.25rem",
+        "--nook-glow-sm": "0 0 8px rgb(241 107 58 / 35%)",
+        "--nook-glow": "0 0 0 1px rgb(241 107 58 / 40%), 0 0 18px rgb(241 107 58 / 22%)",
+        "--nook-glow-focus": "0 0 14px rgb(241 107 58 / 30%)",
         "--sidebar": "var(--nook-surface)",
         "--sidebar-foreground": "var(--nook-text-secondary)",
         "--sidebar-primary": "var(--nook-accent)",

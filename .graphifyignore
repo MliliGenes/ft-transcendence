@@ -5,3 +5,7 @@
 **/.agents/**
 **/.codex/**
 graphify-out/**
+**/.next/**
+**/volumes/**
+**/*.tsbuildinfo
+docs/client/ui-mockups/**
