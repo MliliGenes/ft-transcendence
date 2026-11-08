@@ -1,5 +1,17 @@
 name: nook
 
+# The monitoring stack (Grafana, Prometheus, Loki, Alloy, cAdvisor) lives in its
+# own file but starts with the app. See docs/infra/monitoring.md.
+include:
+  - compose.monitoring.yaml
+
+# Rotate container logs: at most 3 files of 10 MB per container.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   nginx:
     build: ./nginx
@@ -13,30 +25,43 @@ services:
       - client
       - chat-service
       - minio
+    logging: *logging
 
   user-db:
     image: postgres:18-alpine
-    env_file: ./envs/user-db.env
+    env_file:
+      - ./envs/user-db.env
+      - ./envs/monitoring.env
+    environment:
+      MONITORING_PASSWORD_ENV: USER_DB_MONITOR_PASSWORD
     volumes:
       - ./volumes/user-db:/var/lib/postgresql
+      - ./infra/postgres/10-monitoring-role.sh:/docker-entrypoint-initdb.d/10-monitoring-role.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       start_period: 10s
       retries: 12
+    logging: *logging
 
   chat-db:
     image: postgres:18-alpine
-    env_file: ./envs/chat-db.env
+    env_file:
+      - ./envs/chat-db.env
+      - ./envs/monitoring.env
+    environment:
+      MONITORING_PASSWORD_ENV: CHAT_DB_MONITOR_PASSWORD
     volumes:
       - ./volumes/chat-db:/var/lib/postgresql
+      - ./infra/postgres/10-monitoring-role.sh:/docker-entrypoint-initdb.d/10-monitoring-role.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       start_period: 10s
       retries: 12
+    logging: *logging
 
   rabbitmq:
     image: rabbitmq:4-management
@@ -47,12 +72,15 @@ services:
       - "127.0.0.1:15672:15672"
     volumes:
       - ./volumes/rabbitmq:/var/lib/rabbitmq
+      # Adds the Prometheus plugin (metrics on internal port 15692).
+      - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       start_period: 30s
       retries: 5
+    logging: *logging
 
   minio:
     build: ./minio
@@ -68,6 +96,7 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 5
+    logging: *logging
 
   user-service:
     build: ./user-service
@@ -82,6 +111,7 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    logging: *logging
 
   chat-service:
     build: ./chat-service
@@ -105,12 +135,14 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 12
+    logging: *logging
 
   client:
     build: ./client
     depends_on:
       - user-service
       - chat-service
+    logging: *logging
 
 networks:
   default:

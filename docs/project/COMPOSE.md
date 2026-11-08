@@ -53,6 +53,10 @@ The bootstrap runs after migrations on every service start, but creates an accou
 
 The consolidated initial migration requires a fresh database. This stack uses a new `volumes/user-db/` directory and does not reuse or reset the previous testing database.
 
+## Monitoring
+
+The monitoring stack (Grafana, Prometheus, Loki, Alloy, cAdvisor) starts with the app. It is defined in `compose.monitoring.yaml` and included by `compose.yaml`. Copy `envs/grafana.env.example` and `envs/monitoring.env.example` before the first start, then open https://localhost/grafana/. See [Monitoring](../infra/monitoring.md).
+
 ## Network and storage
 
 - All services use the default shared bridge network. Containers address the API at `user-service:3000` and its database at `user-db:5432`.
