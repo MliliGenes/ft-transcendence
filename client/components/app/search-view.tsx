@@ -11,11 +11,26 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCurrentAccount } from "@/hooks/use-current-account";
-import { accountApi } from "@/lib/accounts/client";
+import { accountApi, type PeopleSearchOptions } from "@/lib/accounts/client";
 import { accountImageSource } from "@/lib/accounts/images";
 import { friendshipQueryKey, socialApi, type Friendship } from "@/lib/social/client";
 
-const resultQueryKey = (term: string, page: number) => ["accounts", "discovery", term, page] as const;
+const resultQueryKey = (term: string, page: number, sort: string, filters: PeopleFilters) => ["accounts", "discovery", term, page, sort, filters] as const;
+
+// Each sort option maps to one backend sortBy + sortOrder pair.
+const SORT_OPTIONS = {
+  "username-asc": { label: "Username (A–Z)", sortBy: "username", sortOrder: "asc" },
+  "username-desc": { label: "Username (Z–A)", sortBy: "username", sortOrder: "desc" },
+  "displayName-asc": { label: "Display name (A–Z)", sortBy: "displayName", sortOrder: "asc" },
+  "createdAt-desc": { label: "Newest members", sortBy: "createdAt", sortOrder: "desc" },
+  "createdAt-asc": { label: "Oldest members", sortBy: "createdAt", sortOrder: "asc" },
+} as const satisfies Record<string, { label: string } & Required<Pick<PeopleSearchOptions, "sortBy" | "sortOrder">>>;
+type SortKey = keyof typeof SORT_OPTIONS;
+
+type PeopleFilters = { joinedWithin: "" | "7d" | "30d" | "365d"; hasStatus: boolean; hasBio: boolean };
+const DEFAULT_FILTERS: PeopleFilters = { joinedWithin: "", hasStatus: false, hasBio: false };
+
+const selectClass = "h-11 w-full border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50";
 
 function accountName(account: { displayName: string | null; username: string }) {
   return account.displayName?.trim() || account.username;
@@ -29,15 +44,30 @@ export function SearchView() {
   const [debouncedTerm, setDebouncedTerm] = useState("");
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState("people");
+  const [sort, setSort] = useState<SortKey>("username-asc");
+  const [filters, setFilters] = useState<PeopleFilters>(DEFAULT_FILTERS);
+  const filtersActive = filters.joinedWithin !== "" || filters.hasStatus || filters.hasBio;
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedTerm(term.trim()), 300);
     return () => window.clearTimeout(timeout);
   }, [term]);
 
+  // Any change to sorting or filters starts again from the first page.
+  function updateFilters(changes: Partial<PeopleFilters>) {
+    setFilters(previous => ({ ...previous, ...changes }));
+    setPage(1);
+  }
+
   const people = useQuery({
-    queryKey: resultQueryKey(debouncedTerm, page),
-    queryFn: () => debouncedTerm ? accountApi.searchPeople(debouncedTerm, page) : accountApi.getPeople(page),
+    queryKey: resultQueryKey(debouncedTerm, page, sort, filters),
+    queryFn: () => accountApi.searchPeople(debouncedTerm, page, 10, {
+      sortBy: SORT_OPTIONS[sort].sortBy,
+      sortOrder: SORT_OPTIONS[sort].sortOrder,
+      joinedWithin: filters.joinedWithin || undefined,
+      hasStatus: filters.hasStatus || undefined,
+      hasBio: filters.hasBio || undefined,
+    }),
     enabled: !isRestoring,
     placeholderData: previous => previous,
     retry: false,
@@ -100,11 +130,39 @@ export function SearchView() {
             <Input id="people-search" type="search" value={term} maxLength={100} onChange={event => { setTerm(event.target.value); setPage(1); }} placeholder="Try a name or @username" className="h-11 w-full" autoComplete="off" />
           </div>
 
+          <fieldset className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto_auto_auto] lg:items-end">
+            <legend className="sr-only">Sort and filter people</legend>
+            <div>
+              <label htmlFor="people-sort" className="mb-1.5 block text-xs font-medium text-muted-foreground">Sort by</label>
+              <select id="people-sort" value={sort} onChange={event => { setSort(event.target.value as SortKey); setPage(1); }} className={selectClass}>
+                {Object.entries(SORT_OPTIONS).map(([value, option]) => <option key={value} value={value}>{option.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="people-joined" className="mb-1.5 block text-xs font-medium text-muted-foreground">Joined</label>
+              <select id="people-joined" value={filters.joinedWithin} onChange={event => updateFilters({ joinedWithin: event.target.value as PeopleFilters["joinedWithin"] })} className={selectClass}>
+                <option value="">Any time</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="365d">Last year</option>
+              </select>
+            </div>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+              <input type="checkbox" checked={filters.hasStatus} onChange={event => updateFilters({ hasStatus: event.target.checked })} className="size-4 accent-[var(--nook-accent)]" />
+              Has a status
+            </label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+              <input type="checkbox" checked={filters.hasBio} onChange={event => updateFilters({ hasBio: event.target.checked })} className="size-4 accent-[var(--nook-accent)]" />
+              Has a bio
+            </label>
+            <Button variant="ghost" className="min-h-11" disabled={!filtersActive && sort === "username-asc"} onClick={() => { setFilters(DEFAULT_FILTERS); setSort("username-asc"); setPage(1); }}>Reset</Button>
+          </fieldset>
+
           {friendshipAction.error && <p role="alert" className="mt-4 text-sm text-destructive">{mutationError}</p>}
           {session && friendships.error && <div className="mt-4 flex flex-wrap items-center gap-3 text-sm"><p role="alert" className="text-destructive">Friendship status could not be loaded.</p><Button variant="outline" className="min-h-11" onClick={() => friendships.refetch()}>Retry</Button></div>}
           {people.isPending && <p role="status" className="mt-8 text-sm text-muted-foreground">Finding people…</p>}
           {people.error && <div className="mt-8 border border-border p-5"><p role="alert" className="text-sm text-destructive">Unable to load people. Please try again.</p><Button variant="outline" className="mt-3 min-h-11" onClick={() => people.refetch()}>Try again</Button></div>}
-          {people.isSuccess && users.length === 0 && <p className="mt-8 border border-border px-5 py-10 text-center text-sm text-muted-foreground">{debouncedTerm ? "No people matched that search." : "No people to show yet."}</p>}
+          {people.isSuccess && users.length === 0 && <p className="mt-8 border border-border px-5 py-10 text-center text-sm text-muted-foreground">{debouncedTerm || filtersActive ? "No people matched these filters." : "No people to show yet."}</p>}
 
           {users.length > 0 && <div className="mt-5 divide-y divide-border border-y border-border">
             {users.map(user => {

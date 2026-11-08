@@ -39,6 +39,7 @@ export type ChatGroup = {
   name: string;
   description: string | null;
   rules: string | null;
+  createdAt?: string;
   updatedAt?: string;
   members: { role: "ADMIN" | "MEMBER" }[];
   channels: ChatChannel[];
@@ -92,17 +93,26 @@ function requireSecureStorageUrl(value: string) {
   return url.href;
 }
 
-async function uploadFile(upload: AttachmentUpload, file: File) {
+// XMLHttpRequest instead of fetch: fetch cannot report upload progress.
+function uploadFile(upload: AttachmentUpload, file: File, onProgress?: (loaded: number, total: number) => void) {
   const body = new FormData();
   for (const [key, value] of Object.entries(upload.fields)) body.append(key, value);
   body.append("file", file);
-  let response: Response;
-  try {
-    response = await fetch(requireSecureStorageUrl(upload.uploadUrl), { method: upload.method, body, cache: "no-store" });
-  } catch {
-    throw new AuthRequestError("Unable to upload this file. Check the connection and try again.", 0);
-  }
-  if (!response.ok) throw new AuthRequestError(`File upload failed (${response.status}).`, response.status);
+  const url = requireSecureStorageUrl(upload.uploadUrl);
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(upload.method, url);
+    xhr.upload.onprogress = event => { if (event.lengthComputable) onProgress?.(event.loaded, event.total); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(file.size, file.size);
+        resolve();
+      } else reject(new AuthRequestError(`File upload failed (${xhr.status}).`, xhr.status));
+    };
+    xhr.onerror = () => reject(new AuthRequestError("Unable to upload this file. Check the connection and try again.", 0));
+    xhr.onabort = () => reject(new AuthRequestError("The upload was cancelled.", 0));
+    xhr.send(body);
+  });
 }
 
 export const chatApi = {
@@ -117,12 +127,13 @@ export const chatApi = {
   markRead: (conversationId: string, messageId: string, token: string) => request<void>(`/conversations/${encodeURIComponent(conversationId)}/read-state`, token, { method: "PATCH", body: JSON.stringify({ messageId }) }),
   groups: (token: string) => request<ChatGroup[]>("/groups", token),
   group: (groupId: string, token: string) => request<ChatGroup>(`/groups/${encodeURIComponent(groupId)}`, token),
-  createGroup: (name: string, token: string, rules?: string) => request<ChatGroup>("/groups", token, json({ name, ...(rules?.trim() ? { rules: rules.trim() } : {}) })),
+  createGroup: (name: string, token: string, rules?: string, description?: string) => request<ChatGroup>("/groups", token, json({ name, ...(rules?.trim() ? { rules: rules.trim() } : {}), ...(description?.trim() ? { description: description.trim() } : {}) })),
   groupMembers: (groupId: string, token: string) => request<GroupMember[]>(`/groups/${encodeURIComponent(groupId)}/members`, token),
   addGroupMember: (groupId: string, userId: string, token: string) => request<void>(`/groups/${encodeURIComponent(groupId)}/members`, token, json({ userId })),
   removeGroupMember: (groupId: string, userId: string, token: string) => request<void>(`/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, token, { method: "DELETE" }),
+  updateGroupMemberRole: (groupId: string, userId: string, role: GroupMember["role"], token: string) => request<void>(`/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}/role`, token, { method: "PATCH", body: JSON.stringify({ role }) }),
   leaveGroup: (groupId: string, token: string) => request<void>(`/groups/${encodeURIComponent(groupId)}/members/me`, token, { method: "DELETE" }),
-  updateGroup: (groupId: string, values: { name?: string; rules?: string }, token: string) => request<ChatGroup>(`/groups/${encodeURIComponent(groupId)}`, token, { method: "PATCH", body: JSON.stringify(values) }),
+  updateGroup: (groupId: string, values: { name?: string; description?: string; rules?: string }, token: string) => request<ChatGroup>(`/groups/${encodeURIComponent(groupId)}`, token, { method: "PATCH", body: JSON.stringify(values) }),
   createChannel: (groupId: string, values: { name: string; topic?: string }, token: string) => request<ChatChannel>(`/groups/${encodeURIComponent(groupId)}/channels`, token, json(values)),
   updateChannel: (groupId: string, channelId: string, values: { name?: string; topic?: string }, token: string) => request<ChatChannel>(`/groups/${encodeURIComponent(groupId)}/channels/${encodeURIComponent(channelId)}`, token, { method: "PATCH", body: JSON.stringify(values) }),
   deleteChannel: (groupId: string, channelId: string, token: string) => request<void>(`/groups/${encodeURIComponent(groupId)}/channels/${encodeURIComponent(channelId)}`, token, { method: "DELETE" }),

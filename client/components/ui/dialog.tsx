@@ -25,7 +25,7 @@ function DialogPopup({ className, children, ...props }: DialogPrimitive.Popup.Pr
   return (
     <DialogPortal>
       <DialogBackdrop />
-      <DialogPrimitive.Popup data-slot="dialog-popup" className={cn("fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto border border-border bg-popover p-5 text-popover-foreground shadow-xl sm:p-6", className)} {...props}>
+      <DialogPrimitive.Popup data-slot="dialog-popup" className={cn("fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto rounded-2xl border border-border bg-popover p-5 text-popover-foreground shadow-xl sm:p-6", className)} {...props}>
         {children}
         <DialogPrimitive.Close render={<Button variant="ghost" size="icon" aria-label="Close dialog" className="absolute top-3 right-3" />}>
           <IconX aria-hidden="true" />

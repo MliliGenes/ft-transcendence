@@ -25,9 +25,9 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
-See [API.md](API.md) for the user-service endpoint reference, authentication flow, validation rules, and curl examples.
+See [API.md](../docs/user-service/API.md) for the user-service endpoint reference, authentication flow, validation rules, and curl examples.
 
-See [SETUP.md](SETUP.md) for local setup, or [postgres/README.md](postgres/README.md) to run the database in Docker instead of using a locally installed PostgreSQL server.
+See [SETUP.md](../docs/user-service/SETUP.md) for local setup, or [postgres/README.md](postgres/README.md) to run the database in Docker instead of using a locally installed PostgreSQL server.
 
 ## Project setup
 
@@ -119,4 +119,4 @@ Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 
 ## Service documentation
 
-See [SERVICE.md](SERVICE.md) for the full service guide: setup and configuration, architecture, data model, authentication, Postman usage, testing, operations, and limitations. Import [openapi.json](openapi.json) for all 44 HTTP controller routes, including friendships, account search, and password management.
+See [SERVICE.md](../docs/user-service/SERVICE.md) for the full service guide: setup and configuration, architecture, data model, authentication, Postman usage, testing, operations, and limitations. Import [openapi.json](../docs/user-service/openapi.json) for all 44 HTTP controller routes, including friendships, account search, and password management.

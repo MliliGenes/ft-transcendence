@@ -24,6 +24,14 @@ export type PublicAccount = Pick<UserAccount,
   "id" | "username" | "displayName" | "avatarUrl" | "bannerUrl" | "bio" | "statusText" | "statusIcon" | "createdAt"
 >;
 
+export type PeopleSearchOptions = {
+  sortBy?: "username" | "displayName" | "createdAt";
+  sortOrder?: "asc" | "desc";
+  joinedWithin?: "7d" | "30d" | "365d";
+  hasStatus?: boolean;
+  hasBio?: boolean;
+};
+
 export type PublicAccountPage = {
   users: PublicAccount[];
   total: number;
@@ -175,7 +183,16 @@ export const accountApi = {
   getMe: (accessToken: string) => accountResponse(accountRequest<unknown>("/me", accessToken)),
   getPublic: publicAccountRequest,
   getPeople: (page: number, limit = 10) => publicAccountsRequest(`?page=${page}&limit=${limit}`),
-  searchPeople: (username: string, page: number, limit = 10) => publicAccountsRequest(`/search?username=${encodeURIComponent(username)}&page=${page}&limit=${limit}`),
+  searchPeople: (username: string, page: number, limit = 10, options: PeopleSearchOptions = {}) => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (username) params.set("username", username);
+    if (options.sortBy) params.set("sortBy", options.sortBy);
+    if (options.sortOrder) params.set("sortOrder", options.sortOrder);
+    if (options.joinedWithin) params.set("joinedWithin", options.joinedWithin);
+    if (options.hasStatus !== undefined) params.set("hasStatus", String(options.hasStatus));
+    if (options.hasBio !== undefined) params.set("hasBio", String(options.hasBio));
+    return publicAccountsRequest(`/search?${params}`);
+  },
   updateMe: (accessToken: string, changes: AccountUpdate) => accountResponse(accountRequest<unknown>("/me", accessToken, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

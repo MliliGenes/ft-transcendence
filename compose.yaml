@@ -112,23 +112,6 @@ services:
       - user-service
       - chat-service
 
-  auth-profile-web:
-    image: node:24-alpine
-    working_dir: /app
-    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
-    volumes:
-      - ./auth-profile-web:/app
-      - auth-profile-web-node-modules:/app/node_modules
-    ports:
-      - "127.0.0.1:5173:5173"
-    env_file: ./envs/auth-profile-web.env
-    depends_on:
-      - user-service
-      - chat-service
-
 networks:
   default:
     driver: bridge
-
-volumes:
-  auth-profile-web-node-modules:
