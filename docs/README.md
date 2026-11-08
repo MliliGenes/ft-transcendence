@@ -56,4 +56,6 @@ The project map for the whole repository is in [`../graphify-out/`](../graphify-
 | Document | What it covers |
 |---|---|
 | [MinIO](infra/minio.md) | Object storage setup |
+| [Monitoring](infra/monitoring.md) | Grafana, Prometheus, Loki and Alloy: dashboards, alert rules, setup and the D02 mapping |
+| [Monitoring plan](infra/MONITORING_PLAN.md) | Original two-phase monitoring plan; phase B (service metrics) still to do |
 | [Old Vite test frontend](archive/auth-profile-web.md) | Notes from the removed `auth-profile-web` app; kept for history |

@@ -1,0 +1,197 @@
+// Grafana Alloy: the single collector for Nook monitoring.
+//   * Container logs  -> redacted -> Loki
+//   * Metrics (cAdvisor, RabbitMQ, PostgreSQL, health probes, Alloy) -> Prometheus
+// Docker is reached only through the read-only socket proxy, never the raw socket.
+
+// ---------------------------------------------------------------- logs
+
+discovery.docker "nook" {
+  host             = "tcp://docker-socket-proxy:2375"
+  refresh_interval = "15s"
+
+  filter {
+    name   = "label"
+    values = ["com.docker.compose.project=nook"]
+  }
+}
+
+discovery.relabel "nook_logs" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "nook" {
+  host          = "tcp://docker-socket-proxy:2375"
+  targets       = discovery.docker.nook.targets
+  relabel_rules = discovery.relabel.nook_logs.rules
+  labels        = {"project" = "nook"}
+  forward_to    = [loki.process.redact.receiver]
+}
+
+// Strip secrets before anything is stored. Each expression's capture group is
+// replaced, so the surrounding text stays readable.
+loki.process "redact" {
+  // Signed MinIO URLs and OAuth / reset / verification tokens in query strings.
+  stage.replace {
+    expression = "(?i)(?:X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token|token|code|state|access_token|refresh_token|password)=([^&\\s\"]+)"
+    replace    = "[REDACTED]"
+  }
+
+  // Email-verification and password-reset tokens carried in the path.
+  stage.replace {
+    expression = "(?i)/(?:verify-email|password-reset)/([A-Za-z0-9._~-]{16,})"
+    replace    = "[REDACTED]"
+  }
+
+  // Bearer tokens and cookies, if a header ever reaches a log line.
+  stage.replace {
+    expression = "(?i)(?:bearer\\s+|authorization:\\s*|cookie:\\s*|set-cookie:\\s*)([^\\s\"]+)"
+    replace    = "[REDACTED]"
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// ------------------------------------------------------------- metrics
+
+prometheus.remote_write "local" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+
+// Container CPU, memory, network and filesystem.
+prometheus.scrape "cadvisor" {
+  job_name        = "cadvisor"
+  targets         = [{"__address__" = "cadvisor:8080"}]
+  scrape_interval = "15s"
+  forward_to      = [prometheus.remote_write.local.receiver]
+}
+
+// RabbitMQ's built-in Prometheus plugin; per-object metrics include queue names.
+prometheus.scrape "rabbitmq" {
+  job_name     = "rabbitmq"
+  targets      = [{"__address__" = "rabbitmq:15692"}]
+  metrics_path = "/metrics/per-object"
+  scrape_interval = "15s"
+  forward_to   = [prometheus.remote_write.local.receiver]
+}
+
+// PostgreSQL, one embedded exporter per database. The `monitoring` role only
+// has pg_monitor rights (see infra/postgres/10-monitoring-role.sh).
+prometheus.exporter.postgres "user_db" {
+  data_source_names = [string.format("postgresql://monitoring:%s@user-db:5432/postgres?sslmode=disable", sys.env("USER_DB_MONITOR_PASSWORD"))]
+}
+
+prometheus.exporter.postgres "chat_db" {
+  data_source_names = [string.format("postgresql://monitoring:%s@chat-db:5432/postgres?sslmode=disable", sys.env("CHAT_DB_MONITOR_PASSWORD"))]
+}
+
+discovery.relabel "user_db" {
+  targets = prometheus.exporter.postgres.user_db.targets
+
+  rule {
+    target_label = "database"
+    replacement  = "user-db"
+  }
+}
+
+discovery.relabel "chat_db" {
+  targets = prometheus.exporter.postgres.chat_db.targets
+
+  rule {
+    target_label = "database"
+    replacement  = "chat-db"
+  }
+}
+
+prometheus.scrape "postgres" {
+  job_name   = "postgres"
+  targets    = array.concat(discovery.relabel.user_db.output, discovery.relabel.chat_db.output)
+  scrape_interval = "15s"
+  forward_to = [prometheus.remote_write.local.receiver]
+}
+
+// Health probes: is each service answering HTTP?
+prometheus.exporter.blackbox "services" {
+  config = "{ modules: { http_2xx: { prober: http, timeout: 5s, http: { preferred_ip_protocol: ip4 } }, https_selfsigned: { prober: http, timeout: 5s, http: { preferred_ip_protocol: ip4, tls_config: { insecure_skip_verify: true } } } } }"
+
+  target {
+    name    = "user-service"
+    address = "http://user-service:3000/accounts?page=1&limit=1"
+    module  = "http_2xx"
+  }
+
+  target {
+    name    = "chat-service"
+    address = "http://chat-service:3000/"
+    module  = "http_2xx"
+  }
+
+  target {
+    name    = "client"
+    address = "http://client:3000/"
+    module  = "http_2xx"
+  }
+
+  target {
+    name    = "minio"
+    address = "http://minio:9000/minio/health/live"
+    module  = "http_2xx"
+  }
+
+  target {
+    name    = "nginx"
+    address = "https://nginx:443/"
+    module  = "https_selfsigned"
+  }
+}
+
+discovery.relabel "probes" {
+  targets = prometheus.exporter.blackbox.services.targets
+
+  // Expose the probe name as a friendly `service` label for dashboards and alerts.
+  rule {
+    source_labels = ["__param_target"]
+    target_label  = "probe_target"
+  }
+
+  rule {
+    source_labels = ["job"]
+    regex         = ".*/(.*)"
+    target_label  = "service"
+  }
+}
+
+prometheus.scrape "blackbox" {
+  job_name   = "blackbox"
+  targets    = discovery.relabel.probes.output
+  scrape_interval = "15s"
+  forward_to = [prometheus.remote_write.local.receiver]
+}
+
+// Alloy's own health.
+prometheus.exporter.self "alloy" {}
+
+prometheus.scrape "alloy" {
+  job_name   = "alloy"
+  targets    = prometheus.exporter.self.alloy.targets
+  scrape_interval = "15s"
+  forward_to = [prometheus.remote_write.local.receiver]
+}

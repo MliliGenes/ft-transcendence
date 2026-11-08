@@ -1,0 +1,14 @@
+# Prometheus stores metrics; Grafana Alloy does the scraping and pushes samples
+# here through remote write (enabled by --web.enable-remote-write-receiver).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # Prometheus' own health, so the Overview dashboard can show it.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
