@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Client } from 'minio';
 import { ConfigService } from '@nestjs/config';
@@ -16,7 +22,8 @@ const INLINE_IMAGE_TYPES = new Set([
 ]);
 
 @Injectable()
-export class MinioService {
+export class MinioService implements OnModuleInit {
+  private readonly logger = new Logger(MinioService.name);
   private readonly bucket: string;
 
   constructor(
@@ -25,6 +32,20 @@ export class MinioService {
     config: ConfigService,
   ) {
     this.bucket = minioBucket(config);
+  }
+
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.ensureBucketExists();
+      this.logger.log(`Bucket "${this.bucket}" is ready`);
+    } catch (error) {
+      // Do not crash chat: messaging works without attachments. A bucket-scoped
+      // service account cannot create buckets, so provision it with root creds.
+      this.logger.error(
+        `Cannot ensure bucket "${this.bucket}" exists; attachments will fail until it is created`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   async createUploadUrl(

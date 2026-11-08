@@ -1,8 +1,18 @@
 {
   "version": "1.0.0",
-  "gitCommitHash": "3f669e50d5d3d03006d3059ab46bfcbdbe4a7f79",
-  "generatedAt": "2026-11-08T02:12:29.197Z",
+  "gitCommitHash": "d78e2a23aa343094445f900ca579b0e5ec076a61",
+  "generatedAt": "2026-11-08T05:50:34.992Z",
   "files": {
+    ".gitattributes": {
+      "filePath": ".gitattributes",
+      "contentHash": "3c5032d813a9754ab8405af647c0210d077e487ad66c3b2a6c8b8cbb4050ae6d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 4,
+      "hasStructuralAnalysis": false
+    },
     ".graphifyignore": {
       "filePath": ".graphifyignore",
       "contentHash": "6853de7f653a22e44eb5cfae8023b8d70eb909c4db76e74db3b32831223f60ac",
@@ -15,12 +25,12 @@
     },
     "README.md": {
       "filePath": "README.md",
-      "contentHash": "d7560b99725636d2969cca650367527fe1b23631e63995c6d0aeaf1a626f062c",
+      "contentHash": "0c1304e323634b5543803fdb45090cb9e31be60e348d54263da433e2f939d357",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 2,
+      "totalLines": 41,
       "hasStructuralAnalysis": false
     },
     "chat-service/Dockerfile": {
@@ -2512,6 +2522,210 @@
       "exports": [],
       "totalLines": 9,
       "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/baseline.json": {
+      "filePath": "client/.scratch/env-examples-20261108/baseline.json",
+      "contentHash": "f2276d1e7feaa88056e2d3030d4a34ea8679c4479ceb052897e8b3de0634f4de",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 63,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/docs/infra/minio.md": {
+      "filePath": "client/.scratch/env-examples-20261108/docs/infra/minio.md",
+      "contentHash": "49014bedc0a8962e959480d46ef34f74452f19e7b9f25ed007a0b56c71fe957b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 17,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/docs/project/COMPOSE.md": {
+      "filePath": "client/.scratch/env-examples-20261108/docs/project/COMPOSE.md",
+      "contentHash": "6af970f0214b8aa6a860eb01334626b68ae7c770613b71be45951ecf4e97e2bb",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 102,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/docs/user-service/SERVICE.md": {
+      "filePath": "client/.scratch/env-examples-20261108/docs/user-service/SERVICE.md",
+      "contentHash": "75a17de7a1ab7e4b0cec17778ed1937171905e80137b40c1c011d1234b024f5e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 173,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/docs/user-service/SETUP.md": {
+      "filePath": "client/.scratch/env-examples-20261108/docs/user-service/SETUP.md",
+      "contentHash": "b4f401a9075b2a94aa5695587bac61e2e19f18f12acbb5e89112b5491449c062",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 80,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/envs/README.md": {
+      "filePath": "client/.scratch/env-examples-20261108/envs/README.md",
+      "contentHash": "3b2148bb67b58b1953f6a88313fc4e4728240647199d672b086cf633343c1399",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 89,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/envs/backend.env.example": {
+      "filePath": "client/.scratch/env-examples-20261108/envs/backend.env.example",
+      "contentHash": "caf222cedb9967c56883193d2948771523de43377d9a57de8a578db2b082b3a2",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 8,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/envs/chat-db.env.example": {
+      "filePath": "client/.scratch/env-examples-20261108/envs/chat-db.env.example",
+      "contentHash": "509b5270ba65a0b10359319dc1ce8666bac5a24f248971bb1bcaf72b1b5787be",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 15,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/envs/chat-service.env.example": {
+      "filePath": "client/.scratch/env-examples-20261108/envs/chat-service.env.example",
+      "contentHash": "98b85f28abc3b7d82defa063caa1507bae630d2c473de026b9dd781f1649177a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 52,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/envs/minio.env.example": {
+      "filePath": "client/.scratch/env-examples-20261108/envs/minio.env.example",
+      "contentHash": "76800dba93db4d658875ad5404c66c8c88cf32c305af305211613b6cd4f02726",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 17,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/envs/rabbitmq.env.example": {
+      "filePath": "client/.scratch/env-examples-20261108/envs/rabbitmq.env.example",
+      "contentHash": "a7d6ea75a048e805841142923f56237db66e867452c13f58520995236a2be67a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 11,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/envs/user-auth.env.example": {
+      "filePath": "client/.scratch/env-examples-20261108/envs/user-auth.env.example",
+      "contentHash": "6a008b55e6dcf6ecddbd99f4ab932872f96f2899042fe32e925c2e9c3347c886",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 42,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/envs/user-db.env.example": {
+      "filePath": "client/.scratch/env-examples-20261108/envs/user-db.env.example",
+      "contentHash": "867ac82dbf39d90603b8bb57a60bba4afd6a5967a4cc23b2d8eb85ada2833eee",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 15,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/envs/user-service.env.example": {
+      "filePath": "client/.scratch/env-examples-20261108/envs/user-service.env.example",
+      "contentHash": "f1b4cd0cb7ee6e6b5af8735bebecd0930c7ebff572705d4e0b06b7dfece31762",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 43,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/live-env-hashes.json": {
+      "filePath": "client/.scratch/env-examples-20261108/live-env-hashes.json",
+      "contentHash": "973b6e1e5f61cf57388dfcef6075b45ed2add5b63fc37a718cf34cc99f4ead6f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 43,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/user-service/.env.example": {
+      "filePath": "client/.scratch/env-examples-20261108/user-service/.env.example",
+      "contentHash": "bede090371688a7d8dcd3ac4c8c537d1c9120b7b91c4ecb402c277f0af525f8b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 68,
+      "hasStructuralAnalysis": false
+    },
+    "client/.scratch/env-examples-20261108/validate.mjs": {
+      "filePath": "client/.scratch/env-examples-20261108/validate.mjs",
+      "contentHash": "3a943aaf37a64e71ab5b57fc1e2ac278da216893f3d1425ddf38a654409c5bcc",
+      "functions": [
+        {
+          "name": "collectSource",
+          "params": [
+            "directory"
+          ],
+          "exported": false,
+          "lineCount": 8
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:assert/strict",
+          "specifiers": [
+            "assert"
+          ]
+        },
+        {
+          "source": "node:fs",
+          "specifiers": [
+            "fs"
+          ]
+        },
+        {
+          "source": "node:path",
+          "specifiers": [
+            "path"
+          ]
+        },
+        {
+          "source": "node:util",
+          "specifiers": [
+            "parseEnv"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 64,
+      "hasStructuralAnalysis": true
     },
     "client/AGENTS.md": {
       "filePath": "client/AGENTS.md",
@@ -7546,6 +7760,25 @@
       "totalLines": 2,
       "hasStructuralAnalysis": true
     },
+    "client/next-env.d.ts": {
+      "filePath": "client/next-env.d.ts",
+      "contentHash": "1b59d4c6b83807db275d43f3cf2cc8e9323f465fab764eea091cc5becd5bad37",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "./.next/types/routes.d.ts",
+          "specifiers": []
+        },
+        {
+          "source": "./.next/types/root-params.d.ts",
+          "specifiers": []
+        }
+      ],
+      "exports": [],
+      "totalLines": 8,
+      "hasStructuralAnalysis": true
+    },
     "client/next.config.ts": {
       "filePath": "client/next.config.ts",
       "contentHash": "8b1491f2a06a389900307cca01a8bf3b5296e06a5f14d231d5ceed0b05c18955",
@@ -7820,24 +8053,34 @@
       "totalLines": 35,
       "hasStructuralAnalysis": false
     },
-    "compose.yaml": {
-      "filePath": "compose.yaml",
-      "contentHash": "abd1c65ad71daac664373957fb425cf5fea020c7c4a54afbc26c77aa83620201",
+    "compose.monitoring.yaml": {
+      "filePath": "compose.monitoring.yaml",
+      "contentHash": "bd87d341640eb88432cbc739c2e61a3163a1550e1a684f29f9c74c5914e1d2e4",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 118,
+      "totalLines": 141,
+      "hasStructuralAnalysis": false
+    },
+    "compose.yaml": {
+      "filePath": "compose.yaml",
+      "contentHash": "7cfeaff48b113c63fb5eb34643d8a98f3c89be852bb81e96b941f709f54a20df",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 150,
       "hasStructuralAnalysis": false
     },
     "docs/README.md": {
       "filePath": "docs/README.md",
-      "contentHash": "861636a07c9d39b60b04f95d3d5f6701891a79bf23e25cb3d98061f35d95b3f0",
+      "contentHash": "4e9ac1cb01c266e3c5d468fa8cd4c7916cd00c90e5cd44ee55b5f574988d653b",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 60,
+      "totalLines": 62,
       "hasStructuralAnalysis": false
     },
     "docs/archive/auth-profile-web.md": {
@@ -8030,9 +8273,19 @@
       "totalLines": 35,
       "hasStructuralAnalysis": false
     },
+    "docs/infra/MONITORING_PLAN.md": {
+      "filePath": "docs/infra/MONITORING_PLAN.md",
+      "contentHash": "0146e94c702fa2b2aa2ffbb5b6435b785b894994ccac05bf8d237281c04e6e70",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 52,
+      "hasStructuralAnalysis": false
+    },
     "docs/infra/minio.md": {
       "filePath": "docs/infra/minio.md",
-      "contentHash": "889c25bbffdecdb7990fe334e3fb44824db18d0890d363636538ae0d3658a5a6",
+      "contentHash": "49014bedc0a8962e959480d46ef34f74452f19e7b9f25ed007a0b56c71fe957b",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -8040,14 +8293,24 @@
       "totalLines": 17,
       "hasStructuralAnalysis": false
     },
-    "docs/project/COMPOSE.md": {
-      "filePath": "docs/project/COMPOSE.md",
-      "contentHash": "3f4b188ff18ed4d0346a4ed07d423302b4442bd452fa388171e3ac8c05eb599b",
+    "docs/infra/monitoring.md": {
+      "filePath": "docs/infra/monitoring.md",
+      "contentHash": "bb69769b7c8dcea2d5cf7e2fcbaa489dd376943be982b73b7efb53cf7e208fee",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 98,
+      "totalLines": 107,
+      "hasStructuralAnalysis": false
+    },
+    "docs/project/COMPOSE.md": {
+      "filePath": "docs/project/COMPOSE.md",
+      "contentHash": "082cd3e01c5b6829d85f12370cec707b21ec5a80a08b834522a60da2b4cc147e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 106,
       "hasStructuralAnalysis": false
     },
     "docs/project/POINTS_ROADMAP.md": {
@@ -8102,7 +8365,7 @@
     },
     "docs/user-service/SERVICE.md": {
       "filePath": "docs/user-service/SERVICE.md",
-      "contentHash": "9efe78cd3f1be94919a0731167b01f0ff78ce3724f17f5d9d62624e38bbe24e9",
+      "contentHash": "75a17de7a1ab7e4b0cec17778ed1937171905e80137b40c1c011d1234b024f5e",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -8112,12 +8375,12 @@
     },
     "docs/user-service/SETUP.md": {
       "filePath": "docs/user-service/SETUP.md",
-      "contentHash": "eaaa635c68a69517288eed7281f0eaa19636006c2c0377542654b55df81b36fa",
+      "contentHash": "b4f401a9075b2a94aa5695587bac61e2e19f18f12acbb5e89112b5491449c062",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 70,
+      "totalLines": 80,
       "hasStructuralAnalysis": false
     },
     "docs/user-service/nook-profile-status-plan.md": {
@@ -8140,94 +8403,349 @@
       "totalLines": 4196,
       "hasStructuralAnalysis": false
     },
-    "envs/backend.env.example": {
-      "filePath": "envs/backend.env.example",
-      "contentHash": "c28618658a8f82c5e8b0596e01e6e9de98b26999f8a2cb6850dc4977190ee87f",
+    "envs/README.md": {
+      "filePath": "envs/README.md",
+      "contentHash": "3b2148bb67b58b1953f6a88313fc4e4728240647199d672b086cf633343c1399",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 3,
+      "totalLines": 89,
+      "hasStructuralAnalysis": false
+    },
+    "envs/backend.env.example": {
+      "filePath": "envs/backend.env.example",
+      "contentHash": "caf222cedb9967c56883193d2948771523de43377d9a57de8a578db2b082b3a2",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 8,
       "hasStructuralAnalysis": false
     },
     "envs/chat-db.env.example": {
       "filePath": "envs/chat-db.env.example",
-      "contentHash": "c55a5425213e1193d5aae4852bbf2364c90a959516d1c0329339171a6e6b71f8",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 5,
-      "hasStructuralAnalysis": false
-    },
-    "envs/chat-service.env.example": {
-      "filePath": "envs/chat-service.env.example",
-      "contentHash": "167ac305f322890a08ea177475b62a96c6c86f675f069798a6113f22bb142bc2",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 32,
-      "hasStructuralAnalysis": false
-    },
-    "envs/client.example": {
-      "filePath": "envs/client.example",
-      "contentHash": "13aca03c14cfeaa5b6eb12949af24fe46e7276ffa824a272989b5463f97cb3e7",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 5,
-      "hasStructuralAnalysis": false
-    },
-    "envs/minio.env.example": {
-      "filePath": "envs/minio.env.example",
-      "contentHash": "d7ba13f03d5e3e9f56f9af08d34402b64fbe10deeabe09e5ac512dd4e1eba611",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 4,
-      "hasStructuralAnalysis": false
-    },
-    "envs/rabbitmq.env.example": {
-      "filePath": "envs/rabbitmq.env.example",
-      "contentHash": "67efb3fefc2c1df8bb08bb89e057bb3133f0ee3d4ce77fe4606db8cb46242cc8",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 4,
-      "hasStructuralAnalysis": false
-    },
-    "envs/user-auth.env.example": {
-      "filePath": "envs/user-auth.env.example",
-      "contentHash": "56c89604ea8d2b6ef1a765455b621d3b1ee4fddbad9ea9a63b43ad708b2f4c20",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 16,
-      "hasStructuralAnalysis": false
-    },
-    "envs/user-db.env.example": {
-      "filePath": "envs/user-db.env.example",
-      "contentHash": "df9f25b79cf9ca1a9726137cf1c5b006ef696231780dfaf2137f4ca787738f6e",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 6,
-      "hasStructuralAnalysis": false
-    },
-    "envs/user-service.env.example": {
-      "filePath": "envs/user-service.env.example",
-      "contentHash": "0b8484a2879a2a99de0255b76551c1f09735e4edd382024f13e5ee45c44604fe",
+      "contentHash": "509b5270ba65a0b10359319dc1ce8666bac5a24f248971bb1bcaf72b1b5787be",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
       "totalLines": 15,
+      "hasStructuralAnalysis": false
+    },
+    "envs/chat-service.env.example": {
+      "filePath": "envs/chat-service.env.example",
+      "contentHash": "98b85f28abc3b7d82defa063caa1507bae630d2c473de026b9dd781f1649177a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 52,
+      "hasStructuralAnalysis": false
+    },
+    "envs/grafana.env.example": {
+      "filePath": "envs/grafana.env.example",
+      "contentHash": "c550e2cf81a444ce4f75d18af9c4766e16a7862982cc2af451a9cd28b4879516",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 7,
+      "hasStructuralAnalysis": false
+    },
+    "envs/minio.env.example": {
+      "filePath": "envs/minio.env.example",
+      "contentHash": "76800dba93db4d658875ad5404c66c8c88cf32c305af305211613b6cd4f02726",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 17,
+      "hasStructuralAnalysis": false
+    },
+    "envs/monitoring.env.example": {
+      "filePath": "envs/monitoring.env.example",
+      "contentHash": "15eeb316a601cdd2be50bbe31627a0725c6978a35d66c118db6c73cba79b5e07",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 9,
+      "hasStructuralAnalysis": false
+    },
+    "envs/rabbitmq.env.example": {
+      "filePath": "envs/rabbitmq.env.example",
+      "contentHash": "a7d6ea75a048e805841142923f56237db66e867452c13f58520995236a2be67a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 11,
+      "hasStructuralAnalysis": false
+    },
+    "envs/user-auth.env.example": {
+      "filePath": "envs/user-auth.env.example",
+      "contentHash": "6a008b55e6dcf6ecddbd99f4ab932872f96f2899042fe32e925c2e9c3347c886",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 42,
+      "hasStructuralAnalysis": false
+    },
+    "envs/user-db.env.example": {
+      "filePath": "envs/user-db.env.example",
+      "contentHash": "867ac82dbf39d90603b8bb57a60bba4afd6a5967a4cc23b2d8eb85ada2833eee",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 15,
+      "hasStructuralAnalysis": false
+    },
+    "envs/user-service.env.example": {
+      "filePath": "envs/user-service.env.example",
+      "contentHash": "f1b4cd0cb7ee6e6b5af8735bebecd0930c7ebff572705d4e0b06b7dfece31762",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 43,
+      "hasStructuralAnalysis": false
+    },
+    "infra/monitoring/alloy/config.alloy": {
+      "filePath": "infra/monitoring/alloy/config.alloy",
+      "contentHash": "d2ff79a023af7baed06bc070871c5f54f27873018b32923a4ef873051f36ec5b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 198,
+      "hasStructuralAnalysis": false
+    },
+    "infra/monitoring/grafana/build-dashboards.mjs": {
+      "filePath": "infra/monitoring/grafana/build-dashboards.mjs",
+      "contentHash": "bf19f34c8a9f27d65b3c984dfb5ebf0213586bf4445ebf73df713c5f110b3744",
+      "functions": [
+        {
+          "name": "place",
+          "params": [
+            "w",
+            "h"
+          ],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "targets",
+          "params": [
+            "ds",
+            "list"
+          ],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "timeseries",
+          "params": [
+            "title",
+            "exprs"
+          ],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "stat",
+          "params": [
+            "title",
+            "expr"
+          ],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "logsPanel",
+          "params": [
+            "title",
+            "expr"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "alertList",
+          "params": [
+            "title"
+          ],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "text",
+          "params": [
+            "title",
+            "content"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "dashboard",
+          "params": [
+            "uid",
+            "title",
+            "description",
+            "panels"
+          ],
+          "exported": false,
+          "lineCount": 9
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:fs",
+          "specifiers": [
+            "mkdirSync",
+            "writeFileSync"
+          ]
+        },
+        {
+          "source": "node:path",
+          "specifiers": [
+            "dirname",
+            "join"
+          ]
+        },
+        {
+          "source": "node:url",
+          "specifiers": [
+            "fileURLToPath"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 132,
+      "hasStructuralAnalysis": true
+    },
+    "infra/monitoring/grafana/dashboards/nook-containers.json": {
+      "filePath": "infra/monitoring/grafana/dashboards/nook-containers.json",
+      "contentHash": "a5b47d243aa67e4514e709cb5b90bf5779e2467b547c1eb07b96ce1e1bc60430",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 314,
+      "hasStructuralAnalysis": false
+    },
+    "infra/monitoring/grafana/dashboards/nook-data.json": {
+      "filePath": "infra/monitoring/grafana/dashboards/nook-data.json",
+      "contentHash": "efdd5b20ed72b40733343828563ce02f0785f4a6f4f44796818d96ad2efa8a53",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 610,
+      "hasStructuralAnalysis": false
+    },
+    "infra/monitoring/grafana/dashboards/nook-http-realtime.json": {
+      "filePath": "infra/monitoring/grafana/dashboards/nook-http-realtime.json",
+      "contentHash": "7d8c7b9526cd0170dfcd9ac3b494e5d54f1b8ce7543a869a08e55b2ceeed2657",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 185,
+      "hasStructuralAnalysis": false
+    },
+    "infra/monitoring/grafana/dashboards/nook-logs.json": {
+      "filePath": "infra/monitoring/grafana/dashboards/nook-logs.json",
+      "contentHash": "ebf80ecd469b333609a636a59d841eccc64932cc4cf7478cf0b7fd1e04e962ca",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 130,
+      "hasStructuralAnalysis": false
+    },
+    "infra/monitoring/grafana/dashboards/nook-overview.json": {
+      "filePath": "infra/monitoring/grafana/dashboards/nook-overview.json",
+      "contentHash": "e94418ac04abb12da1d15ca37252dbedb46c5ab26e6e55e19324c1232a543b3e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 627,
+      "hasStructuralAnalysis": false
+    },
+    "infra/monitoring/grafana/provisioning/dashboards/nook.yaml": {
+      "filePath": "infra/monitoring/grafana/provisioning/dashboards/nook.yaml",
+      "contentHash": "6bf967af9a2004ceb9069132143c54bfbbcea034e1e4da3a3bfa22bc3802b865",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 11,
+      "hasStructuralAnalysis": false
+    },
+    "infra/monitoring/grafana/provisioning/datasources/datasources.yaml": {
+      "filePath": "infra/monitoring/grafana/provisioning/datasources/datasources.yaml",
+      "contentHash": "0d18d5a0c8cc75933de7f544a0f73a42f19e52b1afa08653546419b21c16563b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 20,
+      "hasStructuralAnalysis": false
+    },
+    "infra/monitoring/loki/loki.yaml": {
+      "filePath": "infra/monitoring/loki/loki.yaml",
+      "contentHash": "1190abbe4c8ec59879682d5b0bafc322e4d79017bc18e461cbf0dd2375a20178",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 40,
+      "hasStructuralAnalysis": false
+    },
+    "infra/monitoring/prometheus/alerts.yml": {
+      "filePath": "infra/monitoring/prometheus/alerts.yml",
+      "contentHash": "3042973dec4caebab34a7efb4122e84e9aed9011046add96f369d2bbe51fbed5",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 88,
+      "hasStructuralAnalysis": false
+    },
+    "infra/monitoring/prometheus/prometheus.yml": {
+      "filePath": "infra/monitoring/prometheus/prometheus.yml",
+      "contentHash": "0fb049c6cc0fc02532d10048f4125af2870be8651b2c6e9654aad7c46a07df2b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 15,
+      "hasStructuralAnalysis": false
+    },
+    "infra/postgres/10-monitoring-role.sh": {
+      "filePath": "infra/postgres/10-monitoring-role.sh",
+      "contentHash": "b132d2426ba3a19ed4e7c42b05ce827c5ee438498d704592b2141ac3009ae3c2",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 28,
+      "hasStructuralAnalysis": false
+    },
+    "infra/rabbitmq/enabled_plugins": {
+      "filePath": "infra/rabbitmq/enabled_plugins",
+      "contentHash": "a63f0dd4e9181c82af9ad191df89429da0b761517e4a05570a0c67de4c0c1c2d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 2,
       "hasStructuralAnalysis": false
     },
     "minio/Dockerfile": {
@@ -8310,12 +8828,12 @@
     },
     "nginx/default.conf": {
       "filePath": "nginx/default.conf",
-      "contentHash": "48dd7522bf7fe3e1f8061fc32cc31b90438dc0bfc4e57a549fe3eea11f877549",
+      "contentHash": "7b44cac7f22eb4a48f12702a657f932efd386740fbf54c8913327211f2fff628",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 144,
+      "totalLines": 161,
       "hasStructuralAnalysis": false
     },
     "nginx/entrypoint.sh": {
@@ -8340,12 +8858,32 @@
     },
     "user-service/.env.example": {
       "filePath": "user-service/.env.example",
-      "contentHash": "a4783e10eab9a7b7c7b6e412b6239e0ffd02a0aa81154bce960eeccf008554e0",
+      "contentHash": "bede090371688a7d8dcd3ac4c8c537d1c9120b7b91c4ecb402c277f0af525f8b",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 24,
+      "totalLines": 68,
+      "hasStructuralAnalysis": false
+    },
+    "user-service/.keys/jwt-private.pem": {
+      "filePath": "user-service/.keys/jwt-private.pem",
+      "contentHash": "20d8d373de82a452805b8706e18fdafb7134e41b1f9f4d39dd70d8b4c4b2c830",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 40,
+      "hasStructuralAnalysis": false
+    },
+    "user-service/.keys/jwt-public.pem": {
+      "filePath": "user-service/.keys/jwt-public.pem",
+      "contentHash": "b193c64207c5c04a25932170b273f790c2589674569ff75754f9cc1d2e8c672f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 11,
       "hasStructuralAnalysis": false
     },
     "user-service/Dockerfile": {
