@@ -98,6 +98,19 @@ services:
       retries: 5
     logging: *logging
 
+  # Provisions the chat bucket and its scoped service account on a fresh
+  # volume, then exits. Idempotent. Chat waits for it to complete.
+  minio-init:
+    build: ./minio-init
+    env_file:
+      - ./envs/minio.env
+      - ./envs/chat-service.env
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    logging: *logging
+
   user-service:
     build: ./user-service
     env_file:
@@ -125,6 +138,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
       user-service:
