@@ -750,9 +750,9 @@
     "semantic_hash": ""
   },
   "chat-service/src/minio/minio.service.ts": {
-    "mtime": 1793948295.3616397,
-    "seen": 1794099895.837295,
-    "ast_hash": "e6de250d5624e90489b80d5647a03a20",
+    "mtime": 1794120491.0427194,
+    "seen": 1794121679.485185,
+    "ast_hash": "3863633c3bb1231a3a558f77a173ed10",
     "semantic_hash": ""
   },
   "client/NOOK_DESIGN_SYSTEM.json": {
@@ -1260,9 +1260,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1793948295.324514,
-    "seen": 1794099895.8490539,
-    "ast_hash": "4b015ec80a9a2ca8636a8ed2e9064523",
+    "mtime": 1794104397.6346369,
+    "seen": 1794121679.530361,
+    "ast_hash": "d725521367b648058bf6a286993f2967",
     "semantic_hash": ""
   },
   "chat-service/README.md": {
@@ -1284,9 +1284,9 @@
     "semantic_hash": ""
   },
   "compose.yaml": {
-    "mtime": 1794102229.3018775,
-    "seen": 1794102329.3218431,
-    "ast_hash": "9d85a127be110bb6e5f792de7c8315b7",
+    "mtime": 1794121178.6113327,
+    "seen": 1794121679.531362,
+    "ast_hash": "82c048a01d24b50eff8a0642d10008fa",
     "semantic_hash": ""
   },
   "user-service/README.md": {
@@ -1344,9 +1344,9 @@
     "semantic_hash": ""
   },
   "docs/README.md": {
-    "mtime": 1794102314.9437618,
-    "seen": 1794102329.3218431,
-    "ast_hash": "0560882c43f1a1b5bde84e615013a453",
+    "mtime": 1794106192.3257484,
+    "seen": 1794121679.531362,
+    "ast_hash": "40100e6fa28b7ce3321aa3641bb3db31",
     "semantic_hash": ""
   },
   "docs/archive/auth-profile-web.md": {
@@ -1446,15 +1446,15 @@
     "semantic_hash": ""
   },
   "docs/infra/minio.md": {
-    "mtime": 1794082655.6409817,
-    "seen": 1794102329.3218431,
-    "ast_hash": "392f01f0ab88af1ee7954ea90bfae133",
+    "mtime": 1794104078.5887945,
+    "seen": 1794121679.5345128,
+    "ast_hash": "42d4972c9529f43d1d20dbc3bb4b3753",
     "semantic_hash": ""
   },
   "docs/project/COMPOSE.md": {
-    "mtime": 1794102287.6726863,
-    "seen": 1794102329.3218431,
-    "ast_hash": "28fc156aad46f59e7e0e70b837c518a0",
+    "mtime": 1794106197.758437,
+    "seen": 1794121679.5345128,
+    "ast_hash": "6784ed1fb264663c1dc7baa825c32fc3",
     "semantic_hash": ""
   },
   "docs/project/POINTS_ROADMAP.md": {
@@ -1488,15 +1488,15 @@
     "semantic_hash": ""
   },
   "docs/user-service/SERVICE.md": {
-    "mtime": 1794102259.23304,
-    "seen": 1794102329.3218431,
-    "ast_hash": "1f0d69cab431cce8856d14cca3434a6d",
+    "mtime": 1794104114.4070868,
+    "seen": 1794121679.535515,
+    "ast_hash": "1ae07dc7d03c9f5c431a765eeaa382c0",
     "semantic_hash": ""
   },
   "docs/user-service/SETUP.md": {
-    "mtime": 1791902271.0996902,
-    "seen": 1794102329.3218431,
-    "ast_hash": "819df285ad6e5934d523f79113a9e28c",
+    "mtime": 1794104078.458615,
+    "seen": 1794121679.535515,
+    "ast_hash": "f40884854c857876be3e15e5dfa8def0",
     "semantic_hash": ""
   },
   "docs/user-service/nook-profile-status-plan.md": {
@@ -1509,6 +1509,138 @@
     "mtime": 1790285303.938113,
     "seen": 1794102329.3228428,
     "ast_hash": "eb60698adbf186b9b960876a73b426d0",
+    "semantic_hash": ""
+  },
+  ".ua/config.json": {
+    "mtime": 1794102661.369624,
+    "seen": 1794121679.4736571,
+    "ast_hash": "f578c551a8666c5276de17c132683bb5",
+    "semantic_hash": ""
+  },
+  ".ua/fingerprints.json": {
+    "mtime": 1794117034.9951463,
+    "seen": 1794121679.4736571,
+    "ast_hash": "22ce9f03bcd1976670251484aeb81d69",
+    "semantic_hash": ""
+  },
+  ".ua/intermediate/scan-result.json": {
+    "mtime": 1794120735.3569887,
+    "seen": 1794121679.4736571,
+    "ast_hash": "9eee00ab95ffc61763adade70e7dbaeb",
+    "semantic_hash": ""
+  },
+  ".ua/knowledge-graph.json": {
+    "mtime": 1794116991.1028154,
+    "seen": 1794121679.4736571,
+    "ast_hash": "db9dca963d5abfd6f1be9fcbedb9815b",
+    "semantic_hash": ""
+  },
+  ".ua/meta.json": {
+    "mtime": 1794117067.4330902,
+    "seen": 1794121679.4736571,
+    "ast_hash": "52c071f408e87cd30648a0a61eee52a7",
+    "semantic_hash": ""
+  },
+  "infra/monitoring/grafana/build-dashboards.mjs": {
+    "mtime": 1794105682.8335109,
+    "seen": 1794121679.5106404,
+    "ast_hash": "d4828e346f78e6d6002955077c7ca97c",
+    "semantic_hash": ""
+  },
+  "infra/monitoring/grafana/dashboards/nook-containers.json": {
+    "mtime": 1794105684.0995502,
+    "seen": 1794121679.5106404,
+    "ast_hash": "8ea5e1451244002ba4dbcddcab662c9f",
+    "semantic_hash": ""
+  },
+  "infra/monitoring/grafana/dashboards/nook-data.json": {
+    "mtime": 1794105684.1010942,
+    "seen": 1794121679.5106404,
+    "ast_hash": "45b12eab61ec565171945c7bd0761916",
+    "semantic_hash": ""
+  },
+  "infra/monitoring/grafana/dashboards/nook-http-realtime.json": {
+    "mtime": 1794105684.1010942,
+    "seen": 1794121679.5106404,
+    "ast_hash": "1d77ca6ad0f0c30d0181d70ce3fb16d3",
+    "semantic_hash": ""
+  },
+  "infra/monitoring/grafana/dashboards/nook-logs.json": {
+    "mtime": 1794105684.1010942,
+    "seen": 1794121679.5106404,
+    "ast_hash": "66aa0acc8e14ffd3d9ca8624e0501cc2",
+    "semantic_hash": ""
+  },
+  "infra/monitoring/grafana/dashboards/nook-overview.json": {
+    "mtime": 1794105684.0995502,
+    "seen": 1794121679.5106404,
+    "ast_hash": "4b4dc72b2a70bfba51284545d8ae3096",
+    "semantic_hash": ""
+  },
+  "infra/postgres/10-monitoring-role.sh": {
+    "mtime": 1794105642.7498293,
+    "seen": 1794121679.5106404,
+    "ast_hash": "e56d61e45bea90512a5d5866be37b4aa",
+    "semantic_hash": ""
+  },
+  "minio-init/init.sh": {
+    "mtime": 1794121178.0901256,
+    "seen": 1794121679.5106404,
+    "ast_hash": "db0acc73684fd3587f4246e63e80c986",
+    "semantic_hash": ""
+  },
+  "compose.monitoring.yaml": {
+    "mtime": 1794106067.9382644,
+    "seen": 1794121679.531362,
+    "ast_hash": "5ed80c09c4809fbb1d65a6353c65200a",
+    "semantic_hash": ""
+  },
+  "docs/infra/MONITORING_PLAN.md": {
+    "mtime": 1794106191.7287257,
+    "seen": 1794121679.5345128,
+    "ast_hash": "153c3653cc34aaa31a577fd71a6e26a5",
+    "semantic_hash": ""
+  },
+  "docs/infra/monitoring.md": {
+    "mtime": 1794106181.3934748,
+    "seen": 1794121679.5345128,
+    "ast_hash": "f6ab8efe8880973cf1351112a8b95585",
+    "semantic_hash": ""
+  },
+  "envs/README.md": {
+    "mtime": 1794104050.1128852,
+    "seen": 1794121679.5365129,
+    "ast_hash": "2807eeb6dd36f882c3f121e3b103538a",
+    "semantic_hash": ""
+  },
+  "infra/monitoring/grafana/provisioning/dashboards/nook.yaml": {
+    "mtime": 1794105644.1582232,
+    "seen": 1794121679.5365129,
+    "ast_hash": "78936bf3884f70e409f7687d95495f85",
+    "semantic_hash": ""
+  },
+  "infra/monitoring/grafana/provisioning/datasources/datasources.yaml": {
+    "mtime": 1794105643.7262046,
+    "seen": 1794121679.5365129,
+    "ast_hash": "9db6e054dd58ee9ec337aaa45c80f288",
+    "semantic_hash": ""
+  },
+  "infra/monitoring/loki/loki.yaml": {
+    "mtime": 1794105609.5871708,
+    "seen": 1794121679.5365129,
+    "ast_hash": "af7505fc56566199841987b7501f1b54",
+    "semantic_hash": ""
+  },
+  "infra/monitoring/prometheus/alerts.yml": {
+    "mtime": 1794106517.6734552,
+    "seen": 1794121679.5365129,
+    "ast_hash": "80588150915c38860042285ec3a3a89f",
+    "semantic_hash": ""
+  },
+  "infra/monitoring/prometheus/prometheus.yml": {
+    "mtime": 1794105609.0267372,
+    "seen": 1794121679.5365129,
+    "ast_hash": "a9ab303cc733fcaf08288f911c896375",
     "semantic_hash": ""
   }
 }

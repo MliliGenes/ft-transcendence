@@ -12,6 +12,7 @@ The project map for the whole repository is in [`../graphify-out/`](../graphify-
 | [Points roadmap](project/POINTS_ROADMAP.md) | Module plan and point targets |
 | [Module tracker](requirements/index.html) | ft_transcendence v21.2 module checklist (open in a browser) |
 | [Local Compose setup](project/COMPOSE.md) | Running the stack, env files, HTTPS, OAuth callbacks |
+| [Application book (PDF)](book/Nook-Book.pdf) | Whole-app reference built from these docs, both OpenAPI specs, graphify and Understand-Anything. Rebuild with `cd docs/book && npm install && npm run build` |
 | [Public API adapter plan](project/PUBLIC_API_ADAPTER_PLAN.md) | Plan for the W06 public API module |
 
 ## Client (Next.js)
