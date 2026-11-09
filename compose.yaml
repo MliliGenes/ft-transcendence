@@ -24,6 +24,7 @@ services:
       - user-service
       - client
       - chat-service
+      - game-service
       - minio
     logging: *logging
 
@@ -61,6 +62,31 @@ services:
       timeout: 5s
       start_period: 10s
       retries: 12
+    logging: *logging
+
+  game-db:
+    image: postgres:18-alpine
+    env_file:
+      - ./envs/game-db.env
+    volumes:
+      - ./volumes/game-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 12
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - ./volumes/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     logging: *logging
 
   rabbitmq:
@@ -152,13 +178,62 @@ services:
       retries: 12
     logging: *logging
 
+  judge-worker:
+    build:
+      context: .
+      dockerfile: services/judge-worker/Dockerfile
+    env_file:
+      - ./envs/judge-worker.env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - judge-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3010/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    logging: *logging
+
+  game-service:
+    build:
+      context: .
+      dockerfile: services/game/Dockerfile
+    env_file:
+      - ./envs/backend.env
+      - ./envs/game-service.env
+      - ./envs/user-auth.env
+    depends_on:
+      game-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      judge-worker:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    networks:
+      - default
+      - judge-internal
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3002/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
   client:
     build: ./client
     depends_on:
       - user-service
       - chat-service
+      - game-service
     logging: *logging
 
 networks:
   default:
     driver: bridge
+  judge-internal:
+    internal: true

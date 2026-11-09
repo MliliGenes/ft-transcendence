@@ -1,0 +1,57 @@
+{
+  "id": "sum-array",
+  "title": "Sum Array",
+  "difficulty": "Easy",
+  "tags": ["Array", "Math"],
+  "description": "Read an integer n, followed by n space-separated integers, and print their sum.",
+  "examples": [
+    {
+      "label": "Example 1",
+      "input": "4\n1 2 3 4",
+      "output": "10",
+      "explanation": "1 + 2 + 3 + 4 = 10"
+    },
+    {
+      "label": "Example 2",
+      "input": "3\n-5 0 5",
+      "output": "0",
+      "explanation": "-5 + 0 + 5 = 0"
+    }
+  ],
+  "constraints": [
+    "1 <= n <= 10^5",
+    "-10^9 <= a_i <= 10^9"
+  ],
+  "timeLimitMs": 2000,
+  "memoryLimitMb": 256,
+  "driver": "stdio",
+  "entrypoint": null,
+  "starters": {
+    "C++": "#include <iostream>\n#include <vector>\n\nint main() {\n    int n;\n    if (!(std::cin >> n)) return 0;\n    long long sum = 0;\n    for (int i = 0; i < n; ++i) {\n        long long val;\n        std::cin >> val;\n        sum += val;\n    }\n    std::cout << 0 << \"\\n\";\n    return 0;\n}\n",
+    "Python": "import sys\n\ndef main():\n    lines = sys.stdin.read().split()\n    if not lines:\n        return\n    n = int(lines[0])\n    # replace with sum calculation\n    print(0)\n\nmain()\n",
+    "C": "#include <stdio.h>\n\nint main(void) {\n    int n;\n    if (scanf(\"%d\", &n) != 1) return 0;\n    long long sum = 0;\n    for (int i = 0; i < n; ++i) {\n        long long val;\n        scanf(\"%lld\", &val);\n        sum += val;\n    }\n    printf(\"0\\n\");\n    return 0;\n}\n"
+  },
+  "visibleTests": [
+    { "id": "v1", "input": "4\n1 2 3 4", "expected": "10" },
+    { "id": "v2", "input": "3\n-5 0 5", "expected": "0" }
+  ],
+  "hiddenGroups": [
+    {
+      "name": "Basic",
+      "weight": 50,
+      "tests": [
+        { "id": "h1", "input": "1\n42", "expected": "42" },
+        { "id": "h2", "input": "5\n10 20 30 40 50", "expected": "150" }
+      ]
+    },
+    {
+      "name": "LargeOrNegative",
+      "weight": 50,
+      "tests": [
+        { "id": "h3", "input": "4\n-10 -20 -30 -40", "expected": "-100" },
+        { "id": "h4", "input": "2\n1000000000 1000000000", "expected": "2000000000" }
+      ]
+    }
+  ],
+  "provenance": { "origin": "original", "created": "2026-11-09" }
+}

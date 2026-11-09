@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   description: "Share what you’re into, chat with friends, and play together. Nook brings your people, conversations, and games into one shared space.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"

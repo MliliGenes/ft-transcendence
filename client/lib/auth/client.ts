@@ -8,8 +8,11 @@ export type AuthSession = {
 type ApiErrorBody = { message?: string | string[]; error?: string };
 
 export class AuthRequestError extends Error {
-  constructor(message: string, readonly status: number) {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
     super(message);
+    this.status = status;
     this.name = "AuthRequestError";
   }
 }

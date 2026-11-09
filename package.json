@@ -1,0 +1,30 @@
+{
+  "name": "nook-code-arena",
+  "version": "0.1.0",
+  "description": "Code Arena, the first-game implementation baseline for Nook's ft_transcendence project.",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/arena-game",
+    "packages/arena-harness",
+    "packages/arena-model",
+    "services/game",
+    "services/judge-worker"
+  ],
+  "scripts": {
+    "build:packages": "npm run build --workspace arena-model && npm run build --workspace arena-game-engine && npm run build --workspace arena-game",
+    "pretest": "npm run build:packages",
+    "test": "npm test --workspaces --if-present",
+    "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "build": "npm run build:packages && npm run build --workspace arena-game && npm run build --workspace arena-judge-worker",
+    "certs": "bash scripts/gen-dev-certs.sh",
+    "play": "bash scripts/play.sh",
+    "up": "docker compose up --build",
+    "down": "docker compose down"
+  },
+  "license": "ISC"
+}
