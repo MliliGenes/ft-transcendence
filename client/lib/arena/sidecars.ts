@@ -49,11 +49,15 @@ interface ScopeIdentity {
 const defaultFactories: SidecarFactories = {
   createCollab: async (config) => {
     const { CollabClient } = await import("./collab");
-    return new CollabClient({ ...config, displayName: config.userId });
+    const client = new CollabClient({ ...config, displayName: config.userId });
+    await client.connect();
+    return client;
   },
   createChat: async (config) => {
     const { TeamChatClient } = await import("./chat");
-    return new TeamChatClient(config);
+    const client = new TeamChatClient(config);
+    await client.connect();
+    return client;
   },
 };
 
