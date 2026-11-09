@@ -6,6 +6,9 @@ export const ATTACHMENT_CONTENT_TYPES = [
   'image/webp',
   'image/gif',
   'application/pdf',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
 ] as const;
 
 export class CreateAttachmentUploadUrlDto {

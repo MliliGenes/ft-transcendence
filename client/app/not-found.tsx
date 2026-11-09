@@ -1,11 +1,16 @@
-import Link from 'next/link'
+import type { Metadata } from "next";
+import { ErrorPage } from "@/components/error-page";
+
+export const metadata: Metadata = { title: "Page not found — Nook" };
 
 export default function NotFound() {
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center gap-4 text-center">
-      <h2>Not Found</h2>
-      <p>Could not find requested resource</p>
-      <Link href="/">Return Home</Link>
-    </div>
-  )
+    <ErrorPage
+      standalone
+      code="404"
+      eyebrow="Page not found"
+      title="This nook doesn’t exist"
+      description="The page you’re looking for may have moved, been removed, or the link might be incorrect."
+    />
+  );
 }
