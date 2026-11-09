@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 export function LobbyView({ code }: { code: string }) {
   const normalizedCode = code.toUpperCase();
   const router = useRouter();
-  const { session } = useAuth();
+  const { session, isRestoring } = useAuth();
   const userId = session?.user?.id ?? "guest-user";
   const token = session?.accessToken;
 
@@ -26,14 +26,24 @@ export function LobbyView({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    if (isRestoring) return;
+    if (!token) {
+      setError("Please log in to join this lobby");
+      setLoading(false);
+      return;
+    }
+
     let client: LobbyClient | null = new LobbyClient("", userId, token);
     let active = true;
+    setError(null);
+    setLoading(true);
 
     async function init() {
       try {
         const data = await client!.joinRoom(normalizedCode);
         if (active) {
           setLobbyData(data);
+          setError(null);
           setLoading(false);
         }
       } catch (err) {
@@ -63,7 +73,7 @@ export function LobbyView({ code }: { code: string }) {
       client?.disconnect();
       client = null;
     };
-  }, [normalizedCode, userId, token, router]);
+  }, [normalizedCode, userId, token, isRestoring, router]);
 
   async function handleToggleReady() {
     if (!lobbyData) return;

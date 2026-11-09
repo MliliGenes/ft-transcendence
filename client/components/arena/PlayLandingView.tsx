@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconCode, IconDeviceGamepad2, IconPlus, IconUserPlus, IconUsers } from "@tabler/icons-react";
 import { useAuth } from "@/components/auth/auth-provider";
-import { LobbyClient } from "@/lib/arena/lobby";
+import { LobbyClient, type PrivateRoom } from "@/lib/arena/lobby";
 import { Button } from "@/components/ui/button";
 
 export function PlayLandingView() {
@@ -13,9 +13,38 @@ export function PlayLandingView() {
   const [joinCode, setJoinCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeRoom, setActiveRoom] = useState<PrivateRoom | null>(null);
 
   const userId = session?.user?.id ?? "guest-user";
   const token = session?.accessToken;
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const client = new LobbyClient("", userId, token);
+    client
+      .getActive()
+      .then(({ room }) => {
+        if (!cancelled && room) {
+          setActiveRoom(room.room);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, token]);
+
+  async function handleLeaveActiveRoom() {
+    if (!activeRoom || !token) return;
+    try {
+      const client = new LobbyClient("", userId, token);
+      await client.leaveRoom(activeRoom.id);
+      setActiveRoom(null);
+    } catch {
+      // ignore
+    }
+  }
 
   async function handleCreate(mode: "1v1" | "2v2") {
     setLoading(true);
@@ -62,6 +91,24 @@ export function PlayLandingView() {
           </div>
         </div>
       </div>
+
+      {activeRoom && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded border border-primary/40 bg-primary/10 p-4 text-xs font-medium text-foreground">
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-primary">Active Lobby:</span>
+            <span className="font-mono text-sm tracking-wider font-bold">{activeRoom.code}</span>
+            <span className="text-muted-foreground">({activeRoom.mode})</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => router.push(`/play/lobby/${activeRoom.code}`)}>
+              Resume Lobby
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleLeaveActiveRoom}>
+              Leave
+            </Button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 rounded border border-danger/30 bg-danger/10 p-4 text-xs font-medium text-danger">

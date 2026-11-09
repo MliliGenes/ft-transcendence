@@ -483,7 +483,23 @@ export class LobbyStore implements ILobbyStore {
 
       const existing = members.find((m) => m.userId === userId);
       const cap = capacityFor(r.mode);
-      if (existing) throw new LobbyError("already in this private room", 409);
+      if (existing) {
+        await client.query("COMMIT");
+        return {
+          room: {
+            id: r.id,
+            code: r.code,
+            mode: r.mode,
+            ownerUserId: r.owner_user_id,
+            status: r.status,
+            createdAt: Number(r.created_at),
+            expiresAt: Number(r.expires_at),
+            matchId: r.match_id,
+          },
+          members,
+          full: members.length >= cap,
+        };
+      }
 
       if (members.length >= cap) throw new LobbyError("room is full", 409);
 
@@ -971,7 +987,13 @@ export class InMemoryLobbyStore implements ILobbyStore {
       const mems = this.members.get(room.id) ?? [];
       const existing = mems.find((m) => m.userId === userId);
       const cap = capacityFor(room.mode);
-      if (existing) throw new LobbyError("already in this private room", 409);
+      if (existing) {
+        return {
+          room: { ...room },
+          members: [...mems],
+          full: mems.length >= cap,
+        };
+      }
 
       if (mems.length >= cap) throw new LobbyError("room is full", 409);
 
