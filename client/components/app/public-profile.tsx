@@ -10,6 +10,7 @@ import { IconBan, IconCalendar, IconDeviceGamepad2, IconDots, IconMessageCircle,
 import ReactMarkdown from "react-markdown";
 import { AccountAvatar } from "@/components/app/account-avatar";
 import { ConfirmDialog } from "@/components/app/confirm-dialog";
+import { ProfilePosts } from "@/components/app/feed/profile-posts";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,7 +19,7 @@ import { useCurrentAccount } from "@/hooks/use-current-account";
 import { accountApi, type PublicAccount, type UserAccount } from "@/lib/accounts/client";
 import { accountImageSource } from "@/lib/accounts/images";
 import { accountDisplayName } from "@/lib/accounts/status-icons";
-import { StatusIcon } from "@/components/app/status-icon";
+import { StatusPill } from "@/components/app/status-icon";
 import { blocksQueryKey, friendshipQueryKey, socialApi, type FriendshipState } from "@/lib/social/client";
 import { chatApi } from "@/lib/chat/client";
 
@@ -156,6 +157,7 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
           <div className="-mt-12 size-24 shrink-0 overflow-hidden border-4 border-background bg-muted sm:-mt-14 sm:size-32">
             <AccountAvatar source={avatar} seed={profile.id} label={`${displayName}'s avatar`} size={128} className="size-full object-cover" />
           </div>
+          {profile.statusText && <StatusPill text={profile.statusText} icon={profile.statusIcon} className="mb-1 min-w-0 max-w-[calc(100%-7.5rem)] sm:max-w-md" />}
           <div className="ml-auto flex w-full flex-wrap items-center gap-2 pt-3 sm:w-auto">
             {primaryAction}
             {canInteract && <Button disabled={busy} variant="outline" className="min-h-11 px-4" onClick={() => messageAction.mutate()}><IconMessageCircle size={16} aria-hidden="true" />{messageAction.isPending ? "Opening…" : "Message"}</Button>}
@@ -172,7 +174,6 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
           <h1 id="public-profile-name" className="truncate text-2xl font-semibold tracking-tight sm:text-3xl">{displayName}</h1>
           <p className="mt-1 truncate text-sm text-nook-accent-text">@{profile.username}</p>
         </div>
-        {profile.statusText && <p className="mt-4 inline-flex max-w-full items-center gap-2 bg-nook-accent-subtle px-3 py-1.5 text-sm"><StatusIcon name={profile.statusIcon} className="shrink-0 text-primary" /><span className="break-words">{profile.statusText}</span></p>}
         {profile.bio && <div className={`${markdownClass} mt-4 max-w-3xl`}><ReactMarkdown>{profile.bio}</ReactMarkdown></div>}
         <dl className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
           <div className="flex items-center gap-2"><IconCalendar size={16} aria-hidden="true" /><dt className="sr-only">Joined</dt><dd>Joined {joinedDate(profile.createdAt)}</dd></div>
@@ -186,7 +187,7 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
           <Tabs.List aria-label={`${displayName}'s profile sections`} className="flex gap-1 border-b border-border">
             {["posts", "about", "games"].map(tab => <Tabs.Tab key={tab} value={tab} className={tabClass}>{tab}</Tabs.Tab>)}
           </Tabs.List>
-          <Tabs.Panel value="posts" className="min-h-64 px-5 py-14 text-center outline-none focus-visible:ring-2 focus-visible:ring-ring"><h2 className="text-lg font-medium">Posts are coming soon</h2><p className="mt-2 text-sm text-muted-foreground">Posts will appear here when sharing is available.</p></Tabs.Panel>
+          <Tabs.Panel value="posts" className="min-h-64 py-5 outline-none focus-visible:ring-2 focus-visible:ring-ring"><ProfilePosts userId={profile.id} name={displayName} isOwner={isOwner} /></Tabs.Panel>
           <Tabs.Panel value="about" className="min-h-64 px-1 py-7 outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <h2 className="text-lg font-semibold">About {displayName}</h2>
             <dl className="mt-5 grid gap-5 sm:grid-cols-2">

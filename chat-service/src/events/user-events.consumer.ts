@@ -13,6 +13,7 @@ import type {
 } from 'amqp-connection-manager';
 import type { ConsumeMessage } from 'amqplib';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { FeedService } from '../feed/feed.service.js';
 import {
   parseUserEvent,
   USER_EVENT_TYPES,
@@ -32,6 +33,7 @@ export class UserEventsConsumer implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly feed: FeedService,
   ) {}
 
   onModuleInit(): void {
@@ -136,11 +138,17 @@ export class UserEventsConsumer implements OnModuleInit, OnModuleDestroy {
       },
       data: { ...profile, ...common },
     });
-    if (updated.count > 0) return;
+    if (updated.count === 0) {
+      await this.prisma.chatUser.createMany({
+        data: { id: event.data.userId, ...profile, ...common },
+        skipDuplicates: true,
+      });
+    }
 
-    await this.prisma.chatUser.createMany({
-      data: { id: event.data.userId, ...profile, ...common },
-      skipDuplicates: true,
-    });
+    // Every active user belongs to the global feed. Joining on updates as well
+    // as creations also covers accounts that predate the feed.
+    if (event.eventType !== USER_EVENT_TYPES.DELETED) {
+      await this.feed.ensureMember(event.data.userId);
+    }
   }
 }
