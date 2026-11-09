@@ -189,6 +189,7 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
 
 export class SocketArenaTransport implements ArenaTransport {
   private socket: Socket | null = null;
+  private syncTimer: NodeJS.Timeout | null = null;
   private currentSnapshot: ArenaSnapshot;
   private language = "C++";
   private appliedRevision = -1;
@@ -265,6 +266,8 @@ export class SocketArenaTransport implements ArenaTransport {
   }
 
   disconnect(): void {
+    if (this.syncTimer) clearInterval(this.syncTimer);
+    this.syncTimer = null;
     this.socket?.disconnect();
     this.socket = null;
     this.session.setConnection("offline");
@@ -304,9 +307,19 @@ export class SocketArenaTransport implements ArenaTransport {
       this.emit();
     });
 
+    sock.onAny((_event: string, payload: unknown) => {
+      void this.refresh(payload as { revision?: number; round?: number });
+    });
+
     sock.on("match:event", (event: { revision?: number; round?: number }) => {
       void this.refresh(event);
     });
+
+    if (!this.syncTimer) {
+      this.syncTimer = setInterval(() => {
+        void this.refresh().catch(() => {});
+      }, 2000);
+    }
   }
 
   private applySnapshot(snap: ServerSnapshot): boolean {
