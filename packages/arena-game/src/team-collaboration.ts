@@ -227,7 +227,7 @@ export class TeamCollaboration {
     this.requireTeamMode(match);
     const round = this.currentRound(match);
     const doc = this.teamDocOf(match, side);
-    if (documentRevision === undefined || documentRevision !== doc.revision) {
+    if (!this.documentRevisionMatches(match, side, documentRevision)) {
       throw new IllegalStateError("submit rejected: stale document revision (re-ready the current revision)");
     }
     if (language !== doc.language) {

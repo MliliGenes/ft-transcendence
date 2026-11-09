@@ -5,6 +5,8 @@ export interface TokenPayload {
   exp: number;
   iss?: string;
   aud?: string;
+  username?: string;
+  preferred_username?: string;
 }
 
 /**

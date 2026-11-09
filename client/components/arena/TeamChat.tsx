@@ -61,14 +61,14 @@ export function TeamChat({ client }: TeamChatProps) {
           </div>
         ) : (
           messages.map((m) => (
-            <div key={m.id} className="rounded bg-secondary/40 p-2">
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <div key={m.id} className="rounded-none bg-secondary/40 p-2">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono tabular-nums">
                 <span className="font-semibold text-foreground">{m.senderUserId}</span>
                 <span>{new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
               </div>
               <div className="mt-1 text-foreground">
                 {"ping" in m ? (
-                  <span className="inline-block rounded bg-primary/20 px-1.5 py-0.5 text-primary font-medium">
+                  <span className="inline-block rounded-none bg-primary/20 px-1.5 py-0.5 text-primary font-medium text-xs">
                     {TEAM_PING_LABELS[m.ping as TeamPing] ?? m.ping}
                   </span>
                 ) : (
@@ -86,7 +86,7 @@ export function TeamChat({ client }: TeamChatProps) {
             key={p}
             type="button"
             onClick={() => handlePing(p)}
-            className="rounded border border-border bg-background px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
+            className="rounded-none border border-border bg-background px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:border-primary transition-colors font-mono"
           >
             {TEAM_PING_LABELS[p]}
           </button>
@@ -100,7 +100,7 @@ export function TeamChat({ client }: TeamChatProps) {
           onChange={(e) => setText(e.target.value)}
           placeholder="Type team message…"
           disabled={sending}
-          className="flex-1 rounded border border-border bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          className="flex-1 rounded-none border border-border bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
         />
         <Button type="submit" size="sm" disabled={sending || !text.trim()}>
           <IconSend className="size-3.5" />

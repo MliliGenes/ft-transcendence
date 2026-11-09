@@ -80,7 +80,7 @@ export function PlayLandingView() {
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-8 border-b border-border pb-5">
         <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded bg-primary/10 text-primary">
+          <div className="flex size-10 items-center justify-center rounded-none bg-primary/10 text-primary">
             <IconDeviceGamepad2 className="size-6" />
           </div>
           <div>
@@ -93,15 +93,20 @@ export function PlayLandingView() {
       </div>
 
       {activeRoom && (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded border border-primary/40 bg-primary/10 p-4 text-xs font-medium text-foreground">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-none border border-primary/40 bg-primary/10 p-4 text-xs font-medium text-foreground">
           <div className="flex items-center gap-3">
             <span className="font-semibold text-primary">Active Lobby:</span>
-            <span className="font-mono text-sm tracking-wider font-bold">{activeRoom.code}</span>
+            <span className="font-mono text-sm tracking-wider font-bold tabular-nums">{activeRoom.code}</span>
             <span className="text-muted-foreground">({activeRoom.mode})</span>
+            {activeRoom.matchId && (
+              <span className="rounded-none bg-success/20 px-2 py-0.5 text-[11px] font-semibold text-success">
+                Match In Progress
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => router.push(`/play/lobby/${activeRoom.code}`)}>
-              Resume Lobby
+            <Button size="sm" onClick={() => router.push(activeRoom.matchId ? `/play/match/${activeRoom.matchId}` : `/play/lobby/${activeRoom.code}`)}>
+              {activeRoom.matchId ? "Rejoin Active Match" : "Resume Lobby"}
             </Button>
             <Button size="sm" variant="outline" onClick={handleLeaveActiveRoom}>
               Leave
@@ -111,13 +116,13 @@ export function PlayLandingView() {
       )}
 
       {error && (
-        <div className="mb-6 rounded border border-danger/30 bg-danger/10 p-4 text-xs font-medium text-danger">
+        <div className="mb-6 rounded-none border border-danger/30 bg-danger/10 p-4 text-xs font-medium text-danger">
           {error}
         </div>
       )}
 
       <div className="grid gap-6 md:grid-cols-2">
-        <div className="rounded border border-border bg-card p-6 text-card-foreground">
+        <div className="rounded-none border border-border bg-card p-6 text-card-foreground">
           <div className="flex items-center gap-2 font-semibold text-foreground mb-2">
             <IconPlus className="size-5 text-primary" />
             <span>Create a Match Lobby</span>
@@ -148,7 +153,7 @@ export function PlayLandingView() {
           </div>
         </div>
 
-        <div className="rounded border border-border bg-card p-6 text-card-foreground">
+        <div className="rounded-none border border-border bg-card p-6 text-card-foreground">
           <div className="flex items-center gap-2 font-semibold text-foreground mb-2">
             <IconUserPlus className="size-5 text-primary" />
             <span>Join with Code</span>
@@ -170,7 +175,7 @@ export function PlayLandingView() {
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 placeholder="e.g. AB12CD"
                 disabled={loading}
-                className="w-full rounded border border-border bg-background px-3 py-2 font-mono text-base uppercase tracking-wider text-foreground placeholder:normal-case placeholder:tracking-normal placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-none border border-border bg-background px-3 py-2 font-mono text-base uppercase tracking-wider text-foreground placeholder:normal-case placeholder:tracking-normal placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
 
@@ -179,6 +184,31 @@ export function PlayLandingView() {
             </Button>
           </form>
         </div>
+      </div>
+
+      <div className="mt-8 rounded-none border border-border bg-card p-5">
+        <div className="flex items-center justify-between border-b border-border pb-3 mb-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <IconCode className="size-4 text-primary" />
+            <span>Active Matches & Session Overview</span>
+          </div>
+          <span className="text-[11px] text-muted-foreground font-mono">
+            {activeRoom ? "1 active session" : "0 active sessions"}
+          </span>
+        </div>
+        {activeRoom ? (
+          <div className="flex items-center justify-between py-2 text-xs">
+            <div>
+              <span className="font-semibold text-foreground">{activeRoom.mode.toUpperCase()} Arena Match</span>
+              <span className="ml-2 font-mono text-muted-foreground">Room: {activeRoom.code}</span>
+            </div>
+            <span className="font-mono text-success text-[11px]">Active</span>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic py-2">
+            No active match in progress. Create a 1v1 duel or 2v2 team battle above to start coding!
+          </p>
+        )}
       </div>
     </div>
   );

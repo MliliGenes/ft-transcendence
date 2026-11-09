@@ -42,25 +42,25 @@ export function ArenaHeader({ snapshot, connection, onLeave }: ArenaHeaderProps)
           <IconDeviceGamepad2 className="size-5 text-primary" aria-hidden="true" />
           <span>Code Arena</span>
         </div>
-        <span className="rounded bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+        <span className="rounded-none bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground font-mono">
           {mode.toUpperCase()}
         </span>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span>Round {round} / {totalRounds}</span>
+          <span className="font-mono tabular-nums">Round {round} / {totalRounds}</span>
           <span>•</span>
           <span className="uppercase tracking-wide">{roundPhase.replace(/_/g, " ")}</span>
         </div>
       </div>
 
       <div className="flex items-center gap-6">
-        <div className="flex items-center gap-4 text-sm font-medium tabular-nums">
+        <div className="flex items-center gap-4 text-sm font-medium font-mono tabular-nums">
           <span className="text-foreground">{you.name}: {snapshot.reveal?.totals.you ?? 0}</span>
           <span className="text-muted-foreground">vs</span>
           <span className="text-muted-foreground">{opponent.name}: {snapshot.reveal?.totals.opponent ?? 0}</span>
         </div>
 
         <div
-          className={`flex items-center gap-1.5 rounded border px-3 py-1 font-mono text-base font-semibold tabular-nums ${
+          className={`flex items-center gap-1.5 rounded-none border px-3 py-1 font-mono text-base font-semibold tabular-nums ${
             isLowTime
               ? "border-destructive bg-destructive/10 text-destructive animate-pulse"
               : "border-border bg-background text-foreground"

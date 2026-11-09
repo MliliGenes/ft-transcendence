@@ -49,7 +49,7 @@ Integrate the Code Arena competitive multiplayer coding game from branch `integr
 ```
 
 ### Services & Containers to Add in `compose.yaml`:
-1. `game-db`: PostgreSQL 16 image storing match persistence, submissions, reveals, and rating history.
+1. `game-db`: PostgreSQL 18 image (`postgres:18-alpine` in parity with `user-db` and `chat-db`) storing match persistence, submissions, reveals, and rating history.
 2. `redis`: Redis Alpine image for BullMQ evaluation jobs and distributed locks.
 3. `game-service`: NestJS service built from `services/game/Dockerfile`.
 4. `judge-worker`: Isolated code execution container built from `services/judge-worker/Dockerfile`.

@@ -1,13 +1,8 @@
 import type { TeamChatClient } from "./chat";
 import type { CollabClient } from "./collab";
+import type { ArenaConnectionOptions } from "./types";
 
-export interface LiveClientConfig {
-  baseUrl: string;
-  userId: string;
-  matchId: string;
-  token?: string;
-  socketPath?: string;
-}
+export type LiveClientConfig = ArenaConnectionOptions;
 
 export interface SidecarScope {
   transportKey: object;

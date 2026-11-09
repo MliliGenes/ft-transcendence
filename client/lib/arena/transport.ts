@@ -1,4 +1,4 @@
-import type { ArenaSnapshot } from "./types";
+import type { ArenaConnectionOptions, ArenaSnapshot } from "./types";
 
 export interface RunReceipt {
   ok: true;
@@ -74,11 +74,11 @@ export interface ArenaTransport {
    * Collaboration endpoint identity (2v2 live transport only). Absent for
    * mocks and 1v1: consumers fall back to the local controlled document.
    */
-  collabConfig?(): { baseUrl: string; userId: string; matchId: string; token?: string; socketPath?: string } | null;
+  collabConfig?(): ArenaConnectionOptions | null;
   /**
    * Team chat endpoint identity (2v2 live transport only). Absent for mocks and 1v1.
    */
-  chatConfig?(): { baseUrl: string; userId: string; matchId: string; token?: string; socketPath?: string } | null;
+  chatConfig?(): ArenaConnectionOptions | null;
   /** Development-only fixture actions. Live transports return no controls. */
   fixtureControls?(): FixtureTransportControls | null;
   startRound(): Promise<void>;

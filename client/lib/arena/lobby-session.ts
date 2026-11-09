@@ -106,13 +106,14 @@ export class LobbySession {
         if (!isCurrent()) return;
       }
 
-      if (activeState.room?.room.status === "matched" && activeState.room.room.matchId) {
-        this.handoff(activeState.room.room.matchId);
+      const matchedRoom = activeState.room?.room;
+      if (matchedRoom?.status === "matched" && matchedRoom.matchId) {
+        this.handoff(matchedRoom.matchId);
         this.applyRoom(null);
         return;
       }
 
-      const roomData = activeState.room?.room.status === "open" ? activeState.room : null;
+      const roomData = matchedRoom?.status === "open" ? activeState.room : null;
       this.applyRoom(roomData);
     } catch (error) {
       if (isCurrent()) this.update({ error: this.message(error, "Failed to recover lobby") });

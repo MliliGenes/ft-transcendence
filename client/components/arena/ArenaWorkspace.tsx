@@ -130,7 +130,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                 value={snapshot.language}
                 onChange={(e) => transport.setLanguage(e.target.value)}
                 disabled={!isCoding}
-                className="rounded border border-border bg-background px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="rounded-none border border-border bg-background px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-mono text-xs"
               >
                 <option value="C++">C++</option>
                 <option value="Python">Python</option>
@@ -141,7 +141,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
               <select
                 value={fontSize}
                 onChange={(e) => setFontSize(Number(e.target.value))}
-                className="rounded border border-border bg-background px-1.5 py-1 text-foreground focus:outline-none"
+                className="rounded-none border border-border bg-background px-1.5 py-1 text-foreground focus:outline-none font-mono text-xs"
               >
                 <option value="12">12px</option>
                 <option value="14">14px</option>
@@ -199,7 +199,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
 
             {/* Round Intro / Match Found Banner */}
             {(snapshot.roundPhase === "MATCH_FOUND" || snapshot.roundPhase === "ROUND_INTRO") && (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/80 backdrop-blur-xs p-6 text-center">
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/90 p-6 text-center">
                 <div className="mb-2 text-xs font-semibold tracking-widest text-primary uppercase">
                   {snapshot.roundPhase === "MATCH_FOUND" ? "Match Ready" : `Round ${snapshot.round}`}
                 </div>
@@ -232,7 +232,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
 
           {/* Bottom Test Results Panel */}
           <div className="h-48 border-t border-border">
-            <TestPanel tests={snapshot.tests} isRunning={isRunning} />
+            <TestPanel tests={snapshot.tests} isRunning={isRunning} reveal={snapshot.reveal} />
           </div>
         </div>
       </div>

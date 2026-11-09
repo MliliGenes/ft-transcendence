@@ -8,6 +8,7 @@ import { verifyAccessToken } from "./jwt-verifier.js";
  */
 export interface SocketPrincipal {
   userId: string;
+  username?: string;
   matchId?: string;
 }
 
@@ -19,6 +20,7 @@ export type MatchSocketPrincipal = SocketPrincipal & { matchId: string };
 
 type SocketDataWithPrincipal = {
   arenaPrincipal?: SocketPrincipal;
+  principal?: SocketPrincipal;
 };
 
 function nonEmptyString(value: unknown): string | undefined {
@@ -40,12 +42,17 @@ export function principalFromHandshake(client: Socket, options: SocketPrincipalO
   // Dev principal shortcut when explicitly enabled
   if (process.env.DEV_PRINCIPAL === "true" && (auth.userId || query.userId)) {
     const userId = chooseHandshakeValue(auth.userId, query.userId, "userId");
+    const username = chooseHandshakeValue(auth.username, query.username, "username");
     const matchId = chooseHandshakeValue(auth.matchId, query.matchId, "matchId");
 
     if (!userId) throw new Error("missing socket userId");
     if (options.matchIdRequired && !matchId) throw new Error("missing socket matchId");
 
-    return matchId ? { userId, matchId } : { userId };
+    return {
+      userId,
+      ...(username ? { username } : {}),
+      ...(matchId ? { matchId } : {}),
+    };
   }
 
   // Token authentication
@@ -59,18 +66,26 @@ export function principalFromHandshake(client: Socket, options: SocketPrincipalO
 
   const payload = verifyAccessToken(token);
   const userId = payload.sub;
+  const username = payload.username
+    ?? payload.preferred_username
+    ?? chooseHandshakeValue(auth.username, query.username, "username");
   const matchId = chooseHandshakeValue(auth.matchId, query.matchId, "matchId");
 
   if (!userId) throw new Error("missing socket userId");
   if (options.matchIdRequired && !matchId) throw new Error("missing socket matchId");
 
-  return matchId ? { userId, matchId } : { userId };
+  return {
+    userId,
+    ...(username ? { username } : {}),
+    ...(matchId ? { matchId } : {}),
+  };
 }
 
 /** Store the verified handshake identity; namespace-specific context is added separately. */
 export function attachSocketPrincipal(client: Socket, principal: SocketPrincipal): void {
   const data = client.data as SocketDataWithPrincipal;
   data.arenaPrincipal = principal;
+  data.principal = principal;
 }
 
 /** Read a previously attached identity without throwing during disconnect cleanup. */
@@ -78,7 +93,7 @@ export function socketPrincipal(client: Socket, options: { matchIdRequired: true
 export function socketPrincipal(client: Socket, options?: SocketPrincipalOptions): SocketPrincipal | null;
 export function socketPrincipal(client: Socket, options: SocketPrincipalOptions = {}): SocketPrincipal | null {
   const data = client.data as SocketDataWithPrincipal;
-  const principal = data.arenaPrincipal;
+  const principal = data.principal ?? data.arenaPrincipal;
   if (!principal || !nonEmptyString(principal.userId)) return null;
   if (options.matchIdRequired && !nonEmptyString(principal.matchId)) return null;
   return principal.matchId ? { userId: principal.userId, matchId: principal.matchId } : { userId: principal.userId };

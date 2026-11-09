@@ -11,14 +11,14 @@ function PlayerCard({ side, isYou }: { side: SideView; isYou: boolean }) {
   const isOnline = side.presence === "online";
 
   return (
-    <div className="flex items-center justify-between rounded border border-border bg-card p-3">
+    <div className="flex items-center justify-between rounded-none border border-border bg-card p-3">
       <div className="flex items-center gap-2.5">
         <div className="relative">
-          <div className="flex size-7 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
+          <div className="flex size-7 items-center justify-center rounded-none bg-secondary text-xs font-semibold text-secondary-foreground font-mono">
             {side.name.slice(0, 1).toUpperCase()}
           </div>
           <span
-            className={`absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-2 ring-card ${
+            className={`absolute -bottom-0.5 -right-0.5 size-2 rounded-none ring-2 ring-card ${
               isOnline ? "bg-success" : "bg-muted-foreground"
             }`}
           />
@@ -34,7 +34,7 @@ function PlayerCard({ side, isYou }: { side: SideView; isYou: boolean }) {
       </div>
 
       <div className="text-right text-[11px] text-muted-foreground">
-        <div>Submissions: <strong className="text-foreground">{side.submissions}</strong></div>
+        <div>Submissions: <strong className="text-foreground font-mono tabular-nums">{side.submissions}</strong></div>
       </div>
     </div>
   );

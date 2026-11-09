@@ -1,4 +1,5 @@
 import { io, type Socket } from "socket.io-client";
+import type { ArenaConnectionOptions } from "./types";
 
 export const TEAM_PINGS = [
   "CHECK_EDGE_CASE",
@@ -49,13 +50,7 @@ export interface TeamChatAuthContext {
   isMateOnline: boolean;
 }
 
-export interface TeamChatClientOptions {
-  baseUrl: string;
-  userId: string;
-  matchId: string;
-  token?: string;
-  socketPath?: string;
-}
+export type TeamChatClientOptions = ArenaConnectionOptions;
 
 export type TeamChatStatus = "connecting" | "connected" | "disconnected" | "error";
 

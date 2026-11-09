@@ -1,5 +1,15 @@
 export type MatchMode = "1v1" | "2v2";
 
+export type SupportedLanguage = "Python" | "C++" | "C";
+
+export interface ArenaConnectionOptions {
+  baseUrl: string;
+  userId: string;
+  matchId: string;
+  token?: string;
+  socketPath?: string;
+}
+
 export type RoundPhase =
   | "MATCH_FOUND"
   | "ROUND_INTRO"
@@ -84,7 +94,7 @@ export interface ArenaSnapshot {
   totalRounds: number;
   remainingSeconds: number;
   problem: ArenaProblem;
-  language: string;
+  language: SupportedLanguage | string;
   tests: TestView[];
   you: SideView;
   opponent: SideView;

@@ -24,8 +24,8 @@ export function RoundScoreReveal({ reveal, round, totalRounds, onAdvance }: Roun
           <span>Round {round} Score Reveal</span>
         </div>
 
-        <h3 className="text-2xl font-bold tracking-tight text-foreground tabular-nums">
-          {reveal.roundScore} <span className="text-sm font-normal text-muted-foreground">points earned</span>
+        <h3 className="text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+          {reveal.roundScore} <span className="text-sm font-normal text-muted-foreground font-sans">points earned</span>
         </h3>
 
         <div className="mt-4 space-y-2 border-t border-b border-border py-3 text-xs">

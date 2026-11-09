@@ -10,8 +10,47 @@ import {
   IconSwitchHorizontal,
 } from "@tabler/icons-react";
 import { useAuth } from "@/components/auth/auth-provider";
-import { LobbyClient, type RoomWithMembers } from "@/lib/arena/lobby";
+import { LobbyClient, type PrivateRoomMember, type RoomWithMembers } from "@/lib/arena/lobby";
 import { Button } from "@/components/ui/button";
+
+function TeamSlotCard({
+  name,
+  members,
+  maxCapacity,
+  currentUserId,
+}: {
+  name: string;
+  members: PrivateRoomMember[];
+  maxCapacity: number;
+  currentUserId: string;
+}) {
+  return (
+    <div className="rounded-none border border-border bg-card p-5">
+      <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
+        <span className="font-semibold text-foreground">{name}</span>
+        <span className="text-xs text-muted-foreground font-mono tabular-nums">
+          {members.length} / {maxCapacity}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {members.map((m) => (
+          <div key={m.userId} className="flex items-center justify-between rounded-none bg-secondary/40 p-2.5 text-xs">
+            <span className="font-medium text-foreground">
+              {m.userId} {m.userId === currentUserId && <span className="text-primary">(You)</span>}
+            </span>
+            <span className={`inline-flex items-center gap-1 font-semibold ${m.ready ? "text-success" : "text-muted-foreground"}`}>
+              {m.ready && <IconCheck className="size-3.5" />}
+              <span>{m.ready ? "Ready" : "Waiting"}</span>
+            </span>
+          </div>
+        ))}
+        {members.length === 0 && (
+          <p className="py-4 text-center text-xs text-muted-foreground italic">No players on {name}</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function LobbyView({ code }: { code: string }) {
   const normalizedCode = code.toUpperCase();
@@ -162,13 +201,15 @@ export function LobbyView({ code }: { code: string }) {
   const rightMembers = members.filter((m) => m.sideId === "right");
   const allReady = members.length >= (room.mode === "2v2" ? 4 : 2) && members.every((m) => m.ready);
 
+  const capacity = room.mode === "2v2" ? 2 : 1;
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-foreground">Match Lobby</h1>
-            <span className="rounded bg-primary/15 px-2.5 py-0.5 text-xs font-semibold text-primary uppercase">
+            <span className="rounded-none bg-primary/15 px-2.5 py-0.5 text-xs font-semibold text-primary uppercase font-mono">
               {room.mode}
             </span>
           </div>
@@ -177,7 +218,7 @@ export function LobbyView({ code }: { code: string }) {
             <button
               type="button"
               onClick={handleCopy}
-              className="inline-flex items-center gap-1 rounded bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+              className="inline-flex items-center gap-1 rounded-none bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
             >
               <IconCopy className="size-3" />
               <span>{copied ? "Copied!" : "Copy Code"}</span>
@@ -192,54 +233,21 @@ export function LobbyView({ code }: { code: string }) {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 mb-8">
-        <div className="rounded border border-border bg-card p-5">
-          <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
-            <span className="font-semibold text-foreground">Team Alpha</span>
-            <span className="text-xs text-muted-foreground">{leftMembers.length} / {room.mode === "2v2" ? 2 : 1}</span>
-          </div>
-          <div className="space-y-2">
-            {leftMembers.map((m) => (
-              <div key={m.userId} className="flex items-center justify-between rounded bg-secondary/40 p-2.5 text-xs">
-                <span className="font-medium text-foreground">
-                  {m.userId} {m.userId === userId && <span className="text-primary">(You)</span>}
-                </span>
-                <span className={`inline-flex items-center gap-1 font-semibold ${m.ready ? "text-success" : "text-muted-foreground"}`}>
-                  {m.ready && <IconCheck className="size-3.5" />}
-                  <span>{m.ready ? "Ready" : "Waiting"}</span>
-                </span>
-              </div>
-            ))}
-            {leftMembers.length === 0 && (
-              <p className="py-4 text-center text-xs text-muted-foreground italic">No players on Team Alpha</p>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded border border-border bg-card p-5">
-          <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
-            <span className="font-semibold text-foreground">Team Beta</span>
-            <span className="text-xs text-muted-foreground">{rightMembers.length} / {room.mode === "2v2" ? 2 : 1}</span>
-          </div>
-          <div className="space-y-2">
-            {rightMembers.map((m) => (
-              <div key={m.userId} className="flex items-center justify-between rounded bg-secondary/40 p-2.5 text-xs">
-                <span className="font-medium text-foreground">
-                  {m.userId} {m.userId === userId && <span className="text-primary">(You)</span>}
-                </span>
-                <span className={`inline-flex items-center gap-1 font-semibold ${m.ready ? "text-success" : "text-muted-foreground"}`}>
-                  {m.ready && <IconCheck className="size-3.5" />}
-                  <span>{m.ready ? "Ready" : "Waiting"}</span>
-                </span>
-              </div>
-            ))}
-            {rightMembers.length === 0 && (
-              <p className="py-4 text-center text-xs text-muted-foreground italic">No players on Team Beta</p>
-            )}
-          </div>
-        </div>
+        <TeamSlotCard
+          name="Team Alpha"
+          members={leftMembers}
+          maxCapacity={capacity}
+          currentUserId={userId}
+        />
+        <TeamSlotCard
+          name="Team Beta"
+          members={rightMembers}
+          maxCapacity={capacity}
+          currentUserId={userId}
+        />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded border border-border bg-card p-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-none border border-border bg-card p-4">
         <div className="flex items-center gap-3">
           <Button variant="outline" size="sm" onClick={handleSwitchSide}>
             <IconSwitchHorizontal className="size-4 mr-1.5" />

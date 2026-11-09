@@ -1,14 +1,8 @@
 import { io, type Socket } from "socket.io-client";
 import { TransportSession, type ArenaTransport, type ConnectionState, type RunReceipt, type SubmitReceipt } from "./transport";
-import type { ArenaSnapshot, MatchFinalView, RevealView, SideView, TeamView } from "./types";
+import type { ArenaConnectionOptions, ArenaSnapshot, MatchFinalView, RevealView, SideView, TeamView } from "./types";
 
-export interface SocketTransportOptions {
-  baseUrl: string;
-  userId: string;
-  matchId: string;
-  token?: string;
-  socketPath?: string;
-}
+export type SocketTransportOptions = ArenaConnectionOptions;
 
 /** A non-idempotent command was rejected against a newer Match snapshot. */
 export class StaleCommandError extends Error {
@@ -126,6 +120,9 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
   let docRevision: number | null = null;
   let readyRevision: ArenaSnapshot["readyRevision"] = null;
 
+  let mateView: SideView = { name: "Teammate", status: "coding", presence: "online", submissions: 0 };
+  let opponent2View: SideView = { name: "Opponent 2", status: "coding", presence: "online", submissions: 0 };
+
   if (server.mode === "2v2" && server.teams) {
     const myTeam = server.teams.find((t) => t.side === server.mySide);
     if (myTeam) {
@@ -140,18 +137,36 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
         you: youMember?.readyRevision ?? null,
         mate: mateMember?.readyRevision ?? null,
       };
+      if (mateMember) {
+        mateView = {
+          name: mateMember.userId ? (mateMember.userId.length > 8 ? mateMember.userId.slice(0, 8) : mateMember.userId) : "Teammate",
+          status: (mateMember.ready ? "ready" : (myTeam.activity ?? "coding")) as any,
+          presence: mateMember.presence ?? "online",
+          submissions: myTeam.submissions ?? 0,
+        };
+      }
+    }
+    const otherTeam = server.teams.find((t) => t.side === otherId);
+    if (otherTeam && otherTeam.members.length > 1) {
+      const opp2 = otherTeam.members[1];
+      opponent2View = {
+        name: opp2.userId ? (opp2.userId.length > 8 ? opp2.userId.slice(0, 8) : opp2.userId) : "Opponent 2",
+        status: (opp2.ready ? "ready" : (otherTeam.activity ?? "coding")) as any,
+        presence: opp2.presence ?? "online",
+        submissions: otherTeam.submissions ?? 0,
+      };
     }
   }
 
   const alpha: TeamView = {
     id: "alpha",
-    members: [you, { name: "Teammate", status: "coding", presence: "online", submissions: 0 }],
+    members: [you, mateView],
     score: server.reveal?.totals[server.mySide] ?? null,
     submissions: mine.submissions,
   };
   const beta: TeamView = {
     id: "beta",
-    members: [opponent, { name: "Opponent 2", status: "coding", presence: "online", submissions: 0 }],
+    members: [opponent, opponent2View],
     score: server.reveal?.totals[otherId] ?? null,
     submissions: other.submissions,
   };
