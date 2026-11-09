@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { IconDownload, IconFileTypePdf } from "@tabler/icons-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ChatMarkdown } from "@/components/app/chat/chat-markdown";
+import { DeleteMessageDialog, MessageEditor, MessageOwnerActions } from "@/components/app/chat/message-actions";
 import { AccountAvatar } from "@/components/app/account-avatar";
 import { Button } from "@/components/ui/button";
 import { accountImageSource } from "@/lib/accounts/images";
@@ -60,7 +61,12 @@ function MessageRow({ message, own, continued }: { message: ChatMessage; own: bo
   const author = message.author;
   const name = accountDisplayName(author);
   const created = new Date(message.createdAt);
+  const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const canManage = own && !message.deletedAt;
   return <li className={`group relative -mx-3 flex gap-3 px-3 py-0.5 transition-colors hover:bg-muted/60 sm:-mx-4 sm:px-4 ${continued ? "" : "mt-3 pt-1.5"}`} aria-label={`${name}, ${fullFormat.format(created)}`}>
+    {canManage && !editing && <MessageOwnerActions onEdit={() => setEditing(true)} onDelete={() => setConfirmingDelete(true)} className="absolute right-3 top-0 z-10 border border-border bg-card opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 sm:right-4" />}
+    {canManage && <DeleteMessageDialog message={message} open={confirmingDelete} onOpenChange={setConfirmingDelete} />}
     <div className="w-10 shrink-0">
       {continued
         ? <time dateTime={message.createdAt} title={fullFormat.format(created)} className="block pt-1 text-right text-[11px] leading-5 text-muted-foreground opacity-0 tabular-nums group-hover:opacity-100 group-focus-within:opacity-100">{timeFormat.format(created)}</time>
@@ -76,16 +82,18 @@ function MessageRow({ message, own, continued }: { message: ChatMessage; own: bo
       </div>}
       {message.deletedAt
         ? <p className="text-sm italic text-muted-foreground">Message deleted</p>
-        : message.content && <>
-          <ChatMarkdown>{message.content}</ChatMarkdown>
-          {message.editedAt && <span className="text-[11px] text-muted-foreground">(edited)</span>}
-        </>}
-      {message.attachments?.length > 0 && <div className="mt-2 flex flex-wrap gap-3 pb-1">{message.attachments.map(key => <MessageAttachment key={key} conversationId={message.conversationId} objectKey={key} />)}</div>}
+        : editing
+          ? <MessageEditor message={message} onClose={() => setEditing(false)} submitOnEnter />
+          : message.content && <>
+            <ChatMarkdown>{message.content}</ChatMarkdown>
+            {message.editedAt && <span className="text-[11px] text-muted-foreground">(edited)</span>}
+          </>}
+      {!message.deletedAt && message.attachments?.length > 0 && <div className="mt-2 flex flex-wrap gap-3 pb-1">{message.attachments.map(key => <MessageAttachment key={key} conversationId={message.conversationId} objectKey={key} />)}</div>}
     </div>
   </li>;
 }
 
-function MessageAttachment({ conversationId, objectKey }: { conversationId: string; objectKey: string }) {
+export function MessageAttachment({ conversationId, objectKey }: { conversationId: string; objectKey: string }) {
   const { requestWithSession } = useAuth();
   const [downloadError, setDownloadError] = useState("");
   const query = useQuery<AttachmentPreview>({
@@ -106,6 +114,9 @@ function MessageAttachment({ conversationId, objectKey }: { conversationId: stri
   if (query.isPending) return <div role="status" aria-label="Loading attachment" className="h-40 w-56 animate-pulse bg-muted" />;
   if (query.isError) return <button type="button" onClick={() => void query.refetch()} className="grid h-24 w-56 place-items-center border border-border bg-card px-3 text-xs text-destructive focus-visible:outline-2 focus-visible:outline-ring">Attachment unavailable · Retry</button>;
   const previewUrl = query.data.previewUrl;
+  if (previewUrl && query.data.contentType.startsWith("video/")) {
+    return <video src={previewUrl} controls preload="metadata" playsInline aria-label="Video attachment" className="max-h-80 w-auto max-w-full border border-border bg-black" />;
+  }
   if (previewUrl && query.data.contentType.startsWith("image/")) {
     return <a href={previewUrl} target="_blank" rel="noreferrer" className="block max-w-full overflow-hidden border border-border bg-card focus-visible:outline-2 focus-visible:outline-ring" aria-label="Open image attachment in a new tab">
       <Image src={previewUrl} alt="Chat attachment" width={640} height={480} unoptimized className="max-h-80 w-auto max-w-full object-contain" />

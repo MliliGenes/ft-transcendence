@@ -70,6 +70,8 @@ export const authApi = {
   requestPasswordReset: (email: string) => post<{ requested: boolean }>("password-reset/request", { email }),
   confirmPasswordReset: (token: string, newPassword: string) =>
     post<{ confirmed: boolean }>("password-reset/confirm", { token, newPassword }),
+  verifyEmail: (token: string) =>
+    request<{ verified: boolean }>(`verify-email/${encodeURIComponent(token)}`),
   linkProvider: (provider: "discord" | "github", accessToken: string) =>
     request<{ authorizationUrl: string }>(`${provider}/link`, { method: "POST" }, accessToken),
   unlinkProvider: (provider: "discord" | "github", accessToken: string) =>

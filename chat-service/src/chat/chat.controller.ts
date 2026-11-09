@@ -22,14 +22,32 @@ import { GetMessagesQueryDto } from './dtos/get-messages-query.dto.js';
 import { MarkReadDto } from './dtos/mark-read.dto.js';
 import { EditMessageDto } from './dtos/edit-message.dto.js';
 import { CreateAttachmentUploadUrlDto } from './dtos/create-attachment-upload-url.dto.js';
+import { FeedService } from '../feed/feed.service.js';
 import type { Request as ExpressRequest } from 'express';
 
 @Controller('chat')
 @UseGuards(AuthGuard, EnsureActiveUserGuard)
 export class ChatController {
   constructor(
-    private readonly chatService: ChatService
+    private readonly chatService: ChatService,
+    private readonly feedService: FeedService,
   ) {}
+
+  /** Where the global feed lives; also joins the caller if they are not in it yet. */
+  @Get('feed')
+  getFeed(@Request() req: ExpressRequest & { user: { sub: string } }) {
+    return this.feedService.getFeedForUser(req.user.sub);
+  }
+
+  /** One user's feed posts, for the Posts tab on their profile. */
+  @Get('feed/users/:userId/posts')
+  getFeedPosts(
+    @Request() req: ExpressRequest & { user: { sub: string } },
+    @Param('userId', new ParseUUIDPipe({ version: '4' })) userId: string,
+    @Query() query: GetMessagesQueryDto,
+  ) {
+    return this.feedService.getUserPosts(req.user.sub, userId, query);
+  }
 
   @Post('conversations/dm')
   createOrGetDm(@Request() req: ExpressRequest & { user: { sub: string } }, @Body() body: CreateDmDto) {

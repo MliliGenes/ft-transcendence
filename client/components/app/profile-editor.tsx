@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { IconCamera, IconCheck, IconPhoto } from "@tabler/icons-react";
 import { AccountAvatar } from "@/components/app/account-avatar";
+import { StatusComposer } from "@/components/app/status-composer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +18,6 @@ import { accountApi, type AccountUpdate, type UserAccount } from "@/lib/accounts
 import { accountImageSource } from "@/lib/accounts/images";
 
 type ImageKind = "avatar" | "banner";
-const iconOptions = ["IconCode", "IconCoffee", "IconMoon", "IconMusic", "IconDeviceGamepad2"] as const;
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unable to save your changes. Please try again.";
@@ -197,8 +197,12 @@ export function ProfileEditor() {
           <div className="space-y-2"><Label htmlFor="lastName">Last name</Label><Input id="lastName" maxLength={50} value={formValues.lastName ?? ""} onChange={event => updateField("lastName", event.target.value)} /></div>
           <div className="space-y-2 md:col-span-2"><Label htmlFor="email">Email</Label><div className="flex flex-wrap items-center gap-3"><Input id="email" type="email" required autoComplete="email" value={formValues.email ?? ""} onChange={event => updateField("email", event.target.value)} className="min-w-56 flex-1" /><span className={`inline-flex min-h-8 items-center gap-1.5 text-xs ${user.emailVerifiedAt ? "text-nook-success" : "text-muted-foreground"}`}><IconCheck size={15} aria-hidden="true" />{user.emailVerifiedAt ? "Verified" : "Not verified"}</span></div><p className="text-xs text-muted-foreground">Changing your email clears its verified status.</p></div>
           <div className="space-y-2 md:col-span-2"><Label htmlFor="bio">Bio</Label><Textarea id="bio" maxLength={190} rows={3} value={formValues.bio ?? ""} onChange={event => updateField("bio", event.target.value)} /><p className="text-right text-xs text-muted-foreground">{String(formValues.bio ?? "").length}/190</p></div>
-          <div className="space-y-2"><Label htmlFor="statusText">Status</Label><Input id="statusText" maxLength={100} placeholder="What are you up to?" value={formValues.statusText ?? ""} onChange={event => updateField("statusText", event.target.value)} /></div>
-          <div className="space-y-2"><Label htmlFor="statusIcon">Status icon</Label><select id="statusIcon" value={formValues.statusIcon ?? ""} onChange={event => updateField("statusIcon", event.target.value)} className="h-10 w-full border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring"><option value="">No icon</option>{iconOptions.map(icon => <option key={icon} value={icon}>{icon.replace("Icon", "")}</option>)}</select></div>
+          <StatusComposer
+            text={formValues.statusText ?? ""}
+            icon={formValues.statusIcon ?? ""}
+            onTextChange={value => updateField("statusText", value)}
+            onIconChange={value => updateField("statusIcon", value)}
+          />
         </div>
         <div className="mt-7 flex justify-end"><Button type="submit" disabled={update.isPending} className="min-h-11 gap-2 px-5">{update.isPending ? "Saving…" : "Save changes"}</Button></div>
       </form>

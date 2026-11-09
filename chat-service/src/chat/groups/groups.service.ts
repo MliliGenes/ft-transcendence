@@ -11,6 +11,7 @@ import { CreateChannelDto } from './dtos/create-channel.dto.js';
 import { UpdateChannelDto } from './dtos/update-channel.dto.js';
 import { UserProfilesService } from '../user-profiles.service.js';
 import type { Prisma } from '../../generated/prisma/client.js';
+import { FEED_GROUP_ID } from '../../feed/feed.constants.js';
 
 type GroupDb = PrismaService | Prisma.TransactionClient;
 
@@ -46,7 +47,8 @@ export class GroupsService {
 
   getGroups(userId: string) {
     return this.prisma.group.findMany({
-      where: { members: { some: { userId } } },
+      // The global feed has its own page; keep it out of the chat sidebar.
+      where: { id: { not: FEED_GROUP_ID }, members: { some: { userId } } },
       select: {
         id: true,
         name: true,
@@ -155,6 +157,9 @@ export class GroupsService {
   }
 
   async removeMember(groupId: string, actorId: string, userId: string) {
+    if (groupId === FEED_GROUP_ID) {
+      throw new ForbiddenException('Everyone belongs to the feed');
+    }
     return this.prisma.$transaction(
       async (tx) => {
         const actor = await this.requireMember(groupId, actorId, tx);

@@ -14,12 +14,21 @@ import { minioBucket } from './minio.config.js';
 const UPLOAD_URL_TTL_SECONDS = 5 * 60;
 const DOWNLOAD_URL_TTL_SECONDS = 5 * 60;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-const INLINE_IMAGE_TYPES = new Set([
+const MAX_VIDEO_UPLOAD_BYTES = 50 * 1024 * 1024;
+const VIDEO_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
+const INLINE_MEDIA_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
   'image/gif',
+  ...VIDEO_TYPES,
 ]);
+
+function maxBytesFor(contentType: string): number {
+  return VIDEO_TYPES.has(contentType.toLowerCase())
+    ? MAX_VIDEO_UPLOAD_BYTES
+    : MAX_UPLOAD_BYTES;
+}
 
 @Injectable()
 export class MinioService implements OnModuleInit {
@@ -54,11 +63,12 @@ export class MinioService implements OnModuleInit {
     contentType: string,
   ) {
     const objectKey = `attachments/${conversationId}/${userId}/${randomUUID()}`;
+    const maxBytes = maxBytesFor(contentType);
     const policy = this.presignClient.newPostPolicy();
     policy.setBucket(this.bucket);
     policy.setKey(objectKey);
     policy.setContentType(contentType);
-    policy.setContentLengthRange(1, MAX_UPLOAD_BYTES);
+    policy.setContentLengthRange(1, maxBytes);
     policy.setExpires(new Date(Date.now() + UPLOAD_URL_TTL_SECONDS * 1000));
     const { postURL, formData } = await this.presignClient.presignedPostPolicy(policy);
 
@@ -68,7 +78,7 @@ export class MinioService implements OnModuleInit {
       method: 'POST' as const,
       fields: formData,
       expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
-      maxBytes: MAX_UPLOAD_BYTES,
+      maxBytes,
     };
   }
 
@@ -82,7 +92,8 @@ export class MinioService implements OnModuleInit {
   }
 
   async createInlineImageUrl(objectKey: string, contentType: string) {
-    if (!INLINE_IMAGE_TYPES.has(contentType)) return null;
+    // Images and videos only; anything else is download-only.
+    if (!INLINE_MEDIA_TYPES.has(contentType)) return null;
     return this.presignClient.presignedGetObject(
       this.bucket,
       objectKey,
@@ -108,7 +119,15 @@ export class MinioService implements OnModuleInit {
     }
 
     const object = await this.client.statObject(this.bucket, objectKey);
-    if (object.size < 1 || object.size > MAX_UPLOAD_BYTES) {
+    const declaredType = Object.entries(object.metaData ?? {}).find(
+      ([key]) => key.toLowerCase() === 'content-type',
+    )?.[1];
+    const limit = maxBytesFor(
+      typeof declaredType === 'string'
+        ? declaredType.split(';')[0].trim()
+        : '',
+    );
+    if (object.size < 1 || object.size > limit) {
       throw new BadRequestException('Attachment size is invalid');
     }
     return object;

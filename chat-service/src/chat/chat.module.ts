@@ -7,9 +7,10 @@ import { ChatSharedModule } from './chat-shared.module.js';
 import { GroupsModule } from './groups/groups.module.js';
 import { PresenceModule } from './presence/presence.module.js';
 import { MinioModule } from '../minio/minio.module.js';
+import { FeedModule } from '../feed/feed.module.js';
 
 @Module({
-  imports: [AuthModule, ChatSharedModule, GroupsModule, PresenceModule, MinioModule],
+  imports: [AuthModule, ChatSharedModule, GroupsModule, PresenceModule, MinioModule, FeedModule],
   providers: [ChatService, ChatGateway],
   controllers: [ChatController],
 })

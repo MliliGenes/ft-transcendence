@@ -115,11 +115,17 @@ function uploadFile(upload: AttachmentUpload, file: File, onProgress?: (loaded: 
   });
 }
 
+export type FeedInfo = { groupId: string; channelId: string };
+
 export const chatApi = {
+  feed: (token: string) => request<FeedInfo>("/feed", token),
+  feedPosts: (userId: string, token: string, before?: string) => request<ChatMessage[]>(`/feed/users/${encodeURIComponent(userId)}/posts?limit=20${before ? `&before=${encodeURIComponent(before)}` : ""}`, token),
   conversations: (token: string) => request<DirectConversation[]>("/conversations", token),
   openDm: (userId: string, token: string) => request<DirectConversation>("/conversations/dm", token, json({ userId })),
   messages: (conversationId: string, token: string, before?: string) => request<ChatMessage[]>(`/conversations/${encodeURIComponent(conversationId)}/messages?limit=50${before ? `&before=${encodeURIComponent(before)}` : ""}`, token),
   send: (conversationId: string, content: string, clientRequestId: string, token: string, attachments: string[] = []) => request<ChatMessage>(`/conversations/${encodeURIComponent(conversationId)}/messages`, token, json({ content, clientRequestId, ...(attachments.length ? { attachments } : {}) })),
+  editMessage: (messageId: string, content: string, token: string) => request<ChatMessage>(`/messages/${encodeURIComponent(messageId)}`, token, { method: "PATCH", body: JSON.stringify({ content }) }),
+  deleteMessage: (messageId: string, token: string) => request<void>(`/messages/${encodeURIComponent(messageId)}`, token, { method: "DELETE" }),
   createAttachmentUpload: (conversationId: string, contentType: string, token: string) => request<AttachmentUpload>(`/conversations/${encodeURIComponent(conversationId)}/attachments/upload-url`, token, json({ contentType })),
   uploadFile,
   previewAttachment: (conversationId: string, objectKey: string, token: string) => request<AttachmentPreview>(`/conversations/${encodeURIComponent(conversationId)}/attachments/preview-url?${new URLSearchParams({ objectKey })}`, token),
