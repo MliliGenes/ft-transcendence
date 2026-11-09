@@ -197,14 +197,32 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
               collab={sidecars.collab ?? undefined}
             />
 
-            {/* Round Intro Banner */}
-            {snapshot.roundPhase === "ROUND_INTRO" && (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/75 backdrop-blur-xs p-6 text-center">
-                <h3 className="text-2xl font-bold text-foreground">Round {snapshot.round}</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Read the problem description. Click below when you are ready to begin coding!
+            {/* Round Intro / Match Found Banner */}
+            {(snapshot.roundPhase === "MATCH_FOUND" || snapshot.roundPhase === "ROUND_INTRO") && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/80 backdrop-blur-xs p-6 text-center">
+                <div className="mb-2 text-xs font-semibold tracking-widest text-primary uppercase">
+                  {snapshot.roundPhase === "MATCH_FOUND" ? "Match Ready" : `Round ${snapshot.round}`}
+                </div>
+                <h3 className="text-2xl font-bold text-foreground">
+                  {snapshot.problem?.title ?? `Round ${snapshot.round}`}
+                </h3>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                  Read the problem description and examples on the left. Click below to begin coding!
                 </p>
-                <Button onClick={() => transport.beginCoding()} className="mt-5" size="lg">
+                <Button
+                  onClick={async () => {
+                    try {
+                      if (snapshot.roundPhase === "MATCH_FOUND") {
+                        await transport.startRound();
+                      }
+                      await transport.beginCoding();
+                    } catch (e) {
+                      console.error("Failed to begin coding:", e);
+                    }
+                  }}
+                  className="mt-6 font-semibold"
+                  size="lg"
+                >
                   <IconCode className="size-4 mr-2" />
                   <span>Begin Coding</span>
                 </Button>

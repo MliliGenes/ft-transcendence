@@ -46,8 +46,20 @@ export class GameController {
     return this.game.startRound(userId, id);
   }
 
+  @Post(":id/start-round")
+  startRound(@Req() req: Request, @Param("id") id: string) {
+    const { userId } = requirePrincipal(req);
+    return this.game.startRound(userId, id);
+  }
+
   @Post(":id/begin")
   begin(@Req() req: Request, @Param("id") id: string) {
+    const { userId } = requirePrincipal(req);
+    return this.game.beginCoding(userId, id);
+  }
+
+  @Post(":id/begin-coding")
+  beginCoding(@Req() req: Request, @Param("id") id: string) {
     const { userId } = requirePrincipal(req);
     return this.game.beginCoding(userId, id);
   }

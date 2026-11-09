@@ -35,13 +35,32 @@ export function LobbyView({ code }: { code: string }) {
 
     let client: LobbyClient | null = new LobbyClient("", userId, token);
     let active = true;
+    let currentRoomId: string | null = null;
     setError(null);
     setLoading(true);
+
+    const disconnectSocket = client.connectSocket({
+      onConnect: () => {
+        if (currentRoomId && client) {
+          client.joinRoomChannel(currentRoomId);
+        }
+      },
+      onRoomUpdated: (updated) => {
+        if (active) {
+          setLobbyData({ room: updated.room, members: updated.members });
+        }
+      },
+      onMatchFound: ({ matchId }) => {
+        router.push(`/play/match/${matchId}`);
+      },
+    });
 
     async function init() {
       try {
         const data = await client!.joinRoom(normalizedCode);
         if (active) {
+          currentRoomId = data.room.id;
+          client!.joinRoomChannel(data.room.id);
           setLobbyData(data);
           setError(null);
           setLoading(false);
@@ -56,19 +75,24 @@ export function LobbyView({ code }: { code: string }) {
 
     void init();
 
-    const disconnectSocket = client.connectSocket({
-      onRoomUpdated: (updated) => {
+    const pollInterval = setInterval(async () => {
+      if (!currentRoomId || !active || !client) return;
+      try {
+        const updated = await client.getRoom(currentRoomId);
         if (active) {
-          setLobbyData({ room: updated.room, members: updated.members });
+          setLobbyData(updated);
         }
-      },
-      onMatchFound: ({ matchId }) => {
-        router.push(`/play/match/${matchId}`);
-      },
-    });
+      } catch {
+        // ignore
+      }
+    }, 2000);
 
     return () => {
       active = false;
+      clearInterval(pollInterval);
+      if (currentRoomId) {
+        client?.leaveRoomChannel(currentRoomId);
+      }
       disconnectSocket();
       client?.disconnect();
       client = null;
