@@ -1,14 +1,14 @@
-# MinIO and presigned URLs in Nook: the complete guide
+# Chat and storage integration
 
-One-sitting read, same format as [RABBITMQ.md](RABBITMQ.md). It covers the concepts, the exact flow in this project, the code, the infrastructure, a hands-on lab and evaluation Q&A. Written from the code as of November 2026.
+How chat-service, MinIO, Nginx and the browser work together for attachments. This is also the full guide to presigned URLs: the concepts, the exact flow, the code, the infrastructure, a hands-on lab and evaluation Q&A. Written from the code as of November 2026.
 
-Sources consolidated here: [MINIO_ATTACHMENTS.md](../chat-service/MINIO_ATTACHMENTS.md) (the implementation doc), [minio-attachments-plan.md](../chat-service/minio-attachments-plan.md) (the original proposal, partly superseded), [minio.md](minio.md), `compose.yaml`, `nginx/default.conf`, `minio-init/init.sh`, and the `chat-service/src/minio/*` and `chat.service.ts` code.
+**Size limits.** Images and PDFs are limited to 10 MiB, and videos (MP4, WebM, MOV) to 50 MiB. Where this guide says "1..10MiB", read it as the limit for that file type. The limit is chosen from the declared content type when signing and again at send time.
 
 ---
 
 ## 1. The problem
 
-Users attach images and PDFs to chat messages. Where do the bytes go?
+Users attach images, PDFs and videos to chat messages and feed posts. Where do the bytes go?
 
 | Option | Problem |
 | --- | --- |
@@ -115,7 +115,7 @@ Message history returns keys. To show or fetch a file the client asks chat-servi
 Both go through `assertAttachmentAccessible`: authenticated user, member of the conversation, key starts with `attachments/` and is at most 200 characters, **and a non-deleted message in that conversation actually references this key** (`attachments: { has: objectKey }`). Then:
 
 - **Download:** presigned GET, 5 minutes, `response-content-disposition=attachment` so the browser saves rather than renders it.
-- **Preview:** reads the object's real content type via `statObject`. Only JPEG, PNG, WebP and GIF get an inline URL (`response-content-disposition=inline`). PDFs and anything else return no preview. This is a deliberate safety choice, since rendering arbitrary content types inline is how stored XSS happens.
+- **Preview:** reads the object's real content type via `statObject`. Only JPEG, PNG, WebP, GIF, MP4, WebM and MOV get an inline URL (`response-content-disposition=inline`). PDFs and anything else return no preview. This is a deliberate safety choice, since rendering arbitrary content types inline is how stored XSS happens.
 
 After the URL is issued, MinIO serves the bytes directly. Chat is out of the loop, which is why the lifetime is only 5 minutes.
 
@@ -140,7 +140,7 @@ browser --HTTPS--> Nginx :9443 (TLS with the local cert)
 
 Key lines in `nginx/default.conf` (server block `listen 9443 ssl`):
 
-- `client_max_body_size 12m` covers the 10 MiB file limit plus multipart overhead.
+- `client_max_body_size 52m` covers the 50 MiB video limit plus multipart overhead.
 - `proxy_buffering off` and `proxy_request_buffering off` stream the upload instead of buffering it.
 - `proxy_set_header Host $http_host` is **the** critical line. Without it, signatures fail.
 - `proxy_pass http://minio_s3` with `upstream minio_s3 { server minio:9000 resolve; }`.
@@ -154,7 +154,7 @@ CORS: set on the MinIO server through `MINIO_API_CORS_ALLOW_ORIGIN` in `envs/min
 | `chat-service/src/minio/minio.constants.ts` | The two injection tokens |
 | `chat-service/src/minio/minio.config.ts` | Validated env readers; `minioClientOptions` (internal) vs `minioPresignClientOptions` (public); region default `us-east-1` |
 | `chat-service/src/minio/minio.module.ts` | Builds both `Client`s |
-| `chat-service/src/minio/minio.service.ts` | Constants (5 min TTL, 10 MiB max, inline image set); `createUploadUrl`, `createDownloadUrl`, `createInlineImageUrl`, `verifyUploadedAttachment`; `onModuleInit` ensures the bucket exists but only **logs** on failure, so chat still works without attachments |
+| `chat-service/src/minio/minio.service.ts` | Constants (5 min TTL, 10 MiB and 50 MiB video limits, inline media set); `createUploadUrl`, `createDownloadUrl`, `createInlineImageUrl`, `verifyUploadedAttachment`; `onModuleInit` ensures the bucket exists but only **logs** on failure, so chat still works without attachments |
 | `chat-service/src/chat/chat.controller.ts` | Routes `.../attachments/upload-url`, `download-url`, `preview-url` (all behind the auth guard) |
 | `chat-service/src/chat/chat.service.ts` | `createAttachment*Url`, `assertAttachmentAccessible`, and the verification loop inside `sendMessage` |
 | `chat-service/src/chat/dtos/create-attachment-upload-url.dto.ts` | MIME allowlist |
@@ -184,9 +184,9 @@ This is **least privilege**: chat-service never has the root credentials. If the
 - `envs/minio.env`: `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_API_CORS_ALLOW_ORIGIN`.
 - `envs/chat-service.env`: `MINIO_ENDPOINT=minio`, `MINIO_PORT=9000`, `MINIO_USE_SSL=false`, `MINIO_REGION=us-east-1`, `MINIO_BUCKET=chat-attachments`, `MINIO_ACCESS_KEY/SECRET_KEY` (scoped), `MINIO_PUBLIC_ENDPOINT=localhost`, `MINIO_PUBLIC_PORT=9443`, `MINIO_PUBLIC_USE_SSL=true`.
 
-**Caveat from `docs/infra/minio.md`:** the upstream MinIO community repository is archived. The `minio/Dockerfile` builds a pinned upstream commit from source because the official images were unavailable. Fine for the project; be ready to say it should be reassessed for production (for example, moving to a maintained S3-compatible server or a managed S3).
+**Caveat:** the upstream MinIO community repository is archived. The `minio/Dockerfile` builds a pinned upstream commit from source because the official images were unavailable. Fine for the project; be ready to say it should be reassessed for production (for example, moving to a maintained S3-compatible server or a managed S3).
 
-**Monitoring:** `infra/monitoring` also tracks MinIO; see [monitoring.md](monitoring.md).
+**Monitoring:** the Overview dashboard and the `ServiceDown` alert cover MinIO; see [infrastructure](../services/infrastructure.md).
 
 ## 8. Security properties and known limits
 
@@ -201,7 +201,7 @@ What holds up:
 | Size and type bounded at the storage layer | POST policy `content-length-range` and exact content type |
 | Short exposure | 5-minute expiry on every URL |
 | No filename in the path | Server-generated UUID key |
-| Safe rendering | Inline only for 4 image types; everything else is `attachment` |
+| Safe rendering | Inline only for 4 image types and 3 video types; everything else is `attachment` |
 
 Known limits (say these before the evaluator does):
 
@@ -210,7 +210,7 @@ Known limits (say these before the evaluator does):
 3. **Orphans.** A file uploaded but never attached stays in the bucket. There is no cleanup job. Fix: a scheduled sweep of old keys not referenced by any message, or an S3 lifecycle rule on a staging prefix.
 4. **Deleting a message does not delete the object.** `MinioService.removeObject` exists but is not called from message deletion. Fix: delete on message removal, or an outbox/cleanup job (MinIO and Postgres cannot share a transaction).
 5. **`onModuleInit` swallows bucket errors.** Chat boots without attachments if the bucket is missing; the error appears only in logs.
-6. **Documentation drift.** The plan doc proposed a `MessageAttachment` table with originalName and size; the implementation uses `attachments String[]`, so there is no stored filename, size or content type, and the preview endpoint recovers the type from `statObject`. `MINIO_ATTACHMENTS.md` mentions `auth-profile-web/.../ChatPage.jsx`; the real browser code is now under `client/`.
+6. **No attachment metadata in the database.** The model is `attachments String[]`, so no filename, size or content type is stored. The preview endpoint recovers the type from `statObject`.
 
 ## 9. Hands-on lab (20 minutes)
 
@@ -223,7 +223,7 @@ Prereqs: stack running (`docker compose up -d --build`).
 5. **Prove expiry.** Wait over 5 minutes and reload that URL. MinIO returns an `ExpiredToken`/`AccessDenied` XML error.
 6. **Prove tamper-resistance.** Change one character of the key in the URL path, or `X-Amz-Expires`. You get `SignatureDoesNotMatch`.
 7. **Prove the host matters.** Take a presigned URL and request it with a different Host (for example `curl -k --resolve other.test:9443:127.0.0.1 https://other.test:9443/...`). The signature fails. This demonstrates why `proxy_set_header Host $http_host` and the public client exist.
-8. **Prove the size limit.** Request an upload URL and POST a file over 10 MiB with `curl -F` using the returned fields. MinIO rejects it with `EntityTooLarge`, and chat-service was never involved.
+8. **Prove the size limit.** Request an upload URL and POST a file over the limit for its type with `curl -F` using the returned fields. MinIO rejects it with `EntityTooLarge`, and chat-service was never involved.
 9. **Prove the send-time check.** Send `POST /chat/conversations/{id}/messages` with `attachments: ["attachments/<id>/<your id>/<random-uuid-that-was-never-uploaded>"]`. Expect a failure from `statObject`. Try a key with another user's id: expect `Invalid attachment reference`.
 10. **Prove authorization.** With a user who is not in the conversation, call `download-url` for a real key: expect 404 or 403.
 

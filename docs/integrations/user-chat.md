@@ -1,8 +1,6 @@
-# RabbitMQ in Nook: the complete guide
+# User and chat integration
  
-One-sitting read. It combines a primer, the implementation (user-service to chat-service), the infrastructure and monitoring pieces, a hands-on lab, and evaluation Q&A. Written from the code as of November 2026.
-
-Sources consolidated here: [RABBITMQ_USER_SYNC.md](../chat-service/RABBITMQ_USER_SYNC.md) (the detailed design doc), the "RabbitMQ contract" section of [MVP_PLAN.md](../chat-service/MVP_PLAN.md), [monitoring.md](monitoring.md), `compose.yaml`, and the source files named below.
+Everything that connects user-service and chat-service. Most of it is the RabbitMQ profile sync, so this is also the full RabbitMQ guide: a primer, the implementation, infrastructure, a hands-on lab and evaluation Q&A. The other links, shared JWTs and block checks, are in [section 13](#13-the-other-links-between-the-two-services). Written from the code as of November 2026.
 
 ---
 
@@ -136,6 +134,7 @@ Discarding bad messages with an ack is intentional: a malformed message will nev
 1. Build the profile fields. For `deleted`: username, displayName and avatarUrl become `null` and `deletedAt = occurredAt`. Otherwise copy the snapshot and `deletedAt = null`.
 2. `chatUser.updateMany({ where: { id, sourceUpdatedAt: { lt: version } }, data })`. This only updates if the stored version is **strictly older**.
 3. If nothing was updated, `chatUser.createMany({ data, skipDuplicates: true })`. This inserts if the row is missing, and does nothing if it already exists with an equal or newer version.
+4. For `created` and `updated` events, `FeedService.ensureMember` joins the user to the global feed. If this throws, the event is requeued like any other failure. See [feed](feed.md).
 
 ## 5. Ordering, duplicates and deletes: why it is correct (mostly)
 
@@ -159,7 +158,7 @@ Consequences:
 
 ## 6. The HTTP fallback
 
-`chat-service/src/chat/user-profiles.service.ts` has `ensureActiveUsers(ids)`. It is called when creating a DM (and by group member-add). It:
+`chat-service/src/chat/user-profiles.service.ts` has `ensureActiveUsers(ids)`. It is called when creating a DM, when adding a group member, and on every `/chat` request through `EnsureActiveUserGuard`, for the caller. It:
 
 1. finds which requested users are missing from `ChatUser`,
 2. fetches only those through `GET /accounts/:id` on `USER_SERVICE_URL`,
@@ -174,8 +173,7 @@ Errors: unknown account gives 404; user-service unreachable or invalid response 
 2. **No retry cap, delay queue or dead-letter queue.** A permanently failing event (nack + requeue) is retried immediately and forever.
 3. **Race on first insert.** `updateMany` then `createMany` is two statements without a transaction. With multiple consumers, or the HTTP fallback running concurrently, an older event could insert first and cause a newer one to be skipped.
 4. **No `eventId` dedupe.** Idempotency relies only on timestamp comparison, so two different events with the same `version` are resolved first-come.
-5. **Repair path missing.** There is no reconciliation job that re-syncs profiles after a missed event (MVP_PLAN notes this).
-6. **Queue is declared by both services.** Docs sometimes say "declared by User service". Both declare it, identically.
+5. **Repair path missing.** There is no reconciliation job that re-syncs profiles after a missed event.
 
 A defensible answer for each: "known, acceptable for the project scope, and here is the production fix" (outbox table plus relay for 1, DLQ plus retry TTL for 2, a transaction or `INSERT ... ON CONFLICT DO UPDATE ... WHERE` for 3, reconciliation endpoint for 5).
 
@@ -216,7 +214,7 @@ Open the management UI at `http://127.0.0.1:15672` and log in with the credentia
 ## 11. Evaluation Q&A
 
 **Why a message broker instead of REST between the services?**
-Decoupling and resilience. Chat keeps working if user-service is down, and events buffer while chat is down (lab step 3). Chat also queries a local table instead of making network calls per request.
+Decoupling and resilience. Chat renders names and avatars from a local table instead of making network calls per request, and events buffer while chat is down (lab step 3). Be precise about the limit: group chat and history keep working if user-service is down, but opening a DM or sending in one returns 503 because those need the block check (section 13).
 
 **What happens if RabbitMQ is down?**
 Publishers retry the connection every 2 s. Publishing times out after 5 s and the calling request errors. Chat keeps serving from its local copy and the HTTP fallback fills missing users for DMs. Events published during the outage are lost (no outbox), which is the main known gap.
@@ -225,7 +223,7 @@ Publishers retry the connection every 2 s. Publishing times out after 5 s and th
 Nothing bad. The version comparison makes processing idempotent and order-independent for profile data.
 
 **Why topic exchange and `user.#` instead of a direct queue?**
-It lets another service (feed, notifications) bind its own queue to `user.events` and get the same events, with no change to the publisher. Adding a consumer means adding a queue and a binding.
+It lets another service (notifications, for example) bind its own queue to `user.events` and get the same events, with no change to the publisher. Adding a consumer means adding a queue and a binding.
 
 **Why ack manually?**
 So the message is only removed after the DB write succeeds. With auto-ack, a crash mid-processing would lose the event.
@@ -259,3 +257,31 @@ chat-service  parse -> validate -> updateMany(version < v) else createMany(skipD
 ```
 
 Remember: at-least-once delivery, idempotent consumer, newest `version` wins, soft delete with a tombstone, HTTP fallback for the gap, and no outbox (the known limitation).
+
+## 13. The other links between the two services
+
+| Link | Direction | Used for | If it fails |
+| --- | --- | --- | --- |
+| RabbitMQ `user.events` | user-service to chat | Profile copies, feed membership | Events buffer while chat is down. Events published while the broker is down are lost. |
+| Shared JWT | user-service signs, chat verifies | Identity on every request and socket | Chat cannot verify without the matching public key |
+| `GET /accounts/:id` | chat to user-service | Fill a missing `ChatUser` | 404 for an unknown user, 503 if unreachable |
+| `GET /social/blocks/check/:userId` | chat to user-service | Block check for DMs | 503 if unreachable, 403 if blocked |
+
+### Shared JWT
+
+user-service holds the RSA private key and signs access tokens. chat-service holds only the public key in `JWT_PUBLIC_KEY`. It checks the signature, `RS256`, issuer `user-service`, audience `ft-transcendence-api`, a UUID `sub` and `exp`. Users never log in to chat separately. Because chat has no private key, a compromise of chat cannot mint tokens.
+
+### Block checks
+
+Blocks live in user-service. `UserProfilesService.ensureCanContact` forwards the caller's own `Authorization` header to `GET /social/blocks/check/:userId`, with a 3-second timeout. It runs when opening a DM and whenever a DM conversation is accessed with a token, such as sending. Group channels and the feed do not check blocks.
+
+### Ownership
+
+| Data | Owner | Chat's view |
+| --- | --- | --- |
+| Accounts, credentials, global role | user-service | Never copied |
+| Public profile | user-service | `ChatUser`, eventually consistent |
+| Friendships, blocks | user-service | Asked over HTTP when needed |
+| Conversations, messages, group roles, presence | chat-service | Owner |
+
+`ChatUser.id` equals the user-service UUID. There is no foreign key across the two databases.

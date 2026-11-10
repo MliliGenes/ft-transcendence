@@ -1,7 +1,7 @@
 name: nook
 
 # The monitoring stack (Grafana, Prometheus, Loki, Alloy, cAdvisor) lives in its
-# own file but starts with the app. See docs/infra/monitoring.md.
+# own file but starts with the app. See docs/services/infrastructure.md.
 include:
   - compose.monitoring.yaml
 

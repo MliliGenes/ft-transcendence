@@ -78,6 +78,16 @@ function section(text, heading) {
   return lines.slice(start + 1, end).join('\n');
 }
 
+function dropSection(text, heading) {
+  const lines = text.replace(/\r/g, '').split('\n');
+  const start = lines.findIndex((l) => l.trim() === `## ${heading}`);
+  if (start < 0) return text;
+  let end = lines.findIndex((l, i) => i > start && /^## /.test(l));
+  if (end < 0) end = lines.length;
+  lines.splice(start, end - start);
+  return lines.join('\n');
+}
+
 // -------------------------------------------------------------- book model
 const toc = []; // {level, id, title}
 let seq = 0;
@@ -110,8 +120,8 @@ const ua = rdJson('.ua/knowledge-graph.json');
 const uaMeta = rdJson('.ua/meta.json');
 const gg = rdJson('graphify-out/graph.json');
 const ggReport = rd('graphify-out/GRAPH_REPORT.md');
-const userApi = rdJson('docs/user-service/openapi.json');
-const chatApi = rdJson('docs/chat-service/openapi.json');
+const userApi = rdJson('docs/api/user-service.openapi.json');
+const chatApi = rdJson('docs/api/chat-service.openapi.json');
 const HEAD = git('rev-parse --short HEAD');
 const BRANCH = git('rev-parse --abbrev-ref HEAD');
 
@@ -143,7 +153,7 @@ part('Part I: Product and Project', 'What Nook is, who it is for, how the work i
 docChapter('Repository overview', 'README.md');
 docChapter('Product context', 'docs/project/PROJECT_CONTEXT.md');
 docChapter('Roadmap and module plan', 'docs/project/POINTS_ROADMAP.md');
-docChapter('Running the stack with Docker Compose', 'docs/project/COMPOSE.md');
+docChapter('Running the stack with Docker Compose', 'docs/services/infrastructure.md', (t) => section(t, 'Running the stack'));
 docChapter('Environment configuration', 'envs/README.md');
 
 // ============================================================== PART II
@@ -317,25 +327,9 @@ ${mdToHtml(section(ggReport, 'Knowledge Gaps'))}`;
 }
 
 // ============================================================= PART III
-part('Part III: Services', 'The user service, the chat service, object storage, the web client and monitoring, one chapter each.');
-docChapter('User service', 'docs/user-service/SERVICE.md');
-docChapter('Chat service', 'docs/chat-service/CHAT_OVERVIEW.md');
-docChapter('Chat attachments and MinIO', 'docs/chat-service/MINIO_ATTACHMENTS.md', (t) =>
-  t.trimEnd() +
-  `
-
-## Automated provisioning
-
-A fresh MinIO volume starts with no bucket and no service account, so the chat credentials in the chat env file would be rejected with \`AccessDenied\`. The \`minio-init\` compose service fixes this on every \`docker compose up\`. It runs once with the MinIO root account and:
-
-1. creates the bucket named by \`MINIO_BUCKET\`;
-2. creates the policy \`chat-attachments-rw\` (list, get, put and delete on that bucket only);
-3. creates the user from \`MINIO_ACCESS_KEY\` and \`MINIO_SECRET_KEY\`, resetting its secret to the current value;
-4. attaches the policy to the user.
-
-\`chat-service\` waits for it with \`depends_on: minio-init: condition: service_completed_successfully\`. On startup, Chat also calls \`ensureBucketExists()\` and logs a clear error instead of crashing if the bucket cannot be created, so messaging keeps working without attachments. The root credentials are only given to the init container.
-`);
-docChapter('RabbitMQ user synchronization', 'docs/chat-service/RABBITMQ_USER_SYNC.md');
+part('Part III: Services and Integrations', 'One chapter per service, then one per place where services meet.');
+docChapter('User service', 'docs/services/user-service.md');
+docChapter('Chat service', 'docs/services/chat-service.md');
 
 // ---- client chapter with UI mockups
 {
@@ -354,14 +348,15 @@ docChapter('RabbitMQ user synchronization', 'docs/chat-service/RABBITMQ_USER_SYN
     })
     .join('');
   const html =
-    mdToHtml(bodyOf(rd('client/README.md')), 'client/README.md') +
-    `<h3>Client plan</h3>` + mdToHtml(shiftHeadings(bodyOf(rd('docs/client/PLAN.md')), 1), 'docs/client/PLAN.md') +
-    `<h3>Search and social flows</h3>` + mdToHtml(shiftHeadings(bodyOf(rd('docs/client/SEARCH_SOCIAL_PLAN.md')), 1), 'docs/client/SEARCH_SOCIAL_PLAN.md') +
-    `<h3>Profile design specification</h3>` + mdToHtml(shiftHeadings(bodyOf(rd('docs/client/PROFILE_DESIGN_SPEC.md')), 1), 'docs/client/PROFILE_DESIGN_SPEC.md') +
+    mdToHtml(bodyOf(rd('docs/services/client.md')), 'docs/services/client.md') +
     `<h3>UI mockups</h3><div class="gallery">${gallery}</div>`;
   chapter('Web client (Next.js)', html);
 }
-docChapter('Monitoring (Prometheus, Loki, Grafana)', 'docs/infra/monitoring.md');
+docChapter('Infrastructure: gateway, broker, storage and monitoring', 'docs/services/infrastructure.md', (t) => dropSection(t, 'Running the stack'));
+docChapter('User and chat integration (RabbitMQ, JWT, block checks)', 'docs/integrations/user-chat.md');
+docChapter('Chat and storage integration (MinIO, presigned URLs)', 'docs/integrations/chat-storage.md');
+docChapter('Client and backend integration', 'docs/integrations/client-backend.md');
+docChapter('Feed integration', 'docs/integrations/feed.md');
 
 // ============================================================== PART IV
 part('Part IV: API Reference', 'Every HTTP route of both services, generated from the OpenAPI contracts, plus the realtime Socket.IO protocol.');
@@ -466,15 +461,15 @@ ${resp.length ? `<h5>Responses</h5>${table(['Status', 'Meaning'], resp, 'small')
   const authBlock = `
 <p>Both services speak JSON over HTTP and are reached through the gateway: User service under <code>/api/</code> and Chat service under <code>/api/chat/</code>.</p>
 <h3>Authentication</h3>
-${mdToHtml(shiftHeadings(section(rd('docs/chat-service/API.md'), 'Authentication'), 2), 'docs/chat-service/API.md')}
+${mdToHtml(shiftHeadings(section(rd('docs/services/chat-service.md'), 'Authentication'), 2), 'docs/services/chat-service.md')}
 <h3>Error shape</h3>
-${mdToHtml(shiftHeadings(section(rd('docs/chat-service/API.md'), 'Error shape'), 2), 'docs/chat-service/API.md')}`;
+${mdToHtml(shiftHeadings(section(rd('docs/services/chat-service.md'), 'Error shape'), 2), 'docs/services/chat-service.md')}`;
   chapter('Conventions, authentication and errors', authBlock);
 }
 chapter('User service HTTP API', renderApi(userApi, 'User service'));
 chapter('Chat service HTTP API', renderApi(chatApi, 'Chat service'));
-chapter('Realtime protocol (Socket.IO)', mdToHtml(shiftHeadings(section(rd('docs/chat-service/API.md'), 'Socket.IO'), 2), 'docs/chat-service/API.md') +
-  `<h3>Current limitations</h3>` + mdToHtml(shiftHeadings(section(rd('docs/chat-service/API.md'), 'Current limitations'), 2), 'docs/chat-service/API.md'));
+chapter('Realtime protocol (Socket.IO)', mdToHtml(shiftHeadings(section(rd('docs/services/chat-service.md'), 'Socket.IO'), 2), 'docs/services/chat-service.md') +
+  `<h3>Current limitations</h3>` + mdToHtml(shiftHeadings(section(rd('docs/services/chat-service.md'), 'Current limitations'), 2), 'docs/services/chat-service.md'));
 
 // ============================================================== PART V
 part('Part V: Data Model and Code Map', 'The database schemas and an index of every analysed file, grouped by architectural layer.');

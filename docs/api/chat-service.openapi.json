@@ -38,6 +38,12 @@
     {
       "name": "Groups",
       "description": "Private group membership, roles, and channels"
+    },
+    {
+      "name": "Feed"
+    },
+    {
+      "name": "Attachments"
     }
   ],
   "security": [
@@ -1192,6 +1198,225 @@
           }
         }
       }
+    },
+    "/chat/feed": {
+      "get": {
+        "operationId": "getFeed",
+        "summary": "Get the global feed location",
+        "tags": [
+          "Feed"
+        ],
+        "description": "Returns the feed group and channel IDs, and joins the caller to the feed if needed. Posts use the normal message endpoints with this channel ID.",
+        "responses": {
+          "200": {
+            "description": "Feed location",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/chat/feed/users/{userId}/posts": {
+      "get": {
+        "operationId": "getFeedPosts",
+        "summary": "List one user's feed posts",
+        "tags": [
+          "Feed"
+        ],
+        "description": "Newest-first, non-deleted posts by this author in the feed channel. Returns up to limit + 1 rows, where the extra row signals more results. Joins the caller to the feed so attachment URLs work.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserId"
+          },
+          {
+            "$ref": "#/components/parameters/MessageLimit"
+          },
+          {
+            "$ref": "#/components/parameters/BeforeMessageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Posts, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  },
+                  "maxItems": 101
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/chat/conversations/{conversationId}/attachments/upload-url": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationId"
+        }
+      ],
+      "post": {
+        "operationId": "createAttachmentUploadUrl",
+        "summary": "Create a presigned upload policy",
+        "tags": [
+          "Attachments"
+        ],
+        "description": "Returns a five-minute POST policy for a server-generated object key. The browser sends the returned fields and the file directly to MinIO as multipart/form-data.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachmentUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Upload policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentUpload"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/chat/conversations/{conversationId}/attachments/preview-url": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationId"
+        }
+      ],
+      "get": {
+        "operationId": "createAttachmentPreviewUrl",
+        "summary": "Create an inline preview URL",
+        "tags": [
+          "Attachments"
+        ],
+        "description": "Returns a five-minute presigned GET URL for images and videos. Other types return a null previewUrl.",
+        "parameters": [
+          {
+            "name": "objectKey",
+            "in": "query",
+            "required": true,
+            "description": "Key of an attachment on a non-deleted message in this conversation.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/chat/conversations/{conversationId}/attachments/download-url": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationId"
+        }
+      ],
+      "get": {
+        "operationId": "createAttachmentDownloadUrl",
+        "summary": "Create a download URL",
+        "tags": [
+          "Attachments"
+        ],
+        "description": "Returns a five-minute presigned GET URL with attachment disposition.",
+        "parameters": [
+          {
+            "name": "objectKey",
+            "in": "query",
+            "required": true,
+            "description": "Key of an attachment on a non-deleted message in this conversation.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Download URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "url"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1311,6 +1536,14 @@
             "type": "string",
             "format": "uuid",
             "description": "Client-generated idempotency identifier for one logical send"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "maxItems": 5
           }
         }
       },
@@ -1541,6 +1774,14 @@
           },
           "author": {
             "$ref": "#/components/schemas/ChatProfile"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "description": "MinIO object keys. Never signed URLs."
           }
         }
       },
@@ -2080,6 +2321,104 @@
               "null"
             ],
             "format": "uri-reference"
+          }
+        }
+      },
+      "FeedInfo": {
+        "type": "object",
+        "required": [
+          "groupId",
+          "channelId"
+        ],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "AttachmentUploadRequest": {
+        "type": "object",
+        "required": [
+          "contentType"
+        ],
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "image/gif",
+              "application/pdf",
+              "video/mp4",
+              "video/webm",
+              "video/quicktime"
+            ]
+          }
+        }
+      },
+      "AttachmentUpload": {
+        "type": "object",
+        "required": [
+          "objectKey",
+          "uploadUrl",
+          "method",
+          "fields",
+          "expiresInSeconds",
+          "maxBytes"
+        ],
+        "properties": {
+          "objectKey": {
+            "type": "string"
+          },
+          "uploadUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "POST"
+            ]
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "example": 300
+          },
+          "maxBytes": {
+            "type": "integer",
+            "description": "10 MiB, or 50 MiB for video types."
+          }
+        }
+      },
+      "AttachmentPreview": {
+        "type": "object",
+        "required": [
+          "contentType",
+          "previewUrl"
+        ],
+        "properties": {
+          "contentType": {
+            "type": "string"
+          },
+          "previewUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "Null for types that cannot be shown inline, such as PDF."
           }
         }
       }

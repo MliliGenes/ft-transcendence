@@ -9,7 +9,7 @@ export function validateNewPassword(password: string) {
   return undefined;
 }
 
-// Contract: docs/user-service/openapi.json; login byte limit confirmed in LoginDto.
+// Contract: docs/api/user-service.openapi.json; login byte limit confirmed in LoginDto.
 // Client checks are feedback only; the service must validate again on submission.
 export function validateAuth(mode: AuthMode, values: Record<AuthField, string>): AuthErrors {
   const errors: AuthErrors = {};

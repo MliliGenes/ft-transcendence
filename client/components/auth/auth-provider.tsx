@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Avoid racing a refresh request against a login or registration submit.
     if (attemptedRestore.current) return;
     attemptedRestore.current = true;
-    if (["/login", "/register", "/forgot-password", "/reset-password", "/verify-email"].includes(window.location.pathname)) {
+    if (["/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/privacy", "/terms"].includes(window.location.pathname)) {
       Promise.resolve().then(() => setIsRestoring(false));
       return;
     }

@@ -13,9 +13,10 @@ import {
   IconUserPlus,
   IconUsers,
 } from "@tabler/icons-react";
+import Link from "next/link";
 import { NookLogo } from "@/components/nook-logo";
 import { ThemeSelector } from "@/components/theme-selector";
-import { BoardPreview, GroupPreview, HeroPreview, ProfilePreview } from "@/components/landing/previews";
+import { BoardPreview, FeedPreview, GroupPreview, HeroPreview, ProfilePreview } from "@/components/landing/previews";
 
 const features = [
   {
@@ -38,17 +39,24 @@ const features = [
   },
 ];
 
-// Be honest about what is live: Feed and Play are still being built.
+// Be honest about what is live: Play is still being built.
 const spaces = [
-  { icon: IconHome2, name: "Feed", text: "Posts, projects and ideas from people you follow.", live: false },
+  { icon: IconHome2, name: "Feed", text: "Posts, photos and videos from everyone on Nook.", live: true },
   { icon: IconMessageCircle, name: "Chat", text: "Direct messages, groups and channels.", live: true },
   { icon: IconDeviceGamepad2, name: "Play", text: "Friendly matches with your people.", live: false },
   { icon: IconUser, name: "Profile", text: "Your avatar, banner, bio and status.", live: true },
 ];
 
+const feedPoints = [
+  "One shared feed for everyone on Nook, updated live",
+  "Photos and videos posted straight from your device",
+  "Your posts collected on your profile",
+  "Edit or delete anything you’ve shared",
+];
+
 const chatPoints = [
   "Direct messages and group channels with live presence",
-  "Images and PDFs shared straight from your device",
+  "Images, PDFs and videos shared straight from your device",
   "Markdown and emoji for when plain text isn’t enough",
   "Unread counts so you always know where to pick up",
 ];
@@ -70,6 +78,7 @@ export default function Home() {
         </a>
         <nav aria-label="Main navigation" className="order-3 flex w-full items-center gap-6 text-sm sm:order-none sm:w-auto sm:mr-auto md:gap-9">
           <a href="#features" className="inline-flex min-h-11 items-center text-nook-text-secondary hover:text-foreground">Explore</a>
+          <a href="#feed" className="inline-flex min-h-11 items-center text-nook-text-secondary hover:text-foreground">Feed</a>
           <a href="#chat" className="inline-flex min-h-11 items-center text-nook-text-secondary hover:text-foreground">Chat</a>
           <a href="#community" className="inline-flex min-h-11 items-center text-nook-text-secondary hover:text-foreground">About Nook</a>
         </nav>
@@ -102,9 +111,7 @@ export default function Home() {
         </section>
 
         <figure className="mb-20 md:mb-28">
-          <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:duration-700">
-            <HeroPreview />
-          </div>
+          <HeroPreview />
           <figcaption className="mx-auto mt-4 flex max-w-5xl flex-wrap justify-between gap-2 text-xs text-nook-text-muted">
             <span>Your people. Your conversations. Your next match.</span>
             <span>One shared space.</span>
@@ -143,6 +150,26 @@ export default function Home() {
               </li>
             ))}
           </ul>
+        </section>
+
+        <section id="feed" aria-labelledby="feed-title" className="grid scroll-mt-8 items-center gap-10 border-t border-border py-14 md:grid-cols-[1.25fr_1fr] md:gap-14 md:py-20">
+          <figure className="order-last md:order-first">
+            <FeedPreview />
+            <figcaption className="mt-3 text-xs text-nook-text-muted">The feed, with a new post box and a shared video.</figcaption>
+          </figure>
+          <div>
+            <p className={eyebrow}>Feed</p>
+            <h2 id="feed-title" className="text-3xl leading-tight font-semibold tracking-tight md:text-4xl">See what everyone<br />is up to.</h2>
+            <p className="mt-6 max-w-md text-base leading-7 text-nook-text-secondary">Post a thought, a photo or a clip, and it lands in front of everyone on Nook as it happens. No algorithm, just the newest posts first.</p>
+            <ul className="mt-7 space-y-3">
+              {feedPoints.map((p) => (
+                <li key={p} className="flex gap-3 text-sm leading-6 text-nook-text-secondary">
+                  <IconCheck size={18} stroke={2} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />{p}
+                </li>
+              ))}
+            </ul>
+            <Link href="/feed" className={`${ghostBtn} mt-8`}>Open the feed</Link>
+          </div>
         </section>
 
         <section id="chat" aria-labelledby="chat-title" className="grid scroll-mt-8 items-center gap-10 border-t border-border py-14 md:grid-cols-[1fr_1.25fr] md:gap-14 md:py-20">
@@ -222,7 +249,13 @@ export default function Home() {
             <NookLogo />
             <span className="text-xs text-nook-text-muted">A place for your people.</span>
           </div>
-          <a href="#top" className="inline-flex min-h-11 items-center gap-3 text-xs text-nook-text-secondary hover:text-foreground">Back to top <IconArrowRight size={14} stroke={1.75} className="-rotate-90" aria-hidden="true" /></a>
+          <div className="flex flex-wrap items-center gap-x-6 text-xs text-nook-text-secondary">
+            <nav aria-label="Legal" className="flex items-center gap-x-6">
+              <Link href="/privacy" className="inline-flex min-h-11 items-center hover:text-foreground">Privacy Policy</Link>
+              <Link href="/terms" className="inline-flex min-h-11 items-center hover:text-foreground">Terms of Service</Link>
+            </nav>
+            <a href="#top" className="inline-flex min-h-11 items-center gap-3 hover:text-foreground">Back to top <IconArrowRight size={14} stroke={1.75} className="-rotate-90" aria-hidden="true" /></a>
+          </div>
         </div>
       </footer>
     </div>
