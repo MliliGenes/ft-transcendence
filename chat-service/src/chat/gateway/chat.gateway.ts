@@ -2,6 +2,7 @@ import { Logger, OnModuleDestroy } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
+  MessageBody,
   OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
@@ -10,6 +11,7 @@ import {
 import { isUUID } from 'class-validator';
 import type { Namespace, Socket } from 'socket.io';
 import type { Message } from '../../generated/prisma/client.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
 import { PresenceAudienceService } from '../presence/presence-audience.service.js';
 import { PresenceService, type PresenceChange } from '../presence/presence.service.js';
 
@@ -25,6 +27,7 @@ export class ChatGateway implements OnGatewayInit, OnModuleDestroy {
     private readonly jwt: JwtService,
     private readonly presence: PresenceService,
     private readonly presenceAudience: PresenceAudienceService,
+    private readonly prisma: PrismaService,
   ) {}
 
   afterInit(namespace: Namespace) {
@@ -87,6 +90,78 @@ export class ChatGateway implements OnGatewayInit, OnModuleDestroy {
     const userId = socket.data.userId as string;
     const change = this.presence.recordActivity(userId, socket.id);
     if (change) await this.emitPresenceChange(change);
+  }
+
+  @SubscribeMessage('typing:changed')
+  async onTypingChanged(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: unknown,
+  ) {
+    const userId = socket.data.userId as string;
+    if (!body || typeof body !== 'object') return { ok: false as const };
+
+    const { conversationId, typing } = body as {
+      conversationId?: unknown;
+      typing?: unknown;
+    };
+    if (
+      typeof conversationId !== 'string' ||
+      !isUUID(conversationId) ||
+      typeof typing !== 'boolean'
+    ) {
+      return { ok: false as const };
+    }
+
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        OR: [
+          { dmUserAId: userId },
+          { dmUserBId: userId },
+          {
+            kind: 'CHANNEL',
+            group: { is: { members: { some: { userId } } } },
+          },
+        ],
+      },
+      select: {
+        dmUserAId: true,
+        dmUserBId: true,
+        group: { select: { members: { select: { userId: true } } } },
+      },
+    });
+    if (!conversation) return { ok: false as const };
+
+    const recipients = conversation.group
+      ? conversation.group.members.map(({ userId: memberId }) => memberId)
+      : [conversation.dmUserAId, conversation.dmUserBId].filter(
+          (id): id is string => id !== null,
+        );
+    const rooms = recipients
+      .filter((recipientId) => recipientId !== userId)
+      .map((recipientId) => `user:${recipientId}`);
+
+    if (rooms.length) {
+      this.namespace.to(rooms).emit('typing:changed', {
+        conversationId,
+        userId,
+        typing,
+      });
+    }
+    return { ok: true as const };
+  }
+
+  broadcastReadState(
+    userIds: string[],
+    readState: {
+      conversationId: string;
+      userId: string;
+      messageId: string;
+      readAt: string;
+    },
+  ) {
+    const rooms = userIds.map((userId) => `user:${userId}`);
+    if (rooms.length) this.namespace.to(rooms).emit('read:updated', readState);
   }
 
   onModuleDestroy() {

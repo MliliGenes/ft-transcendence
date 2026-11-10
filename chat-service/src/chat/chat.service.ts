@@ -132,6 +132,50 @@ export class ChatService {
     return messages;
   }
 
+  async getReadStates(userId: string, conversationId: string) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        OR: [
+          { dmUserAId: userId },
+          { dmUserBId: userId },
+          {
+            kind: 'CHANNEL',
+            group: { is: { members: { some: { userId } } } },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!conversation) throw new NotFoundException('Conversation not found');
+
+    const states = await this.prisma.conversationReadState.findMany({
+      where: { conversationId },
+      select: {
+        userId: true,
+        lastReadMessageId: true,
+        updatedAt: true,
+      },
+    });
+    const messageIds = states.flatMap(({ lastReadMessageId }) =>
+      lastReadMessageId ? [lastReadMessageId] : [],
+    );
+    const messages = await this.prisma.message.findMany({
+      where: { id: { in: messageIds } },
+      select: { id: true, createdAt: true },
+    });
+    const readAtById = new Map(
+      messages.map((message) => [message.id, message.createdAt.toISOString()]),
+    );
+
+    return states.map((state) => ({
+      ...state,
+      lastReadAt: state.lastReadMessageId
+        ? (readAtById.get(state.lastReadMessageId) ?? null)
+        : null,
+    }));
+  }
+
   async createOrGetDm(
     userId: string,
     otherUserId: string,
@@ -406,10 +450,10 @@ export class ChatService {
     }
   }
 
-  async markRead(userId: string, conversationId: string, _messageId: string) {
+  async markRead(userId: string, conversationId: string, messageId: string) {
     const message = await this.prisma.message.findFirst({
-      where: { id: _messageId, conversationId },
-      select: { id: true },
+      where: { id: messageId, conversationId },
+      select: { id: true, createdAt: true },
     });
 
     if (!message) {
@@ -428,7 +472,11 @@ export class ChatService {
           },
         ],
       },
-      select: { id: true },
+      select: {
+        dmUserAId: true,
+        dmUserBId: true,
+        group: { select: { members: { select: { userId: true } } } },
+      },
     });
 
     if (!conversation) {
@@ -439,8 +487,23 @@ export class ChatService {
       where: {
         conversationId_userId: { conversationId, userId },
       },
-      update: { lastReadMessageId: _messageId },
-      create: { conversationId, userId, lastReadMessageId: _messageId },
+      update: { lastReadMessageId: messageId },
+      create: { conversationId, userId, lastReadMessageId: messageId },
     });
+
+    const recipientIds = conversation.group
+      ? conversation.group.members.map(({ userId: memberId }) => memberId)
+      : [conversation.dmUserAId, conversation.dmUserBId].filter(
+          (id): id is string => id !== null,
+        );
+    const readAt = message.createdAt.toISOString();
+    this.chatGateway.broadcastReadState(recipientIds, {
+      conversationId,
+      userId,
+      messageId,
+      readAt,
+    });
+
+    return { messageId, readAt };
   }
 }

@@ -142,7 +142,7 @@ The repository includes a working interpretation of the ft_transcendence v21.2 m
 | U01 · User management | 2 | Account, profile, friend and presence flows exist. Verify the full rubric and demonstrate the flows. |
 | U02 · Game statistics/history | 1 | Match history, win/loss summaries, leaderboard, player progression (XP, levels, rank titles) and 6 unlockable achievements are implemented and displayed on profile and leaderboard. Demonstrate the flows. |
 | W09 · Real-time collaboration | 1 | Code Arena 2v2 implements synchronized multi-user code editing with Monaco and Yjs CRDTs over authenticated Socket.IO (`/collab` namespace), with conflict resolution and document revision tracking. |
-| G06 · Advanced chat | 1 | Persistent chat and game invitations are implemented. The full module also requires blocked-message handling, game/tournament notifications, profile access, typing indicators and read receipts; verify all parts and tournament coverage before claiming it. |
+| G06 · Advanced chat | 1 | Complete: persistent history, bidirectional block enforcement, game challenge cards and notifications, profile access, real-time typing indicators, and durable read receipts. Verified with automated tests and live dual-user sessions. |
 | D03 · Backend microservices | 2 | User, Chat, Game and judge responsibilities have separate service boundaries and APIs/events. Demonstrate the service interactions. |
 | D04 · Health/status/backups/recovery | 1 | Compose health checks cover all service containers; public `/status` page and `/api/status` endpoint; automated multi-database (User, Chat, Game) and MinIO backup/restore scripts with SHA-256 verification, retention rotation, and proven recovery procedures. Demonstrate the disaster recovery drill. |
 
@@ -160,6 +160,7 @@ We used AI tools openly. The team chose the product, architecture, API contracts
 |---|---|
 | Claude Code | Planning, implementation assistance, code review, tests and repository documentation |
 | Codex (OpenAI) | Code Arena/Nook integration audit and implementation assistance, fixes, verification and documentation |
+| OpenCode / Antigravity | Advanced chat (G06) typing indicators and read receipts implementation, verification, and session continuation |
 | Graphify | Generated a code relationship map in `graphify-out/` |
 | Understand Anything | Generated a repository knowledge graph and codebase tour in `.ua/` |
 

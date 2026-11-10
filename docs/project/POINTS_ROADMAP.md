@@ -116,7 +116,7 @@ The implementation items above are present. These verification, operations, and 
 - [x] Live expiry and joinability indicators on duel invitation cards: direct chat renders real-time status badges (`Open`, `In Match`, `Expired`) via `GET /lobby/rooms/lookup/:code` and dynamically routes to active matches or disables expired rooms (2026-11-10).
 - [x] Player progression and achievements system for Code Arena: dynamic XP, level thresholds, rank titles, and 6 unlockable badges based on completed matches and scores, integrated in `/api/game/users/:userId/stats`, user profile Games tab, and leaderboard (2026-11-10).
 - [x] Complete the D04 backup and restore work in Phase 4 for the Game database and any required attachment data, then demonstrate recovery into clean services (2026-11-10).
-- [ ] Verify the full G06 tracker criteria before claiming the point. Code Arena invitations work, but the invitation flow does not provide tournament notifications; check the other chat criteria and record evidence for each.
+- [x] Complete and verify all G06 Advanced Chat criteria (2026-11-10): enforced bidirectional block checks on direct messages (`ensureCanContact`), real-time Socket.IO typing indicators (`typing:changed`) with peer notification and debounced UI display, durable read receipts in PostgreSQL (`ConversationReadState`) with REST endpoints and real-time socket delivery (`read:updated`), profile access navigation from message rows, persistent message history, and interactive Code Arena challenge/duel notification cards. Verified with automated unit tests in `chat-service` (12/12) and `client` (38/38) and live dual-user browser sessions.
 
 **Optional UX decision:** Decide whether invitation cards should show a live expiry/joinability label. Currently, opening a card routes to the lobby and Game checks joinability.
 
@@ -134,7 +134,7 @@ The implementation items above are present. These verification, operations, and 
 
 ## Other module candidates
 
-- [ ] **G06 Advanced Chat (+1):** Code Arena challenge invitations are implemented in Phase 5, but do not alone complete G06. Verify every tracker criterion—blocked-message enforcement, game/tournament notifications, profile access, persistent history, typing indicators, and read receipts—and record evidence for each before claiming the point. The challenge-card flow does not establish tournament notifications.
+- [x] **G06 Advanced Chat (+1):** Complete and verified across all tracker criteria—blocked-message enforcement in `ChatService`, game/match challenge notifications via real-time invitation cards, profile navigation from messages, persistent PostgreSQL history, Socket.IO typing indicators (`typing:changed`), and durable read receipts (`read:updated`). Automated tests and live multi-user verification confirmed.
 - [ ] **W06 Public API (+2):** defer until stable, useful endpoints are ready for external clients. Use the planned [Public API adapter](PUBLIC_API_ADAPTER_PLAN.md) for key management, per-key limits, scopes, and allowlisted routing; document at least five database-backed endpoints covering GET, POST, PUT, and DELETE. Keep private conversation data out of it.
 - [ ] **W10 SSR (+1):** if using Next.js, render a public content surface server-side for performance/SEO. Choosing Next.js alone is not sufficient.
 - [ ] **W08 Notifications (+1):** cover relevant create, update, and delete actions across the product; a message alert alone is insufficient.

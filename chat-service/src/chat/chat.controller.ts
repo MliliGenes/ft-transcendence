@@ -128,6 +128,14 @@ export class ChatController {
     return this.chatService.getMessages(req.user.sub, conversationId, query);
   }
 
+  @Get('conversations/:conversationId/read-states')
+  getReadStates(
+    @Request() req: ExpressRequest & { user: { sub: string } },
+    @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
+  ) {
+    return this.chatService.getReadStates(req.user.sub, conversationId);
+  }
+
   @Patch('conversations/:conversationId/read-state')
   markRead(
     @Request() req: ExpressRequest & { user: { sub: string } },

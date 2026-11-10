@@ -42,7 +42,11 @@ function dayLabel(date: Date) {
 }
 
 /** Messages grouped by author and time, with day dividers, as the design system asks ("avoid boxing every message"). */
-export function MessageList({ messages, currentUserId }: { messages: ChatMessage[]; currentUserId: string }) {
+export function MessageList({ messages, currentUserId, readReceipt }: {
+  messages: ChatMessage[];
+  currentUserId: string;
+  readReceipt?: { messageId: string; readerCount: number } | null;
+}) {
   return <ol className="flex flex-col" aria-label="Message history">
     {messages.map((message, index) => {
       const previous = messages[index - 1];
@@ -53,13 +57,13 @@ export function MessageList({ messages, currentUserId }: { messages: ChatMessage
         {newDay && <li role="separator" aria-label={dayLabel(date)} className="my-4 flex items-center gap-3 text-xs font-medium text-muted-foreground first:mt-0">
           <span className="h-px flex-1 bg-border" aria-hidden="true" /><span>{dayLabel(date)}</span><span className="h-px flex-1 bg-border" aria-hidden="true" />
         </li>}
-        <MessageRow message={message} own={message.authorId === currentUserId} continued={continued} />
+        <MessageRow message={message} own={message.authorId === currentUserId} continued={continued} readerCount={readReceipt?.messageId === message.id ? readReceipt.readerCount : undefined} />
       </Fragment>;
     })}
   </ol>;
 }
 
-function MessageRow({ message, own, continued }: { message: ChatMessage; own: boolean; continued: boolean }) {
+function MessageRow({ message, own, continued, readerCount }: { message: ChatMessage; own: boolean; continued: boolean; readerCount?: number }) {
   const author = message.author;
   const name = accountDisplayName(author);
   const created = new Date(message.createdAt);
@@ -94,6 +98,7 @@ function MessageRow({ message, own, continued }: { message: ChatMessage; own: bo
             {message.editedAt && <span className="text-[11px] text-muted-foreground">(edited)</span>}
           </>}
       {!message.deletedAt && message.attachments?.length > 0 && <div className="mt-2 flex flex-wrap gap-3 pb-1">{message.attachments.map(key => <MessageAttachment key={key} conversationId={message.conversationId} objectKey={key} />)}</div>}
+      {readerCount !== undefined && <p className="mt-1 text-right text-[11px] text-muted-foreground" aria-label={readerCount === 1 ? "Read by one person" : `Read by ${readerCount} people`}>{readerCount === 1 ? "Read" : `Read by ${readerCount}`}</p>}
     </div>
   </li>;
 }

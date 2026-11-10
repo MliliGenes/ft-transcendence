@@ -8,7 +8,7 @@ import { io, type Socket } from "socket.io-client";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AccountAvatar } from "@/components/app/account-avatar";
 import { CreateGroupDialog } from "@/components/app/chat/create-group-dialog";
-import { DirectDetails, GroupDetails, GroupMark } from "@/components/app/chat/details-panel";
+import { DirectDetails, GroupDetails, GroupMark, groupMembersKey } from "@/components/app/chat/details-panel";
 import { MessageList } from "@/components/app/chat/message-list";
 import { GroupSettingsView, type Section as SettingsSection } from "@/components/app/group-management";
 import { EmojiPicker } from "@/components/app/chat/emoji-picker";
@@ -27,7 +27,9 @@ import { accountApi } from "@/lib/accounts/client";
 import { accountImageSource } from "@/lib/accounts/images";
 import { accountDisplayName as displayName } from "@/lib/accounts/status-icons";
 import { createCodeArenaInvite } from "@/lib/arena/invitations";
-import { chatApi, type ChatGroup, type ChatMessage } from "@/lib/chat/client";
+import { chatApi, type ChatGroup, type ChatMessage, type ChatReadState } from "@/lib/chat/client";
+import { readReceiptForLastOwnMessage } from "@/lib/chat/receipts";
+import { formatTypingNames } from "@/lib/chat/typing";
 import { friendshipQueryKey, socialApi } from "@/lib/social/client";
 
 type Selection = { kind: "dm"; id: string } | { kind: "group"; id: string; groupId: string } | { kind: "group-home"; groupId: string };
@@ -85,6 +87,8 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
   const [uploadProgress, setUploadProgress] = useState<{ label: string; percent: number } | null>(null);
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "reconnecting">("connecting");
   const [presence, setPresence] = useState<Record<string, string>>({});
+  const [liveReadStatesByConversation, setLiveReadStatesByConversation] = useState<Record<string, Record<string, ChatReadState>>>({});
+  const [typingByConversation, setTypingByConversation] = useState<Record<string, Record<string, number>>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -95,8 +99,12 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
   const activityAtRef = useRef(0);
   const uploadKeysRef = useRef(new Map<File, string>());
   const requestIdRef = useRef("");
+  const typingTimerRef = useRef<number | null>(null);
+  const typingSentAtRef = useRef(0);
+  const typingConversationRef = useRef<string | undefined>(undefined);
 
   function chooseSelection(next: Selection) {
+    stopTyping();
     setSelection(next);
     setDraft("");
     setSelectedFiles([]);
@@ -151,6 +159,13 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
   const recipient = selectedDm && (selectedDm.dmUserA.id === session?.user.id ? selectedDm.dmUserB : selectedDm.dmUserA);
   const selectedName = recipient ? displayName(recipient) : selectedChannel ? `#${selectedChannel.name}` : "Choose a conversation";
 
+  const groupMembers = useQuery({
+    queryKey: groupMembersKey(session?.user.id, selectedGroup?.id ?? "none"),
+    queryFn: () => requestWithSession(token => chatApi.groupMembers(selectedGroup!.id, token)),
+    enabled: Boolean(session && selectedGroup) && !isRestoring,
+    retry: false,
+  });
+
   const history = useInfiniteQuery({
     queryKey: messagesKey(session?.user.id, selectedId ?? "none"),
     queryFn: ({ pageParam }) => requestWithSession(token => chatApi.messages(selectedId!, token, pageParam)),
@@ -169,6 +184,31 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
     return [...byId.values()].sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
   }, [history.data]);
   const latestMessageId = messages[messages.length - 1]?.id;
+
+  const readStates = useQuery({
+    queryKey: ["chat", "read-states", session?.user.id, selectedId],
+    queryFn: () => requestWithSession(token => chatApi.readStates(selectedId!, token)),
+    enabled: Boolean(session && selectedId) && !isRestoring,
+    refetchOnWindowFocus: true,
+    retry: false,
+  });
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setTypingByConversation(previous => {
+        let changed = false;
+        const next: Record<string, Record<string, number>> = {};
+        for (const [conversationId, users] of Object.entries(previous)) {
+          const active = Object.entries(users).filter(([, expiresAt]) => expiresAt > now);
+          if (active.length !== Object.keys(users).length) changed = true;
+          if (active.length) next[conversationId] = Object.fromEntries(active);
+        }
+        return changed ? next : previous;
+      });
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!userId || !accessToken || expiresIn === undefined || isRestoring) return;
@@ -207,8 +247,51 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
         if (!found) pages[0] = [...pages[0], payload].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         return { ...previous, pages };
       });
+      setTypingByConversation(previous => {
+        const users = { ...(previous[payload.conversationId] ?? {}) };
+        delete users[payload.authorId];
+        if (!Object.keys(users).length) {
+          const next = { ...previous };
+          delete next[payload.conversationId];
+          return next;
+        }
+        return { ...previous, [payload.conversationId]: users };
+      });
       void queryClient.invalidateQueries({ queryKey: conversationsKey(userId) });
       void queryClient.invalidateQueries({ queryKey: groupsKey(userId) });
+    };
+    const onTyping = (payload: unknown) => {
+      if (!payload || typeof payload !== "object") return;
+      const event = payload as { conversationId?: unknown; userId?: unknown; typing?: unknown };
+      if (typeof event.conversationId !== "string" || typeof event.userId !== "string" || typeof event.typing !== "boolean") return;
+      setTypingByConversation(previous => {
+        const users = { ...(previous[event.conversationId as string] ?? {}) };
+        if (event.typing) users[event.userId as string] = Date.now() + 6000;
+        else delete users[event.userId as string];
+        if (!Object.keys(users).length) {
+          const next = { ...previous };
+          delete next[event.conversationId as string];
+          return next;
+        }
+        return { ...previous, [event.conversationId as string]: users };
+      });
+    };
+    const onRead = (payload: unknown) => {
+      if (!payload || typeof payload !== "object") return;
+      const event = payload as { conversationId?: unknown; userId?: unknown; messageId?: unknown; readAt?: unknown };
+      if (typeof event.conversationId !== "string" || typeof event.userId !== "string" || typeof event.messageId !== "string" || typeof event.readAt !== "string") return;
+      setLiveReadStatesByConversation(previous => ({
+        ...previous,
+        [event.conversationId as string]: {
+          ...(previous[event.conversationId as string] ?? {}),
+          [event.userId as string]: {
+            userId: event.userId as string,
+            lastReadMessageId: event.messageId as string,
+            lastReadAt: event.readAt as string,
+            updatedAt: event.readAt as string,
+          },
+        },
+      }));
     };
     const onSnapshot = (payload: unknown) => {
       if (!payload || typeof payload !== "object" || !Array.isArray((payload as { users?: unknown }).users)) return;
@@ -223,6 +306,8 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
     socket.on("disconnect", onDisconnect);
     socket.on("connect_error", onConnectError);
     socket.on("message:created", onMessage);
+    socket.on("typing:changed", onTyping);
+    socket.on("read:updated", onRead);
     socket.on("presence:snapshot", onSnapshot);
     socket.on("presence:changed", onPresence);
     const refreshTimer = window.setTimeout(() => {
@@ -252,6 +337,17 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
     uploadKeysRef.current.clear();
     requestIdRef.current = "";
     lastReadRef.current = "";
+  }, [selectedId]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current !== null) window.clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = null;
+      typingSentAtRef.current = 0;
+      const conversationId = typingConversationRef.current;
+      typingConversationRef.current = undefined;
+      if (conversationId) socketRef.current?.emit("typing:changed", { conversationId, typing: false });
+    };
   }, [selectedId]);
 
   const openDm = useMutation({
@@ -289,6 +385,7 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
     }),
     onMutate: () => setSendError(""),
     onSuccess: async () => {
+      stopTyping();
       setDraft("");
       setPreview(false);
       setSelectedFiles([]);
@@ -362,6 +459,19 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
   if (!session) return <section className="grid flex-1 place-items-center p-6"><div className="max-w-sm bg-card p-8 text-center"><IconMessageCircle className="mx-auto size-8 text-primary" aria-hidden="true" /><h1 className="mt-4 text-xl font-semibold">Chat with your people</h1><p className="mt-2 text-sm text-muted-foreground">Sign in to open conversations and join groups.</p><Button render={<Link href="/login" />} className="mt-5 min-h-11 px-5">Log in</Button></div></section>;
 
   const sortedConversations = [...(conversations.data ?? [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const currentReadStates = useMemo(() => {
+    if (!selectedId) return {};
+    const base = readStates.data
+      ? Object.fromEntries(readStates.data.map(state => [state.userId, state]))
+      : {};
+    const live = liveReadStatesByConversation[selectedId];
+    return live ? { ...base, ...live } : base;
+  }, [selectedId, readStates.data, liveReadStatesByConversation]);
+  const readReceipt = readReceiptForLastOwnMessage(messages, session.user.id, Object.values(currentReadStates));
+  const typingUserIds = selectedId ? Object.keys(typingByConversation[selectedId] ?? {}) : [];
+  const groupMemberNames = new Map((groupMembers.data ?? []).map(member => [member.user.id, displayName(member.user)]));
+  const typingNames = typingUserIds.filter(id => id !== session.user.id).map(id => id === recipient?.id ? displayName(recipient) : groupMemberNames.get(id) ?? "Someone");
+  const typingLabel = formatTypingNames(typingNames);
   const matchedPeople = (people.data?.users ?? []).filter(person => person.id !== session.user.id);
   const friends = friendships.data?.friends ?? [];
   const directoryVisible = !mobile || showDirectory;
@@ -377,6 +487,36 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
     setManagedSection(section);
     setManagedGroupId(groupId);
     setShowDirectory(false);
+  }
+
+  function stopTyping() {
+    if (typingTimerRef.current !== null) {
+      window.clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
+    typingSentAtRef.current = 0;
+    const conversationId = typingConversationRef.current;
+    typingConversationRef.current = undefined;
+    if (conversationId) socketRef.current?.emit("typing:changed", { conversationId, typing: false });
+  }
+
+  function signalTyping() {
+    const socket = socketRef.current;
+    if (!selectedId || !socket?.connected) return;
+    const conversationId = selectedId;
+    typingConversationRef.current = conversationId;
+    const now = Date.now();
+    if (now - typingSentAtRef.current > 2500) {
+      typingSentAtRef.current = now;
+      socket.emit("typing:changed", { conversationId, typing: true });
+    }
+    if (typingTimerRef.current !== null) window.clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = window.setTimeout(() => {
+      typingTimerRef.current = null;
+      typingSentAtRef.current = 0;
+      if (typingConversationRef.current === conversationId) typingConversationRef.current = undefined;
+      socket.emit("typing:changed", { conversationId, typing: false });
+    }, 3000);
   }
 
   function insertText(text: string) {
@@ -400,6 +540,7 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
     event.preventDefault();
     const content = draft.trim();
     if (!selectedId || !content || sendMessage.isPending) return;
+    stopTyping();
     if (!requestIdRef.current) requestIdRef.current = crypto.randomUUID();
     sendMessage.mutate({ content, clientRequestId: requestIdRef.current, files: selectedFiles });
   }
@@ -524,12 +665,16 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
               {history.hasNextPage
                 ? <Button variant="ghost" className="mx-auto mb-4 flex min-h-10 text-muted-foreground" disabled={history.isFetchingNextPage} onClick={() => void history.fetchNextPage()}>{history.isFetchingNextPage ? "Loading…" : "Load older messages"}</Button>
                 : <ConversationStart recipient={recipient} channelName={selectedChannel?.name} groupName={selectedGroup?.name} />}
-              <MessageList messages={messages} currentUserId={session.user.id} />
+              <MessageList messages={messages} currentUserId={session.user.id} readReceipt={readReceipt} />
             </div>}
             </div>
           </div>
 
           {showJump && <Button variant="secondary" className="absolute bottom-32 left-1/2 z-10 min-h-10 -translate-x-1/2 px-4 shadow-md" onClick={jumpToLatest}><IconArrowDown size={16} aria-hidden="true" />Jump to present</Button>}
+
+          <div className="min-h-5 shrink-0 px-4 text-xs text-muted-foreground sm:px-6" role="status" aria-live="polite">
+            {typingLabel && <span className="inline-flex items-center gap-1.5"><span className="flex gap-0.5" aria-hidden="true">{["0ms", "150ms", "300ms"].map(delay => <span key={delay} className="size-1 animate-bounce rounded-full bg-muted-foreground motion-reduce:animate-none" style={{ animationDelay: delay }} />)}</span>{typingLabel}</span>}
+          </div>
 
           <form className="shrink-0 px-3 pb-3 sm:px-6 sm:pb-4" onSubmit={submit}>
             {sendError && <p role="alert" className="mb-2 text-sm text-destructive">{sendError}</p>}
@@ -559,7 +704,7 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
                   <IconPaperclip size={20} aria-hidden="true" /><span className="sr-only">Attach images or PDF files</span>
                   <input type="file" className="sr-only" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,video/mp4,video/webm,video/quicktime" multiple disabled={sendMessage.isPending || selectedFiles.length >= 5} onChange={event => { const incoming = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; const combined = [...selectedFiles, ...incoming]; if (combined.length > 5) { setSendError("You can attach up to 5 files per message."); return; } const invalid = combined.find(file => !allowedAttachmentTypes.has(file.type) || file.size > attachmentLimit(file) || file.size === 0); if (invalid) { setSendError(videoAttachmentTypes.has(invalid.type) ? `${invalid.name} must be under 50 MB.` : `${invalid.name} must be an image, PDF or MP4/WebM/MOV video (images and PDFs under 10 MB, videos under 50 MB).`); return; } setSendError(""); setSelectedFiles(combined); requestIdRef.current = ""; }} />
                 </label>
-                {preview ? <div id="chat-composer-preview" className="max-h-40 min-h-11 min-w-0 flex-1 overflow-y-auto px-3 py-2.5" aria-label="Message preview">{draft.trim() ? <ChatMarkdown>{draft}</ChatMarkdown> : <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>}</div> : <Textarea id="chat-composer" ref={inputRef} value={draft} maxLength={2000} rows={1} onChange={event => { setDraft(event.target.value); requestIdRef.current = ""; }} disabled={sendMessage.isPending} onKeyDown={event => { const shortcut = shortcutFormat(event); if (shortcut) { event.preventDefault(); applyFormat(shortcut); return; } if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder={`Message ${selectedName}`} aria-label={`Message ${selectedName}`} aria-describedby="composer-hint" className="field-sizing-content max-h-40 min-h-11 resize-none border-0 bg-transparent py-2.5 focus-visible:ring-0" />}
+                {preview ? <div id="chat-composer-preview" className="max-h-40 min-h-11 min-w-0 flex-1 overflow-y-auto px-3 py-2.5" aria-label="Message preview">{draft.trim() ? <ChatMarkdown>{draft}</ChatMarkdown> : <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>}</div> : <Textarea id="chat-composer" ref={inputRef} value={draft} maxLength={2000} rows={1} onChange={event => { const value = event.target.value; setDraft(value); requestIdRef.current = ""; if (value.trim()) signalTyping(); else stopTyping(); }} disabled={sendMessage.isPending} onKeyDown={event => { const shortcut = shortcutFormat(event); if (shortcut) { event.preventDefault(); applyFormat(shortcut); return; } if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder={`Message ${selectedName}`} aria-label={`Message ${selectedName}`} aria-describedby="composer-hint" className="field-sizing-content max-h-40 min-h-11 resize-none border-0 bg-transparent py-2.5 focus-visible:ring-0" />}
                 <EmojiPicker onSelect={insertText} disabled={sendMessage.isPending} />
                 <Button type="submit" size="icon" aria-label="Send message" title="Send message" className="size-11" disabled={!draft.trim() || sendMessage.isPending}><IconSend size={19} aria-hidden="true" /></Button>
               </div>

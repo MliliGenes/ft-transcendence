@@ -34,6 +34,12 @@ export type DirectConversation = {
   unreadCount: number;
 };
 export type ChatChannel = { id: string; name: string; topic: string | null; lastReadMessageId: string | null; unreadCount: number };
+export type ChatReadState = {
+  userId: string;
+  lastReadMessageId: string | null;
+  lastReadAt: string | null;
+  updatedAt: string;
+};
 export type ChatGroup = {
   id: string;
   name: string;
@@ -130,7 +136,8 @@ export const chatApi = {
   uploadFile,
   previewAttachment: (conversationId: string, objectKey: string, token: string) => request<AttachmentPreview>(`/conversations/${encodeURIComponent(conversationId)}/attachments/preview-url?${new URLSearchParams({ objectKey })}`, token),
   downloadAttachment: (conversationId: string, objectKey: string, token: string) => request<{ url: string }>(`/conversations/${encodeURIComponent(conversationId)}/attachments/download-url?${new URLSearchParams({ objectKey })}`, token),
-  markRead: (conversationId: string, messageId: string, token: string) => request<void>(`/conversations/${encodeURIComponent(conversationId)}/read-state`, token, { method: "PATCH", body: JSON.stringify({ messageId }) }),
+  readStates: (conversationId: string, token: string) => request<ChatReadState[]>(`/conversations/${encodeURIComponent(conversationId)}/read-states`, token),
+  markRead: (conversationId: string, messageId: string, token: string) => request<{ messageId: string; readAt: string }>(`/conversations/${encodeURIComponent(conversationId)}/read-state`, token, { method: "PATCH", body: JSON.stringify({ messageId }) }),
   groups: (token: string) => request<ChatGroup[]>("/groups", token),
   group: (groupId: string, token: string) => request<ChatGroup>(`/groups/${encodeURIComponent(groupId)}`, token),
   createGroup: (name: string, token: string, rules?: string, description?: string) => request<ChatGroup>("/groups", token, json({ name, ...(rules?.trim() ? { rules: rules.trim() } : {}), ...(description?.trim() ? { description: description.trim() } : {}) })),
