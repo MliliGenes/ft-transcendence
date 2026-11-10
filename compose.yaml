@@ -139,6 +139,12 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 12
     logging: *logging
 
   chat-service:
@@ -158,7 +164,7 @@ services:
       rabbitmq:
         condition: service_healthy
       user-service:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/"]
       interval: 10s
@@ -203,7 +209,7 @@ services:
       judge-worker:
         condition: service_healthy
       user-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     networks:
@@ -219,9 +225,18 @@ services:
   client:
     build: ./client
     depends_on:
-      - user-service
-      - chat-service
-      - game-service
+      user-service:
+        condition: service_healthy
+      chat-service:
+        condition: service_healthy
+      game-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 12
     logging: *logging
 
 networks:

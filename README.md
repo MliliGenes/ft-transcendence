@@ -144,7 +144,7 @@ The repository includes a working interpretation of the ft_transcendence v21.2 m
 | W09 · Real-time collaboration | 1 | Code Arena 2v2 implements synchronized multi-user code editing with Monaco and Yjs CRDTs over authenticated Socket.IO (`/collab` namespace), with conflict resolution and document revision tracking. |
 | G06 · Advanced chat | 1 | Persistent chat and game invitations are implemented. The full module also requires blocked-message handling, game/tournament notifications, profile access, typing indicators and read receipts; verify all parts and tournament coverage before claiming it. |
 | D03 · Backend microservices | 2 | User, Chat, Game and judge responsibilities have separate service boundaries and APIs/events. Demonstrate the service interactions. |
-| D04 · Health/status/backups/recovery | 1 | Compose health checks and monitoring exist. Automated backups and a demonstrated disaster recovery procedure remain to be verified. |
+| D04 · Health/status/backups/recovery | 1 | Compose health checks cover all service containers; public `/status` page and `/api/status` endpoint; automated multi-database (User, Chat, Game) and MinIO backup/restore scripts with SHA-256 verification, retention rotation, and proven recovery procedures. Demonstrate the disaster recovery drill. |
 
 No final module total is claimed here. If every listed module were accepted at its maximum, their arithmetic subtotal would be **14 points** (2 + 2 + 2 + 2 + 1 + 1 + 1 + 2 + 1); incomplete modules contribute zero until the team completes and demonstrates their requirements. Reconcile the full project score with the subject and tracker before submission.
 

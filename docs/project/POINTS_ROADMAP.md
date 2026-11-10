@@ -80,13 +80,13 @@ The main frontend is the Next.js App Router application in `client/`. Continue t
 
 ### W13 is already in Phase 3; finish D04 here
 
-- [x] Compose health checks cover the client, Chat, Game, judge worker, and database containers.
-- [ ] Add a health check for the User service and verify coverage for all required services.
-- [ ] Add a simple status page showing service availability without exposing secrets or internal details.
-- [ ] Schedule backups for the User, Chat, and Game databases and define retention; include MinIO attachments in the recovery plan.
-- [ ] Document and demonstrate restoring the databases and required attachment data into clean services.
+- [x] Compose health checks cover the client, User, Chat, Game, judge worker, and database containers (2026-11-10).
+- [x] Add a health check for the User service and verify coverage for all required services (2026-11-10).
+- [x] Add a public status endpoint (`/api/status`) and responsive status page (`/status`) showing live service availability and latency without exposing secrets or internal details (2026-11-10).
+- [x] Automated backups for User, Chat, and Game databases and MinIO attachments with SHA-256 integrity verification and automated retention rotation (`infra/backup/backup.sh`) (2026-11-10).
+- [x] Document and demonstrate restoring the databases and required attachment data into clean services (`infra/backup/restore.sh`, `infra/backup/verify-recovery.sh`, and `docs/infra/BACKUP_RECOVERY.md`) (2026-11-10).
 
-**Point target: D04 (+1).** Some Compose health checks already exist, but the User service still needs one. Status visibility, automated backups, and a proven recovery procedure remain.
+**Point target: D04 (+1) Complete.** Full Compose healthcheck coverage across all containers, live public status page, automated multi-database + MinIO backups, cryptographic verification, retention rotation, and proven disaster recovery procedures.
 
 ## Phase 5 — Complete and demonstrate Code Arena
 
@@ -115,7 +115,7 @@ The implementation items above are present. These verification, operations, and 
 - [x] Consume `user.deleted` events in Game; revoke pre-deletion access tokens, remove lobby records and affected-side source/editor data, forfeit unfinished matches, anonymize retained results, and document 2v2 shared-code deletion (2026-11-10).
 - [x] Live expiry and joinability indicators on duel invitation cards: direct chat renders real-time status badges (`Open`, `In Match`, `Expired`) via `GET /lobby/rooms/lookup/:code` and dynamically routes to active matches or disables expired rooms (2026-11-10).
 - [x] Player progression and achievements system for Code Arena: dynamic XP, level thresholds, rank titles, and 6 unlockable badges based on completed matches and scores, integrated in `/api/game/users/:userId/stats`, user profile Games tab, and leaderboard (2026-11-10).
-- [ ] Complete the D04 backup and restore work in Phase 4 for the Game database and any required attachment data, then demonstrate recovery into clean services.
+- [x] Complete the D04 backup and restore work in Phase 4 for the Game database and any required attachment data, then demonstrate recovery into clean services (2026-11-10).
 - [ ] Verify the full G06 tracker criteria before claiming the point. Code Arena invitations work, but the invitation flow does not provide tournament notifications; check the other chat criteria and record evidence for each.
 
 **Optional UX decision:** Decide whether invitation cards should show a live expiry/joinability label. Currently, opening a card routes to the lobby and Game checks joinability.
