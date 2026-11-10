@@ -10,6 +10,8 @@ Docker Compose runs everything. This covers startup, environment files, the Ngin
 | `client` | Next.js app | Through Nginx |
 | `user-service`, `chat-service` | NestJS APIs | Through Nginx |
 | `user-db`, `chat-db` | PostgreSQL 18, one per service | No |
+| `user-db-backup`, `chat-db-backup` | Scheduled PostgreSQL dumps with retention | No |
+| `backup-storage-init` | One-shot backup-volume permissions setup | No |
 | `rabbitmq` | Broker | `127.0.0.1:5672`, management UI `127.0.0.1:15672` |
 | `minio` | Object storage | Console `127.0.0.1:9001` |
 | `minio-init` | One-shot bucket and user setup | No |
@@ -39,7 +41,7 @@ Open `https://localhost` and accept the local certificate. Source changes need `
 | File | Holds |
 | --- | --- |
 | `backend.env` | Runtime mode for both backends |
-| `user-db.env`, `chat-db.env` | Database credentials, loaded by the database and its service |
+| `user-db.env`, `chat-db.env` | Database credentials, loaded by the database, its service, and its backup container |
 | `rabbitmq.env` | Broker credentials, loaded by the broker and both backends |
 | `minio.env` | MinIO root account and CORS origins |
 | `user-service.env` | Internal addresses, SMTP, initial superadmin |
@@ -57,7 +59,119 @@ docker compose exec user-service npm run bootstrap:superadmin -- user@example.co
 
 ### Data
 
-Database, MinIO and RabbitMQ data live under `volumes/`, and `docker compose down` keeps them. Monitoring uses named volumes, which `docker compose down -v` deletes.
+Database, MinIO and RabbitMQ data live under `volumes/`, and `docker compose down` keeps them. Monitoring and database backups use named volumes, which `docker compose down -v` deletes. Use `docker compose down` without `-v` to preserve backups.
+
+## Database backups
+
+The root stack includes one `prodrigestivill/postgres-backup-local:18-alpine`
+container for each database, matching PostgreSQL 18. Each reads its database's
+existing env file; no additional credentials are needed. The containers wait for
+database health and volume initialization, then run as `postgres:postgres`.
+They have no published ports. The initializer only sets ownership and mode `0700`
+on the two backup volume roots, and exits.
+
+### Schedule and storage
+
+- A backup runs at container startup and daily at midnight in `Africa/Casablanca`.
+- Retention settings are 7 days, 4 weeks, and 6 months. The `last` directory also
+  retains timestamped backups for the image's default 24-hour window.
+- Dumps include all schemas, data, and large objects. They omit ownership and ACL
+  commands for portable restores. Cluster roles/passwords and server configuration
+  are not included; provision those separately from the deployment configuration.
+- `user-db-backups` and `chat-db-backups` are separate Docker named volumes
+  (normally `nook_user-db-backups` and `nook_chat-db-backups`). Inside each backup
+  container, `/backups` contains `last`, `daily`, `weekly`, and `monthly` folders.
+- Rotation uses hardlinks and symlinks. Docker-managed storage avoids the Windows
+  bind-mount filesystem limitations described in the
+  [upstream documentation](https://github.com/prodrigestivill/docker-postgres-backup-local#how-the-backups-folder-works).
+
+Daily/weekly/monthly entries retain the latest successful backup for each period;
+retention is age-based, not an exact count of files. Each database dump has its own
+consistent snapshot; the two services are not backed up in one shared transaction.
+Settings live in the `x-db-backup-environment` section of `compose.yaml`.
+
+### Start and inspect
+
+Normal `docker compose up -d` starts backups with the stack. To start just these
+services and their dependencies:
+
+```sh
+docker compose up -d user-db-backup chat-db-backup
+docker compose ps -a backup-storage-init user-db-backup chat-db-backup
+docker compose logs --tail=100 user-db-backup chat-db-backup
+docker compose exec user-db-backup ls -lh /backups/last
+docker compose exec chat-db-backup ls -lh /backups/last
+```
+
+Look for successful backup completion in the logs and a timestamped `.sql.gz`
+file for each database. The inherited image health check probes the scheduler on
+internal port 8080; it does not demonstrate that a dump can be restored.
+
+To request a backup manually, run these when no scheduled/startup backup is in
+progress (the image's backup script does not serialize concurrent runs):
+
+```sh
+docker compose exec user-db-backup /backup.sh
+docker compose exec chat-db-backup /backup.sh
+```
+
+### Export a copy
+
+Copy backups out of the Docker volumes; `-L` follows the `latest` symlinks:
+
+```sh
+docker compose cp -L user-db-backup:/backups ./volumes/user-db-backup-export
+docker compose cp -L chat-db-backup:/backups ./volumes/chat-db-backup-export
+```
+
+Use fresh destination directories for subsequent exports. These paths are already
+ignored by Git. Backups contain private account and chat data; restrict access
+and encrypt copies sent to separate storage. A copy on the same host does not
+protect against loss of that host or Docker's disk. Keep an off-host copy.
+MinIO attachment/profile files and RabbitMQ state are outside these SQL backups.
+
+### Restore into a new database
+
+The following Bash command restores the latest User database dump into a separate
+database named `nook_users_restore`. It refuses to create that database if the
+name already exists, and leaves the live database untouched. Use a unique restore
+database name for each drill. Run this only when the backup container is running
+and a successful dump exists:
+
+```sh
+docker compose exec -T user-db-backup bash -euo pipefail -c '
+export PGPASSWORD="$POSTGRES_PASSWORD"
+backup_file="/backups/last/${POSTGRES_DB}-latest.sql.gz"
+
+gzip -t "$backup_file"
+
+createdb \
+  --host="$POSTGRES_HOST" \
+  --username="$POSTGRES_USER" \
+  --template=template0 \
+  nook_users_restore
+
+gzip -dc "$backup_file" |
+  psql \
+    --host="$POSTGRES_HOST" \
+    --username="$POSTGRES_USER" \
+    --dbname=nook_users_restore \
+    --single-transaction \
+    --set=ON_ERROR_STOP=1
+'
+```
+
+For Chat, replace `user-db-backup` with `chat-db-backup` and both occurrences of
+`nook_users_restore` with `nook_chat_restore`. A failed restore leaves the new
+database for inspection; it never drops a database automatically. To restore an
+older dump, use its timestamped path instead of the `latest` symlink.
+
+Inspect restored tables, row counts, and Prisma migration history, then exercise
+the application against isolated restored databases before planning a live
+recovery. Restore drills and application checks must be performed explicitly;
+adding this configuration alone does not prove recovery. Recreate any extra roles
+and grants separately. A live recovery also requires coordinating both services
+and restoring the matching MinIO files.
 
 ## Gateway (Nginx)
 

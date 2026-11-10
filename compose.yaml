@@ -12,6 +12,24 @@ x-logging: &logging
     max-size: "10m"
     max-file: "3"
 
+x-db-backup: &db-backup
+  image: prodrigestivill/postgres-backup-local:18-alpine
+  restart: unless-stopped
+  user: postgres:postgres
+  logging: *logging
+
+x-db-backup-environment: &db-backup-environment
+  POSTGRES_PORT: "5432"
+  # Dump every schema; restore ownership/permissions separately if needed.
+  POSTGRES_EXTRA_OPTS: "-Z1 --no-owner --no-acl"
+  SCHEDULE: "@daily"
+  TZ: Africa/Casablanca
+  BACKUP_ON_START: "TRUE"
+  BACKUP_KEEP_DAYS: "7"
+  BACKUP_KEEP_WEEKS: "4"
+  BACKUP_KEEP_MONTHS: "6"
+  HEALTHCHECK_PORT: "8080"
+
 services:
   nginx:
     build: ./nginx
@@ -62,6 +80,51 @@ services:
       start_period: 10s
       retries: 12
     logging: *logging
+
+  # Named volumes support the hardlinks/symlinks used for backup rotation,
+  # including on Docker Desktop. Only this one-shot initializer runs as root.
+  backup-storage-init:
+    image: postgres:18-alpine
+    user: "0:0"
+    network_mode: none
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        chown postgres:postgres /user-backups /chat-backups
+        chmod 0700 /user-backups /chat-backups
+    volumes:
+      - user-db-backups:/user-backups
+      - chat-db-backups:/chat-backups
+    restart: "no"
+    logging: *logging
+
+  user-db-backup:
+    <<: *db-backup
+    env_file: ./envs/user-db.env
+    environment:
+      <<: *db-backup-environment
+      POSTGRES_HOST: user-db
+    volumes:
+      - user-db-backups:/backups
+    depends_on:
+      user-db:
+        condition: service_healthy
+      backup-storage-init:
+        condition: service_completed_successfully
+
+  chat-db-backup:
+    <<: *db-backup
+    env_file: ./envs/chat-db.env
+    environment:
+      <<: *db-backup-environment
+      POSTGRES_HOST: chat-db
+    volumes:
+      - chat-db-backups:/backups
+    depends_on:
+      chat-db:
+        condition: service_healthy
+      backup-storage-init:
+        condition: service_completed_successfully
 
   rabbitmq:
     image: rabbitmq:4-management
@@ -158,6 +221,10 @@ services:
       - user-service
       - chat-service
     logging: *logging
+
+volumes:
+  user-db-backups:
+  chat-db-backups:
 
 networks:
   default:

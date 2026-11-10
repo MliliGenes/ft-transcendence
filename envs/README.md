@@ -29,8 +29,8 @@ Every example assignment uses `VAR_NAME=<EXAMPLE_VALUE>`:
 | Local file | Loaded by | Contents |
 | --- | --- | --- |
 | `backend.env` | User and Chat services | Shared runtime mode |
-| `user-db.env` | User database and User service | User database credentials/name |
-| `chat-db.env` | Chat database and Chat service | Chat database credentials/name |
+| `user-db.env` | User database, User service, and User database backup | User database credentials/name |
+| `chat-db.env` | Chat database, Chat service, and Chat database backup | Chat database credentials/name |
 | `rabbitmq.env` | RabbitMQ and both backend services | Shared broker credentials |
 | `minio.env` | MinIO only | Storage admin credentials and browser CORS origins |
 | `user-service.env` | User service only | Internal addresses, SMTP, initial app admin |
