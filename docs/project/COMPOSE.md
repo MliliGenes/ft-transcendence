@@ -6,17 +6,21 @@ Run commands from the `ft-transcendence/` root.
 compose.yaml
 envs/
   README.md                # placeholder rules and configuration ownership
-  backend.env.example      # runtime mode shared by both backend services
+  backend.env.example      # runtime mode shared by backend services
   user-db.env.example      # User database credentials
   chat-db.env.example      # Chat database credentials
+  game-db.env.example      # Game database credentials
   rabbitmq.env.example     # broker credentials shared with both backends
   minio.env.example        # storage admin credentials and browser origins
   user-service.env.example # internal addresses, SMTP, initial app admin
   user-auth.env.example    # JWT keys, frontend origin, OAuth settings
   chat-service.env.example # internal addresses, public JWT key, attachment storage
+  game-service.env.example # Game DB URL, public JWT key, judge worker settings
+  judge-worker.env.example # shared judge token and execution limits
   *.env                    # configured local copies, ignored by Git
 volumes/
   user-db/                # persistent Postgres data, ignored by Git
+  game-db/                # persistent Postgres data, ignored by Git
   nginx/certs/            # local TLS certificate/key, ignored by Git
 nginx/
   Dockerfile
@@ -33,11 +37,11 @@ client/                   # Next.js frontend
 
 ## First startup
 
-Each container receives only its own settings and the shared configuration files it needs. `backend.env` holds runtime settings such as `NODE_ENV` for both backend services. Database credentials are defined once in the matching `*-db.env` file and loaded by both its database and application container. RabbitMQ credentials are defined once in `rabbitmq.env` and loaded by RabbitMQ and the backend services. User-service signing keys and OAuth settings live in `user-auth.env`; required SMTP settings live in `user-service.env`. Internal service hostnames and ports live in the application's own env file and refer to Compose service names.
+Each container receives only its own settings and the shared configuration files it needs. `backend.env` holds runtime settings such as `NODE_ENV` for User, Chat and Game services. Database credentials are defined in the matching `*-db.env` file; the Game credentials must also match the Game service's `DATABASE_URL`. RabbitMQ credentials are shared by RabbitMQ and the User and Chat services. User-service signing keys and OAuth settings live in `user-auth.env`; required SMTP settings live in `user-service.env`. Game and judge-worker settings live in separate files, and the shared judge token must match in both. Internal service hostnames and ports refer to Compose service names.
 
 On a fresh clone, copy each `envs/*.env.example` to the same name without `.example`, preserving existing local files. Every assignment uses `VAR_NAME=<EXAMPLE_VALUE>`: remove the brackets around concrete examples and replace descriptive placeholders with your own values. Do not run with unresolved placeholders or source templates as shell scripts. See [envs/README.md](../../envs/README.md) for setup order, file ownership, and quoting rules.
 
-Set shared backend settings in `backend.env`, each database credential once in its `*-db.env` file, and RabbitMQ credentials once in `rabbitmq.env`. Configure SMTP in `user-service.env`; all four SMTP settings are required at startup. Run `node scripts/generate-jwt-keys.mjs` from `user-service/`, put the key pair in `user-auth.env`, and copy only the matching public key into `chat-service.env`. Provision the attachment bucket and dedicated storage credentials documented in that template.
+Set shared runtime settings in `backend.env`, database credentials in their `*-db.env` files, and RabbitMQ credentials in `rabbitmq.env`. Configure SMTP in `user-service.env`; all four SMTP settings are required at startup. Run `node scripts/generate-jwt-keys.mjs` from `user-service/`, put the key pair in `user-auth.env`, and copy only the matching public key into `chat-service.env` and `game-service.env`. The User service alone receives the private signing key. Match the Game `DATABASE_URL` to `game-db.env` and use the same generated judge token in both Game and worker environment files. Provision the attachment bucket and dedicated storage credentials documented in the MinIO templates.
 
 ```sh
 docker compose config --quiet
@@ -45,7 +49,7 @@ docker compose up --build -d
 docker compose logs -f user-service
 ```
 
-Postgres initializes fresh storage, then its health check allows user-service to start. The service's Dockerfile generates Prisma Client and compiles during build. At runtime it applies migrations, bootstraps the initial superadmin, then starts Node. A failed migration or bootstrap prevents the API from starting.
+Postgres initializes fresh storage, then its health checks allow the owning services to start. The User service's Dockerfile generates Prisma Client and compiles during build; at runtime it applies migrations and bootstraps the initial superadmin. Game initializes its owned schema before reporting ready. A failed migration or bootstrap prevents the corresponding API from starting.
 
 Set `SUPERADMIN_USERNAME`, `SUPERADMIN_EMAIL`, and `SUPERADMIN_PASSWORD` in `envs/user-service.env` before the first startup. The username must be 3–30 characters and the password 8–32 characters (at most 72 UTF-8 bytes). Use a valid email. Passwords are bcrypt-hashed with cost 12. Keep these settings in the ignored local env file, never in the Docker image or committed examples. Single-quote values containing `$` to prevent Compose interpolation.
 
@@ -59,8 +63,8 @@ The monitoring stack (Grafana, Prometheus, Loki, Alloy, cAdvisor) starts with th
 
 ## Network and storage
 
-- All services use the default shared bridge network. Containers address the API at `user-service:3000` and its database at `user-db:5432`.
-- Open the app at `https://localhost`. Nginx publishes local port 443 and routes `/api/` to user-service, stripping that prefix, and other paths to the frontend. Backend and database ports remain private. Use the HTTPS origin for OAuth.
+- User, Chat, Game and application databases use the default Compose bridge network. The judge worker shares a separate internal network with Game; evaluation containers have no network access. Containers address services by Compose service name.
+- Open the app at `https://localhost`. Nginx publishes local port 443 and routes `/api/` to User, `/api/chat/` to Chat, `/api/game/` and `/api/game/socket.io/` to Game, and other paths to the frontend. Backend and database ports remain private. Use the HTTPS origin for OAuth.
 - Postgres 18 mounts `volumes/user-db/` at `/var/lib/postgresql`; its actual database lives below that path. The initial image login is a Postgres superuser, separate from the application's superadmin.
 - `docker compose down` stops/removes containers but preserves this bind-mounted database directory. Do not delete its contents unless deliberately discarding local data.
 - Source changes require another `docker compose up --build -d`. Hot reload is not configured.
@@ -73,11 +77,11 @@ The monitoring stack (Grafana, Prometheus, Loki, Alloy, cAdvisor) starts with th
 4. Copy the service/database pair in `compose.yaml`, updating names, build context, env paths, and storage path. Set its database host to its own Compose database service name.
 5. Keep migrations in the owning service's startup command and wait for its database health check. Publish no backend/database ports.
 
-RabbitMQ and notifications can be added under `services:` when ready. For another browser-facing API, add its upstream and a distinct location to `nginx/default.conf`, then rebuild Nginx. Keep existing paths stable so OAuth callback registrations do not change again.
+The existing RabbitMQ service carries User events to Chat. A separate notification service can be added under `services:` when ready. For another browser-facing API, add its upstream and a distinct location to `nginx/default.conf`, then rebuild Nginx. Keep existing paths stable so OAuth callback registrations do not change again.
 
 ## Frontend
 
-The `client` container builds and serves the Next.js app; Nginx routes non-API paths to it. Browser code calls user-service through `/api/` and chat-service through `/api/chat/` (plus Socket.IO) on the same HTTPS origin, never through internal Docker hostnames. It needs no project-specific env file; the old `VITE_API_URL` and `API_PROXY_TARGET` settings are unused. Source changes require `docker compose up --build -d client`. Never put secrets in `NEXT_PUBLIC_` variables; they are exposed to the browser.
+The `client` container builds and serves the Next.js app; Nginx routes non-API paths to it. Browser code calls User through `/api/`, Chat through `/api/chat/`, and Game through `/api/game/` plus `/api/game/socket.io/` on the same HTTPS origin, never through internal Docker hostnames. It needs no project-specific env file; the old `VITE_API_URL` and `API_PROXY_TARGET` settings are unused. Source changes require `docker compose up --build -d client`. Never put secrets in `NEXT_PUBLIC_` variables; they are exposed to the browser.
 
 The previous Vite test frontend (`auth-profile-web`) was removed; its notes are in [docs/archive/auth-profile-web.md](../archive/auth-profile-web.md).
 

@@ -1,24 +1,12 @@
-# Points Roadmap: Groups First, Frontend Next
+# Delivery Roadmap: Nook and Code Arena
 
-This roadmap sequences the work so the group-chat backend is complete before the main frontend build. Frontend tasks are framed as visible features to build and demo, while each one also closes a module requirement where possible.
+This roadmap contains the platform backlog and current Code Arena follow-up. Some older group, search and analytics tasks below have not been re-audited; do not treat their checkboxes as a current implementation report.
 
 Use [the module tracker](../requirements/index.html) as the scoring source. Point totals below are planning estimates, not confirmed awards. The evaluator decides whether each module is complete. Finish the mandatory foundation requirements as well; modules alone do not satisfy the submission requirements.
 
-## Target
+## Current scoring position
 
-The current repo-based estimate was **10 points**, pending verification of the existing modules. The quickest planned path to **18** is:
-
-| Step | Module | Points | Running estimate |
-| --- | --- | ---: | ---: |
-| Current provisional baseline | W01, W04, W05, W07, U03, D03 | 10 | 10 |
-| Complete groups and channels | U05 Organization system | +2 | 12 |
-| Add friend online presence | U01 User management | +2 | 14 |
-| Build a reusable themed component system | W12 Custom design system | +1 | 15 |
-| Add activity insights for admins | U07 User activity analytics | +1 | 16 |
-| Add sort/filter controls to the paginated directory | W13 Advanced search | +1 | 17 |
-| Add status, automated backups, and recovery | D04 Health/status/backups/recovery | +1 | **18** |
-
-The estimate assumes the existing modules meet their full requirements. Recheck them against the tracker before relying on the total.
+The earlier 10-point baseline and 18-point target were planning estimates, not evidence of completed rubric items, and are retired. Use the [current module tracker](../requirements/index.html) and the evidence map in the [root README](../../README.md). The original subject PDF, confirmed team roster, module owners and evaluator decisions are not recorded here, so this document does not claim a final score.
 
 ## Phase 1 — Finish group chat on the backend
 
@@ -48,12 +36,13 @@ Keep the existing [Chat Service Plan](../chat-service/PLAN.md) as the detailed b
 
 ## Phase 3 — Build the main frontend as feature-sized sessions
 
-The current account/chat frontend uses Vite and React. Build the requested Next.js app as the main experience, then migrate the working flows rather than spending the frontend phase on a static mockup.
+The main frontend is the Next.js App Router application in `client/`. Continue the real application and integration work there; the old plan to migrate from Vite is no longer current.
 
 ### Session A: Set the visual foundation
 
-- [ ] Set up Next.js with shadcn/ui and a small set of design tokens for colors, typography, spacing, and focus states.
-- [ ] Add light/dark themes and a theme switcher; check text and controls in both themes.
+- [x] Use Next.js App Router and shared Nook tokens/components for colors, typography, spacing, and focus states.
+- [x] Provide light/dark themes and a light/dark/system selector; automated checks verify theme tokens and text, action, input, and focus contrast.
+- [ ] Manually review representative screens and controls in both themes.
 - [ ] Build and reuse at least ten components (for example: button, input, dialog, dropdown, tabs, avatar, badge, card, toast, and navigation item). Use a consistent icon set.
 - [ ] Keep the existing app accessible with keyboard navigation and responsive layouts as screens move over.
 
@@ -91,40 +80,61 @@ The current account/chat frontend uses Vite and React. Build the requested Next.
 
 ### W13 is already in Phase 3; finish D04 here
 
-- [ ] Add/verify health checks for the web app, User service, Chat service, and databases.
+- [x] Compose health checks cover the client, Chat, Game, judge worker, and database containers.
+- [ ] Add a health check for the User service and verify coverage for all required services.
 - [ ] Add a simple status page showing service availability without exposing secrets or internal details.
-- [ ] Schedule backups for both User and Chat databases and define retention.
-- [ ] Document and demonstrate restoring a backup into a clean database.
+- [ ] Schedule backups for the User, Chat, and Game databases and define retention; include MinIO attachments in the recovery plan.
+- [ ] Document and demonstrate restoring the databases and required attachment data into clean services.
 
-**Point target: D04 (+1).** Compose health checks already exist; status visibility, automated backups, and a proven recovery procedure remain.
+**Point target: D04 (+1).** Some Compose health checks already exist, but the User service still needs one. Status visibility, automated backups, and a proven recovery procedure remain.
 
-## Phase 5 — Integrate the existing game, then decide on Chess
+## Phase 5 — Complete and demonstrate Code Arena
 
-Your friend's game is outside this repo, and the Chess engine is not yet a running service here. Treat both as integration work until they are deployed, tested with separate clients, and demonstrable from the app.
+Code Arena is now in this repository and integrated into the Nook client, User identity, Chat invitation flow, Nginx routing and Compose stack. Automated implementation work is present; module claims still need a live demonstration and evaluator confirmation.
 
-### Integrate the friend's game
+- [x] Use authenticated game APIs and canonical `/api/game/` HTTP and Socket.IO paths.
+- [x] Support 1v1 matchmaking/private rooms and four-player 2v2 rooms.
+- [x] Support profile and direct-message challenges with interactive room cards.
+- [x] Persist matches, rounds, scores, source submissions and collaborative state in a Game-owned PostgreSQL database.
+- [x] Show public match history, basic statistics and a wins/win-rate leaderboard.
+- [x] Select three distinct seeded problems for the default three-round match.
 
-- [ ] Agree on a stable match/invitation API and event contract.
-- [ ] Add authenticated game invitations from profiles/chat and show their current state.
-- [ ] Run a full match between separate computers with clear rules and win/loss results.
-- [ ] Handle latency and disconnects, then reconnect without corrupting or losing the match.
-- [ ] If the game supports three or more simultaneous players, verify fair synchronized play separately.
+### Remaining Code Arena integration work
 
-**Conditional point targets:** G01 (+2) for the complete playable game; G02 (+2) for remote play plus latency/disconnect/reconnect behavior; G03 (+2) only if three or more players play the same match.
+The implementation items above are present. These verification, operations, and data-lifecycle items remain before the integration can be called fully demonstrated:
 
-### Add the Chess service after the first game is integrated
+- [x] Validate the Compose configuration with `docker compose config --quiet` (2026-11-10). This checks Compose syntax and referenced files, not the correctness of local secret values.
+- [x] Verify locally that `envs/game-service.env` contains the User service's matching public JWT key, never its private key, and that Game and Judge Worker use the same strong `JUDGE_WORKER_TOKEN` (2026-11-10): verified and configured.
+- [x] Run the PostgreSQL restart/recovery test with `TEST_PG_URL` pointed to a disposable test database. Passed on 2026-11-10: 5 tests, including HTTP/game execution, sockets, and Postgres restart recovery. The default in-memory API tests alone do not verify persistent SQL behavior.
+- [x] Verify G01’s three-round HTTP/socket match flow and G03’s four-client 2v2 service/socket flow (2026-11-10): 4 service E2E tests and 8 2v2 integration tests passed.
+- [x] Verify G02 reconnect/resume against disposable PostgreSQL and RabbitMQ (2026-11-10): all 10 real-socket service tests passed, including disconnect/rejoin and process restart with in-flight evaluations.
+- [x] Fix and regression-test reconnect-state feedback when the authoritative snapshot is delayed; the client now shows the recovered socket state immediately (2026-11-10).
+- [x] Smoke-test the local Nook UI in Chrome (2026-11-10): resumed an existing 1v1 lobby, created fresh 1v1 and 2v2 lobbies, confirmed public player identity and readiness updates, then left with zero active sessions. This exposed and fixed a duplicate-admission error on lobby resume; the client now reuses the user's matching active room and redirects matched rooms to their in-progress match.
+- [x] Demonstrate a complete live 1v1 match with two distinct authenticated players across two browser sessions (Chrome and Chrome Incognito) across all 3 rounds (2026-11-10): verified lobby join/ready, mid-match tab reload and G02 socket snapshot recovery without state loss, live Docker Judge Worker compilation and evaluation (C++ and Python), synchronized round transitions, hidden test score reveals, final match victory screen (300 vs 225), persistent Postgres records in `matches` and `submissions`, and clean return to Play lobby with zero active sessions. Remote multi-machine test remains ready for final evaluator grading.
+- [x] Demonstrate synchronized 2v2 play with four distinct authenticated players (2026-11-10): verified 2v2 lobby creation (code `CKEYCE`), 4-player seat allocation (Team Alpha: `aymanysr_b3a987ed` + `player_alpha_2`; Team Beta: `player_beta` + `player_beta_2`), synchronized readiness and host match launch, in-game isolated 2v2 Team Chat (`/chat` namespace), collaborative Monaco editor synchronization via Yjs (`/collab` namespace), dual-teammate readiness gating for submissions, live Docker judge worker test evaluations across all 3 rounds, score reveals, match completion draw reveal (100 vs 100), PostgreSQL persistence, and zero-session lobby teardown.
+- [x] Consume `user.deleted` events in Game; revoke pre-deletion access tokens, remove lobby records and affected-side source/editor data, forfeit unfinished matches, anonymize retained results, and document 2v2 shared-code deletion (2026-11-10).
+- [x] Live expiry and joinability indicators on duel invitation cards: direct chat renders real-time status badges (`Open`, `In Match`, `Expired`) via `GET /lobby/rooms/lookup/:code` and dynamically routes to active matches or disables expired rooms (2026-11-10).
+- [x] Player progression and achievements system for Code Arena: dynamic XP, level thresholds, rank titles, and 6 unlockable badges based on completed matches and scores, integrated in `/api/game/users/:userId/stats`, user profile Games tab, and leaderboard (2026-11-10).
+- [ ] Complete the D04 backup and restore work in Phase 4 for the Game database and any required attachment data, then demonstrate recovery into clean services.
+- [ ] Verify the full G06 tracker criteria before claiming the point. Code Arena invitations work, but the invitation flow does not provide tournament notifications; check the other chat criteria and record evidence for each.
+
+**Optional UX decision:** Decide whether invitation cards should show a live expiry/joinability label. Currently, opening a card routes to the lobby and Game checks joinability.
+
+**Conditional point targets:** G01 (+2) for a complete playable game; G02 (+2) for demonstrated remote play and recovery; G03 (+2) for fair synchronized play with at least three participants. The [integration specification](../spec/code-arena-integration-spec.md) records current behavior and known limits.
+
+### Optional: add Chess as a second game
 
 - [ ] Wrap the existing `chess.js` match engine in a service that owns match creation, turn validation, completion, and persistence.
 - [ ] Add authenticated Socket.IO rooms; only players in a match may read or send its moves.
 - [ ] Persist move history, result, players, timestamps, and Elo changes in the service's own database.
 - [ ] Add matchmaking/lobby flow and a frontend board with legal moves, turn state, resign/draw, reconnect, and match result.
-- [ ] Add match history and rating views; add achievements/progression and a leaderboard only if targeting U02.
+- [ ] Add match history and rating views for Chess; Code Arena now has match history, basic statistics and a wins/win-rate leaderboard, but no Elo rating or achievement progression.
 
-**Conditional point targets:** G04 (+2) for a second distinct game with history/statistics, matchmaking, and responsive performance; U02 (+1) if the full stats/history/achievements/leaderboard requirement is met. A second service does not earn D03 again.
+**Conditional point targets:** G04 (+2) for a second distinct game with history/statistics, matchmaking, and responsive performance. U02 (+1) remains incomplete until all local tracker criteria, including achievements/progression, are addressed. A second service does not earn D03 again.
 
-## Optional points after the 18-point path
+## Other module candidates
 
-- [ ] **G06 Advanced Chat (+1):** after G01, add blocked-message enforcement, game invitations, game/tournament notifications, profile access, persistent history, typing indicators, and read receipts. All are needed; channel chat alone is not enough.
+- [ ] **G06 Advanced Chat (+1):** Code Arena challenge invitations are implemented in Phase 5, but do not alone complete G06. Verify every tracker criterion—blocked-message enforcement, game/tournament notifications, profile access, persistent history, typing indicators, and read receipts—and record evidence for each before claiming the point. The challenge-card flow does not establish tournament notifications.
 - [ ] **W06 Public API (+2):** defer until stable, useful endpoints are ready for external clients. Use the planned [Public API adapter](PUBLIC_API_ADAPTER_PLAN.md) for key management, per-key limits, scopes, and allowlisted routing; document at least five database-backed endpoints covering GET, POST, PUT, and DELETE. Keep private conversation data out of it.
 - [ ] **W10 SSR (+1):** if using Next.js, render a public content surface server-side for performance/SEO. Choosing Next.js alone is not sufficient.
 - [ ] **W08 Notifications (+1):** cover relevant create, update, and delete actions across the product; a message alert alone is insufficient.
@@ -140,4 +150,4 @@ The tracker treats these as mandatory foundation checks separate from module poi
 - [ ] Relevant Privacy Policy and Terms of Service.
 - [ ] Complete root README with the required attribution, setup, resources/AI disclosure, team roles, project management, stack, schema, module owners/calculations, contributions, and challenges.
 
-The current root README is only a title, so README/foundation completion needs its own focused pass before submission.
+The root README and public Privacy Policy and Terms pages are now present. The exact italicized 42 attribution line, team role assignments and individual contribution mapping remain pending confirmed team information. The local tracker is a project reference, not a substitute for checking the original subject.

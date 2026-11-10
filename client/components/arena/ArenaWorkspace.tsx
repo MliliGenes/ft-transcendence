@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { IconCheck, IconCode, IconDeviceFloppy, IconPlayerPlay, IconRefresh, IconSend } from "@tabler/icons-react";
+import { IconCheck, IconCode, IconPlayerPlay, IconSend } from "@tabler/icons-react";
 import type { ArenaTransport } from "@/lib/arena/transport";
 import { useArena } from "@/hooks/useArena";
 import { createArenaSidecarLifecycle, type SidecarState } from "@/lib/arena/sidecars";
@@ -27,11 +27,16 @@ export interface ArenaWorkspaceProps {
 
 export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
   const snapshot = useArena(transport);
-  const [code, setCode] = useState("");
+  const [sidecars, setSidecars] = useState<SidecarState>({ collab: null, chat: null });
+  const codeKey = `${snapshot.problem.id}:${snapshot.language}`;
+  const starterCode = snapshot.problem.starters[snapshot.language as "C++" | "Python" | "C"] ?? "";
+  const [codeState, setCodeState] = useState(() => ({ key: codeKey, value: starterCode }));
+  if (!sidecars.collab && codeState.key !== codeKey) setCodeState({ key: codeKey, value: starterCode });
+  const code = codeState.value;
+  const setCode = (value: string) => setCodeState({ key: codeKey, value });
   const [fontSize, setFontSize] = useState(14);
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [sidecars, setSidecars] = useState<SidecarState>({ collab: null, chat: null });
 
   const sidecarLifecycleRef = useRef(createArenaSidecarLifecycle());
 
@@ -53,14 +58,6 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
       active = false;
     };
   }, [transport, snapshot.round, snapshot.mode]);
-
-  // Update initial starter code when problem/language changes
-  useEffect(() => {
-    const starter = snapshot.problem.starters[snapshot.language as "C++" | "Python" | "C"] ?? "";
-    if (!sidecars.collab) {
-      setCode(starter);
-    }
-  }, [snapshot.problem.id, snapshot.language, sidecars.collab]);
 
   async function handleRun() {
     setIsRunning(true);

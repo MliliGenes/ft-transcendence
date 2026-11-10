@@ -10,6 +10,10 @@ The project map for the whole repository is in [`../graphify-out/`](../graphify-
 |---|---|
 | [Project context](project/PROJECT_CONTEXT.md) | Product vision, spaces (Feed, Chat, Play, Profile), confirmed decisions |
 | [Points roadmap](project/POINTS_ROADMAP.md) | Module plan and point targets |
+| [Code Arena integration spec](spec/code-arena-integration-spec.md) | Current game flows, routes, persistence, verification and known limits |
+| [Code Arena integration ADR](adr/0015-code-arena-nook-integration.md) | Accepted integration boundaries and decisions |
+| [Root README](../README.md) | Architecture, setup, data ownership, module evidence and AI disclosure |
+| [Privacy Policy](../client/app/privacy/page.tsx) and [Terms of Service](../client/app/terms/page.tsx) | Public Nook user notices in the client application |
 | [Module tracker](requirements/index.html) | ft_transcendence v21.2 module checklist (open in a browser) |
 | [Local Compose setup](project/COMPOSE.md) | Running the stack, env files, HTTPS, OAuth callbacks |
 | [Application book (PDF)](book/Nook-Book.pdf) | Whole-app reference built from these docs, both OpenAPI specs, graphify and Understand-Anything. Rebuild with `cd docs/book && npm install && npm run build` |
@@ -51,6 +55,15 @@ The project map for the whole repository is in [`../graphify-out/`](../graphify-
 | [RabbitMQ user sync](chat-service/RABBITMQ_USER_SYNC.md) | User events between services |
 | [DM tests](chat-service/DM_TESTS.md) | Direct message test notes |
 | [Prisma notes](chat-service/PRISMA_README.md) and [learning notes](chat-service/PRISMA_LEARNING.md) | Database schema and Prisma |
+
+## Code Arena
+
+| Document | What it covers |
+|---|---|
+| [Integration specification](spec/code-arena-integration-spec.md) | Routes, HTTP/socket contracts, data ownership and live demonstration requirements |
+| [ADR-0015](adr/0015-code-arena-nook-integration.md) | Integration decisions and known limits |
+| [Arena game engine](../packages/arena-game/src/engine.ts) and [Postgres persistence](../packages/arena-game/src/postgres-store.ts) | Match lifecycle, scoring, durable state and judge integration |
+| [Game service](../services/game/src/game/game.service.ts) and [stats endpoints](../services/game/src/game/game-stats.controller.ts) | Authenticated HTTP and realtime API |
 
 ## Infrastructure and archive
 

@@ -23,6 +23,8 @@ export interface CollabPersist {
     roundId: string,
     sideId: string,
   ): Promise<{ appRevision: number; language: string; stateB64: string } | undefined>;
+  /** Remove every persisted shared document for the selected match sides. */
+  eraseForMatchSides(matchId: string, sideIds: string[]): Promise<void>;
 }
 
 /** One team-document row inside the atomic match+collab commit. */
@@ -41,6 +43,14 @@ export class InMemoryCollabPersist implements CollabPersist {
   }
   async load(matchId: string, roundId: string, sideId: string) {
     return this.rows.get(`${matchId}:${roundId}:${sideId}`);
+  }
+  async eraseForMatchSides(matchId: string, sideIds: string[]): Promise<void> {
+    const erasedSides = new Set(sideIds);
+    for (const key of this.rows.keys()) {
+      const lastSeparator = key.lastIndexOf(":");
+      const sideId = key.slice(lastSeparator + 1);
+      if (key.startsWith(`${matchId}:`) && erasedSides.has(sideId)) this.rows.delete(key);
+    }
   }
 }
 /**

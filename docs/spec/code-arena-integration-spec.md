@@ -1,101 +1,60 @@
-# Code Arena Integration Specification
+# Code Arena integration specification
 
-**Status:** Ready for Implementation  
-**Date:** 2026-11-09  
-**Target:** `ft_transcendence` Game Module Integration in Nook  
-**References:**
-- [CONTEXT.md](file:///Users/ayousr/orca/workspaces/ft-transcendence/nook-client/CONTEXT.md)
-- [ADR-0015](file:///Users/ayousr/orca/workspaces/ft-transcendence/nook-client/docs/adr/0015-code-arena-nook-integration.md)
-- [NOOK_DESIGN_SYSTEM.json](file:///Users/ayousr/orca/workspaces/ft-transcendence/nook-client/client/NOOK_DESIGN_SYSTEM.json)
-- [next-frontend Skill](file:///Users/ayousr/orca/workspaces/ft-transcendence/nook-client/.agents/skills/next-frontend/SKILL.md)
+**Status:** Integrated; automated verification and live demonstration evidence are tracked separately.
+**Updated:** 2026-11-10
+**Decision:** [ADR-0015](../adr/0015-code-arena-nook-integration.md)
 
----
+## Product behavior
 
-## 1. Objectives & Scope
+Code Arena is Nook's first playable game. Signed-in users can find a 1v1 match, create or join a six-character private room, challenge another user from a direct conversation or profile, or form a 2v2 team. A match has three timed coding rounds, automated hidden-test evaluation, score reveals and a final result. Default problems are selected from three seeded problem versions without repetition.
 
-Integrate the Code Arena competitive multiplayer coding game from branch `integration/code-arena` into the current `nook-client` repository.
+The 2v2 mode gives each team a shared CodeMirror/Yjs editor, readiness gates and match-scoped team chat. Match recovery and socket presence are owned by the Game service. The profile Games tab displays recent completed matches, a played/wins/win-rate summary, player progression (level, XP, rank title), and six unlockable achievement badges; `/play/leaderboard` ranks players by wins, then win rate and matches played, with level indicators.
 
-### Core Capabilities:
-- **Modes**: 1v1 duels and 2v2 team collaboration.
-- **Realtime Sync**: Yjs CRDT-based synchronized code editing for teammates with CodeMirror 6.
-- **Judge Execution**: Sandboxed, multi-language (C++, Python, C) evaluation with test runner.
-- **Match Lifecycle**: 3-round sequence with state transitions, deadline enforcement, score reveals, and winner determination.
-- **Platform Alignment**: Native look-and-feel inside Nook's Next.js client under the `/play` route.
+Direct-message invitations are ordinary persistent Chat messages with a recognized Code Arena card. Opening a card routes to the room; the card queries `GET /api/game/lobby/rooms/lookup/:code` to render a live status badge (`Open`, `In Match`, or `Expired`), links directly to active matches, or disables expired rooms.
 
----
+## Service boundaries
 
-## 2. Architecture & Service Topology
-
-```
-                         Browser (Next.js Client)
-                                  │
-                                  ▼
-                        Nginx Reverse Proxy (:8080)
-                       /                           \
-           (HTTP /api/game)                    (WebSockets /socket.io)
-                     │                                     │
-                     └─────────────┬───────────────────────┘
-                                   ▼
-                         game-service (NestJS)
-                         ├── Auth Bridge (user-service verification)
-                         ├── Match Authority & Lifecycle
-                         ├── Socket.IO Gateways (/arena, /chat, /lobby)
-                         ├── PostgreSQL Adapter ──► game-db (:5432)
-                         └── Evaluation Queue  ──► redis (:6379)
-                                                       │
-                                                       ▼
-                                            judge-worker (Sandbox)
-                                            (Docker Container / Isolated Runner)
+```mermaid
+flowchart LR
+  Browser[Browser · Next.js] --> Nginx[Nginx · HTTPS]
+  Nginx -->|app routes| Client[Next.js client]
+  Nginx -->|/api/*| User[User service]
+  Nginx -->|/api/chat/* and Socket.IO| Chat[Chat service]
+  Nginx -->|/api/game/* and Socket.IO| Game[Game service]
+  User --> UserDB[(User PostgreSQL)]
+  Chat --> ChatDB[(Chat PostgreSQL)]
+  User --> Events[RabbitMQ · user events]
+  Events --> Chat
+  Chat --> MinIO[MinIO · attachment objects]
+  Game --> GameDB[(Game PostgreSQL)]
+  Game -->|private judge network| Judge[Judge worker]
+  Judge --> Sandbox[resource-limited, no-network containers]
 ```
 
-### Services & Containers to Add in `compose.yaml`:
-1. `game-db`: PostgreSQL 18 image (`postgres:18-alpine` in parity with `user-db` and `chat-db`) storing match persistence, submissions, reveals, and rating history.
-2. `redis`: Redis Alpine image for BullMQ evaluation jobs and distributed locks.
-3. `game-service`: NestJS service built from `services/game/Dockerfile`.
-4. `judge-worker`: Isolated code execution container built from `services/judge-worker/Dockerfile`.
+Nginx maps `/api/game/` to the Game HTTP service and `/api/game/socket.io/` to its Socket.IO transport. The legacy `/socket.io/` location continues to route to Chat, so the lobby and game clients must provide the canonical Game socket path. The Game service validates User-issued RS256 JWTs and uses `sub` as the stable user ID. Public usernames and avatars are hydrated from the User API in the client.
 
----
+The Game service persists state in its own PostgreSQL database using atomic match snapshots and associated round, submission and collaboration records. Judge execution uses a bounded in-process queue and the isolated worker. Redis is not a runtime dependency in the current implementation.
 
-## 3. Auth & Principal Bridge Contract
+## HTTP and realtime contracts
 
-Per `docs/auth-game-contract.md`:
-- `game-service` does not handle password checks or user records directly.
-- **HTTP**: Reads trusted principal from JWT cookie or Authorization header validated with `user-service` secret or verification route.
-- **WebSockets**: The initial handshake extracts and validates the token, assigning `socket.data.principal = { userId, username }`.
-- Test fixture remains available for standalone game unit/integration suites.
+- `/api/game/lobby/*`: authenticated matchmaking, private-room creation/joining, readiness and room state.
+- `/api/game/matches/*`: authenticated match snapshots, coding actions, runs, submissions, readiness and leaving.
+- `/api/game/users/:userId/matches`: authenticated, sanitized completed-match summaries for profile display.
+- `/api/game/users/:userId/stats`: authenticated win/loss/draw and win-rate aggregates.
+- `/api/game/leaderboard`: authenticated top-player summaries, limited to 50 players.
+- `/api/game/socket.io/`: the shared Engine.IO transport path. The authenticated Socket.IO namespaces are the default `/` namespace for match state and `/collab`, `/chat`, and `/lobby` for Yjs collaboration, team chat, and room events.
+- `/api/chat/*`: persisted direct conversations, including Code Arena invitation messages.
 
----
+The history response contains up to 25 recent matches, each with its ID, mode, outcome, opponents, score, and `playedAt` completion timestamp. Stats and leaderboard responses contain aggregate counts and win rate; leaderboard entries also contain rank. These responses do not contain source code, editor snapshots, or hidden tests. Game HTTP requests use same-origin paths and the authenticated access token; Socket.IO clients send the token in their authenticated handshake. The API returns no rating because this build has no rating system.
 
-## 4. Frontend Architecture in `client/`
+## Persistence and privacy boundary
 
-### Route Layout:
-- `/play`: Game landing, active matches overview, and "Create / Join Lobby" modal.
-- `/play/lobby/[code]`: 1v1 and 2v2 lobby assembly, role/side assignment, and readiness toggles.
-- `/play/match/[id]`: Active match arena view.
+The `game-db` owns match snapshots, private rooms, rounds, submissions, reveals and collaborative documents. Submitted source and editor snapshots may contain personal data and can be read by the instance operator. The durable `game.user-events` queue consumes `user.deleted` events from the User service. Game stores only a SHA-256 hash of the deleted account identifier for 20 minutes so unexpired access tokens are rejected across Game instances; an automatic sweep removes the hash within one additional minute. Authenticated HTTP and WebSocket handlers check this block, per-instance fanout disconnects existing sockets, and a 15-second socket sweep catches instances that missed live fanout during a broker interruption.
 
-### Component Structure:
-- `components/arena/EditorAdapter.tsx`: CodeMirror 6 editor bound to Y.Text with Nook dark theme, marked `"use client"` and dynamically imported (`ssr: false`).
-- `components/arena/ProblemPanel.tsx`: Problem description, markdown rendered, examples, constraints.
-- `components/arena/DuelScoreboard.tsx`: Tabular countdown clock, round indicator, team readiness badges, scorebars.
-- `components/arena/TestResultsPanel.tsx`: Tabbed output for visible test runs and hidden suite evaluation reveals.
-- `components/arena/TeamChatPanel.tsx`: Match-scoped in-game team chat styled with Nook message tokens.
+Erasure removes the account's matchmaking rows and private-room membership. If it owns a room, ownership transfers to the earliest remaining member; an empty room is deleted. Each affected active match ends by forfeit. The match result remains, but the participant identifier is replaced by a random anonymous identifier and marked `anonymized`; match snapshots expose `null` for that member ID, profile history omits anonymous opponent IDs and the leaderboard omits anonymous players. Game deletes all submitted source, run output, judge diagnostics and collaborative documents for the affected side, and removes that account's messages from the in-memory team-chat history. In 2v2, editor state and submissions are side-shared, so the entire side's code is removed even when the teammate contributed it. This deletion covers the live Game database; backups and copied volumes follow the instance operator's separate retention policy. See the [Privacy Policy](../../client/app/privacy/page.tsx) and [Terms of Service](../../client/app/terms/page.tsx).
 
-### Design Tokens:
-- All components use semantic CSS tokens from `NOOK_DESIGN_SYSTEM.json`:
-  - Canvas: `bg-background` (`#000000` dark)
-  - Surfaces: `bg-card` (`#121212`), `bg-popover` (`#1C1C1C`)
-  - Primary actions: `bg-primary` (`#F16B3A`), `text-primary-foreground` (`#000000`)
-  - Corners: Square corners / 4px subtle radii (`rounded-none` or `rounded-sm`)
-  - Icons: `@tabler/icons-react` only.
+## Verification
 
----
+Automated checks are run from the repository root or `client/` as described in the [root README](../../README.md). In the default no-`DATABASE_URL` test setup, the Game HTTP integration tests cover principal-protected history, stats, and leaderboard responses with the development principal fixture and in-memory store. Account-erasure tests cover forfeit/anonymization, source and collaboration deletion, lobby cleanup, token-block expiry, and access denial on existing sockets. A separate unit test checks that default matchmaking selects three distinct problem IDs. The PostgreSQL persistence contract, including atomic source deletion, requires `TEST_PG_URL` to point to a disposable test database. Do not point tests at a database containing user data.
 
-## 5. Verification Plan
-
-1. **Unit & Integration Suites**:
-   - Run Vitest suites in `packages/arena-game`, `packages/arena-model`, `services/game`, and `services/judge-worker`.
-2. **Compose Stack Health**:
-   - `docker compose up --build` brings up `game-db`, `redis`, `game-service`, and `judge-worker` healthy alongside existing Nook services.
-3. **End-to-End Game Flow**:
-   - Two browser windows create a 1v1 lobby, ready up, receive the problem, test run code, submit, and see the reveal.
-   - Four browser windows create a 2v2 lobby, verify live CRDT typing between teammates, readiness toggle, team submission, and final scoreboard.
+Before claiming G02, demonstrate two clients on separate computers completing a match and recovering from a disconnection. For the project's full 2v2 demonstration and stronger G03 evidence, demonstrate four synchronized clients; the local tracker sets G03's minimum at three simultaneous players. Live evaluator demonstrations are not replaced by unit tests or a successful container build.

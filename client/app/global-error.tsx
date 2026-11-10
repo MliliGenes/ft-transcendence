@@ -1,9 +1,10 @@
 "use client";
 
 import "./globals.css";
+import Link from "next/link";
 
 // Replaces the root layout when it fails, so this page brings its own document
-// and cannot rely on providers, fonts or client-side navigation.
+// and cannot rely on providers or fonts.
 export default function GlobalError({ retry }: { error: unknown; retry: () => void }) {
   return (
     <html lang="en" className="h-full antialiased">
@@ -17,7 +18,7 @@ export default function GlobalError({ retry }: { error: unknown; retry: () => vo
           <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">The app couldn’t start. Try again, and if it keeps happening, come back in a little while.</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <button type="button" onClick={() => retry()} className="inline-flex min-h-11 items-center bg-primary px-5 text-sm font-medium text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Try again</button>
-            <button type="button" onClick={() => window.location.assign("/")} className="inline-flex min-h-11 items-center border border-border px-5 text-sm font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Back to Nook</button>
+            <Link href="/" className="inline-flex min-h-11 items-center border border-border px-5 text-sm font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Back to Nook</Link>
           </div>
         </main>
       </body>

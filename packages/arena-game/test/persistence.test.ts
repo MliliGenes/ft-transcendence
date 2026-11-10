@@ -136,6 +136,34 @@ async function assertPersistenceContract(persistence: MatchPersistence, id: stri
     language: "Python",
     stateB64: "state-1",
   });
+  await persistence.saveTeamDocument(id, match.rounds[0]!.roundId, "right", 2, "Python", "state-2");
+
+  const retainedSubmission = {
+    ...submission,
+    submissionId: `${id}-submission-right`,
+    evaluationId: `${id}-evaluation-right`,
+    sideId: "right",
+    source: "print('retained')",
+    sourceHash: "right-hash",
+  };
+  await persistence.recordSubmission(retainedSubmission);
+  const stale = (await persistence.loadMatch(id))!;
+  stale.participants[0] = { userId: "anonymous", sideId: "left", anonymized: true };
+  stale.roundPhase = "MATCH_COMPLETE";
+  stale.forfeit = { winner: "right", loser: "left", at: 3_000, reason: "leave" };
+  stale.revision = 2;
+  await expect(persistence.eraseMatchSideData(stale, ["left"], 0)).rejects.toBeInstanceOf(MatchRevisionConflictError);
+  expect((await persistence.findSubmissionById(submission.submissionId))?.source).toBe("print('ok')");
+  expect(await persistence.loadTeamDocument(id, match.rounds[0]!.roundId, "left")).toBeDefined();
+
+  await persistence.eraseMatchSideData(stale, ["left"], 1);
+  const erasedMatch = await persistence.loadMatch(id);
+  expect(erasedMatch).toMatchObject({ roundPhase: "MATCH_COMPLETE" });
+  expect(erasedMatch?.participants[0]).toMatchObject({ userId: "anonymous", anonymized: true });
+  expect(await persistence.findSubmissionById(submission.submissionId)).toBeUndefined();
+  expect((await persistence.findSubmissionById(retainedSubmission.submissionId))?.source).toBe("print('retained')");
+  expect(await persistence.loadTeamDocument(id, match.rounds[0]!.roundId, "left")).toBeUndefined();
+  expect(await persistence.loadTeamDocument(id, match.rounds[0]!.roundId, "right")).toBeDefined();
 }
 
 describe("MatchPersistence contract", () => {
@@ -204,6 +232,14 @@ describe.runIf(HAS_POSTGRES)("MatchPersistence Postgres adapter contract", () =>
     try {
       await stores.ensureSchema();
       await assertPersistenceContract(stores.persistence, id);
+      const liveHash = "a".repeat(64);
+      const expiredHash = "b".repeat(64);
+      await stores.blockUserHash(liveHash, Date.now() + 10_000);
+      await stores.blockUserHash(expiredHash, Date.now() - 1);
+      expect(await stores.isUserHashBlocked(liveHash)).toBe(true);
+      expect(await stores.isUserHashBlocked(expiredHash)).toBe(false);
+      await stores.purgeExpiredAccountHashes();
+      expect((await stores.raw.query("SELECT 1 FROM erased_account_tokens WHERE user_hash = $1", [expiredHash])).rowCount).toBe(0);
     } finally {
       await stores.raw.query("DELETE FROM submissions WHERE match_id = $1", [id]);
       await stores.raw.query("DELETE FROM reveals WHERE match_id = $1", [id]);

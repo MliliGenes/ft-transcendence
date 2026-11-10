@@ -17,7 +17,11 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main className="flex flex-1 items-center justify-center px-6 py-12 md:py-20">{children}</main>
-      <footer className="px-6 py-8 text-center text-xs text-nook-text-muted">A place for your people.</footer>
+      <footer className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 px-6 py-8 text-center text-xs text-nook-text-muted">
+        <span>A place for your people.</span>
+        <Link href="/privacy" className="min-h-11 inline-flex items-center underline-offset-4 hover:text-foreground hover:underline">Privacy Policy</Link>
+        <Link href="/terms" className="min-h-11 inline-flex items-center underline-offset-4 hover:text-foreground hover:underline">Terms of Service</Link>
+      </footer>
     </div>
   );
 }

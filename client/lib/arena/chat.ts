@@ -105,6 +105,12 @@ export class TeamChatClient {
     this.notify();
   }
 
+  replaceHistory(entries: TeamChatEntry[]): void {
+    this.entries = [...entries];
+    this.seenIds = new Set(entries.map((entry) => entry.id));
+    this.notify();
+  }
+
   setAuthorizedForTest(ctx: TeamChatAuthContext): void {
     this.authContext = ctx;
     this.state = "connected";
@@ -149,9 +155,7 @@ export class TeamChatClient {
 
       this.socket.on("history", (history: TeamChatEntry[]) => {
         if (Array.isArray(history)) {
-          for (const item of history) {
-            this.applyIncomingEntry(item);
-          }
+          this.replaceHistory(history);
         }
       });
 

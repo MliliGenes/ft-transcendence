@@ -109,6 +109,23 @@ describe("Lobby and Matchmaking Service (HTTP + WebSocket)", () => {
     expect((await api("POST", "/lobby/rooms/join", "invalid-code", { code: "ZZZZZZ" })).status).toBe(404);
   });
 
+  it("lookups room status by code without joining", async () => {
+    const host = `lookup-host-${Date.now()}`;
+    const created = await api("POST", "/lobby/rooms", host, { mode: "1v1" });
+    const code = created.json.room.code;
+
+    const lookup = await api("GET", `/lobby/rooms/lookup/${code}`, "stranger");
+    expect(lookup.status).toBe(200);
+    expect(lookup.json.ok).toBe(true);
+    expect(lookup.json.status).toBe("open");
+    expect(lookup.json.room.code).toBe(code);
+
+    const missing = await api("GET", "/lobby/rooms/lookup/NONEXIST", "stranger");
+    expect(missing.status).toBe(200);
+    expect(missing.json.status).toBe("expired");
+    expect(missing.json.room).toBeNull();
+  });
+
   it("public queue: joins 1v1 queue, matches 2 players, and forms authoritative match", async () => {
     const u1 = `q-user-1-${Date.now()}`;
     const u2 = `q-user-2-${Date.now()}`;

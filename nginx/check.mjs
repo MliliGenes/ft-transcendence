@@ -20,11 +20,18 @@ function request(path) {
 
 const page = await request('/login');
 assert.equal(page.status, 200);
-assert.match(page.body, /<div id="root"><\/div>/);
+assert.ok(page.body.includes('<title>Log in — Nook</title>'), 'Next.js should render the login page title');
+assert.ok(page.body.includes('Welcome back.'), 'Next.js should render the login page content');
 const api = await request('/api/');
 assert.equal(api.status, 200);
 assert.equal(typeof JSON.parse(api.body).message, 'string');
 const missing = await request('/api/does-not-exist');
 assert.equal(missing.status, 404);
 assert.match(missing.headers['content-type'], /application\/json/);
-console.log('HTTPS certificate, frontend SPA routing, API forwarding, and API 404 handling passed.');
+const game = await request('/api/game/health');
+assert.equal(game.status, 200, 'Game HTTP route should reach game-service');
+assert.equal(JSON.parse(game.body).service, 'game');
+const socket = await request('/api/game/socket.io/?EIO=4&transport=polling');
+assert.equal(socket.status, 200, 'Game Socket.IO path should reach game-service');
+assert.match(socket.body, /^0\{"sid":/);
+console.log('HTTPS certificate, Next.js pages, User API, Game HTTP and Game Socket.IO routing passed.');

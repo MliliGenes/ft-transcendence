@@ -14,6 +14,8 @@ export interface ForfeitRecord {
 export interface Participant {
   userId: string;
   sideId: SideId;
+  /** True when the original account was erased but the competitive result remains. */
+  anonymized?: true;
 }
 
 /**

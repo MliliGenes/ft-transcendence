@@ -36,6 +36,18 @@ export interface RoomWithMembers {
   members: PrivateRoomMember[];
 }
 
+export function lobbyMemberName(profile: { displayName?: string | null; username?: string | null } | undefined): string {
+  const displayName = profile?.displayName?.trim();
+  if (displayName) return displayName;
+  const username = profile?.username?.trim();
+  return username ? `@${username}` : "Player";
+}
+
+export function lobbyMatchPath(room: Pick<PrivateRoom, "status" | "matchId">): string | null {
+  if (room.status !== "matched" || !room.matchId) return null;
+  return `/play/match/${encodeURIComponent(room.matchId)}`;
+}
+
 function headers(userId: string, token?: string): Record<string, string> {
   const h: Record<string, string> = {
     "content-type": "application/json",
@@ -107,6 +119,22 @@ export class LobbyClient {
     return { room: json.room, members: json.members };
   }
 
+  async lookupRoom(code: string): Promise<{ status: "open" | "matched" | "expired" | "closed"; room: PrivateRoom | null; members: PrivateRoomMember[] }> {
+    const res = await fetch(`${this.baseUrl}/lobby/rooms/lookup/${encodeURIComponent(code)}`, {
+      headers: headers(this.userId, this.token),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) throw new Error(json.error ?? "Failed to lookup room");
+    return { status: json.status ?? "expired", room: json.room ?? null, members: json.members ?? [] };
+  }
+
+  async getOrJoinRoom(code: string): Promise<RoomWithMembers> {
+    const normalizedCode = code.toUpperCase().trim();
+    const { room } = await this.getActive();
+    if (room?.room.code.toUpperCase() === normalizedCode) return room;
+    return this.joinRoom(normalizedCode);
+  }
+
   async getRoom(roomId: string): Promise<RoomWithMembers> {
     const res = await fetch(`${this.baseUrl}/lobby/rooms/${roomId}`, {
       headers: headers(this.userId, this.token),
@@ -175,7 +203,9 @@ export class LobbyClient {
   }): () => void {
     if (this.socket) this.socket.disconnect();
 
-    const socketPath = this.socketPath ?? (this.baseUrl.includes("/api/game") ? "/api/game/socket.io" : "/socket.io");
+    const socketPath = this.socketPath ?? (
+      this.baseUrl.includes("/api/game") || !this.baseUrl ? "/api/game/socket.io" : "/socket.io"
+    );
     const auth: Record<string, unknown> = { userId: this.userId };
     if (this.token) auth.token = this.token;
 

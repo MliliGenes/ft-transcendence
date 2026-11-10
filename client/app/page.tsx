@@ -15,7 +15,7 @@ import {
 } from "@tabler/icons-react";
 import { NookLogo } from "@/components/nook-logo";
 import { ThemeSelector } from "@/components/theme-selector";
-import { BoardPreview, GroupPreview, HeroPreview, ProfilePreview } from "@/components/landing/previews";
+import { CodeArenaPreview, GroupPreview, HeroPreview, ProfilePreview } from "@/components/landing/previews";
 
 const features = [
   {
@@ -38,11 +38,11 @@ const features = [
   },
 ];
 
-// Be honest about what is live: Feed and Play are still being built.
+// Be honest about what is live: Feed is still being built; Chat, Profile and Play are available.
 const spaces = [
   { icon: IconHome2, name: "Feed", text: "Posts, projects and ideas from people you follow.", live: false },
   { icon: IconMessageCircle, name: "Chat", text: "Direct messages, groups and channels.", live: true },
-  { icon: IconDeviceGamepad2, name: "Play", text: "Friendly matches with your people.", live: false },
+  { icon: IconDeviceGamepad2, name: "Play", text: "Code Arena duels with friends or teams.", live: true },
   { icon: IconUser, name: "Profile", text: "Your avatar, banner, bio and status.", live: true },
 ];
 
@@ -179,13 +179,14 @@ export default function Home() {
 
         <section id="play" aria-labelledby="play-title" className="grid scroll-mt-8 items-center gap-10 border-t border-border py-14 md:grid-cols-[1.25fr_1fr] md:gap-14 md:py-20">
           <div>
-            <p className={eyebrow}>Play · coming soon</p>
-            <h2 id="play-title" className="text-3xl leading-tight font-semibold tracking-tight md:text-4xl">One more game<br />is always an option.</h2>
-            <p className="mt-6 max-w-md text-base leading-7 text-nook-text-secondary">Games are on the way. Challenge a friend, jump into a quick match, and keep the conversation going while you play.</p>
+            <p className={eyebrow}>Play · Code Arena</p>
+            <h2 id="play-title" className="text-3xl leading-tight font-semibold tracking-tight md:text-4xl">Write code.<br />Play together.</h2>
+            <p className="mt-6 max-w-md text-base leading-7 text-nook-text-secondary">Challenge a friend to a 1v1 duel or team up for a 2v2 match. Code Arena brings timed programming rounds, live collaboration and team chat into Nook.</p>
+            <a href="/play" className={`${primaryBtn} mt-7`}>Open Code Arena <IconArrowRight size={16} stroke={1.75} aria-hidden="true" /></a>
           </div>
           <figure>
-            <BoardPreview className="max-w-md md:ml-auto" />
-            <figcaption className="mt-3 text-xs text-nook-text-muted md:text-right">A first look at the Play space. Still in the works.</figcaption>
+            <CodeArenaPreview className="max-w-md md:ml-auto" />
+            <figcaption className="mt-3 text-xs text-nook-text-muted md:text-right">Code Arena is available after you sign in.</figcaption>
           </figure>
         </section>
 
@@ -222,7 +223,11 @@ export default function Home() {
             <NookLogo />
             <span className="text-xs text-nook-text-muted">A place for your people.</span>
           </div>
-          <a href="#top" className="inline-flex min-h-11 items-center gap-3 text-xs text-nook-text-secondary hover:text-foreground">Back to top <IconArrowRight size={14} stroke={1.75} className="-rotate-90" aria-hidden="true" /></a>
+          <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-nook-text-secondary">
+            <a href="/privacy" className="inline-flex min-h-11 items-center hover:text-foreground">Privacy Policy</a>
+            <a href="/terms" className="inline-flex min-h-11 items-center hover:text-foreground">Terms of Service</a>
+            <a href="#top" className="inline-flex min-h-11 items-center gap-3 hover:text-foreground">Back to top <IconArrowRight size={14} stroke={1.75} className="-rotate-90" aria-hidden="true" /></a>
+          </nav>
         </div>
       </footer>
     </div>

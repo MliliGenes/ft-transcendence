@@ -1,11 +1,23 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { oauthNoticeMessage, parseOAuthReturn } from "../lib/auth/oauth.ts";
+import { URLSearchParams } from "node:url";
+import { runInNewContext } from "node:vm";
+import ts from "typescript";
+
+const source = readFileSync(new URL("../lib/auth/oauth.ts", import.meta.url), "utf8");
+const compiled = ts.transpileModule(source, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const compiledModule = { exports: {} };
+runInNewContext(compiled, { module: compiledModule, exports: compiledModule.exports, URLSearchParams });
+const { oauthNoticeMessage, parseOAuthReturn } = compiledModule.exports;
+const localValue = (value) => value === null ? null : JSON.parse(JSON.stringify(value));
 
 test("successful provider linking returns to settings without exposing credentials", () => {
   const result = parseOAuthReturn("#providerLinked=github", null);
 
-  assert.deepEqual(result, {
+  assert.deepEqual(localValue(result), {
     route: "/settings",
     notice: { flow: "link", provider: "github", result: "linked" },
   });
@@ -14,7 +26,7 @@ test("successful provider linking returns to settings without exposing credentia
 test("login errors return to login and identify the provider from safe state", () => {
   const result = parseOAuthReturn("#oauthError=authorization&oauthFlow=login", "discord");
 
-  assert.deepEqual(result, {
+  assert.deepEqual(localValue(result), {
     route: "/login",
     notice: { flow: "login", provider: "discord", result: "error", error: "authorization" },
   });

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueries } from "@tanstack/react-query";
 import {
   IconArrowLeft,
   IconCheck,
@@ -10,7 +11,10 @@ import {
   IconSwitchHorizontal,
 } from "@tabler/icons-react";
 import { useAuth } from "@/components/auth/auth-provider";
-import { LobbyClient, type PrivateRoomMember, type RoomWithMembers } from "@/lib/arena/lobby";
+import { AccountAvatar } from "@/components/app/account-avatar";
+import { LobbyClient, lobbyMatchPath, lobbyMemberName, type PrivateRoomMember, type RoomWithMembers } from "@/lib/arena/lobby";
+import { accountApi, type PublicAccount } from "@/lib/accounts/client";
+import { accountImageSource } from "@/lib/accounts/images";
 import { Button } from "@/components/ui/button";
 
 function TeamSlotCard({
@@ -18,11 +22,13 @@ function TeamSlotCard({
   members,
   maxCapacity,
   currentUserId,
+  profiles,
 }: {
   name: string;
   members: PrivateRoomMember[];
   maxCapacity: number;
   currentUserId: string;
+  profiles: Map<string, PublicAccount>;
 }) {
   return (
     <div className="rounded-none border border-border bg-card p-5">
@@ -33,17 +39,23 @@ function TeamSlotCard({
         </span>
       </div>
       <div className="space-y-2">
-        {members.map((m) => (
-          <div key={m.userId} className="flex items-center justify-between rounded-none bg-secondary/40 p-2.5 text-xs">
-            <span className="font-medium text-foreground">
-              {m.userId} {m.userId === currentUserId && <span className="text-primary">(You)</span>}
+        {members.map((m) => {
+          const profile = profiles.get(m.userId);
+          const displayName = lobbyMemberName(profile);
+          return <div key={m.userId} className="flex items-center justify-between gap-3 rounded-none bg-secondary/40 p-2.5 text-xs">
+            <span className="flex min-w-0 items-center gap-2.5">
+              <AccountAvatar source={accountImageSource(profile?.avatarUrl ?? null)} seed={m.userId} label={`${displayName} avatar`} size={32} className="size-8 shrink-0 object-cover" />
+              <span className="min-w-0">
+                <span className="block truncate font-medium text-foreground">{displayName} {m.userId === currentUserId && <span className="text-primary">(You)</span>}</span>
+                {profile?.username && <span className="block truncate text-[11px] text-muted-foreground">@{profile.username}</span>}
+              </span>
             </span>
             <span className={`inline-flex items-center gap-1 font-semibold ${m.ready ? "text-success" : "text-muted-foreground"}`}>
               {m.ready && <IconCheck className="size-3.5" />}
               <span>{m.ready ? "Ready" : "Waiting"}</span>
             </span>
-          </div>
-        ))}
+          </div>;
+        })}
         {members.length === 0 && (
           <p className="py-4 text-center text-xs text-muted-foreground italic">No players on {name}</p>
         )}
@@ -58,25 +70,36 @@ export function LobbyView({ code }: { code: string }) {
   const { session, isRestoring } = useAuth();
   const userId = session?.user?.id ?? "guest-user";
   const token = session?.accessToken;
+  const lobbyKey = `${normalizedCode}:${userId}:${token ?? ""}`;
 
   const [lobbyData, setLobbyData] = useState<RoomWithMembers | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [resolvedLobbyKey, setResolvedLobbyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const loading = resolvedLobbyKey !== lobbyKey;
+  const lobbyMembers = lobbyData?.members ?? [];
+  const memberProfiles = useQueries({
+    queries: lobbyMembers.map((member) => ({
+      queryKey: ["accounts", "public", member.userId],
+      queryFn: () => accountApi.getPublic(member.userId),
+      enabled: Boolean(lobbyData),
+      staleTime: 60_000,
+      retry: false,
+    })),
+  });
+  const profilesById = new Map<string, PublicAccount>();
+  lobbyMembers.forEach((member, index) => {
+    const profile = memberProfiles[index]?.data;
+    if (profile) profilesById.set(member.userId, profile);
+  });
 
   useEffect(() => {
     if (isRestoring) return;
-    if (!token) {
-      setError("Please log in to join this lobby");
-      setLoading(false);
-      return;
-    }
+    if (!token) return;
 
     let client: LobbyClient | null = new LobbyClient("", userId, token);
     let active = true;
     let currentRoomId: string | null = null;
-    setError(null);
-    setLoading(true);
 
     const disconnectSocket = client.connectSocket({
       onConnect: () => {
@@ -96,18 +119,23 @@ export function LobbyView({ code }: { code: string }) {
 
     async function init() {
       try {
-        const data = await client!.joinRoom(normalizedCode);
+        const data = await client!.getOrJoinRoom(normalizedCode);
         if (active) {
+          const matchPath = lobbyMatchPath(data.room);
+          if (matchPath) {
+            router.replace(matchPath);
+            return;
+          }
           currentRoomId = data.room.id;
           client!.joinRoomChannel(data.room.id);
           setLobbyData(data);
           setError(null);
-          setLoading(false);
+          setResolvedLobbyKey(lobbyKey);
         }
       } catch (err) {
         if (active) {
           setError(err instanceof Error ? err.message : "Failed to load lobby");
-          setLoading(false);
+          setResolvedLobbyKey(lobbyKey);
         }
       }
     }
@@ -136,7 +164,7 @@ export function LobbyView({ code }: { code: string }) {
       client?.disconnect();
       client = null;
     };
-  }, [normalizedCode, userId, token, isRestoring, router]);
+  }, [normalizedCode, userId, token, isRestoring, router, lobbyKey]);
 
   async function handleToggleReady() {
     if (!lobbyData) return;
@@ -176,12 +204,16 @@ export function LobbyView({ code }: { code: string }) {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  if (loading) {
+  if (isRestoring || loading && token) {
     return (
       <div className="flex h-96 items-center justify-center text-sm text-muted-foreground animate-pulse">
         Connecting to lobby {normalizedCode}…
       </div>
     );
+  }
+
+  if (!token) {
+    return <div className="mx-auto max-w-md px-4 py-16 text-center"><h2 className="mb-2 text-xl font-bold text-danger">Lobby Error</h2><p className="mb-6 text-xs text-muted-foreground">Please log in to join this lobby.</p><Button onClick={() => router.push("/login")}>Log in</Button></div>;
   }
 
   if (error || !lobbyData) {
@@ -238,12 +270,14 @@ export function LobbyView({ code }: { code: string }) {
           members={leftMembers}
           maxCapacity={capacity}
           currentUserId={userId}
+          profiles={profilesById}
         />
         <TeamSlotCard
           name="Team Beta"
           members={rightMembers}
           maxCapacity={capacity}
           currentUserId={userId}
+          profiles={profilesById}
         />
       </div>
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { IconMessageCircle, IconSend } from "@tabler/icons-react";
-import { TeamChatClient, TEAM_PINGS, TEAM_PING_LABELS, type TeamChatEntry, type TeamPing } from "@/lib/arena/chat";
+import { TeamChatClient, TEAM_PINGS, TEAM_PING_LABELS, type TeamPing } from "@/lib/arena/chat";
 import { Button } from "@/components/ui/button";
 
 export interface TeamChatProps {
@@ -10,15 +10,16 @@ export interface TeamChatProps {
 }
 
 export function TeamChat({ client }: TeamChatProps) {
-  const [messages, setMessages] = useState<TeamChatEntry[]>(() => client?.getMessages() ?? []);
+  const [messagesState, setMessagesState] = useState(() => ({ client, messages: client?.getMessages() ?? [] }));
+  if (messagesState.client !== client) setMessagesState({ client, messages: client?.getMessages() ?? [] });
+  const messages = messagesState.messages;
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
     if (!client) return;
-    setMessages(client.getMessages());
     return client.subscribe(() => {
-      setMessages(client.getMessages());
+      setMessagesState({ client, messages: client.getMessages() });
     });
   }, [client]);
 

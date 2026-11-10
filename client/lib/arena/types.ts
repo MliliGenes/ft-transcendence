@@ -58,7 +58,7 @@ export interface TestView {
 
 export interface SideView {
   name: string;
-  status: PlayerStatus;
+  status: PlayerStatus | "ready";
   presence: Presence;
   submissions: number;
 }

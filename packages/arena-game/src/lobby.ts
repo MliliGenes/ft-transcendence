@@ -137,6 +137,7 @@ export function selectProblems(
 
 export interface ILobbyStore {
   ensureSchema(): Promise<void>;
+  eraseUser(userId: string): Promise<void>;
   joinQueue(userId: string, mode: MatchMode): Promise<QueueEntry>;
   cancelQueue(userId: string): Promise<{ cancelled: boolean; matched: boolean; matchId?: string }>;
   queueStatus(userId: string): Promise<QueueEntry | null>;
@@ -172,6 +173,52 @@ export class LobbyStore implements ILobbyStore {
 
   async ensureSchema(): Promise<void> {
     await this.pool.query(LOBBY_SCHEMA);
+  }
+
+  async eraseUser(userId: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`lobby:user:${userId}`]);
+      await client.query("DELETE FROM arena_queue_entries WHERE user_id = $1", [userId]);
+
+      const affected = await client.query(
+        `SELECT r.id, r.owner_user_id
+         FROM arena_private_rooms r
+         WHERE r.owner_user_id = $1
+            OR EXISTS (SELECT 1 FROM arena_private_room_members m WHERE m.room_id = r.id AND m.user_id = $1)
+         FOR UPDATE OF r`,
+        [userId],
+      );
+      for (const room of affected.rows as Array<{ id: string; owner_user_id: string }>) {
+        await client.query("DELETE FROM arena_private_room_members WHERE room_id = $1 AND user_id = $2", [room.id, userId]);
+        if (room.owner_user_id === userId) {
+          const successor = await client.query(
+            "SELECT user_id FROM arena_private_room_members WHERE room_id = $1 ORDER BY joined_at ASC LIMIT 1",
+            [room.id],
+          );
+          if ((successor.rowCount ?? 0) > 0) {
+            await client.query("UPDATE arena_private_rooms SET owner_user_id = $2 WHERE id = $1", [room.id, successor.rows[0].user_id]);
+          } else {
+            await client.query("DELETE FROM arena_private_rooms WHERE id = $1", [room.id]);
+          }
+        } else {
+          const remaining = await client.query(
+            "SELECT 1 FROM arena_private_room_members WHERE room_id = $1 LIMIT 1",
+            [room.id],
+          );
+          if ((remaining.rowCount ?? 0) === 0) {
+            await client.query("DELETE FROM arena_private_rooms WHERE id = $1", [room.id]);
+          }
+        }
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   // ── Queue ──
@@ -842,6 +889,31 @@ export class InMemoryLobbyStore implements ILobbyStore {
   }
 
   async ensureSchema(): Promise<void> {}
+
+  async eraseUser(userId: string): Promise<void> {
+    return this.exclusive(async () => {
+      for (const [entryId, entry] of this.queue) {
+        if (entry.userId === userId) this.queue.delete(entryId);
+      }
+      for (const [roomId, room] of this.rooms) {
+        let members = this.members.get(roomId) ?? [];
+        if (room.ownerUserId !== userId && !members.some((member) => member.userId === userId)) continue;
+        members = members.filter((member) => member.userId !== userId);
+        this.members.set(roomId, members);
+        if (room.ownerUserId === userId) {
+          const successor = [...members].sort((left, right) => left.joinedAt - right.joinedAt)[0];
+          if (successor) room.ownerUserId = successor.userId;
+          else {
+            this.rooms.delete(roomId);
+            this.members.delete(roomId);
+          }
+        } else if (members.length === 0) {
+          this.rooms.delete(roomId);
+          this.members.delete(roomId);
+        }
+      }
+    });
+  }
 
   async joinQueue(userId: string, mode: MatchMode): Promise<QueueEntry> {
     return this.exclusive(async () => {

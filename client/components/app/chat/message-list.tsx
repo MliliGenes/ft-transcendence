@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { IconDownload, IconFileTypePdf } from "@tabler/icons-react";
+import { IconDeviceGamepad2, IconDownload, IconFileTypePdf } from "@tabler/icons-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ChatMarkdown } from "@/components/app/chat/chat-markdown";
 import { DeleteMessageDialog, MessageEditor, MessageOwnerActions } from "@/components/app/chat/message-actions";
@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { accountImageSource } from "@/lib/accounts/images";
 import { accountDisplayName } from "@/lib/accounts/status-icons";
 import { chatApi, type AttachmentPreview, type ChatMessage } from "@/lib/chat/client";
+import { parseCodeArenaInvite } from "@/lib/arena/invitations";
+import { LobbyClient } from "@/lib/arena/lobby";
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 const fullFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "short" });
@@ -64,6 +66,7 @@ function MessageRow({ message, own, continued }: { message: ChatMessage; own: bo
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const canManage = own && !message.deletedAt;
+  const invite = message.content && !message.deletedAt ? parseCodeArenaInvite(message.content) : null;
   return <li className={`group relative -mx-3 flex gap-3 px-3 py-0.5 transition-colors hover:bg-muted/60 sm:-mx-4 sm:px-4 ${continued ? "" : "mt-3 pt-1.5"}`} aria-label={`${name}, ${fullFormat.format(created)}`}>
     {canManage && !editing && <MessageOwnerActions onEdit={() => setEditing(true)} onDelete={() => setConfirmingDelete(true)} className="absolute right-3 top-0 z-10 border border-border bg-card opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 sm:right-4" />}
     {canManage && <DeleteMessageDialog message={message} open={confirmingDelete} onOpenChange={setConfirmingDelete} />}
@@ -84,6 +87,8 @@ function MessageRow({ message, own, continued }: { message: ChatMessage; own: bo
         ? <p className="text-sm italic text-muted-foreground">Message deleted</p>
         : editing
           ? <MessageEditor message={message} onClose={() => setEditing(false)} submitOnEnter />
+          : invite
+            ? <DuelInviteCard code={invite.code} own={own} authorName={name} />
           : message.content && <>
             <ChatMarkdown>{message.content}</ChatMarkdown>
             {message.editedAt && <span className="text-[11px] text-muted-foreground">(edited)</span>}
@@ -127,4 +132,60 @@ export function MessageAttachment({ conversationId, objectKey }: { conversationI
     <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">PDF document</span>{downloadError ? <span role="alert" className="block text-xs text-destructive">{downloadError}</span> : <span className="block text-xs text-muted-foreground">Attachment</span>}</span>
     <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0" onClick={() => { setDownloadError(""); void download(); }} aria-label="Download PDF"><IconDownload size={18} aria-hidden="true" /></Button>
   </div>;
+}
+
+function DuelInviteCard({ code, own, authorName }: { code: string; own: boolean; authorName: string }) {
+  const { session, requestWithSession } = useAuth();
+  const query = useQuery({
+    queryKey: ["game", "room-lookup", code],
+    queryFn: async () => {
+      return requestWithSession(async (token) => {
+        const client = new LobbyClient("/api/game", session?.user.id ?? "", token);
+        return client.lookupRoom(code);
+      });
+    },
+    enabled: Boolean(session),
+    staleTime: 5000,
+    refetchInterval: 10000,
+  });
+
+  const isExpired = query.data && (query.data.status === "expired" || query.data.status === "closed");
+  const isMatched = query.data?.status === "matched";
+  const isOpen = query.data?.status === "open";
+
+  return (
+    <section className="my-2 max-w-sm border border-primary/30 bg-primary/5 p-3" aria-label="Code Arena duel invitation">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <IconDeviceGamepad2 size={17} className="text-primary" aria-hidden="true" />
+          Code Arena · 1v1 Duel
+        </div>
+        {isOpen && <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">Open</span>}
+        {isMatched && <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">In Match</span>}
+        {isExpired && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Expired</span>}
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {isExpired
+          ? "This challenge room has expired or ended."
+          : isMatched
+            ? "The match is currently underway or finished."
+            : own
+              ? "You sent a duel challenge."
+              : `${authorName} challenged you to a duel.`}
+      </p>
+      {isMatched && query.data?.room?.matchId ? (
+        <Button render={<Link href={`/play/match/${query.data.room.matchId}`} />} size="sm" variant="outline" className="mt-3 min-h-10">
+          View Match
+        </Button>
+      ) : isExpired ? (
+        <Button disabled size="sm" variant="outline" className="mt-3 min-h-10 opacity-50">
+          Room Expired
+        </Button>
+      ) : (
+        <Button render={<Link href={`/play/lobby/${code}`} />} size="sm" className="mt-3 min-h-10">
+          {own ? "Open Lobby" : "Accept & Join"}
+        </Button>
+      )}
+    </section>
+  );
 }

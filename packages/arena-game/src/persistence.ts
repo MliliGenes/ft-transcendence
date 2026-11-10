@@ -61,6 +61,8 @@ export interface MatchPersistence {
   ): Promise<void>;
   /** MatchRecord and shared-document rows commit together when supported. */
   commitMatchAndTeamDocuments(match: MatchRecord, rows: CollabRow[], expectedRevision?: number): Promise<void>;
+  /** Atomically persist an anonymized result and remove source/document rows. */
+  eraseMatchSideData(match: MatchRecord, sideIds: string[], expectedRevision?: number): Promise<void>;
 }
 
 export interface MatchPersistenceAdapters {
@@ -74,6 +76,8 @@ export interface MatchPersistenceAdapters {
   claimPendingEvaluation?: (evaluationId: string) => Promise<EvaluationClaim | undefined>;
   /** Postgres implementation commits the evaluation and Match on the claim session. */
   commitClaimedEvaluation?: (claim: EvaluationClaim, match: MatchRecord, submission?: SubmissionRecord) => Promise<void>;
+  /** Production implementation uses one transaction for the match and source deletion. */
+  eraseMatchSideData?: (match: MatchRecord, sideIds: string[], expectedRevision?: number) => Promise<void>;
 }
 
 function immutableSubmissionView(record: SubmissionRecord): string {
@@ -269,5 +273,15 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
     for (const row of rows) {
       await this.saveTeamDocument(match.id, row.roundId, row.sideId, row.appRevision, row.language, row.stateB64);
     }
+  }
+
+  async eraseMatchSideData(match: MatchRecord, sideIds: string[], expectedRevision?: number): Promise<void> {
+    if (this.adapters.eraseMatchSideData) {
+      await this.adapters.eraseMatchSideData(match, sideIds, expectedRevision);
+      return;
+    }
+    await this.adapters.matches.save(match, expectedRevision);
+    await this.adapters.submissions.eraseForMatchSides(match.id, sideIds);
+    await this.adapters.collab.eraseForMatchSides(match.id, sideIds);
   }
 }

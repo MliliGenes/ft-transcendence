@@ -56,7 +56,7 @@ export interface SubmissionDocument {
 }
 
 export interface TeamMemberSnapshot {
-  userId: string;
+  userId: string | null;
   presence: "online" | "offline";
   /** Own team only; opponent readiness and document revisions stay masked. */
   ready: boolean;
@@ -245,6 +245,13 @@ export class TeamCollaboration {
     }
   }
 
+  destroySide(match: MatchRecord, side: SideId): void {
+    if (match.mode !== "2v2") return;
+    for (const round of match.rounds) {
+      this.collab.destroy(collabRoomId(match.id, round.roundId, side));
+    }
+  }
+
   hasOnlineMember(match: MatchRecord, side: SideId): boolean {
     return this.teamMembers(match, side).some((member) => match.memberPresence?.[member.userId] === "online");
   }
@@ -260,7 +267,7 @@ export class TeamCollaboration {
         members: this.teamMembers(match, side).map((participant) => {
           const record = own ? round.readiness?.[participant.userId] : undefined;
           return {
-            userId: participant.userId,
+            userId: participant.anonymized ? null : participant.userId,
             presence: match.memberPresence?.[participant.userId] ?? "offline",
             ready: record?.ready === true,
             readyRevision: record?.ready === true ? (record.documentRevision ?? null) : null,

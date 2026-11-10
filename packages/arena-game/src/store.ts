@@ -17,6 +17,10 @@ export interface MatchStore {
   load(matchId: string): Promise<MatchRecord | undefined>;
   /** All known match ids (boot recovery: presence reset, pending re-drive). */
   listIds(): Promise<string[]>;
+  /** Completed, public-result records used by profile and leaderboard reads. */
+  listCompleted(): Promise<MatchRecord[]>;
+  /** Completed records containing this participant, ordered newest first. */
+  listCompletedForUser(userId: string): Promise<MatchRecord[]>;
 }
 
 export interface SubmissionStore {
@@ -27,6 +31,8 @@ export interface SubmissionStore {
   listRound(matchId: string, roundId: string): Promise<SubmissionRecord[]>;
   /** Non-terminal rows (boot recovery: idempotent judge retry under original ids). */
   listPending(): Promise<SubmissionRecord[]>;
+  /** Remove retained source for the selected sides of one match. */
+  eraseForMatchSides(matchId: string, sideIds: string[]): Promise<void>;
 }
 
 export class DuplicateError extends Error {
@@ -79,6 +85,15 @@ export class InMemoryMatchStore implements MatchStore {
   async listIds(): Promise<string[]> {
     return [...this.matches.keys()];
   }
+  async listCompleted(): Promise<MatchRecord[]> {
+    return [...this.matches.values()].filter((match) => match.roundPhase === "MATCH_COMPLETE").map((match) => structuredClone(match));
+  }
+  async listCompletedForUser(userId: string): Promise<MatchRecord[]> {
+    return [...this.matches.values()]
+      .filter((match) => match.roundPhase === "MATCH_COMPLETE" && match.participants.some((participant) => participant.userId === userId))
+      .sort((left, right) => right.startedAt - left.startedAt || left.id.localeCompare(right.id))
+      .map((match) => structuredClone(match));
+  }
 }
 
 export class InMemorySubmissionStore implements SubmissionStore {
@@ -103,6 +118,15 @@ export class InMemorySubmissionStore implements SubmissionStore {
   }
   async listPending(): Promise<SubmissionRecord[]> {
     return [...this.bySubmission.values()].filter((r) => r.status === "pending");
+  }
+  async eraseForMatchSides(matchId: string, sideIds: string[]): Promise<void> {
+    const erasedSides = new Set(sideIds);
+    for (const [submissionId, record] of this.bySubmission) {
+      if (record.matchId === matchId && erasedSides.has(record.sideId)) {
+        this.bySubmission.delete(submissionId);
+        this.byEvaluation.delete(record.evaluationId);
+      }
+    }
   }
 }
 

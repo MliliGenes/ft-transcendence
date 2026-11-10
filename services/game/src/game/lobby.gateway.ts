@@ -9,7 +9,7 @@ import {
 } from "@nestjs/websockets";
 import type { Namespace, Socket } from "socket.io";
 import { GameService } from "./game.service.js";
-import { attachSocketPrincipal, principalFromHandshake, requireSocketPrincipal } from "./socket-auth.js";
+import { attachSocketPrincipal, principalFromHandshake, requireSocketPrincipal, socketPrincipal } from "./socket-auth.js";
 
 function userChannel(userId: string): string {
   return `user:${userId}`;
@@ -25,6 +25,12 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
   server!: Namespace;
 
   constructor(private readonly game: GameService) {
+    this.game.onAccountDeleted((userId) => this.disconnectUser(userId));
+    this.game.registerActiveSocketEnumerator(() => [...(this.server?.sockets.values() ?? [])]
+      .flatMap((socket) => {
+        const userId = socketPrincipal(socket)?.userId;
+        return userId ? [userId] : [];
+      }));
     this.game.onLobbyEvent((event, payload) => {
       if (event === "lobby.roomUpdated") {
         const p = payload as { roomId: string; room: unknown; members: Array<{ userId: string }> };
@@ -47,10 +53,17 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
+  private disconnectUser(userId: string): void {
+    for (const socket of this.server?.sockets.values() ?? []) {
+      if (socketPrincipal(socket)?.userId === userId) socket.disconnect(true);
+    }
+  }
+
   async handleConnection(client: Socket): Promise<void> {
     try {
       const principal = principalFromHandshake(client);
       const { userId } = principal;
+      await this.game.assertAccountActive(userId);
       attachSocketPrincipal(client, principal);
       await client.join(userChannel(userId));
     } catch {

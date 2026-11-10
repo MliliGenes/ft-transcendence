@@ -87,6 +87,37 @@ describe("game service integration (real HTTP + sockets + containers)", () => {
     expect((await api("POST", `/matches/${matchId}/submit`, "user-stranger", { code: "x", language: "Python" })).status).toBe(403);
   });
 
+  it("serves authenticated, sanitized completed-match history, stats, and leaderboard rows", async () => {
+    const matchId = await newMatch();
+    expect((await api("POST", `/matches/${matchId}/start`, "user-a")).status).toBe(201);
+    expect((await api("POST", `/matches/${matchId}/leave`, "user-b")).status).toBe(201);
+
+    expect((await api("GET", "/users/user-a/matches")).status).toBe(401);
+    const history = await api("GET", "/users/user-a/matches", "viewer");
+    expect(history.status).toBe(200);
+    const matches = (history.json as { matches: Array<Record<string, unknown>> }).matches;
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      matchId,
+      mode: "1v1",
+      outcome: "win",
+      opponentUserIds: ["user-b"],
+      score: { for: 0, against: 0 },
+    });
+    expect(matches[0]).toHaveProperty("playedAt");
+    expect(matches[0]).not.toHaveProperty("rounds");
+
+    const stats = await api("GET", "/users/user-a/stats", "viewer");
+    expect(stats.status).toBe(200);
+    expect(stats.json).toMatchObject({ userId: "user-a", matchesPlayed: 1, wins: 1, losses: 0, draws: 0, winRate: 1 });
+
+    const leaderboard = await api("GET", "/leaderboard", "viewer");
+    expect(leaderboard.status).toBe(200);
+    expect((leaderboard.json as { players: Array<Record<string, unknown>> }).players).toContainEqual(
+      expect.objectContaining({ userId: "user-a", matchesPlayed: 1, wins: 1 }),
+    );
+  });
+
   it("HTTP 1v1 real E2E: run, submit, auto-reveal x3, final", async () => {
     const matchId = await newMatch();
     await api("POST", `/matches/${matchId}/start`, "user-a", {});

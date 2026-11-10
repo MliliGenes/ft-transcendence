@@ -22,6 +22,8 @@ import { accountDisplayName } from "@/lib/accounts/status-icons";
 import { StatusPill } from "@/components/app/status-icon";
 import { blocksQueryKey, friendshipQueryKey, socialApi, type FriendshipState } from "@/lib/social/client";
 import { chatApi } from "@/lib/chat/client";
+import { createCodeArenaInvite } from "@/lib/arena/invitations";
+import { CodeArenaProfile, CodeArenaSidebar } from "@/components/app/code-arena-profile";
 
 const profileQueryKey = (id: string) => ["accounts", "public", id] as const;
 const tabClass = "min-h-11 border-b-2 border-transparent px-4 text-sm capitalize text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[active]:border-primary data-[active]:font-medium data-[active]:text-foreground";
@@ -113,6 +115,21 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
       router.push(`/chat?conversation=${encodeURIComponent(conversation.id)}`);
     },
   });
+  const challengeAction = useMutation({
+    mutationFn: () => requestWithSession(async token => {
+      if (!session?.user.id) throw new Error("Log in to challenge a player.");
+      const conversation = await chatApi.openDm(targetId, token);
+      await createCodeArenaInvite({ userId: session.user.id, token, conversationId: conversation.id });
+      return conversation;
+    }),
+    onSuccess: async conversation => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["chat", "conversations", session?.user.id] }),
+        queryClient.invalidateQueries({ queryKey: ["chat", "messages", session?.user.id, conversation.id] }),
+      ]);
+      router.push(`/chat?conversation=${encodeURIComponent(conversation.id)}`);
+    },
+  });
 
   if (isRestoring) return <LoadingProfile />;
   if (ownerRoute && !session) return <ProfileMessage title="Your profile" body="Log in to view your profile." action={<Button render={<Link href="/login" />} className="min-h-11 px-5">Log in</Button>} />;
@@ -127,11 +144,11 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
   const banner = accountImageSource(profile.bannerUrl);
   const friend = friendships.data?.friends.find(item => item.id === profile.id);
   const blocked = blocks.data?.some(item => item.id === profile.id) ?? false;
-  const busy = friendshipAction.isPending || blockAction.isPending || messageAction.isPending;
+  const busy = friendshipAction.isPending || blockAction.isPending || messageAction.isPending || challengeAction.isPending;
   const incoming = friendships.data?.incoming.find(item => item.requesterId === profile.id);
   const outgoing = friendships.data?.outgoing.find(item => item.addresseeId === profile.id);
   const friendCount = friendships.data?.friends.length;
-  const actionError = friendshipAction.error ?? blockAction.error ?? messageAction.error;
+  const actionError = friendshipAction.error ?? blockAction.error ?? messageAction.error ?? challengeAction.error;
 
   let primaryAction: React.ReactNode = null;
   if (isOwner) primaryAction = <Button render={<Link href="/profile/edit" />} variant="outline" className="min-h-11 px-4"><IconPencil size={16} aria-hidden="true" />Edit profile</Button>;
@@ -161,6 +178,7 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
           <div className="ml-auto flex w-full flex-wrap items-center gap-2 pt-3 sm:w-auto">
             {primaryAction}
             {canInteract && <Button disabled={busy} variant="outline" className="min-h-11 px-4" onClick={() => messageAction.mutate()}><IconMessageCircle size={16} aria-hidden="true" />{messageAction.isPending ? "Opening…" : "Message"}</Button>}
+            {canInteract && <Button disabled={busy} variant="outline" className="min-h-11 px-4" onClick={() => challengeAction.mutate()}><IconDeviceGamepad2 size={16} aria-hidden="true" />{challengeAction.isPending ? "Creating invite…" : "Challenge to Code Arena"}</Button>}
             {canInteract && <DropdownMenu>
               <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="size-11" aria-label="More actions" disabled={busy} />}><IconDots size={18} aria-hidden="true" /></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
@@ -197,13 +215,13 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
             </dl>
             {profile.bio && <div className={`${markdownClass} mt-6 border-t border-border pt-5`}><ReactMarkdown>{profile.bio}</ReactMarkdown></div>}
           </Tabs.Panel>
-          <Tabs.Panel value="games" className="min-h-64 px-5 py-14 text-center outline-none focus-visible:ring-2 focus-visible:ring-ring"><h2 className="text-lg font-medium">Game activity is coming soon</h2><p className="mt-2 text-sm text-muted-foreground">Games will appear here when activity is available.</p></Tabs.Panel>
+          <Tabs.Panel value="games" className="min-h-64 px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"><CodeArenaProfile userId={profile.id} /></Tabs.Panel>
         </Tabs.Root>
 
         <aside className="grid content-start gap-4" aria-label="Profile sidebar">
           {isOwner ? <FriendsCard state={friendships.data} isPending={friendships.isPending} isError={friendships.isError} onRetry={() => void friendships.refetch()} />
             : session && <ConnectionCard name={displayName} friend={Boolean(friend)} incoming={Boolean(incoming)} outgoing={Boolean(outgoing)} blocked={blocked} loading={friendships.isPending || blocks.isPending} />}
-          <section className="bg-card p-5" aria-labelledby="game-activity-title"><h2 id="game-activity-title" className="flex items-center gap-2 text-sm font-semibold"><IconDeviceGamepad2 size={17} className="text-primary" aria-hidden="true" />Currently playing</h2><p className="mt-3 text-sm text-muted-foreground">Game activity coming soon.</p></section>
+          <CodeArenaSidebar />
         </aside>
       </div>
 

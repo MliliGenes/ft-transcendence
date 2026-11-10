@@ -36,12 +36,26 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Namespace;
 
-  constructor(private readonly game: GameService) {}
+  constructor(private readonly game: GameService) {
+    this.game.onAccountDeleted((userId) => this.disconnectUser(userId));
+    this.game.registerActiveSocketEnumerator(() => [...(this.server?.sockets.values() ?? [])]
+      .flatMap((socket) => {
+        const userId = socketPrincipal(socket)?.userId;
+        return userId ? [userId] : [];
+      }));
+  }
+
+  private disconnectUser(userId: string): void {
+    for (const socket of this.server?.sockets.values() ?? []) {
+      if (socketPrincipal(socket)?.userId === userId) socket.disconnect(true);
+    }
+  }
 
   async handleConnection(client: Socket): Promise<void> {
     try {
       const principal = principalFromHandshake(client, { matchIdRequired: true });
       const { userId, matchId } = principal;
+      await this.game.assertAccountActive(userId);
       // Throws for strangers, 1v1 participants, unknown matches: no sync, no leak.
       const sync = await this.game.collabSync(userId, matchId);
       attachSocketPrincipal(client, principal);

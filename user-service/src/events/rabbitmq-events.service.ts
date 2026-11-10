@@ -21,6 +21,7 @@ import {
 const USER_EVENTS_EXCHANGE = 'user.events';
 const CHAT_USER_EVENTS_QUEUE = 'chat.user-events';
 const USER_EVENTS_ROUTING_KEY = 'user.#';
+const GAME_USER_EVENTS_QUEUE = 'game.user-events';
 
 @Injectable()
 export class RabbitMqEventsService implements OnModuleInit, OnModuleDestroy {
@@ -60,6 +61,14 @@ export class RabbitMqEventsService implements OnModuleInit, OnModuleDestroy {
           CHAT_USER_EVENTS_QUEUE,
           USER_EVENTS_EXCHANGE,
           USER_EVENTS_ROUTING_KEY,
+        );
+        // Declare the durable Game queue at the publisher so deletion events
+        // remain available when Game is temporarily offline.
+        await channel.assertQueue(GAME_USER_EVENTS_QUEUE, { durable: true });
+        await channel.bindQueue(
+          GAME_USER_EVENTS_QUEUE,
+          USER_EVENTS_EXCHANGE,
+          'user.deleted',
         );
       },
     });

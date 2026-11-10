@@ -91,6 +91,14 @@ export class EvaluationInFlightRegistry {
     }
     return out;
   }
+
+  forMatch(matchId: string): Array<{ evaluationId: string; promise: Promise<EvaluationCompletion> }> {
+    const out: Array<{ evaluationId: string; promise: Promise<EvaluationCompletion> }> = [];
+    for (const [evaluationId, entry] of this.entries) {
+      if (entry.matchId === matchId) out.push({ evaluationId, promise: entry.promise });
+    }
+    return out;
+  }
 }
 
 export interface EvaluationRunInput {
@@ -186,6 +194,10 @@ export class EvaluationOrchestrator {
     roundId: string,
   ): Array<{ evaluationId: string; promise: Promise<EvaluationCompletion> }> {
     return this.inFlight.forRound(matchId, roundId);
+  }
+
+  forMatch(matchId: string): Array<{ evaluationId: string; promise: Promise<EvaluationCompletion> }> {
+    return this.inFlight.forMatch(matchId);
   }
 
   async run(input: EvaluationRunInput): Promise<{ ok: true; round: number; submissionId: string; evaluationId: string }> {

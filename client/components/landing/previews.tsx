@@ -1,5 +1,6 @@
 import {
   IconBold,
+  IconCheck,
   IconCode,
   IconDeviceGamepad2,
   IconFileTypePdf,
@@ -204,25 +205,36 @@ export function ProfilePreview({ className }: { className?: string }) {
   );
 }
 
-/** Play space teaser: a board with a "coming soon" badge. */
-export function BoardPreview({ className }: { className?: string }) {
-  const pieces: Record<number, string> = { 1: "♞", 4: "♚", 9: "♟", 12: "♟", 27: "♟", 36: "♙", 45: "♘", 52: "♙", 59: "♔", 62: "♖" };
+/** Decorative Code Arena preview matching the live Play integration. */
+export function CodeArenaPreview({ className }: { className?: string }) {
   return (
-    <Window title="nook / play" className={className}>
-      <div className="relative p-5">
-        <div className="mx-auto grid aspect-square w-full max-w-[300px] grid-cols-8 border border-border">
-          {Array.from({ length: 64 }, (_, i) => {
-            const dark = (Math.floor(i / 8) + i) % 2 === 1;
-            return (
-              <span key={i} className={cn("grid place-items-center text-[clamp(10px,3.6vw,20px)] leading-none", dark ? "bg-nook-surface-raised" : "bg-nook-surface", i === 27 && "bg-nook-accent-subtle")}>
-                {pieces[i]}
-              </span>
-            );
-          })}
+    <Window title="nook / play / code arena" className={className}>
+      <div className="p-4 sm:p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <span className="grid size-8 place-items-center bg-primary/10 text-primary"><IconCode size={18} aria-hidden="true" /></span>
+            <div><p className="text-[12px] font-semibold text-foreground">1v1 · Even Ledger</p><p className="text-[10px] text-nook-text-muted">Round 1 of 3</p></div>
+          </div>
+          <div className="font-mono text-lg font-semibold tabular-nums text-foreground">08:42</div>
         </div>
-        <div className="mt-4 flex items-center justify-between gap-3 text-[12px]">
-          <span className="text-nook-text-secondary">Challenge a friend to a friendly match</span>
-          <span className="shrink-0 border border-primary px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-nook-accent-text">Coming soon</span>
+        <div className="grid gap-3 md:grid-cols-[0.8fr_1.2fr]">
+          <div className="border border-border bg-nook-surface p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-nook-text-muted">Problem</p>
+            <p className="mt-2 text-[12px] font-medium text-foreground">Balance the ledger</p>
+            <p className="mt-1 text-[11px] leading-5 text-nook-text-secondary">Count the values that meet the even-ledger rule, then return their total.</p>
+            <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-[10px]">
+              <span className="text-nook-text-muted">Your score</span><span className="font-mono font-semibold tabular-nums text-foreground">640</span>
+            </div>
+          </div>
+          <div className="min-w-0 border border-border bg-background p-3 font-mono text-[10px] leading-6 sm:text-[11px]">
+            <div className="mb-2 flex items-center justify-between border-b border-border pb-2 text-[10px] text-nook-text-muted"><span>solution.py</span><span>Python</span></div>
+            <p><span className="mr-3 text-nook-text-muted">1</span><span className="text-primary">def</span> <span className="text-foreground">solve</span>(values):</p>
+            <p><span className="mr-3 text-nook-text-muted">2</span>    total = <span className="text-primary">0</span></p>
+            <p><span className="mr-3 text-nook-text-muted">3</span>    <span className="text-primary">for</span> value <span className="text-primary">in</span> values:</p>
+            <p><span className="mr-3 text-nook-text-muted">4</span>        total += value</p>
+            <p><span className="mr-3 text-nook-text-muted">5</span>    <span className="text-primary">return</span> total</p>
+            <div className="mt-3 flex items-center gap-2 border-t border-border pt-2 text-[10px] text-nook-success"><IconCheck size={13} aria-hidden="true" /> Visible examples passed</div>
+          </div>
         </div>
       </div>
     </Window>

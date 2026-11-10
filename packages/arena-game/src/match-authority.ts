@@ -126,6 +126,26 @@ export class MatchAuthority {
     this.lockLastState.set(match.id, state);
   }
 
+  /** Persist an anonymized match and purge its source rows under the active revision lock. */
+  async eraseMatchSideData(match: MatchRecord, sideIds: string[]): Promise<void> {
+    const nextRevision = this.lockRevision.get(match.id);
+    if (nextRevision === undefined) {
+      await this.persistence.eraseMatchSideData(match, sideIds);
+      return;
+    }
+    const state = this.stateText(match);
+    if (this.lockLastState.get(match.id) === state) return;
+    const expectedRevision = this.lockPersisted.has(match.id)
+      ? nextRevision
+      : this.lockBaseRevision.get(match.id);
+    const committedRevision = this.lockPersisted.has(match.id) ? nextRevision + 1 : nextRevision;
+    match.revision = committedRevision;
+    await this.persistence.eraseMatchSideData(match, sideIds, expectedRevision);
+    this.lockRevision.set(match.id, committedRevision);
+    this.lockPersisted.add(match.id);
+    this.lockLastState.set(match.id, state);
+  }
+
   private stateText(match: MatchRecord): string {
     const snapshot = structuredClone(match);
     snapshot.revision = 0;

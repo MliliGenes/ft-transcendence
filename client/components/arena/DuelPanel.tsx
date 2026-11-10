@@ -1,7 +1,6 @@
 "use client";
 
 import type { ArenaSnapshot, SideView } from "@/lib/arena/types";
-import { IconCheck, IconCode, IconLoader2, IconUserCheck, IconUserX } from "@tabler/icons-react";
 
 export interface DuelPanelProps {
   snapshot: ArenaSnapshot;

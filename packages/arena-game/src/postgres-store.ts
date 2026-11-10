@@ -14,6 +14,10 @@ CREATE TABLE IF NOT EXISTS matches (
   id TEXT PRIMARY KEY,
   data JSONB NOT NULL
 );
+CREATE INDEX IF NOT EXISTS matches_phase_started_at_idx
+  ON matches ((data->>'roundPhase'), ((data->>'startedAt')::BIGINT) DESC);
+CREATE INDEX IF NOT EXISTS matches_participants_idx
+  ON matches USING GIN ((data->'participants') jsonb_path_ops);
 CREATE TABLE IF NOT EXISTS rounds (
   match_id TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
   idx INTEGER NOT NULL,
@@ -60,6 +64,11 @@ CREATE TABLE IF NOT EXISTS collab_documents (
   updated_at BIGINT NOT NULL,
   PRIMARY KEY (match_id, round_id, side_id)
 );
+CREATE TABLE IF NOT EXISTS erased_account_tokens (
+  user_hash TEXT PRIMARY KEY,
+  expires_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS erased_account_tokens_expiry_idx ON erased_account_tokens (expires_at);
 `;
 
 /**
@@ -116,6 +125,7 @@ export class PostgresStores {
       reveals: this.reveals,
       collab: this.collab,
       commitMatchAndTeamDocuments: (match, rows) => this.saveMatchAndCollab(match, rows),
+      eraseMatchSideData: (match, sideIds, expectedRevision) => this.persistErasure(match, sideIds, expectedRevision),
       claimPendingEvaluation: (evaluationId) => this.claimPendingEvaluation(evaluationId),
       commitClaimedEvaluation: (claim, match, submission) => this.commitClaimedEvaluation(claim, match, submission),
     });
@@ -133,6 +143,61 @@ export class PostgresStores {
 
   async recordFailure(matchId: string, message: string): Promise<void> {
     await this.pool.query("INSERT INTO match_failures (match_id, message) VALUES ($1, $2)", [matchId, message]);
+  }
+
+  async blockUserHash(userHash: string, expiresAt: number): Promise<void> {
+    await this.pool.query("DELETE FROM erased_account_tokens WHERE expires_at <= $1", [Date.now()]);
+    await this.pool.query(
+      `INSERT INTO erased_account_tokens (user_hash, expires_at) VALUES ($1, $2)
+       ON CONFLICT (user_hash) DO UPDATE SET expires_at = GREATEST(erased_account_tokens.expires_at, EXCLUDED.expires_at)`,
+      [userHash, expiresAt],
+    );
+  }
+
+  async isUserHashBlocked(userHash: string): Promise<boolean> {
+    const result = await this.pool.query(
+      "SELECT 1 FROM erased_account_tokens WHERE user_hash = $1 AND expires_at > $2",
+      [userHash, Date.now()],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async blockedUserHashes(userHashes: string[]): Promise<Set<string>> {
+    if (userHashes.length === 0) return new Set();
+    const result = await this.pool.query<{ user_hash: string }>(
+      "SELECT user_hash FROM erased_account_tokens WHERE user_hash = ANY($1::text[]) AND expires_at > $2",
+      [userHashes, Date.now()],
+    );
+    return new Set(result.rows.map((row) => row.user_hash));
+  }
+
+  async purgeExpiredAccountHashes(): Promise<void> {
+    await this.pool.query("DELETE FROM erased_account_tokens WHERE expires_at <= $1", [Date.now()]);
+  }
+
+  private async persistErasure(match: MatchRecord, sideIds: string[], expectedRevision?: number): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      // Evaluations lock their submission before the match; use the same order
+      // so erasure cannot deadlock with an accepted judge commit.
+      await client.query(
+        "DELETE FROM submissions WHERE match_id = $1 AND data->>'sideId' = ANY($2::text[])",
+        [match.id, sideIds],
+      );
+      await saveMatchTx(client, match, expectedRevision);
+      await client.query(
+        "DELETE FROM collab_documents WHERE match_id = $1 AND side_id = ANY($2::text[])",
+        [match.id, sideIds],
+      );
+      await client.query("DELETE FROM match_failures WHERE match_id = $1", [match.id]);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**
@@ -344,6 +409,25 @@ class PostgresMatchStore implements MatchStore {
     const res = await this.pool.query("SELECT id FROM matches");
     return res.rows.map((r) => r.id as string);
   }
+
+  async listCompleted(): Promise<MatchRecord[]> {
+    const res = await this.pool.query<{ data: MatchRecord }>(
+      `SELECT data FROM matches WHERE data->>'roundPhase' = 'MATCH_COMPLETE'
+       ORDER BY (data->>'startedAt')::BIGINT DESC, id ASC`,
+    );
+    return res.rows.map((row) => row.data);
+  }
+
+  async listCompletedForUser(userId: string): Promise<MatchRecord[]> {
+    const res = await this.pool.query<{ data: MatchRecord }>(
+      `SELECT data FROM matches
+       WHERE data->>'roundPhase' = 'MATCH_COMPLETE'
+         AND data->'participants' @> $1::JSONB
+       ORDER BY (data->>'startedAt')::BIGINT DESC, id ASC`,
+      [JSON.stringify([{ userId }])],
+    );
+    return res.rows.map((row) => row.data);
+  }
 }
 
 class PostgresSubmissionStore implements SubmissionStore {
@@ -388,6 +472,13 @@ class PostgresSubmissionStore implements SubmissionStore {
     const res = await this.pool.query("SELECT data FROM submissions WHERE data->>'status' = 'pending'");
     return res.rows.map((r) => r.data as SubmissionRecord);
   }
+
+  async eraseForMatchSides(matchId: string, sideIds: string[]): Promise<void> {
+    await this.pool.query(
+      "DELETE FROM submissions WHERE match_id = $1 AND data->>'sideId' = ANY($2::text[])",
+      [matchId, sideIds],
+    );
+  }
 }
 
 class PostgresCollabStore implements CollabPersist {
@@ -412,6 +503,13 @@ class PostgresCollabStore implements CollabPersist {
     if (res.rowCount === 0) return undefined;
     const row = res.rows[0];
     return { appRevision: row.app_revision as number, language: row.language as string, stateB64: row.ydoc_state as string };
+  }
+
+  async eraseForMatchSides(matchId: string, sideIds: string[]): Promise<void> {
+    await this.pool.query(
+      "DELETE FROM collab_documents WHERE match_id = $1 AND side_id = ANY($2::text[])",
+      [matchId, sideIds],
+    );
   }
 }
 

@@ -58,6 +58,20 @@ export class LobbyController {
     return { ok: true, ...result };
   }
 
+  @Get("rooms/lookup/:code")
+  async lookupRoom(@Req() req: Request, @Param("code") code: string) {
+    requirePrincipal(req);
+    const normalized = code?.trim().toUpperCase();
+    if (!normalized || normalized.length > 32) {
+      throw new BadRequestException("invalid invite code");
+    }
+    const result = await this.game.lookupRoomByCode(normalized);
+    if (!result) {
+      return { ok: true, status: "expired", room: null, members: [] };
+    }
+    return { ok: true, status: result.room.status, room: result.room, members: result.members };
+  }
+
   @Get("rooms/:id")
   async getRoom(@Req() req: Request, @Param("id") id: string) {
     const { userId } = requirePrincipal(req);

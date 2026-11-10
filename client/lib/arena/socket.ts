@@ -1,6 +1,6 @@
 import { io, type Socket } from "socket.io-client";
 import { TransportSession, type ArenaTransport, type ConnectionState, type RunReceipt, type SubmitReceipt } from "./transport";
-import type { ArenaConnectionOptions, ArenaSnapshot, MatchFinalView, RevealView, SideView, TeamView } from "./types";
+import type { ArenaConnectionOptions, ArenaSnapshot, MatchFinalView, PlayerStatus, RevealView, SideView, TeamView } from "./types";
 
 export type SocketTransportOptions = ArenaConnectionOptions;
 
@@ -33,10 +33,10 @@ interface ServerSnapshot {
   problem: Omit<ArenaSnapshot["problem"], "id"> & { id?: string; problemVersionId?: string };
   tests: ArenaSnapshot["tests"];
   mySide: string;
-  sides: Record<string, { status: SideView["status"]; submissions: number; presence: SideView["presence"] }>;
+  sides: Record<string, { status: PlayerStatus; submissions: number; presence: SideView["presence"] }>;
   teams?: Array<{
     side: string;
-    activity: SideView["status"];
+    activity: PlayerStatus;
     submissions: number;
     members: Array<{ userId: string; presence: SideView["presence"]; ready: boolean; readyRevision: number | null }>;
     documentRevision: number | null;
@@ -140,7 +140,7 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
       if (mateMember) {
         mateView = {
           name: mateMember.userId ? (mateMember.userId.length > 8 ? mateMember.userId.slice(0, 8) : mateMember.userId) : "Teammate",
-          status: (mateMember.ready ? "ready" : (myTeam.activity ?? "coding")) as any,
+          status: mateMember.ready ? "ready" : (myTeam.activity ?? "coding"),
           presence: mateMember.presence ?? "online",
           submissions: myTeam.submissions ?? 0,
         };
@@ -151,7 +151,7 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
       const opp2 = otherTeam.members[1];
       opponent2View = {
         name: opp2.userId ? (opp2.userId.length > 8 ? opp2.userId.slice(0, 8) : opp2.userId) : "Opponent 2",
-        status: (opp2.ready ? "ready" : (otherTeam.activity ?? "coding")) as any,
+        status: opp2.ready ? "ready" : (otherTeam.activity ?? "coding"),
         presence: opp2.presence ?? "online",
         submissions: otherTeam.submissions ?? 0,
       };
@@ -308,7 +308,7 @@ export class SocketArenaTransport implements ArenaTransport {
     this.socket = sock;
 
     sock.on("connect", () => {
-      this.session.setConnection("connected");
+      if (this.session.setConnection("connected")) this.emit();
       void this.refresh();
     });
 

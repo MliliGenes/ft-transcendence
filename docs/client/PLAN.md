@@ -2,8 +2,8 @@
 
 This is the working progress tracker for the Nook web client. Update this file as implementation changes: check off work only after it is present and verified, revise the status table when a page changes, and refresh the review date.
 
-**Last reviewed:** 2026-11-07  
-**Current focus:** Profile/settings design and image editing implemented; verify the browser flow through Nginx, then connect search and chat.
+**Last reviewed:** 2026-11-09
+**Current focus:** Code Arena is connected to Nook profiles, Chat invitations and Game APIs. Verify the integrated flows in the running Compose stack and complete the submission evidence.
 
 ## Product direction
 
@@ -15,16 +15,16 @@ Profile/settings implementation reference: [PROFILE_DESIGN_SPEC.md](PROFILE_DESI
 
 | Area | Status | What works today |
 | --- | --- | --- |
-| Landing page (`/`) | UI complete | Responsive marketing page, shared logo, and image placeholders. |
+| Landing page (`/`) | UI complete | Responsive public page with working Code Arena entry point and public legal links. |
 | Login and registration | API connected; verify in running stack | Client validation and user-service requests; access token kept in memory; refresh token handled by an HTTP-only cookie. |
 | App shell and notifications | Mixed | Shared navigation shows the signed-in account name/avatar with generated fallbacks; notification content is sample data. |
-| Chat (`/chat`) | API connected; browser verification pending | Persisted DMs/groups over `/api/chat` with live socket updates and presence; grouped messages with day dividers; Discord-style details aside (DM profile card, group channel/rules/members); create-group and tabbed group-management dialogs with confirmations. |
+| Chat (`/chat`) | API connected; browser verification pending | Persisted DMs/groups over `/api/chat`, live socket updates and presence; profile access; Code Arena challenge action with persistent interactive invite cards. |
 | Search (`/search`) | UI prototype | Search view is present; results are not yet backed by the user service. |
 | Feed (`/feed`) | Coming soon | Placeholder page. |
 | Profile (`/profile`) | API connected | Banner and avatar, identity, friend count and friends aside (owner), connection card (others), primary action plus overflow menu with confirm dialogs. Other users’ friend lists need a backend endpoint. |
-| Play (`/play`) | Coming soon | Lists Chess and a future second game; Chess opens its own coming-soon view. |
-| Settings (`/settings`) | Profile/API connected; browser verification pending | Reference-based window/rail, profile fields including email, account details, connection status, logout, crop/zoom uploads, and avatar/banner deletion. Security, notifications, appearance, and privacy are marked Soon; connection management is deferred. |
-| Gateway routing | Configured | Nginx sends `/chat` to the client and `/api/chat/*` to the chat service. |
+| Play (`/play`) | Integrated; browser verification pending | 1v1 matchmaking/private rooms, 2v2 rooms, Code Arena matches, lobby identity hydration and leaderboard. |
+| Settings (`/settings`) | Profile/API connected; browser verification pending | Profile fields, account details, password, connected accounts, appearance, logout, image upload/removal. Notification preferences and self-service account deletion are not exposed. Public Privacy Policy and Terms pages are available at `/privacy` and `/terms`. |
+| Gateway routing | Configured | Nginx sends client routes to Next.js, `/api/*` to User, `/api/chat/*` to Chat, and `/api/game/*` plus its Socket.IO path to Game. |
 
 “UI prototype” means the view is implemented but its data or actions are not persisted through a backend. It does not imply that the underlying backend capability is missing.
 
@@ -38,7 +38,7 @@ Profile/settings implementation reference: [PROFILE_DESIGN_SPEC.md](PROFILE_DESI
 - [x] Build the landing, login, and registration views with image placeholders.
 - [x] Add the shared app shell, notification dropdown, profile, search, feed placeholder, and chat prototype.
 - [x] Give the client chat view the `/chat` route and keep chat-service routes under `/api/chat` in Nginx.
-- [x] Add a Play catalog and a dedicated Chess coming-soon page.
+- [x] Add the Play landing, Code Arena lobby/match routes, leaderboard and a Chess coming-soon page.
 
 ### 2. Account session — in progress
 
@@ -62,14 +62,15 @@ Profile/settings implementation reference: [PROFILE_DESIGN_SPEC.md](PROFILE_DESI
 
 **Acceptance:** profile, people search, feed, and notifications show server-backed data and user actions survive navigation and reload.
 
-### 4. Chat integration
+### 4. Chat and Code Arena integration
 
-- [ ] Replace sample conversations and messages with the chat-service API using `/api/chat`.
-- [ ] Connect live message updates through `/api/chat/socket.io` and handle reconnects and expired sessions.
-- [ ] Connect conversation selection, group creation, and message sending to persisted service actions.
-- [ ] Keep direct message and group layouts usable on narrow screens as responsive design is finalized.
+- [x] Connect persisted conversations and messages to the chat-service API using `/api/chat`.
+- [x] Connect live message updates through `/api/chat/socket.io` and handle reconnects and expired sessions.
+- [x] Connect conversation selection, group creation and message sending to persisted service actions.
+- [x] Add direct-message and profile challenges that create Code Arena private rooms and persistent invitation cards.
+- [ ] Verify Chat and Code Arena flows in the running Compose stack, including expired/filled invitations and narrow-screen layouts.
 
-**Acceptance:** two signed-in users can exchange persisted messages and see new messages arrive without reloading.
+**Acceptance:** two signed-in users can exchange persisted messages, invite each other to Code Arena, and see new messages arrive without reloading.
 
 ### 5. Remaining app views and release checks
 

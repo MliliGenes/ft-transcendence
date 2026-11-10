@@ -1,6 +1,6 @@
 "use client";
 
-import { IconAward, IconCheck, IconPlayerPlay } from "@tabler/icons-react";
+import { IconAward, IconPlayerPlay } from "@tabler/icons-react";
 import type { RevealView } from "@/lib/arena/types";
 import { Button } from "@/components/ui/button";
 

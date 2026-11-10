@@ -602,6 +602,48 @@ describe("boot recovery across a simulated process death (ticket 11 §10)", () =
     expect(snap.sides.right?.submissions).toBe(0);
   });
 
+  it("starts reconnect grace after boot finishes re-driving pending evaluations", async () => {
+    const graceMs = 30_000;
+    const { engine1, engine2, judge, left, matchId, stores, advance } = await twoEngines(
+      [{ defer: true }],
+      { reconnectGraceMs: graceMs },
+    );
+    const match = await stores.matches.load(matchId);
+    const round = match!.rounds[0]!;
+    await stores.submissions.append({
+      submissionId: "slow-recovery-submission",
+      evaluationId: "slow-recovery-evaluation",
+      matchId,
+      roundId: round.roundId,
+      sideId: "left",
+      problemVersionId: round.problemVersionId,
+      language: "Python",
+      source: SOLVED_PY,
+      sourceHash: "slow-recovery-hash",
+      documentRevision: null,
+      submittedAt: match!.startedAt,
+      elapsedMatchMs: 0,
+      status: "pending",
+      score: null,
+      scoreBp: null,
+      groups: null,
+      testStatuses: null,
+      failureCode: null,
+    });
+    await engine1.setPresence(matchId, "left", "online");
+    await engine1.setPresence(matchId, "right", "online");
+
+    const recovering = engine2.recover();
+    for (let i = 0; i < 100 && judge.evalCalls < 1; i++) await tick();
+    expect(judge.evalCalls).toBe(1);
+    advance(graceMs + 1);
+    judge.release(P100);
+    await recovering;
+
+    expect(await engine2.applyGraceIfExpired(matchId)).toBe(false);
+    expect((await engine2.snapshot(left, matchId)).roundPhase).toBe("CODING");
+  });
+
   it("supersedes an expired pending evaluation during recovery without rerunning the judge", async () => {
     const graceMs = 25;
     const { engine1, engine2, judge, left, matchId, stores, advance } = await twoEngines(

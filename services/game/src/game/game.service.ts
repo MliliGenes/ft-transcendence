@@ -1,5 +1,6 @@
 import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { createHash } from "node:crypto";
 import {
   ArenaEngine,
   InMemoryEvaluationTelemetry,
@@ -15,6 +16,7 @@ import {
   RateLimitedError,
   selectProblems,
   type AuthenticatedPrincipal,
+  type MatchStore,
   type MatchPersistence,
   type ILobbyStore,
   type LobbySideId,
@@ -26,6 +28,18 @@ import {
 import type { MatchMode } from "arena-model";
 import { MatchSocketPresence } from "./match-socket-presence.js";
 import { createGameJudge } from "./judge-factory.js";
+import { buildLeaderboard, statisticsForUser, summarizeCompletedMatch } from "./match-statistics.js";
+
+const LOBBY_PROBLEM_POOL = ["even-ledger", "double-it", "sum-array"];
+const DELETED_ACCOUNT_TOKEN_BLOCK_MS = 20 * 60 * 1000;
+
+function userTokenHash(userId: string): string {
+  return createHash("sha256").update(userId, "utf8").digest("hex");
+}
+
+export function selectLobbyProblems(): string[] {
+  return selectProblems(LOBBY_PROBLEM_POOL, 3);
+}
 
 /**
  * Thin application layer over ArenaEngine: owns NOTHING domain (no scoring,
@@ -37,14 +51,20 @@ import { createGameJudge } from "./judge-factory.js";
 export class GameService implements OnModuleInit, OnModuleDestroy {
   private engine!: ArenaEngine;
   private stores?: PostgresStores;
+  private matchStore!: MatchStore;
   private lobbyStore!: ILobbyStore;
   private readonly listeners = new Set<(event: string, matchId: string, payload: unknown) => void>();
   private readonly lobbyListeners = new Set<(event: string, payload: unknown) => void>();
+  private readonly accountDeletionListeners = new Set<(userId: string) => void>();
+  private readonly activeSocketEnumerators = new Set<() => string[]>();
+  private readonly deletedAccountHashes = new Map<string, number>();
   private readonly userActionTimes = new Map<string, number[]>();
   private readonly evaluationTelemetry = new InMemoryEvaluationTelemetry();
   private readonly matchSocketPresence: MatchSocketPresence;
   private graceTimer?: NodeJS.Timeout;
   private deadlineTimer?: NodeJS.Timeout;
+  private accountErasureCleanupTimer?: NodeJS.Timeout;
+  private activeSocketSweepTimer?: NodeJS.Timeout;
 
   constructor() {
     this.matchSocketPresence = new MatchSocketPresence({
@@ -71,6 +91,65 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     return () => {
       this.lobbyListeners.delete(listener);
     };
+  }
+
+  onAccountDeleted(listener: (userId: string) => void): () => void {
+    this.accountDeletionListeners.add(listener);
+    return () => this.accountDeletionListeners.delete(listener);
+  }
+
+  registerActiveSocketEnumerator(enumerate: () => string[]): () => void {
+    this.activeSocketEnumerators.add(enumerate);
+    return () => this.activeSocketEnumerators.delete(enumerate);
+  }
+
+  /** Fast local revocation and socket fan-out as soon as a deletion event arrives. */
+  blockDeletedAccount(userId: string): void {
+    const hash = userTokenHash(userId);
+    this.deletedAccountHashes.set(hash, Date.now() + DELETED_ACCOUNT_TOKEN_BLOCK_MS);
+    this.engine?.blockAccount(userId);
+    for (const listener of this.accountDeletionListeners) {
+      try {
+        listener(userId);
+      } catch {
+        console.error("[game] failed to disconnect a deleted account socket");
+      }
+    }
+  }
+
+  /** Reject old access tokens after account deletion; the persistent store keeps only a short-lived hash. */
+  async assertAccountActive(userId: string): Promise<void> {
+    const hash = userTokenHash(userId);
+    const localExpiry = this.deletedAccountHashes.get(hash);
+    if (localExpiry !== undefined) {
+      if (localExpiry > Date.now()) throw new Error("account is unavailable");
+      this.deletedAccountHashes.delete(hash);
+    }
+    if (await this.stores?.isUserHashBlocked(hash)) throw new Error("account is unavailable");
+  }
+
+  private async disconnectDeletedSockets(): Promise<void> {
+    const hashToUser = new Map<string, string>();
+    for (const enumerate of this.activeSocketEnumerators) {
+      for (const userId of enumerate()) hashToUser.set(userTokenHash(userId), userId);
+    }
+    const localBlocklist = [...hashToUser]
+      .filter(([hash]) => (this.deletedAccountHashes.get(hash) ?? 0) > Date.now())
+      .map(([hash]) => hash);
+    const storedBlocklist = await this.stores?.blockedUserHashes([...hashToUser.keys()]) ?? new Set<string>();
+    for (const hash of new Set([...localBlocklist, ...storedBlocklist])) {
+      const userId = hashToUser.get(hash);
+      if (userId) this.blockDeletedAccount(userId);
+    }
+  }
+
+  /** Persist deletion revocation, clear lobby state, then anonymize matches and purge source. */
+  async eraseDeletedAccount(userId: string): Promise<void> {
+    this.blockDeletedAccount(userId);
+    const blockUntil = Date.now() + DELETED_ACCOUNT_TOKEN_BLOCK_MS;
+    await this.stores?.blockUserHash(userTokenHash(userId), blockUntil);
+    await this.lobbyStore.eraseUser(userId);
+    await this.engine.eraseAccount(userId);
   }
 
   private broadcastRoomUpdate(roomId: string, room: PrivateRoom, members: PrivateRoomMember[]): void {
@@ -102,10 +181,24 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     if (databaseUrl) {
       this.stores = new PostgresStores(databaseUrl);
       await this.stores.ensureSchema();
+      this.accountErasureCleanupTimer = setInterval(() => {
+        void this.stores?.purgeExpiredAccountHashes().catch(() => {});
+        const now = Date.now();
+        for (const [hash, expiry] of this.deletedAccountHashes) {
+          if (expiry <= now) this.deletedAccountHashes.delete(hash);
+        }
+      }, 60_000);
+      this.accountErasureCleanupTimer.unref();
+      this.activeSocketSweepTimer = setInterval(() => {
+        void this.disconnectDeletedSockets().catch(() => {});
+      }, 15_000);
+      this.activeSocketSweepTimer.unref();
       persistence = this.stores.persistence;
+      this.matchStore = this.stores.matches;
       this.lobbyStore = this.stores.lobby;
     } else {
       const matches = new InMemoryMatchStore();
+      this.matchStore = matches;
       persistence = new StoreBackedMatchPersistence({
         matches,
         submissions: new InMemorySubmissionStore(),
@@ -151,6 +244,8 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     if (this.graceTimer) clearInterval(this.graceTimer);
     if (this.deadlineTimer) clearInterval(this.deadlineTimer);
+    if (this.accountErasureCleanupTimer) clearInterval(this.accountErasureCleanupTimer);
+    if (this.activeSocketSweepTimer) clearInterval(this.activeSocketSweepTimer);
     await this.stores?.close();
   }
 
@@ -264,6 +359,24 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     return this.engine.finalResult(this.principalFor(userId), matchId);
   }
 
+  async userMatches(userId: string) {
+    const records = await this.matchStore.listCompletedForUser(userId);
+    const matches = records
+      .map((record) => summarizeCompletedMatch(record, userId))
+      .filter((summary): summary is NonNullable<typeof summary> => summary !== null)
+      .sort((left, right) => right.playedAt.localeCompare(left.playedAt) || left.matchId.localeCompare(right.matchId))
+      .slice(0, 25);
+    return { matches };
+  }
+
+  async userStatistics(userId: string) {
+    return statisticsForUser(userId, await this.matchStore.listCompletedForUser(userId));
+  }
+
+  async leaderboard() {
+    return { players: buildLeaderboard(await this.matchStore.listCompleted()).slice(0, 50) };
+  }
+
   // ─── Ticket 04: Lobby and Matchmaking ──────────────────────────────────────
 
   async joinQueue(userId: string, mode: MatchMode): Promise<QueueEntry> {
@@ -283,7 +396,7 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   }
 
   async triggerMatchmaking(mode: MatchMode): Promise<{ matchId: string; entries: QueueEntry[] } | null> {
-    const problems = selectProblems(["even-ledger", "double-it"], 3);
+    const problems = selectLobbyProblems();
     const result = await this.lobbyStore.tryMatch(mode, problems, (input, save) =>
       this.engine.createMatch(input, save),
     );
@@ -333,7 +446,7 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
 
   async startPrivateRoom(userId: string, roomId: string): Promise<{ matchId: string }> {
     this.checkLobbyRateLimit(userId);
-    const problems = selectProblems(["even-ledger", "double-it"], 3);
+    const problems = selectLobbyProblems();
     const { matchId } = await this.lobbyStore.startPrivateRoom(
       userId,
       roomId,
@@ -358,6 +471,10 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
 
   async getRoomWithMembers(roomId: string): Promise<RoomWithMembers | null> {
     return this.lobbyStore.getRoomWithMembers(roomId);
+  }
+
+  async lookupRoomByCode(code: string): Promise<RoomWithMembers | null> {
+    return this.lobbyStore.getRoomByCode(code);
   }
 
   async userActiveRoom(userId: string): Promise<RoomWithMembers | null> {

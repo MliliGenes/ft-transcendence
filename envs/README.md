@@ -28,18 +28,26 @@ Every example assignment uses `VAR_NAME=<EXAMPLE_VALUE>`:
 
 | Local file | Loaded by | Contents |
 | --- | --- | --- |
-| `backend.env` | User and Chat services | Shared runtime mode |
+| `backend.env` | User, Chat and Game services | Shared runtime mode |
 | `user-db.env` | User database and User service | User database credentials/name |
 | `chat-db.env` | Chat database and Chat service | Chat database credentials/name |
-| `rabbitmq.env` | RabbitMQ and both backend services | Shared broker credentials |
-| `minio.env` | MinIO only | Storage admin credentials and browser CORS origins |
+| `game-db.env` | Game database | Game database credentials/name |
+| `rabbitmq.env` | RabbitMQ plus User, Chat and Game services | Shared broker credentials |
+| `minio.env` | MinIO and its initializer | Storage admin credentials and browser CORS origins |
 | `user-service.env` | User service only | Internal addresses, SMTP, initial app admin |
-| `user-auth.env` | User service only | RSA key pair, frontend origin, OAuth |
+| `user-auth.env` | User service only | RSA signing key pair, frontend origin, OAuth |
 | `chat-service.env` | Chat service only | Internal addresses, public RSA key, storage settings |
+| `game-service.env` | Game service only | Game DB URL, public RSA key, judge worker URL/token and game settings |
+| `judge-worker.env` | Judge worker only | Shared request token and execution limits |
 
 Compose loads these files in the order declared under each service's
 `env_file`. Later files override earlier values with the same name.
-Define database and broker credentials only in their shared files.
+Define database and broker credentials only in their shared files. Match the
+Game database username, password and database name in `game-db.env` and the
+`DATABASE_URL` in `game-service.env`. The Game service receives only
+`JWT_PUBLIC_KEY`; keep `JWT_PRIVATE_KEY` in `user-auth.env` for User service.
+Use the same generated `JUDGE_WORKER_TOKEN` in `game-service.env` and
+`judge-worker.env`.
 
 The Next.js client currently needs no project-specific env file: browser
 requests use `/api/` and `/api/chat/` on the current origin. The obsolete
@@ -50,26 +58,33 @@ requests use `/api/` and `/api/chat/` on the current origin. The obsolete
 1. Copy each `*.env.example` in this directory to the same filename without
    `.example`, but keep any existing local `*.env` files.
 2. Replace every `<...>` placeholder. Comments describe required values,
-   local Compose examples, and settings shared with another service.
-3. Generate the RSA pair from `user-service/` using
+   local Compose examples, and settings shared with another service. Use a
+   URL-safe Game database password or percent-encode reserved characters in
+   the Game `DATABASE_URL`.
+3. Generate a strong worker token, for example with `openssl rand -hex 32`,
+   and set exactly the same value in `game-service.env` and `judge-worker.env`.
+4. Generate the RSA pair from `user-service/` using
    `node scripts/generate-jwt-keys.mjs`. Put both keys in `user-auth.env`;
-   copy only the matching public key into `chat-service.env`.
-4. Configure SMTP, `AUTH_FRONTEND_URL`, and the initial superadmin.
+   copy only the matching public key into `chat-service.env` and
+   `game-service.env`. Never give the private key to Chat or Game.
+5. Configure SMTP, `AUTH_FRONTEND_URL`, and the initial superadmin.
    SMTP is required even when OAuth is disabled. Superadmin settings do not
    reset an account that already exists.
-5. Configure any OAuth providers you want to use. Their callback registrations
+6. Configure any OAuth providers you want to use. Their callback registrations
    must agree with the public URLs in `user-auth.env`, including HTTPS
    and the `/api` prefix for Compose.
-6. Provision the private attachment bucket and a restricted MinIO service account.
+7. Provision the private attachment bucket and a restricted MinIO service account.
    Use that account in `chat-service.env`; keep MinIO root credentials separate.
-7. From the repository root, run `docker compose config --quiet` and then
+8. From the repository root, run `docker compose config --quiet` and then
    `docker compose up --build -d`. The config check validates Compose syntax
    and file references; it does not prove that credentials or endpoints work.
 
 ## Internal and public addresses
 
 Compose applications use Docker service names such as `user-db`, `chat-db`,
-`rabbitmq`, and `minio`. Browser URLs use the public Nginx address.
+`game-db`, `judge-worker`, `rabbitmq`, and `minio`. Browser URLs use the
+public Nginx address. The Game service uses Postgres and an in-process bounded
+judge queue; Redis is not a runtime dependency.
 
 The local application origin is `https://localhost`. Browser attachment
 requests use `https://localhost:9443`; internal storage requests use

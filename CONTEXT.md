@@ -13,13 +13,13 @@ The game is hosted inside Nook's web client under the `/play` route and follows 
    - Backend services (`services/game`, `services/judge-worker`), core packages (`packages/arena-game`, `packages/arena-model`, `packages/problem-bank`), and documentation are ported selectively into `nook-client` without overwriting root compose or project configurations.
 2. **Database Topology**:
    - `game-db`: Dedicated PostgreSQL container (`5432`) on Nook's private network alongside `user-db` and `chat-db`.
-   - Redis: Added to `compose.yaml` to power evaluation queueing and lock management.
+   - Judge queueing: The judge worker uses a bounded in-process queue; Postgres stores durable matches and submissions. Redis is not part of the current Code Arena runtime.
 3. **Authentication Boundary**:
-   - `services/game` is an auth consumer per `docs/auth-game-contract.md`. It validates Nook JWT/cookies via `user-service` public keys/middleware, extracting trusted `{ userId, username }` into `SocketPrincipal`.
+   - `services/game` is an auth consumer. It validates Nook RS256 access tokens with the public key and trusts only the `sub` UUID as `userId`; public profile names are loaded from User service by the client. The User signing private key is not provided to Game.
 4. **Chat & Communication Separation**:
    - In-game team chat runs on `game-service`'s match-scoped WebSocket namespace (`/chat`), styled natively with Nook UI components. Nook platform chat remains in `chat-service`.
 5. **Entry Flow**:
-   - Private lobby entry: Players create a lobby, receive a shareable 6-character code (or send an invite link in Nook Chat), assemble teams, and start upon mutual readiness.
+   - Entry: Players can enter 1v1 matchmaking, create a private room with a shareable 6-character code, or send a private-room invitation through Nook Chat. 2v2 teams assemble and use mutual readiness before submission.
 6. **Editor & Collaboration**:
    - CodeMirror 6 with Yjs CRDT collaborative binding (`y-codemirror.next`), wrapped in dynamic client components (`ssr: false`) and styled to match Nook's pure-black (`#000000`) and surface (`#121212`) palette with Inter and monospace typography.
 7. **Supported Languages**:

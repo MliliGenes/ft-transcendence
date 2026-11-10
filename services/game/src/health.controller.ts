@@ -18,6 +18,26 @@ function tcp(host: string, port: number, timeoutMs: number): Promise<boolean> {
   });
 }
 
+async function httpReady(baseUrl: string, timeoutMs: number): Promise<boolean> {
+  let readyUrl: URL;
+  try {
+    readyUrl = new URL("/ready", baseUrl);
+  } catch {
+    return false;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(readyUrl, { signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 @Controller()
 export class HealthController {
   /** Liveness: the process is up and the shared model resolves at runtime. */
@@ -35,19 +55,11 @@ export class HealthController {
         defaultPgHost = new URL(process.env.DATABASE_URL).hostname;
       } catch {}
     }
-    let defaultRedisHost = "redis";
-    if (process.env.REDIS_URL) {
-      try {
-        defaultRedisHost = new URL(process.env.REDIS_URL).hostname;
-      } catch {}
-    }
-
     const pgHost = process.env.POSTGRES_HOST ?? defaultPgHost;
-    const rdHost = process.env.REDIS_HOST ?? defaultRedisHost;
-
     const postgres = await tcp(pgHost, 5432, 500);
-    const redis = await tcp(rdHost, 6379, 500);
-    const result = { ready: postgres && redis, checks: { postgres, redis } };
+    const judgeWorkerUrl = process.env.JUDGE_WORKER_URL ?? "http://judge-worker:3010";
+    const judgeWorker = await httpReady(judgeWorkerUrl, 500);
+    const result = { ready: postgres && judgeWorker, checks: { postgres, judgeWorker } };
     if (!result.ready) throw new ServiceUnavailableException(result);
     return result;
   }

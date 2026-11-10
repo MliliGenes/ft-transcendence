@@ -37,6 +37,18 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.game.onEvent((event, matchId, payload) => {
       if (matchId) this.server?.to(roomFor(matchId)).emit(event, payload);
     });
+    this.game.onAccountDeleted((userId) => this.disconnectUser(userId));
+    this.game.registerActiveSocketEnumerator(() => [...(this.server?.sockets.sockets.values() ?? [])]
+      .flatMap((socket) => {
+        const userId = socketPrincipal(socket)?.userId;
+        return userId ? [userId] : [];
+      }));
+  }
+
+  private disconnectUser(userId: string): void {
+    for (const socket of this.server?.sockets.sockets.values() ?? []) {
+      if (socketPrincipal(socket)?.userId === userId) socket.disconnect(true);
+    }
   }
 
   /**
@@ -54,6 +66,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       principal = principalFromHandshake(client, { matchIdRequired: true });
       const { userId, matchId } = principal;
+      await this.game.assertAccountActive(userId);
       await this.game.snapshot(userId, matchId);
       await this.game.noteSocketOpen(userId, matchId, client.id);
       opened = true;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { IconCode, IconDeviceGamepad2, IconPlus, IconUserPlus, IconUsers } from "@tabler/icons-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { LobbyClient, type PrivateRoom } from "@/lib/arena/lobby";
@@ -78,7 +79,7 @@ export function PlayLandingView() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-8 border-b border-border pb-5">
+      <div className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
         <div className="flex items-center gap-3">
           <div className="flex size-10 items-center justify-center rounded-none bg-primary/10 text-primary">
             <IconDeviceGamepad2 className="size-6" />
@@ -90,6 +91,7 @@ export function PlayLandingView() {
             </p>
           </div>
         </div>
+        <Button render={<Link href="/play/leaderboard" />} variant="outline" className="min-h-11">Leaderboard</Button>
       </div>
 
       {activeRoom && (

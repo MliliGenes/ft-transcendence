@@ -22,7 +22,7 @@ export function VerifyEmailView() {
     // Keep the token out of the address bar, history and referrers.
     window.history.replaceState(window.history.state, "", window.location.pathname);
     if (!token) {
-      setState("missing");
+      void Promise.resolve().then(() => setState("missing"));
       return;
     }
 

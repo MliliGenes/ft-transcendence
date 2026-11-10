@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
-import { IconArrowDown, IconArrowLeft, IconChevronDown, IconHash, IconLayoutSidebarRight, IconLayoutSidebarRightFilled, IconMessageCircle, IconPaperclip, IconPlus, IconSearch, IconSend, IconSettings, IconUsersGroup, IconX } from "@tabler/icons-react";
+import { IconArrowDown, IconArrowLeft, IconChevronDown, IconDeviceGamepad2, IconHash, IconLayoutSidebarRight, IconLayoutSidebarRightFilled, IconMessageCircle, IconPaperclip, IconPlus, IconSearch, IconSend, IconSettings, IconUsersGroup, IconX } from "@tabler/icons-react";
 import { io, type Socket } from "socket.io-client";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AccountAvatar } from "@/components/app/account-avatar";
@@ -26,6 +26,7 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { accountApi } from "@/lib/accounts/client";
 import { accountImageSource } from "@/lib/accounts/images";
 import { accountDisplayName as displayName } from "@/lib/accounts/status-icons";
+import { createCodeArenaInvite } from "@/lib/arena/invitations";
 import { chatApi, type ChatGroup, type ChatMessage } from "@/lib/chat/client";
 import { friendshipQueryKey, socialApi } from "@/lib/social/client";
 
@@ -306,6 +307,23 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
     },
     onError: error => { setUploadProgress(null); setSendError(errorMessage(error)); },
   });
+  const challenge = useMutation({
+    mutationFn: ({ conversationId, userId }: { conversationId: string; userId: string }) => {
+      if (!recipient) throw new Error("Challenges can only be sent in a direct message.");
+      return requestWithSession((token) => createCodeArenaInvite({ userId, token, conversationId }));
+    },
+    onMutate: () => setSendError(""),
+    onSuccess: async (_invite, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: messagesKey(session?.user.id, variables.conversationId) }),
+        queryClient.invalidateQueries({ queryKey: conversationsKey(session?.user.id) }),
+      ]);
+      nearBottomRef.current = true;
+      setShowJump(false);
+      requestAnimationFrame(() => { const element = scrollContainerRef.current; if (element) element.scrollTop = element.scrollHeight; });
+    },
+    onError: (error) => setSendError(errorMessage(error)),
+  });
 
   useEffect(() => {
     const latest = messages[messages.length - 1];
@@ -491,6 +509,7 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
             </div>
             {connectionState !== "connected" && <span role="status" className="hidden shrink-0 items-center gap-1.5 text-xs text-muted-foreground sm:inline-flex"><StatusDot status="AWAY" />{connectionState === "connecting" ? "Connecting…" : "Reconnecting…"}</span>}
             {connectionState === "connected" && <span className="sr-only" role="status">Chat connected</span>}
+            {recipient && <Button type="button" variant="outline" className="min-h-10 shrink-0 px-2 text-xs sm:px-3 sm:text-sm" aria-label="Challenge to a Code Arena duel" title="Challenge to a Code Arena duel" disabled={challenge.isPending || sendMessage.isPending} onClick={() => { if (selectedId && session?.user.id) challenge.mutate({ conversationId: selectedId, userId: session.user.id }); }}><IconDeviceGamepad2 size={16} aria-hidden="true" />{challenge.isPending ? "Creating…" : "Challenge"}</Button>}
             {isGroupAdmin && selectedGroup && <Button type="button" variant="ghost" size="icon" className="size-11 shrink-0" aria-label="Manage group" title="Manage group" onClick={() => openSettings(selectedGroup.id)}><IconSettings size={20} aria-hidden="true" /></Button>}
             <Button type="button" variant="ghost" size="icon" className={`size-11 shrink-0 ${detailsInline ? "text-foreground" : "text-muted-foreground"}`} aria-label={recipient ? "Show profile panel" : "Show group panel"} aria-pressed={wide ? detailsInline : undefined} title={recipient ? "Profile" : "Group info"} onClick={toggleDetails}>
               {detailsInline ? <IconLayoutSidebarRightFilled size={20} aria-hidden="true" /> : <IconLayoutSidebarRight size={20} aria-hidden="true" />}

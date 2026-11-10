@@ -16,6 +16,8 @@
     "@nestjs/platform-socket.io": "^11.2.6",
     "@nestjs/websockets": "^11.2.6",
     "@types/express": "^4.17.25",
+    "amqp-connection-manager": "^5.0.0",
+    "amqplib": "^2.2.0",
     "arena-game-engine": "*",
     "arena-model": "*",
     "reflect-metadata": "^0.2.2",

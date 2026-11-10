@@ -160,6 +160,7 @@ export class ArenaEngine {
   private readonly eventCommand = new AsyncLocalStorage<{ matchId: string; events: Array<{ event: ArenaEvent; payload: unknown }> }>();
   private readonly runStamps = new Map<string, number[]>();
   private readonly evaluation: EvaluationOrchestrator;
+  private readonly blockedAccounts = new Set<string>();
 
   private async withMatchLock<T>(matchId: string, fn: () => Promise<T>, options?: MatchLockOptions): Promise<T> {
     const command = { matchId, events: [] as Array<{ event: ArenaEvent; payload: unknown }> };
@@ -906,6 +907,7 @@ export class ArenaEngine {
    * Membership-verified; never trusts client-supplied sides.
    */
   async participantSide(userId: string, matchId: string): Promise<SideId> {
+    if (this.blockedAccounts.has(userId)) throw new NotMemberError(matchId);
     const match = await this.loadMatchOrThrow(matchId);
     const found = match.participants.find((p) => p.userId === userId);
     if (!found) throw new NotMemberError(matchId);
@@ -1215,6 +1217,62 @@ export class ArenaEngine {
     });
   }
 
+  /** Immediately deny new game actions from this account while erasure runs. */
+  blockAccount(userId: string): void {
+    this.blockedAccounts.add(userId);
+  }
+
+  /**
+   * Remove a deleted user's identity and code while keeping public match
+   * results. In 2v2 the source belongs to the team side, so the whole side's
+   * submissions and shared documents are erased together.
+   */
+  async eraseAccount(userId: string): Promise<void> {
+    this.blockAccount(userId);
+    for (const matchId of await this.persistence.listMatchIds()) {
+      const initial = await this.persistence.loadMatch(matchId);
+      if (!initial?.participants.some((participant) => participant.userId === userId)) continue;
+
+      // Drain accepted submission setup first, then let each evaluation make
+      // its terminal commit before acquiring the erasure lock. Waiting under
+      // that lock would deadlock the evaluation's final commit.
+      await this.withMatchLock(matchId, async () => undefined);
+      await Promise.all(this.evaluation.forMatch(matchId).map((entry) => entry.promise));
+
+      await this.withRevisionRetry(matchId, async () => {
+        const match = await this.loadMatchOrThrow(matchId);
+        const participant = match.participants.find((entry) => entry.userId === userId);
+        if (!participant) return;
+        const side = participant.sideId;
+
+        if (match.roundPhase !== "MATCH_COMPLETE" && !match.forfeit) {
+          const winner = match.participants.find((entry) => entry.sideId !== side)?.sideId ?? side;
+          this.recordForfeit(match, winner, side, "leave");
+        }
+
+        participant.userId = this.uniqueAnonymousId(match);
+        participant.anonymized = true;
+        delete match.memberPresence?.[userId];
+        delete match.memberOfflineSinceMs?.[userId];
+        for (const round of match.rounds) {
+          delete round.readiness?.[userId];
+          delete round.runTests[side];
+        }
+        // Failure strings are diagnostic text and may include judge output.
+        match.failures = [];
+
+        await this.authority.eraseMatchSideData(match, [side]);
+        this.teamCollaboration.destroySide(match, side);
+      });
+    }
+  }
+
+  private uniqueAnonymousId(match: MatchRecord): string {
+    let userId = this.uuid();
+    while (match.participants.some((participant) => participant.userId === userId)) userId = this.uuid();
+    return userId;
+  }
+
   private recordForfeit(match: MatchRecord, winner: SideId, loser: SideId, reason: ForfeitRecord["reason"]): void {
     match.forfeit = { winner, loser, at: this.clock(), reason };
     match.roundPhase = "MATCH_COMPLETE";
@@ -1293,11 +1351,33 @@ export class ArenaEngine {
     const recovery = await this.evaluation.recoverPending();
     retried = recovery.retried;
     failed = recovery.failed;
+    // The service does not accept clients until this work is complete. Start
+    // reconnect grace when it is actually ready, not before slow judge retries.
+    const recoveryReadyAt = this.clock();
+    for (const id of ids) {
+      await this.withRevisionRetry(id, async () => {
+        const match = await this.loadMatchOrThrow(id);
+        for (const participant of match.participants) {
+          match.presence[participant.sideId] = "offline";
+          match.offlineSinceMs[participant.sideId] = recoveryReadyAt;
+        }
+        if (match.mode === "2v2") {
+          match.memberPresence ??= {};
+          match.memberOfflineSinceMs ??= {};
+          for (const participant of match.participants) {
+            match.memberPresence[participant.userId] = "offline";
+            match.memberOfflineSinceMs[participant.userId] = recoveryReadyAt;
+          }
+        }
+        await this.authority.saveMatch(match);
+      });
+    }
     await this.sweepExpiredMatches();
     return { matches: ids.length, retried, failed };
   }
 
   private async requireMember(principal: AuthenticatedPrincipal, matchId: string): Promise<MatchRecord> {
+    if (this.blockedAccounts.has(principal.userId)) throw new NotMemberError(matchId);
     const match = await this.authority.requireMember(principal, matchId);
     this.rememberDeadline(match);
     return match;
