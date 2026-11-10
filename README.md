@@ -1,5 +1,34 @@
 # FT_TRANSCENDENCE
 
+## Git activity report
+
+Requires Git and Node.js 20+; no dependencies to install. From the repository root:
+
+```sh
+node git-analytics.mjs
+node git-analytics.mjs --no-fetch
+node git-analytics.mjs --branch main
+node git-analytics.mjs --json > git-report.json
+```
+
+The default command fetches all `origin` branches, prunes stale remote-tracking
+refs, and downloads full history for shallow clones. It does not merge, switch
+branches, or change working files. Fetch failures stop the report; `--no-fetch`
+explicitly uses cached refs instead.
+
+Reports include unique commit counts, authored/co-authored credit per contributor,
+7/30-day pulse, 12 weeks of activity, branch history counts, and recent commits.
+Contributor counts and pulse exclude merges; merge totals are shown separately.
+Activity uses author dates in UTC. `.mailmap` combines known contributor aliases
+for both authors and co-authors without rewriting history; add aliases there as
+needed. A person is credited once per commit, and shared commits credit each
+participant. These counts describe recorded history, not effort or code quality.
+
+Only history reachable from `origin` branches is included, so local backup and
+review branches do not inflate totals. Shared commit IDs count once overall;
+branch totals overlap. Distinct commits created by cherry-picks or history rewrites
+remain distinct. JSON output includes contributor email addresses.
+
 ## Use of AI
 
 We used AI tools openly during this project. How much we relied on them differs by part of the codebase:
