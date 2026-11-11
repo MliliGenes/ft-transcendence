@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -13,6 +14,7 @@ import { ChatGateway } from './gateway/chat.gateway.js';
 import { UserProfilesService } from './user-profiles.service.js';
 import { MinioService } from '../minio/minio.service.js';
 import { GameNotificationsService } from './game-notifications.service.js';
+import { GameRoomsClient } from './game-rooms.client.js';
 
 @Injectable()
 export class ChatService {
@@ -22,6 +24,7 @@ export class ChatService {
     private readonly userProfiles: UserProfilesService,
     private readonly minio: MinioService,
     private readonly gameNotifications: GameNotificationsService,
+    private readonly gameRooms: GameRoomsClient,
   ) {}
 
   async createAttachmentUploadUrl(
@@ -336,21 +339,55 @@ export class ChatService {
       ),
     );
 
-    const newMessage = await this.prisma.message.create({
-      data: {
+    const roomCode = msg.gameChallenge?.roomCode;
+    if (roomCode) {
+      // The Game service owns the room and its membership, so it decides
+      // whether this caller may announce this room here. Nothing is written
+      // before that answer, so a refusal leaves no message and no link.
+      await this.assertChallengeAuthorized(
+        userId,
         conversationId,
-        authorId: userId,
-        content: msg.content,
-        attachments,
-        clientRequestId: msg.clientRequestId,
-        requestHash,
-      },
-      include: {
-        author: {
-          select: { id: true, username: true, displayName: true, avatarUrl: true },
-        },
-      },
-    });
+        roomCode,
+        authorization,
+      );
+    }
+
+    const messageData = {
+      conversationId,
+      authorId: userId,
+      content: msg.content,
+      attachments,
+      clientRequestId: msg.clientRequestId,
+      requestHash,
+    };
+
+    // A challenge and its message are written together, so a failure never
+    // leaves one of them behind.
+    const newMessage = roomCode
+      ? await this.prisma.$transaction(async (tx) => {
+          const created = await tx.message.create({
+            data: messageData,
+            include: {
+              author: {
+                select: { id: true, username: true, displayName: true, avatarUrl: true },
+              },
+            },
+          });
+          await tx.gameChallenge.upsert({
+            where: { roomCode },
+            create: { roomCode, conversationId },
+            update: {},
+          });
+          return created;
+        })
+      : await this.prisma.message.create({
+          data: messageData,
+          include: {
+            author: {
+              select: { id: true, username: true, displayName: true, avatarUrl: true },
+            },
+          },
+        });
 
     const recipientIds =
       conversation.kind === 'DM'
@@ -361,9 +398,44 @@ export class ChatService {
 
     this.chatGateway.broadcastMessageCreated(recipientIds, newMessage);
 
-    await this.linkChallenge(conversationId, msg);
-
     return newMessage;
+  }
+
+  /**
+   * A Code Arena challenge may only be linked to a conversation when the
+   * caller owns that room, and only when the room is not already linked to a
+   * different conversation.
+   */
+  private async assertChallengeAuthorized(
+    userId: string,
+    conversationId: string,
+    roomCode: string,
+    authorization?: string,
+  ): Promise<void> {
+    if (!authorization) {
+      throw new ForbiddenException(
+        'A Code Arena challenge needs an authenticated session',
+      );
+    }
+    const allowed = await this.gameRooms.canAnnounce(
+      roomCode,
+      userId,
+      authorization,
+    );
+    if (!allowed) {
+      throw new ForbiddenException(
+        'You may not announce that Code Arena room',
+      );
+    }
+    const existing = await this.prisma.gameChallenge.findUnique({
+      where: { roomCode },
+      select: { conversationId: true },
+    });
+    if (existing && existing.conversationId !== conversationId) {
+      throw new ConflictException(
+        'That Code Arena challenge is already linked to another conversation',
+      );
+    }
   }
 
   /**

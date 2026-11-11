@@ -19,8 +19,10 @@ import { UserProfilesService } from '../dist/chat/user-profiles.service.js';
 import { MinioService } from '../dist/minio/minio.service.js';
 import { FeedService } from '../dist/feed/feed.service.js';
 import { GameNotificationsService } from '../dist/chat/game-notifications.service.js';
+import { GameRoomsClient } from '../dist/chat/game-rooms.client.js';
 import { GameEventsConsumer } from '../dist/events/game-events.consumer.js';
 import { AuthModule } from '../dist/auth/auth.module.js';
+import { startFakeGameService } from './fake-game-service.mjs';
 
 // Never reset an existing schema: each run owns only this random schema.
 const schema = `chat_game_test_${randomUUID().replaceAll('-', '')}`;
@@ -40,6 +42,7 @@ const SYSTEM_AUTHOR = '0000a11e-0000-4000-8000-000000000000';
 let app;
 let notifications;
 let broadcasts = [];
+let gameService;
 let ownsSchema = false;
 const token = (id = alice) => signer.sign({ sub: id });
 
@@ -112,6 +115,12 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       await connection.query('RESET search_path');
       connection.release();
     }
+    // The Game service owns rooms and their membership; this stand-in answers
+    // exactly as its room endpoints do.
+    gameService = await startFakeGameService([
+      { id: 'room-1', code: ROOM, ownerUserId: alice, members: [alice, bob] },
+      { id: 'room-2', code: 'CD34EF', ownerUserId: bob, members: [bob, alice] },
+    ]);
     const gateway = {
       broadcastMessageCreated: (userIds, message) => broadcasts.push({ userIds, message }),
       broadcastReadState: () => {},
@@ -120,6 +129,7 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       imports: [
         ConfigModule.forRoot({ ignoreEnvFile: true, load: [() => ({
           JWT_PUBLIC_KEY: keys.publicKey.export({ type: 'spki', format: 'pem' }),
+          GAME_SERVICE_URL: gameService.url,
         })] }),
         AuthModule,
       ],
@@ -127,6 +137,7 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       providers: [
         ChatService,
         GameNotificationsService,
+        GameRoomsClient,
         { provide: PrismaService, useValue: prisma },
         { provide: ChatGateway, useValue: gateway },
         { provide: MinioService, useValue: {} },
@@ -159,6 +170,7 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
 
   after(async () => {
     await app?.close();
+    await gameService?.close();
     await prisma.$disconnect();
     if (ownsSchema) await pool.query(`DROP SCHEMA "${schema}" CASCADE`);
     await pool.end();
@@ -195,6 +207,84 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       })
       .expect(400);
     assert.equal(await prisma.gameChallenge.count(), 0);
+  });
+
+  it('refuses a challenge from an account that is not in that room', async () => {
+    // The outsider is a member of a conversation and knows the invite code,
+    // but does not belong to the room.
+    const conversation = await request(app.getHttpServer())
+      .post('/chat/conversations/dm')
+      .set('Authorization', `Bearer ${token(stranger)}`)
+      .send({ userId: alice })
+      .expect(201);
+    const conversationId = conversation.body.id;
+    await request(app.getHttpServer())
+      .post(`/chat/conversations/${conversationId}/messages`)
+      .set('Authorization', `Bearer ${token(stranger)}`)
+      .send({
+        content: '🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/AB12CD)',
+        clientRequestId: randomUUID(),
+        gameChallenge: { roomCode: ROOM },
+      })
+      .expect(403);
+
+    // A refusal leaves neither the message nor the link behind.
+    assert.equal(await prisma.message.count({ where: { conversationId } }), 0);
+    assert.equal(await prisma.gameChallenge.count(), 0);
+    assert.equal(broadcasts.length, 0);
+  });
+
+  it('refuses a challenge from a room member that did not create the room', async () => {
+    // Bob is in the room, but Alice created it, so only Alice may announce it.
+    const conversation = await request(app.getHttpServer())
+      .post('/chat/conversations/dm')
+      .set('Authorization', `Bearer ${token(bob)}`)
+      .send({ userId: alice })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/chat/conversations/${conversation.body.id}/messages`)
+      .set('Authorization', `Bearer ${token(bob)}`)
+      .send({
+        content: '🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/AB12CD)',
+        clientRequestId: randomUUID(),
+        gameChallenge: { roomCode: ROOM },
+      })
+      .expect(403);
+
+    assert.equal(await prisma.message.count({ where: { conversationId: conversation.body.id } }), 0);
+    assert.equal(await prisma.gameChallenge.count(), 0);
+  });
+
+  it('refuses to move a challenge to another conversation', async () => {
+    const conversationId = await createDm();
+    await request(app.getHttpServer())
+      .post(`/chat/conversations/${conversationId}/messages`)
+      .set('Authorization', `Bearer ${token()}`)
+      .send({
+        content: '🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/AB12CD)',
+        clientRequestId: randomUUID(),
+        gameChallenge: { roomCode: ROOM },
+      })
+      .expect(201);
+
+    const other = await request(app.getHttpServer())
+      .post('/chat/conversations/dm')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ userId: stranger })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/chat/conversations/${other.body.id}/messages`)
+      .set('Authorization', `Bearer ${token()}`)
+      .send({
+        content: 'the same challenge again',
+        clientRequestId: randomUUID(),
+        gameChallenge: { roomCode: ROOM },
+      })
+      .expect(409);
+
+    const link = await prisma.gameChallenge.findUnique({ where: { roomCode: ROOM } });
+    assert.equal(link.conversationId, conversationId);
+    assert.equal(await prisma.message.count({ where: { conversationId: other.body.id } }), 0);
   });
 
   it('persists one notification for a match start and ignores the replay', async () => {

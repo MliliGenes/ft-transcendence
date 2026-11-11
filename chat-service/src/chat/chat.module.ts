@@ -9,10 +9,11 @@ import { PresenceModule } from './presence/presence.module.js';
 import { MinioModule } from '../minio/minio.module.js';
 import { FeedModule } from '../feed/feed.module.js';
 import { GameNotificationsService } from './game-notifications.service.js';
+import { GameRoomsClient } from './game-rooms.client.js';
 
 @Module({
   imports: [AuthModule, ChatSharedModule, GroupsModule, PresenceModule, MinioModule, FeedModule],
-  providers: [ChatService, ChatGateway, GameNotificationsService],
+  providers: [ChatService, ChatGateway, GameNotificationsService, GameRoomsClient],
   exports: [GameNotificationsService],
   controllers: [ChatController],
 })

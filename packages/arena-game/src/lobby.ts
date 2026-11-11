@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS arena_private_rooms (
   expires_at BIGINT NOT NULL,
   match_id TEXT
 );
+CREATE INDEX IF NOT EXISTS ix_private_rooms_expiry
+  ON arena_private_rooms (status, expires_at, id);
 
 CREATE TABLE IF NOT EXISTS arena_private_room_members (
   room_id TEXT NOT NULL REFERENCES arena_private_rooms(id) ON DELETE CASCADE,
@@ -135,6 +137,18 @@ export function selectProblems(
 
 // ─── Interface ──────────────────────────────────────────────────────────────
 
+/** Position of the last room of a page; the next page starts after it. */
+export interface ExpiredRoomCursor {
+  expiresAt: number;
+  id: string;
+}
+
+export interface ExpiredRoomPage {
+  rooms: RoomWithMembers[];
+  /** Cursor of the next page, or null when this was the last one. */
+  nextCursor: ExpiredRoomCursor | null;
+}
+
 export interface ILobbyStore {
   ensureSchema(): Promise<void>;
   eraseUser(userId: string): Promise<void>;
@@ -161,11 +175,11 @@ export interface ILobbyStore {
   getRoomWithMembers(roomId: string): Promise<RoomWithMembers | null>;
   userActiveRoom(userId: string): Promise<RoomWithMembers | null>;
   /**
-   * Open rooms whose invite window has closed. Read-only: the room keeps its
-   * current status so existing expiry handling (and its error codes) is
-   * unchanged.
+   * Open rooms whose invite window has closed, one page at a time. Read-only:
+   * the room keeps its current status so existing expiry handling (and its
+   * error codes) is unchanged.
    */
-  listExpiredOpenRooms(now: number): Promise<RoomWithMembers[]>;
+  listExpiredOpenRooms(now: number, cursor?: ExpiredRoomCursor, limit?: number): Promise<ExpiredRoomPage>;
 }
 
 // ─── Postgres Implementation ────────────────────────────────────────────────
@@ -838,19 +852,53 @@ export class LobbyStore implements ILobbyStore {
   }
 
   /** Open rooms whose invite window closed; the stored status is left untouched. */
-  async listExpiredOpenRooms(now: number): Promise<RoomWithMembers[]> {
+  async listExpiredOpenRooms(now: number, cursor?: ExpiredRoomCursor, limit = 200): Promise<ExpiredRoomPage> {
     const res = await this.pool.query(
-      `SELECT id FROM arena_private_rooms
-       WHERE status = 'open' AND expires_at <= $1
-       ORDER BY expires_at ASC LIMIT 200`,
-      [now],
+      `WITH page AS (
+         SELECT id, code, mode, owner_user_id, status, created_at, expires_at, match_id
+         FROM arena_private_rooms
+         WHERE status = 'open' AND expires_at <= $1
+           AND ($2::BIGINT IS NULL OR (expires_at, id) > ($2, $3))
+         ORDER BY expires_at ASC, id ASC
+         LIMIT $4
+       )
+       SELECT page.*, m.user_id, m.side_id, m.ready, m.joined_at
+       FROM page
+       LEFT JOIN arena_private_room_members m ON m.room_id = page.id
+       ORDER BY page.expires_at ASC, page.id ASC, m.joined_at ASC`,
+      [now, cursor?.expiresAt ?? null, cursor?.id ?? '', limit],
     );
+
     const rooms: RoomWithMembers[] = [];
-    for (const row of res.rows) {
-      const room = await this.getRoomWithMembers(row.id as string);
-      if (room) rooms.push(room);
+    const byId = new Map<string, RoomWithMembers>();
+    for (const row of res.rows as any[]) {
+      let room = byId.get(row.id);
+      if (!room) {
+        room = {
+          room: {
+            id: row.id, code: row.code, mode: row.mode, ownerUserId: row.owner_user_id,
+            status: row.status, createdAt: Number(row.created_at), expiresAt: Number(row.expires_at), matchId: row.match_id,
+          },
+          members: [],
+        };
+        byId.set(row.id, room);
+        rooms.push(room);
+      }
+      if (row.user_id === null || row.user_id === undefined) continue;
+      room.members.push({
+        roomId: row.id, userId: row.user_id, sideId: row.side_id as LobbySideId,
+        ready: Boolean(row.ready), joinedAt: Number(row.joined_at),
+      });
     }
-    return rooms;
+
+    const last = rooms[rooms.length - 1];
+    // A full page may still have more rooms behind it; the next page starts
+    // after this one and confirms that.
+    const nextCursor =
+      last && byId.size >= limit
+        ? { expiresAt: last.room.expiresAt, id: last.room.id }
+        : null;
+    return { rooms, nextCursor };
   }
 
   async userActiveRoom(userId: string): Promise<RoomWithMembers | null> {
@@ -1206,14 +1254,29 @@ export class InMemoryLobbyStore implements ILobbyStore {
   }
 
   /** Open rooms whose invite window closed; the stored status is left untouched. */
-  async listExpiredOpenRooms(now: number): Promise<RoomWithMembers[]> {
-    const expired: RoomWithMembers[] = [];
-    for (const room of this.rooms.values()) {
-      if (room.status !== "open" || room.expiresAt > now) continue;
+  async listExpiredOpenRooms(now: number, cursor?: ExpiredRoomCursor, limit = 200): Promise<ExpiredRoomPage> {
+    const expired = [...this.rooms.values()]
+      .filter((room) => room.status === "open" && room.expiresAt <= now)
+      .sort((left, right) => left.expiresAt - right.expiresAt || left.id.localeCompare(right.id));
+    const startIndex = cursor
+      ? expired.findIndex(
+          (room) =>
+            room.expiresAt > cursor.expiresAt ||
+            (room.expiresAt === cursor.expiresAt && room.id > cursor.id),
+        )
+      : 0;
+    const page = expired.slice(startIndex < 0 ? expired.length : startIndex, (startIndex < 0 ? expired.length : startIndex) + limit);
+    const rooms: RoomWithMembers[] = [];
+    for (const room of page) {
       const withMembers = await this.getRoomWithMembers(room.id);
-      if (withMembers) expired.push(withMembers);
+      if (withMembers) rooms.push(withMembers);
     }
-    return expired;
+    const last = page[page.length - 1];
+    const nextCursor =
+      last && startIndex + limit < expired.length
+        ? { expiresAt: last.expiresAt, id: last.id }
+        : null;
+    return { rooms, nextCursor };
   }
 
   async userActiveRoom(userId: string): Promise<RoomWithMembers | null> {

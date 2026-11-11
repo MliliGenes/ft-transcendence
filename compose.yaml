@@ -234,6 +234,10 @@ services:
       - ./envs/chat-service.env
       - ./envs/chat-db.env
       - ./envs/rabbitmq.env
+    environment:
+      # Chat verifies a Code Arena room with the Game service before it links
+      # that room to a conversation.
+      GAME_SERVICE_URL: http://game-service:3002
     depends_on:
       chat-db:
         condition: service_healthy

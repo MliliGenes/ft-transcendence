@@ -24,6 +24,7 @@ import {
   type PrivateRoomMember,
   type QueueEntry,
   type RoomWithMembers,
+  type ExpiredRoomCursor,
 } from "arena-game-engine";
 import type { MatchMode } from "arena-model";
 import { MatchSocketPresence } from "./match-socket-presence.js";
@@ -33,6 +34,9 @@ import { GameEventsPublisher } from "./game-events.publisher.js";
 
 const LOBBY_PROBLEM_POOL = ["even-ledger", "double-it", "sum-array"];
 const DELETED_ACCOUNT_TOKEN_BLOCK_MS = 20 * 60 * 1000;
+/** How often an unconfirmed lifecycle event is republished before it is dropped. */
+const PUBLISH_ATTEMPTS = 3;
+const PUBLISH_RETRY_MS = 2000;
 
 function userTokenHash(userId: string): string {
   return createHash("sha256").update(userId, "utf8").digest("hex");
@@ -533,21 +537,36 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
    * must never delay a match start or a lobby action. Events are chained so
    * they reach the broker in the order the Game service decided them.
    */
-  private queuePublish(task: () => Promise<void>): void {
+  private queuePublish(task: () => Promise<boolean>): void {
     this.publishChain = this.publishChain
-      .then(task)
+      .then(() => this.publishWithRetry(task))
       .catch((error) => console.error("[game] failed to publish a game lifecycle event", error));
+  }
+
+  /**
+   * Retry an unconfirmed publish a few times. Delivery is best effort: there
+   * is no transactional outbox, so an event the broker never confirms is lost
+   * after the last attempt.
+   */
+  private async publishWithRetry(task: () => Promise<boolean>): Promise<void> {
+    for (let attempt = 1; attempt <= PUBLISH_ATTEMPTS; attempt++) {
+      if (await task()) return;
+      if (attempt < PUBLISH_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, PUBLISH_RETRY_MS));
+      }
+    }
+    console.error("[game] the broker did not confirm a game lifecycle event");
   }
 
   /**
    * Announce a started match. The event carries only public match facts; the
    * Game database stays the single source of truth for anything else.
    */
-  private async publishMatchStarted(matchId: string, roomCode: string | null): Promise<void> {
-    if (!this.events) return;
+  private async publishMatchStarted(matchId: string, roomCode: string | null): Promise<boolean> {
+    if (!this.events) return false;
     const match = await this.matchStore.load(matchId);
-    if (!match) return;
-    await this.events.publishMatchStarted({
+    if (!match) return false;
+    return this.events.publishMatchStarted({
       matchId,
       mode: match.mode,
       roomCode,
@@ -562,10 +581,10 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
    * Announce a finished match. Runs after the engine committed the terminal
    * state, so the persisted record is the authority for scores and forfeit.
    */
-  private async publishMatchEnded(matchId: string, result: string | undefined): Promise<void> {
-    if (!this.events) return;
+  private async publishMatchEnded(matchId: string, result: string | undefined): Promise<boolean> {
+    if (!this.events) return false;
     const match = await this.matchStore.load(matchId);
-    if (!match || match.roundPhase !== "MATCH_COMPLETE") return;
+    if (!match || match.roundPhase !== "MATCH_COMPLETE") return false;
 
     const totalFor = (sideId: string) =>
       match.rounds.reduce((total, round) => total + (round.counted[sideId]?.score ?? 0), 0);
@@ -602,32 +621,58 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
         : null,
       endedBecause: match.forfeit ? "forfeit" : result === "deadline" ? "deadline" : "completed",
     });
+    return true;
   }
 
-  /** Announce that a challenge will not produce a match. */
+  /**
+   * Announce that a challenge will not produce a match. Returns whether the
+   * broker confirmed the event; an unconfirmed event is not remembered, so it
+   * is published again later.
+   */
   private async publishChallengeCancelled(
     roomCode: string,
     reason: "room-closed" | "expired",
     participantUserIds: string[],
-  ): Promise<void> {
-    if (!this.events) return;
-    await this.events.publishChallengeCancelled({ roomCode, reason, participantUserIds });
+  ): Promise<boolean> {
+    if (!this.events) return false;
+    return this.events.publishChallengeCancelled({ roomCode, reason, participantUserIds });
   }
 
-  /** Announce challenges whose invite window closed without a match. */
+  /**
+   * Announce challenges whose invite window closed without a match.
+   *
+   * The listing is paged, so every expired challenge is reached instead of
+   * the first page only. A challenge is only remembered once the broker
+   * confirmed its notification; an unconfirmed one is retried by the next
+   * sweep.
+   */
   async sweepExpiredChallenges(): Promise<void> {
     if (!this.events) return;
-    const rooms = await this.lobbyStore.listExpiredOpenRooms(Date.now());
-    for (const room of rooms) {
-      if (this.cancelledChallengeCodes.has(room.room.code)) continue;
-      this.cancelledChallengeCodes.add(room.room.code);
-      await this.publishChallengeCancelled(
-        room.room.code,
-        "expired",
-        room.members.map((member) => member.userId),
-      );
+    const now = Date.now();
+    let cursor: ExpiredRoomCursor | undefined;
+    for (;;) {
+      const page = await this.lobbyStore.listExpiredOpenRooms(now, cursor);
+      for (const room of page.rooms) {
+        if (this.cancelledChallengeCodes.has(room.room.code)) continue;
+        const published = await this.publishChallengeCancelled(
+          room.room.code,
+          "expired",
+          room.members.map((member) => member.userId),
+        );
+        if (published) this.rememberCancelledChallenge(room.room.code);
+      }
+      cursor = page.nextCursor ?? undefined;
+      if (!cursor) break;
     }
-    // Keep the guard bounded: the oldest codes can no longer matter.
+  }
+
+  /**
+   * Remember a confirmed cancellation. The guard is bounded: dropping the
+   * oldest code only costs one redundant publish, and the Chat service
+   * ignores a repeated notification for the same challenge.
+   */
+  private rememberCancelledChallenge(roomCode: string): void {
+    this.cancelledChallengeCodes.add(roomCode);
     while (this.cancelledChallengeCodes.size > 1000) {
       const oldest = this.cancelledChallengeCodes.values().next();
       if (oldest.done) break;

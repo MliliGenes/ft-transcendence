@@ -17,6 +17,7 @@ Related documents: [user-chat integration](../integrations/user-chat.md) (identi
 | `src/chat/gateway/chat.gateway.ts` | Socket.IO connection, rooms, broadcasts |
 | `src/chat/presence/` | In-memory online status and its audience |
 | `src/chat/game-notifications.service.ts` | Code Arena lifecycle notifications written from game events |
+| `src/chat/game-rooms.client.ts` | Checks Code Arena room membership with the Game service |
 | `src/events/` | RabbitMQ consumers for user events and game events |
 | `src/feed/` | Global feed group, membership, per-user posts |
 | `src/minio/` | MinIO clients, signed URLs, object checks |
@@ -124,7 +125,17 @@ A Code Arena invitation is a normal chat message. The client sends the private-r
 }
 ```
 
-`roomCode` must match `^[A-Z0-9]{6}$`; anything else is rejected with `400`. The first message that claims a room code owns the link (`GameChallenge`), so a later post cannot move it to another conversation. The link is written on every accepted send, including an idempotent retry.
+`roomCode` must match `^[A-Z0-9]{6}$`; anything else is rejected with `400`.
+
+The code alone does not authorize anything. Before Chat writes the message it asks the **Game service**, which owns rooms and their membership:
+
+1. `GET {GAME_SERVICE_URL}/lobby/rooms/lookup/:code` resolves the invite code to a room.
+2. `GET {GAME_SERVICE_URL}/lobby/rooms/:id` is read with the **caller's own access token**. The Game service refuses a non-member with `403`, so membership is decided by the service that owns the room, not by the browser and not by Chat.
+3. The room record the Game service returns names its owner. Only that account may announce the room, because only that account created the challenge; the client always creates the room it announces.
+
+An account that is not in the room, or that is in the room but did not create it, gets `403` and the request writes **nothing**: no message and no `GameChallenge` row. A room code that is already linked to a different conversation gets `409`. The message and the link are written in one transaction, so a failure never leaves one of them behind. The first invitation for a room code owns the link; a later post cannot move it.
+
+If the Game service cannot answer, the request fails with `503` and nothing is written: an unknown answer is never treated as a permission.
 
 ### Events that Chat consumes
 
@@ -169,7 +180,7 @@ The notification's `clientRequestId` is derived from the conversation and the ev
 - Notifications follow the conversation, so a member who blocked the other party still cannot read the conversation: the block check in `getAccessibleConversation` runs for DM reads and sends.
 - Matches started from the matchmaking queue have no linked conversation and are not announced in chat; they are announced in the game itself.
 - The Game service and Chat service never read each other's database.
-- The Game service publishes its events without blocking gameplay and in order, so a broker outage cannot delay a match and a start is never announced after its result.
+- The Game service publishes its events without blocking gameplay and in order, so a broker outage cannot delay a match and a start is never announced after its result. Delivery is **best effort**: the Game service has no transactional outbox, so an event the broker never confirms after the bounded retries is lost, and a Game service restart does not replay past events. Events that *were* published are durable, so the broker keeps them while Chat is down. An expiry the broker did not confirm is not remembered, so the next sweep publishes it again.
 
 ## Groups and channels
 
@@ -228,6 +239,7 @@ Nest errors normally use this JSON shape:
 | `POSTGRES_*` | Chat's own database |
 | `JWT_PUBLIC_KEY` | Public half of user-service's signing key |
 | `USER_SERVICE_URL` | Internal URL for profile and block checks |
+| `GAME_SERVICE_URL` | Internal URL of the Game service, used to check Code Arena room membership |
 | `RABBITMQ_*` | Broker connection |
 | `MINIO_*`, `MINIO_PUBLIC_*` | Storage. See [chat-storage](../integrations/chat-storage.md). |
 

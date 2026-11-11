@@ -283,6 +283,46 @@ describe("Lobby and Matchmaking (In-Memory)", () => {
 
 // Real database tests if DATABASE_URL is set
 const dbUrl = process.env.DATABASE_URL;
+describe("Expired room listing (In-Memory)", () => {
+  it("pages through every expired open room instead of stopping at the first page", async () => {
+    const lobby = new InMemoryLobbyStore();
+    const total = 201;
+    const codes: string[] = [];
+    for (let index = 0; index < total; index++) {
+      const { room } = await lobby.createPrivateRoom(`owner-${index}`, "1v1");
+      codes.push(room.code);
+    }
+    // Every room is past its invite window now.
+    const later = Date.now() + 21 * 60 * 1000;
+
+    const seen: string[] = [];
+    let pages = 0;
+    let cursor: { expiresAt: number; id: string } | undefined;
+    for (;;) {
+      const page = await lobby.listExpiredOpenRooms(later, cursor, 200);
+      pages += 1;
+      for (const room of page.rooms) seen.push(room.room.code);
+      if (!page.nextCursor) break;
+      cursor = page.nextCursor;
+    }
+
+    expect(seen).toHaveLength(total);
+    expect(new Set(seen).size).toBe(total);
+    for (const code of codes) expect(seen).toContain(code);
+    // More rooms than one page holds, so the listing really paged.
+    expect(pages).toBeGreaterThan(1);
+  });
+
+  it("keeps the room status untouched so expiry errors stay the same", async () => {
+    const lobby = new InMemoryLobbyStore();
+    const { room } = await lobby.createPrivateRoom("owner-status", "1v1");
+    const later = Date.now() + 21 * 60 * 1000;
+    const page = await lobby.listExpiredOpenRooms(later);
+    expect(page.rooms.map((entry) => entry.room.code)).toEqual([room.code]);
+    expect((await lobby.getRoomWithMembers(room.id))?.room.status).toBe("open");
+  });
+});
+
 describe.runIf(Boolean(dbUrl))("Lobby and Matchmaking (Postgres Real Database)", () => {
   let pool: Pool;
   let lobby: LobbyStore;
@@ -317,6 +357,38 @@ describe.runIf(Boolean(dbUrl))("Lobby and Matchmaking (Postgres Real Database)",
 
     const rm = await lobby.getRoomWithMembers(room.id);
     expect(rm?.members).toHaveLength(2);
+  });
+
+  it("pages through more expired rooms than one page holds", async () => {
+    const stamp = Date.now();
+    const total = 201;
+    const codes: string[] = [];
+    for (let index = 0; index < total; index++) {
+      const { room } = await lobby.createPrivateRoom(`owner-expiry-${stamp}-${index}`, "1v1");
+      codes.push(room.code);
+    }
+    // Every room is past its invite window now.
+    const later = Date.now() + 21 * 60 * 1000;
+
+    const seen: string[] = [];
+    let pages = 0;
+    let cursor: { expiresAt: number; id: string } | undefined;
+    for (;;) {
+      const page = await lobby.listExpiredOpenRooms(later, cursor, 200);
+      pages += 1;
+      for (const room of page.rooms) seen.push(room.room.code);
+      if (!page.nextCursor) break;
+      cursor = page.nextCursor;
+    }
+
+    // The store may hold rooms from earlier tests, so this suite only claims
+    // the ones it created.
+    expect(seen.filter((code) => codes.includes(code))).toHaveLength(total);
+    // Every expired room is returned exactly once.
+    expect(new Set(seen).size).toBe(seen.length);
+    // More rooms than one page holds, so the listing really paged.
+    expect(seen.length).toBeGreaterThan(200);
+    expect(pages).toBeGreaterThan(1);
   });
 
   it("handles concurrent start races so match is created exactly once", async () => {

@@ -6,21 +6,24 @@ type PublishedEvent = { type: string; data: unknown };
 
 function stubPublisher() {
   const published: PublishedEvent[] = [];
+  const publishMatchStarted = vi.fn(async (data: unknown) => {
+    published.push({ type: "game.match.started", data });
+    return true;
+  });
+  const publishMatchEnded = vi.fn(async (data: unknown) => {
+    published.push({ type: "game.match.ended", data });
+    return true;
+  });
+  const publishChallengeCancelled = vi.fn(async (data: unknown) => {
+    published.push({ type: "game.challenge.cancelled", data });
+    return true;
+  });
   const publisher = {
-    publishMatchStarted: vi.fn(async (data: unknown) => {
-      published.push({ type: "game.match.started", data });
-      return true;
-    }),
-    publishMatchEnded: vi.fn(async (data: unknown) => {
-      published.push({ type: "game.match.ended", data });
-      return true;
-    }),
-    publishChallengeCancelled: vi.fn(async (data: unknown) => {
-      published.push({ type: "game.challenge.cancelled", data });
-      return true;
-    }),
+    publishMatchStarted,
+    publishMatchEnded,
+    publishChallengeCancelled,
   } as unknown as GameEventsPublisher;
-  return { publisher, published };
+  return { publisher, published, publishChallengeCancelled };
 }
 
 const ALICE = "11111111-1111-4111-8111-111111111111";
@@ -30,11 +33,12 @@ describe("Game service lifecycle events", () => {
   let game: GameService;
   let publisher: GameEventsPublisher;
   let published: PublishedEvent[];
+  let publishChallengeCancelled: ReturnType<typeof vi.fn>;
   let now: number;
 
   beforeEach(async () => {
     published = [];
-    ({ publisher, published } = stubPublisher());
+    ({ publisher, published, publishChallengeCancelled } = stubPublisher());
     now = Date.now();
     vi.spyOn(Date, "now").mockReturnValue(now);
     game = new GameService(publisher);
@@ -119,6 +123,39 @@ describe("Game service lifecycle events", () => {
       reason: "expired",
       participantUserIds: [ALICE],
     });
+  });
+
+  it("retries an expiry notification the broker did not confirm", async () => {
+    const room = await game.createPrivateRoom(ALICE, "1v1");
+    now += 21 * 60 * 1000;
+    vi.mocked(Date.now).mockReturnValue(now);
+    // The first publication is not confirmed by the broker.
+    publishChallengeCancelled.mockResolvedValueOnce(false);
+
+    await game.sweepExpiredChallenges();
+    expect(publishChallengeCancelled).toHaveBeenCalledTimes(1);
+
+    // An unconfirmed challenge is not remembered, so the next sweep retries it.
+    await game.sweepExpiredChallenges();
+    expect(publishChallengeCancelled).toHaveBeenCalledTimes(2);
+    expect(publishChallengeCancelled).toHaveBeenLastCalledWith({
+      roomCode: room.room.code,
+      reason: "expired",
+      participantUserIds: [ALICE],
+    });
+  });
+
+  it("announces every expired challenge, not only the first page", async () => {
+    const total = 201;
+    for (let index = 0; index < total; index++) {
+      await game.createPrivateRoom(`owner-${index}`, "1v1");
+    }
+    now += 21 * 60 * 1000;
+    vi.mocked(Date.now).mockReturnValue(now);
+
+    await game.sweepExpiredChallenges();
+
+    expect(publisher.publishChallengeCancelled).toHaveBeenCalledTimes(total);
   });
 
   it("never publishes source code, editor state or hidden test data", async () => {

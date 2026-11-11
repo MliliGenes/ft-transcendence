@@ -6,6 +6,7 @@ import { ChatGateway } from '../src/chat/gateway/chat.gateway.js';
 import { UserProfilesService } from '../src/chat/user-profiles.service.js';
 import { MinioService } from '../src/minio/minio.service.js';
 import { GameNotificationsService } from '../src/chat/game-notifications.service.js';
+import { GameRoomsClient } from '../src/chat/game-rooms.client.js';
 
 describe('ChatService.sendMessage channel delivery', () => {
   it('saves a channel message and emits it to the current group members', async () => {
@@ -41,6 +42,7 @@ describe('ChatService.sendMessage channel delivery', () => {
       {} as UserProfilesService,
       {} as MinioService,
       { linkChallenge: vi.fn() } as unknown as GameNotificationsService,
+      { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 
     const result = await service.sendMessage(
@@ -76,6 +78,7 @@ describe('ChatService.sendMessage channel delivery', () => {
       {} as UserProfilesService,
       {} as MinioService,
       { linkChallenge: vi.fn() } as unknown as GameNotificationsService,
+      { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 
     await expect(
@@ -126,6 +129,7 @@ describe('ChatService block enforcement', () => {
       userProfiles,
       {} as MinioService,
       { linkChallenge: vi.fn() } as unknown as GameNotificationsService,
+      { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 
     await expect(service.sendMessage(
@@ -172,6 +176,7 @@ describe('ChatService read receipts', () => {
       {} as UserProfilesService,
       {} as MinioService,
       { linkChallenge: vi.fn() } as unknown as GameNotificationsService,
+      { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 
     await expect(service.markRead(readerId, conversationId, messageId)).resolves.toEqual({
@@ -216,6 +221,7 @@ describe('ChatService read receipts', () => {
       {} as UserProfilesService,
       {} as MinioService,
       { linkChallenge: vi.fn() } as unknown as GameNotificationsService,
+      { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 
     await expect(service.getReadStates(readerId, conversationId)).resolves.toEqual([
