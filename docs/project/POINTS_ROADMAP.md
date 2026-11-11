@@ -90,7 +90,7 @@ The main frontend is the Next.js App Router application in `client/`. Continue t
 
 ## Phase 5 — Complete and demonstrate Code Arena
 
-Code Arena is now in this repository and integrated into the Nook client, User identity, Chat invitation flow, Nginx routing and Compose stack. Automated implementation work is present; module claims still need a live demonstration and evaluator confirmation.
+Code Arena is now in this repository and integrated into the Nook client, User identity, Chat invitation flow, Nginx routing and Compose stack. Automated implementation work and prior local 1v1/2v2 demonstration records are present; separate-computer remote-play evidence and evaluator confirmation remain pending.
 
 - [x] Use authenticated game APIs and canonical `/api/game/` HTTP and Socket.IO paths.
 - [x] Support 1v1 matchmaking/private rooms and four-player 2v2 rooms.
@@ -101,7 +101,7 @@ Code Arena is now in this repository and integrated into the Nook client, User i
 
 ### Remaining Code Arena integration work
 
-The implementation items above are present. These verification, operations, and data-lifecycle items remain before the integration can be called fully demonstrated:
+The implementation items above are present. The checklist below records prior verification, operations and data-lifecycle work. Checked items are historical evidence, not checks rerun during the documentation reconciliation. Open acceptance checks follow it:
 
 - [x] Validate the Compose configuration with `docker compose config --quiet` (2026-11-10). This checks Compose syntax and referenced files, not the correctness of local secret values.
 - [x] Verify locally that `envs/game-service.env` contains the User service's matching public JWT key, never its private key, and that Game and Judge Worker use the same strong `JUDGE_WORKER_TOKEN` (2026-11-10): verified and configured.
@@ -111,14 +111,25 @@ The implementation items above are present. These verification, operations, and 
 - [x] Fix and regression-test reconnect-state feedback when the authoritative snapshot is delayed; the client now shows the recovered socket state immediately (2026-11-10).
 - [x] Smoke-test the local Nook UI in Chrome (2026-11-10): resumed an existing 1v1 lobby, created fresh 1v1 and 2v2 lobbies, confirmed public player identity and readiness updates, then left with zero active sessions. This exposed and fixed a duplicate-admission error on lobby resume; the client now reuses the user's matching active room and redirects matched rooms to their in-progress match.
 - [x] Demonstrate a complete live 1v1 match with two distinct authenticated players across two browser sessions (Chrome and Chrome Incognito) across all 3 rounds (2026-11-10): verified lobby join/ready, mid-match tab reload and G02 socket snapshot recovery without state loss, live Docker Judge Worker compilation and evaluation (C++ and Python), synchronized round transitions, hidden test score reveals, final match victory screen (300 vs 225), persistent Postgres records in `matches` and `submissions`, and clean return to Play lobby with zero active sessions. Remote multi-machine test remains ready for final evaluator grading.
-- [x] Demonstrate synchronized 2v2 play with four distinct authenticated players (2026-11-10): verified 2v2 lobby creation (code `CKEYCE`), 4-player seat allocation (Team Alpha: `aymanysr_b3a987ed` + `player_alpha_2`; Team Beta: `player_beta` + `player_beta_2`), synchronized readiness and host match launch, in-game isolated 2v2 Team Chat (`/chat` namespace), collaborative Monaco editor synchronization via Yjs (`/collab` namespace), dual-teammate readiness gating for submissions, live Docker judge worker test evaluations across all 3 rounds, score reveals, match completion draw reveal (100 vs 100), PostgreSQL persistence, and zero-session lobby teardown.
+- [x] Demonstrate synchronized 2v2 play with four distinct authenticated players (2026-11-10): verified 2v2 lobby creation (code `CKEYCE`), 4-player seat allocation (Team Alpha: `aymanysr_b3a987ed` + `player_alpha_2`; Team Beta: `player_beta` + `player_beta_2`), synchronized readiness and host match launch, in-game isolated 2v2 Team Chat (`/chat` namespace), collaborative CodeMirror editor synchronization via Yjs (`/collab` namespace), dual-teammate readiness gating for submissions, live Docker judge worker test evaluations across all 3 rounds, score reveals, match completion draw reveal (100 vs 100), PostgreSQL persistence, and zero-session lobby teardown.
 - [x] Consume `user.deleted` events in Game; revoke pre-deletion access tokens, remove lobby records and affected-side source/editor data, forfeit unfinished matches, anonymize retained results, and document 2v2 shared-code deletion (2026-11-10).
 - [x] Live expiry and joinability indicators on duel invitation cards: direct chat renders real-time status badges (`Open`, `In Match`, `Expired`) via `GET /lobby/rooms/lookup/:code` and dynamically routes to active matches or disables expired rooms (2026-11-10).
 - [x] Player progression and achievements system for Code Arena: dynamic XP, level thresholds, rank titles, and 6 unlockable badges based on completed matches and scores, integrated in `/api/game/users/:userId/stats`, user profile Games tab, and leaderboard (2026-11-10).
 - [x] Complete the D04 backup and restore work in Phase 4 for the Game database and any required attachment data, then demonstrate recovery into clean services (2026-11-10).
-- [x] Complete and verify all G06 Advanced Chat criteria (2026-11-10): enforced bidirectional block checks on direct messages (`ensureCanContact`), real-time Socket.IO typing indicators (`typing:changed`) with peer notification and debounced UI display, durable read receipts in PostgreSQL (`ConversationReadState`) with REST endpoints and real-time socket delivery (`read:updated`), profile access navigation from message rows, persistent message history, and interactive Code Arena challenge/duel notification cards. Verified with automated unit tests in `chat-service` (12/12) and `client` (38/38) and live dual-user browser sessions.
+- [x] Record prior G06 Advanced Chat implementation and verification (2026-11-10; separate notification acceptance check remains below): enforced bidirectional block checks on direct messages (`ensureCanContact`), real-time Socket.IO typing indicators (`typing:changed`) with peer notification and debounced UI display, durable read receipts in PostgreSQL (`ConversationReadState`) with REST endpoints and real-time socket delivery (`read:updated`), profile access navigation from message rows, persistent message history, and interactive Code Arena challenge/duel notification cards. Verified with automated unit tests in `chat-service` (12/12) and `client` (38/38) and live dual-user browser sessions.
 
-**Optional UX decision:** Decide whether invitation cards should show a live expiry/joinability label. Currently, opening a card routes to the lobby and Game checks joinability.
+### Open acceptance checks
+
+Use [the supplied v21.2 subject](../../ft_trans_subject.pdf) as the requirements source; module IDs are local tracker labels.
+
+- [ ] **G01:** Demonstrate live play with clear rules, scoring and win/loss/draw conditions (§IV.6). The subject says the game can be 2D or 3D; advanced 3D graphics are a separate module.
+- [ ] **G02:** Complete a live match on two separate computers, including latency/disconnection recovery (§IV.6). The recorded same-machine browser sessions do not establish the separate-computer requirement.
+- [ ] **G03/W09:** Prepare a repeatable four-player demonstration of fair synchronized play, simultaneous shared edits, team isolation and reconnect behavior. Prior local 2v2 evidence is recorded above.
+- [ ] **U02:** Demonstrate history dates/results/opponents, statistics, achievements/progression and leaderboard updates, including persistence across a service restart (§IV.3). Implementation is present; this is an acceptance check.
+- [ ] **G06:** Verify game notifications in chat separately from direct game invitations (§IV.6 lists both). Invitation cards alone do not establish that separate requirement. Add any missing behavior before claiming full coverage.
+- [ ] **G09 candidate (+1, not included in the README subtotal):** Verify achievements, leaderboard and XP/levels as three features; demonstrate database-backed persistence across restart, visual feedback and clear progression rules (§IV.6). Progression currently derives from completed match records: 50 XP per match, plus 100 for a win or 25 for a draw; each 100 XP advances a level, starting at level 1.
+
+Invitation expiry/joinability labels are implemented and polled every ten seconds; they are no longer an open UX decision.
 
 **Conditional point targets:** G01 (+2) for a complete playable game; G02 (+2) for demonstrated remote play and recovery; G03 (+2) for fair synchronized play with at least three participants. The [integration specification](../spec/code-arena-integration-spec.md) records current behavior and known limits.
 
@@ -128,20 +139,20 @@ The implementation items above are present. These verification, operations, and 
 - [ ] Add authenticated Socket.IO rooms; only players in a match may read or send its moves.
 - [ ] Persist move history, result, players, timestamps, and Elo changes in the service's own database.
 - [ ] Add matchmaking/lobby flow and a frontend board with legal moves, turn state, resign/draw, reconnect, and match result.
-- [ ] Add match history and rating views for Chess; Code Arena now has match history, basic statistics and a wins/win-rate leaderboard, but no Elo rating or achievement progression.
+- [ ] Add match history and rating views for Chess; Code Arena already has match history, statistics, a wins/win-rate leaderboard and achievement/XP progression; Elo rating is not implemented.
 
-**Conditional point targets:** G04 (+2) for a second distinct game with history/statistics, matchmaking, and responsive performance. U02 (+1) remains incomplete until all local tracker criteria, including achievements/progression, are addressed. A second service does not earn D03 again.
+**Conditional point targets:** G04 (+2) for a second distinct game with history/statistics, matchmaking, and responsive performance. Code Arena's U02 (+1) implementation is present; its acceptance demonstration is tracked above and does not depend on adding Chess. A second service does not earn D03 again.
 
 ## Other module candidates
 
-- [x] **G06 Advanced Chat (+1):** Complete and verified across all tracker criteria—blocked-message enforcement in `ChatService`, game/match challenge notifications via real-time invitation cards, profile navigation from messages, persistent PostgreSQL history, Socket.IO typing indicators (`typing:changed`), and durable read receipts (`read:updated`). Automated tests and live multi-user verification confirmed.
+- [ ] **G06 Advanced Chat (+1):** Blocking, direct game invitations, profile navigation, persistent history, typing indicators and read receipts are implemented with prior test/live evidence. Full module acceptance remains conditional on the separate game-notification check above; invitations and notifications are distinct subject requirements.
 - [ ] **W06 Public API (+2):** defer until stable, useful endpoints are ready for external clients. Use the planned [Public API adapter](PUBLIC_API_ADAPTER_PLAN.md) for key management, per-key limits, scopes, and allowlisted routing; document at least five database-backed endpoints covering GET, POST, PUT, and DELETE. Keep private conversation data out of it.
 - [ ] **W10 SSR (+1):** if using Next.js, render a public content surface server-side for performance/SEO. Choosing Next.js alone is not sufficient.
 - [ ] **W08 Notifications (+1):** cover relevant create, update, and delete actions across the product; a message alert alone is insufficient.
 
 ## Submission gate — foundation requirements
 
-The tracker treats these as mandatory foundation checks separate from module points. Before calling the score ready, verify the whole list against the official subject:
+The tracker treats these as mandatory foundation checks separate from module points. Before calling the score ready, verify the whole list against [the supplied subject](../../ft_trans_subject.pdf):
 
 - [ ] One-command containerized start; all required work is in this repository.
 - [ ] Multiple users can act concurrently without data corruption; the team can demonstrate the work and explain the implementation.
@@ -150,4 +161,4 @@ The tracker treats these as mandatory foundation checks separate from module poi
 - [ ] Relevant Privacy Policy and Terms of Service.
 - [ ] Complete root README with the required attribution, setup, resources/AI disclosure, team roles, project management, stack, schema, module owners/calculations, contributions, and challenges.
 
-The root README and public Privacy Policy and Terms pages are now present. The exact italicized 42 attribution line, team role assignments and individual contribution mapping remain pending confirmed team information. The local tracker is a project reference, not a substitute for checking the original subject.
+The root README and public Privacy Policy and Terms pages are now present. The subject's exact attribution wording is now referenced in the README; placing the completed italicized line first still requires confirmed 42 logins. Team role assignments and individual contribution mapping also require confirmed team information. The local tracker is a project reference, not a substitute for checking the original subject.

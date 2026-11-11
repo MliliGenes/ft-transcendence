@@ -1,12 +1,14 @@
 # Nook
 
+## Description
+
 Nook is a community platform for the 1337 / 42 student community. It brings profiles, friendships, a feed, conversations and games into one web app. This repository contains the Next.js client, User and Chat services, Code Arena game service, judge worker, databases, storage, gateway and monitoring stack.
 
-The current playable game is **Code Arena**: authenticated 1v1 and 2v2 programming matches with timed rounds, server-side scoring, matchmaking and private rooms. The 2v2 mode has a shared editor and team chat. Players can challenge someone from a direct conversation or profile, then open the invitation in the Play area. Match history, basic win/loss statistics and a leaderboard are available. The leaderboard is based on wins and win rate; this build does not have an Elo rating or achievements system.
+The current playable game is **Code Arena**: authenticated 1v1 and 2v2 programming matches with timed rounds, server-side scoring, matchmaking and private rooms. The 2v2 mode has a shared editor and team chat. Players can challenge someone from a direct conversation or profile, then open the invitation in the Play area. Match history, win/loss statistics, a leaderboard, XP, levels, rank titles and six unlockable achievements are available. The leaderboard is based on wins and win rate; this build does not have an Elo rating.
 
 ## 42 curriculum attribution and team
 
-The exact italicized curriculum attribution line is still pending. The repository's project context does not contain verified 42 login names or the exact attribution wording required by the subject. The team must add the subject's verbatim line here before submission; no member names have been inferred.
+The subject requires the very first README line to be italicized and follow this wording: “This project has been created as part of the 42 curriculum by &lt;login1&gt;[, &lt;login2&gt;[, &lt;login3&gt;[...]]].” The team must supply confirmed 42 logins and place the completed attribution before the title; no member names have been inferred. See [the subject](ft_trans_subject.pdf), Chapter VI.
 
 The team roster and role assignments have not been reconfirmed in this repository. These responsibilities describe the expected roles, but do not assign them to individuals:
 
@@ -46,6 +48,7 @@ flowchart LR
   User --> UserDB
   User --> Events
   Events --> Chat
+  Events --> Game
   Chat --> ChatDB
   Chat --> MinIO
   Game --> GameDB
@@ -56,7 +59,7 @@ flowchart LR
   Monitor -. observes services .-> Game
 ```
 
-Nginx is the browser-facing HTTPS entry point. Service and database ports are private to the Compose network, apart from the explicitly loopback-bound development tools below. User owns account identity and authentication; Chat owns messages and groups; Code Arena owns matches, rounds, submissions and collaboration snapshots. The services use separate PostgreSQL databases. RabbitMQ propagates account profile and deletion events to Chat. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records.
+Nginx is the browser-facing HTTPS entry point. Service and database ports are private to the Compose network, apart from the explicitly loopback-bound development tools below. User owns account identity and authentication; Chat owns messages and groups; Code Arena owns matches, rounds, submissions and collaboration snapshots. The services use separate PostgreSQL databases. RabbitMQ propagates account profile and deletion events to Chat, and account deletion events to Game. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records.
 
 The judge worker currently mounts the host Docker socket because it creates the isolated execution containers. Treat that worker as a privileged host component: keep the worker endpoint and shared token private, and review the Docker-host trust boundary before using this setup for an untrusted public multi-tenant service.
 
@@ -69,13 +72,13 @@ The judge worker currently mounts the host Docker socket because it creates the 
 | Account and Chat persistence | PostgreSQL and Prisma | Relational identity/social data and conversation/group data with migrations |
 | Game persistence | PostgreSQL with parameterized SQL | Atomic match snapshots, round/submission records and collaborative state |
 | Realtime | Socket.IO, Yjs | Presence, chat, matchmaking and collaborative 2v2 editing |
-| Service events | RabbitMQ | Profile synchronization from User service to Chat |
+| Service events | RabbitMQ | Profile synchronization to Chat and account deletion delivery to Chat and Game |
 | Attachments | MinIO | Private object storage with presigned browser uploads/downloads |
 | Code execution | Judge worker and Docker | Isolated execution of Code Arena submissions |
 | Local orchestration | Docker Compose | Repeatable multi-service development and demonstration |
 | Gateway and monitoring | Nginx, Grafana, Prometheus, Loki, Alloy | TLS termination, path routing, health/metrics dashboards and operational logs |
 
-## Start the local stack
+## Instructions: start the local stack
 
 **Prerequisites:** Docker with Compose, Node.js 22 or newer for repository scripts, and a browser with local HTTPS certificate acceptance. Full first-start configuration is documented in [Environment configuration](envs/README.md) and [Local Compose setup](docs/project/COMPOSE.md).
 
@@ -128,11 +131,11 @@ The databases have separate owners and no cross-database foreign keys. The Chat 
 - Authenticated match summaries, per-user statistics and a leaderboard. Public summaries do not return source code or hidden tests.
 - Player names and avatars are loaded from the User service in lobbies.
 
-The invitation card opens the room; the Game service checks whether it is still joinable. Game records and source submissions are retained in the Game database according to the instance operator's storage policy. See the [Privacy Policy](/privacy) and [Terms of Service](/terms).
+Invitation cards poll room status every ten seconds, show Open, In Match or Expired, route matched rooms to their match, and disable expired rooms. The Game service enforces joinability. Game retains match records and source submissions until account erasure or the instance operator's retention policy applies; erasure removes affected-side source/editor data and anonymizes retained results. See the [Privacy Policy](/privacy) and [Terms of Service](/terms).
 
 ## Module evidence and point calculation
 
-The repository includes a working interpretation of the ft_transcendence v21.2 module matrix in [the module tracker](docs/requirements/index.html). The original subject PDF and evaluator decisions are not part of this repository. The table below is an evidence map, not a claim that the team has been awarded points. `Maximum` is the module value in the local tracker; assessors decide whether every requirement is met.
+The [ft_transcendence v21.2 subject](ft_trans_subject.pdf) is the requirements source; [the module tracker](docs/requirements/index.html) assigns local IDs such as G01 and U02 for planning. Evaluator decisions are not recorded here. The table below is an evidence map, not a claim that the team has been awarded points. `Maximum` is the module value in the local tracker; assessors decide whether every requirement is met.
 
 | Module | Maximum | Current evidence and remaining condition |
 |---|---:|---|
@@ -141,18 +144,18 @@ The repository includes a working interpretation of the ft_transcendence v21.2 m
 | G03 · More than two players | 2 | Four-client 2v2 service/socket tests cover team isolation, collaborative readiness, and reveal delivery. Demonstrate fair synchronized play with all four clients. |
 | U01 · User management | 2 | Account, profile, friend and presence flows exist. Verify the full rubric and demonstrate the flows. |
 | U02 · Game statistics/history | 1 | Match history, win/loss summaries, leaderboard, player progression (XP, levels, rank titles) and 6 unlockable achievements are implemented and displayed on profile and leaderboard. Demonstrate the flows. |
-| W09 · Real-time collaboration | 1 | Code Arena 2v2 implements synchronized multi-user code editing with Monaco and Yjs CRDTs over authenticated Socket.IO (`/collab` namespace), with conflict resolution and document revision tracking. |
-| G06 · Advanced chat | 1 | Complete: persistent history, bidirectional block enforcement, game challenge cards and notifications, profile access, real-time typing indicators, and durable read receipts. Verified with automated tests and live dual-user sessions. |
+| W09 · Real-time collaboration | 1 | Code Arena 2v2 implements synchronized multi-user code editing with CodeMirror and Yjs CRDTs over authenticated Socket.IO (`/collab` namespace), with conflict resolution and document revision tracking. |
+| G06 · Advanced chat | 1 | Persistent history, bidirectional block enforcement, game invitations, profile access, typing indicators and durable read receipts are implemented, with prior automated and live dual-user verification recorded. Verify game notifications in chat separately from invitations against subject §IV.6 before claiming the full module. |
 | D03 · Backend microservices | 2 | User, Chat, Game and judge responsibilities have separate service boundaries and APIs/events. Demonstrate the service interactions. |
 | D04 · Health/status/backups/recovery | 1 | Compose health checks cover all service containers; public `/status` page and `/api/status` endpoint; automated multi-database (User, Chat, Game) and MinIO backup/restore scripts with SHA-256 verification, retention rotation, and proven recovery procedures. Demonstrate the disaster recovery drill. |
 
-No final module total is claimed here. If every listed module were accepted at its maximum, their arithmetic subtotal would be **14 points** (2 + 2 + 2 + 2 + 1 + 1 + 1 + 2 + 1); incomplete modules contribute zero until the team completes and demonstrates their requirements. Reconcile the full project score with the subject and tracker before submission.
+No final module total is claimed here. If every listed module were accepted at its maximum, their arithmetic subtotal would be **14 points** (2 + 2 + 2 + 2 + 1 + 1 + 1 + 2 + 1); incomplete modules contribute zero until the team completes and demonstrates their requirements. Reconcile the full project score with the subject and tracker before submission. G06 remains conditional on the separate notification check above. G09 gamification is a candidate outside this subtotal: achievements, leaderboards and XP/levels exist, but database persistence across restart, visual feedback and clear progression rules still need an acceptance demonstration against subject §IV.6.
 
 ## Privacy, terms and operational notes
 
-Public pages are available at [Privacy Policy](/privacy) and [Terms of Service](/terms). The current client does not expose self-service account deletion. Account deletion does not currently remove Chat message history or Code Arena match/submission data; the policy states this limitation. Public deployment requires the instance operator to configure trusted TLS, secrets, hosting, backups, data retention and a reliable contact channel.
+Public pages are available at [Privacy Policy](/privacy) and [Terms of Service](/terms). The current client does not expose self-service account deletion. When account deletion is processed, Chat clears cached profile identity while retaining existing messages. Game removes matchmaking/private-room membership, forfeits unfinished matches, deletes affected-side source, run output, judge diagnostics and collaborative documents, and anonymizes retained results. In 2v2, erasure removes the entire side's shared code. Backups and logs have separate operator-controlled retention. Public deployment requires the instance operator to configure trusted TLS, secrets, hosting, backups, data retention and a reliable contact channel.
 
-## AI and project resources
+## Resources and AI use
 
 We used AI tools openly. The team chose the product, architecture, API contracts, design direction and final behavior. AI-assisted code was reviewed and tested by project members; team members remain responsible for explaining and modifying it.
 
