@@ -229,7 +229,10 @@ describe("2v2 service integration (real HTTP + sockets + Postgres)", () => {
     expect(ok.status).toBe(201);
     expect(ok.json.submissionId).toBeTruthy();
     expect(ok.json.evaluationId).toBeTruthy();
-  });
+    // The accepted submit starts a real judge container; the default 5 s
+    // budget is too tight for that on a loaded machine (this test needs
+    // 3.5-4.5 s), so give it the same room as its sibling below.
+  }, 30000);
 
   it("10. Alpha evaluation does not block Beta; both teams count, reveal is team scores", async () => {
     const matchId = await newTeamMatch();
