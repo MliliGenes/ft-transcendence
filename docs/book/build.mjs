@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { marked } from 'marked';
 import puppeteer from 'puppeteer-core';
 
@@ -392,22 +393,153 @@ docChapter('Feed integration', 'docs/integrations/feed.md');
   const spec = rd(specPath);
   const evidencePath = 'docs/evidence/g06-live-demo/README.md';
   const evidence = rd(evidencePath);
+  const screenshotRows = [...evidence.matchAll(/^\|\s*`([^`]+\.png)`\s*\|\s*(.+?)\s*\|$/gm)]
+    .map(([, filename, caption], index) => ({ filename, caption, index: index + 1 }));
+  if (!screenshotRows.length) throw new Error(`No screenshot entries found in ${evidencePath}`);
+  const evidenceDir = dirname(join(ROOT, evidencePath));
+  const screenshotCount = screenshotRows.length;
+  const screenshotByName = new Map(screenshotRows.map((row) => [row.filename, row]));
+  const selectedBookEvidence = [
+    '03-owner-invitation-sent.png',
+    '04-rival-sees-invitation.png',
+    '09-owner-chat-match-started.png',
+    '13-owner-chat-match-result.png',
+    '16-owner-chat-cancelled.png',
+    '20-owner-chat-expired.png',
+  ];
+  const expectedBookEvidence = new Set(selectedBookEvidence);
+  const includedEvidence = new Set();
+  const evidenceFigure = (filename) => {
+    const row = screenshotByName.get(filename);
+    if (!row) throw new Error(`Missing screenshot entry in ${evidencePath}: ${filename}`);
+    if (!expectedBookEvidence.has(filename)) throw new Error(`Setup-only screenshot does not belong in the Code Arena chapter: ${filename}`);
+    if (includedEvidence.has(filename)) throw new Error(`Screenshot used more than once in the Code Arena chapter: ${filename}`);
+    includedEvidence.add(filename);
+    const imagePath = join(evidenceDir, filename);
+    if (!existsSync(imagePath)) throw new Error(`Missing G06 screenshot: ${imagePath}`);
+    assertUniqueFigureImage(imagePath);
+    const caption = row.caption.replace(/\*\*(.*?)\*\*/g, '$1');
+    const description = `Live demo screenshot ${row.index}: ${caption}`;
+    return `<figure><img src="${pathToFileURL(imagePath).href}" alt="${esc(description)}"><figcaption><b>${String(row.index).padStart(2, '0')}</b> ${esc(caption)}</figcaption></figure>`;
+  };
+  const evidenceGallery = (filenames) => `<div class="gallery">${filenames.map(evidenceFigure).join('')}</div>`;
+  const figureImages = new Map();
+  function assertUniqueFigureImage(imagePath) {
+    const digest = createHash('sha256').update(readFileSync(imagePath)).digest('hex');
+    const previous = figureImages.get(digest);
+    if (previous) throw new Error(`Duplicate image used in Code Arena chapter: ${previous} and ${imagePath}`);
+    figureImages.set(digest, imagePath);
+  }
+  const localFigure = (imagePath, alt, caption, className = '') => existsSync(imagePath)
+    ? (assertUniqueFigureImage(imagePath), `<figure${className ? ` class="${esc(className)}"` : ''}><img src="${pathToFileURL(imagePath).href}" alt="${esc(alt)}"><figcaption>${esc(caption)}</figcaption></figure>`)
+    : '';
   const screenshotLink = screenshotUrl
-    ? `<a href="${esc(screenshotUrl)}">Download the 21-page screenshot proof</a>`
-    : `<code>docs/evidence/g06-live-demo/screenshots.pdf</code> (21-page screenshot proof)`;
+    ? `<a href="${esc(screenshotUrl)}">Download the ${screenshotCount}-page screenshot proof</a>`
+    : `<code>docs/evidence/g06-live-demo/screenshots.pdf</code> (${screenshotCount}-page screenshot proof)`;
+  const ownerProfilePath = 'docs/book/assets/aimane-yousr-profile-dark.png';
+  const ownerGamesPath = 'docs/book/assets/aimane-yousr-games-dark.png';
+  const leaderboardPath = 'docs/book/assets/aimane-yousr-leaderboard-dark.png';
+  const playPagePath = 'docs/book/assets/code-arena-play-dark.png';
+  const lobbyPath = 'docs/book/assets/code-arena-lobby-two-player-dark.png';
+  const readyPath = 'docs/book/assets/code-arena-lobby-ready-two-player-dark.png';
+  const editorPath = 'docs/book/assets/code-arena-editor-dark.png';
+  const scoreRevealPath = 'docs/book/assets/code-arena-round-score-reveal-dark.png';
+  const collaborationPath = 'docs/book/assets/code-arena-2v2-collaboration-dark.png';
+  const forfeitPath = 'docs/book/assets/code-arena-forfeit-result-dark.png';
+  const ownerProfileImage = join(ROOT, ownerProfilePath);
+  const ownerGamesImage = join(ROOT, ownerGamesPath);
+  const leaderboardImage = join(ROOT, leaderboardPath);
+  const playPageImage = join(ROOT, playPagePath);
+  const lobbyImage = join(ROOT, lobbyPath);
+  const readyImage = join(ROOT, readyPath);
+  const editorImage = join(ROOT, editorPath);
+  const scoreRevealImage = join(ROOT, scoreRevealPath);
+  const collaborationImage = join(ROOT, collaborationPath);
+  const forfeitImage = join(ROOT, forfeitPath);
+  const profileGallery = `<div class="gallery">${[
+    localFigure(ownerProfileImage, 'Aimane Yousr Nook profile in dark mode with Code Arena actions', 'Aimane Yousr — Nook profile'),
+    localFigure(ownerGamesImage, 'Nook Games profile with Code Arena match record, badges, and recent results', 'Games tab with progression, achievements, and recent matches'),
+  ].filter(Boolean).join('')}</div>`;
+  const playGallery = `<div class="gallery">${localFigure(playPageImage, 'Nook Code Arena Play page with create and join controls', 'Play page: create a duel or team lobby, join by code, and review active sessions', 'wide')}</div>`;
+  const leaderboardGallery = `<div class="gallery">${localFigure(leaderboardImage, 'Nook Code Arena leaderboard with the project profile row', 'Leaderboard: player rank, match count, wins, and win rate', 'wide')}</div>`;
+  const lobbyGallery = `<div class="gallery">${localFigure(lobbyImage, 'Aimane and Arena Guest in the same dark-mode private Code Arena 1v1 lobby', 'Live 1v1 lobby: both players occupy a team seat before readiness', 'wide')}</div>`;
+  const readyGallery = `<div class="gallery">${localFigure(readyImage, 'Aimane and Guest both ready in a dark-mode Code Arena lobby, viewed from Guest’s client', 'Ready gate: both players show Ready in the guest-side lobby view', 'wide')}</div>`;
+  const editorGallery = `<div class="gallery">${localFigure(editorImage, 'Aimane writing a C++ solution in a live dark-mode Code Arena match', 'Live coding: problem statement, examples, language controls, shared timer, editor, and case panel', 'wide')}</div>`;
+  const scoreRevealGallery = `<div class="gallery">${localFigure(scoreRevealImage, 'Dark-mode Code Arena score reveal after both visible cases passed, showing 100 points and 100–100 match totals', 'Judge result: both visible cases pass; hidden-test weights add 100 points, with match totals at 100–100', 'wide')}</div>`;
+  const collaborationGallery = `<div class="gallery">${localFigure(collaborationImage, 'Aimane in a live dark-mode 2v2 Code Arena workspace with a shared editor, teammates, and team chat', '2v2 collaboration: the active team workspace combines a shared editor, teammate status, and match-scoped chat', 'wide')}</div>`;
+  const forfeitGallery = `<div class="gallery">${localFigure(forfeitImage, 'Aimane sees a dark-mode Code Arena match result after the opponent forfeits', 'Forfeit result: the live match ends and records the winner', 'wide')}</div>`;
+  const behaviorParagraphs = section(spec, 'Product behavior').trim().split(/\n\s*\n/);
+  if (behaviorParagraphs.length !== 4) throw new Error('Unexpected Code Arena product behavior structure; update the book figure placement.');
+  const profileDetailsStart = behaviorParagraphs[1].indexOf('The profile Games tab');
+  if (profileDetailsStart < 0) throw new Error('Could not locate the Code Arena profile details sentence for the profile screenshots.');
+  const [overview, collaboration, profileDetails, invitations, lifecycle] = [
+    behaviorParagraphs[0],
+    behaviorParagraphs[1].slice(0, profileDetailsStart).trim(),
+    behaviorParagraphs[1].slice(profileDetailsStart).trim(),
+    behaviorParagraphs[2],
+    behaviorParagraphs[3],
+  ];
+  const matchSentenceStart = overview.indexOf(' A match has three timed coding rounds');
+  if (matchSentenceStart < 0) throw new Error('Could not locate the Code Arena match-flow sentence for the editor screenshot.');
+  const discoveryText = overview.slice(0, matchSentenceStart).trim();
+  const matchAndProblems = overview.slice(matchSentenceStart + 1).trim();
+  const defaultProblemStart = matchAndProblems.indexOf(' Default problems are selected');
+  if (defaultProblemStart < 0) throw new Error('Could not locate the seeded-problem sentence in Code Arena product behavior.');
+  const matchText = matchAndProblems.slice(0, defaultProblemStart).trim();
+  const defaultProblemText = matchAndProblems.slice(defaultProblemStart + 1).trim();
+  const invitationBindingStart = lifecycle.indexOf('The invitation message carries');
+  if (invitationBindingStart < 0) throw new Error('Could not locate the invitation-binding text after Code Arena lifecycle notifications.');
+  const lifecycleNotifications = lifecycle.slice(0, invitationBindingStart).trim();
+  const lifecycleRoomBinding = lifecycle.slice(invitationBindingStart).trim();
+  const productBehaviorHtml = [
+    mdToHtml(discoveryText, specPath),
+    playGallery,
+    mdToHtml(matchText, specPath),
+    editorGallery,
+    scoreRevealGallery,
+    mdToHtml(defaultProblemText, specPath),
+    mdToHtml(collaboration, specPath),
+    collaborationGallery,
+    mdToHtml(profileDetails, specPath),
+    profileGallery,
+    leaderboardGallery,
+    mdToHtml(invitations, specPath),
+    evidenceGallery(['03-owner-invitation-sent.png', '04-rival-sees-invitation.png']),
+    mdToHtml(lifecycleNotifications, specPath),
+    evidenceFigure('09-owner-chat-match-started.png'),
+    mdToHtml(lifecycleRoomBinding, specPath),
+  ].join('');
   const html = `
 <p>This chapter summarizes the integrated Code Arena contract. ${specUrl ? `<a href="${esc(specUrl)}">The integration specification</a>` : 'The integration specification'} remains the detailed source for route ownership, privacy behavior and automated verification.</p>
-<h3>Product behavior</h3>${mdToHtml(section(spec, 'Product behavior'), specPath)}
+<h3>Product behavior</h3>${productBehaviorHtml}
+<h3>Challenge and lobby flow</h3>
+<p>Creating a private room gives the host a short invite code. The lobby shows team capacity, player identity and readiness before a match begins.</p>
+${lobbyGallery}
+<p>Both clients join the same private lobby and receive synchronized room state.</p>
+<p>The readiness gate blocks launch until every required player is ready. Once all seats are ready, only the host can start the match; the capture below shows the synchronized state from the other player’s view.</p>
+${readyGallery}
 <h3>Service boundary</h3>
 <p>The browser reaches Game through Nginx at <code>/api/game/</code> and <code>/api/game/socket.io/</code>. Game validates User-issued RS256 tokens and owns its PostgreSQL data. The Judge worker runs submissions on a private network in resource-limited containers without network access. Game publishes lifecycle events through RabbitMQ; Chat validates them and stores notices in the conversation linked to a challenge.</p>
+<p>Participants can leave a running match, which ends the game with a forfeit result. The live Aimane capture shows this outcome; the two-client Chat screenshots show the persisted match-start and match-result messages.</p>
+${forfeitGallery}
+${evidenceGallery(['13-owner-chat-match-result.png'])}
 <h3>HTTP and realtime contracts</h3>${mdToHtml(section(spec, 'HTTP and realtime contracts'), specPath)}
 <h3>Persistence and privacy boundary</h3>${mdToHtml(section(spec, 'Persistence and privacy boundary'), specPath)}
+<p>Reloading and reconnecting preserves the conversation cards captured at the verification checkpoint.</p>
 <h3>Verification and evaluation limits</h3>${mdToHtml(section(spec, 'Verification'), specPath)}
+<p>A room owner may withdraw a challenge before the match starts. Chat records the cancellation in the linked conversation.</p>
+${evidenceFigure('16-owner-chat-cancelled.png')}
+<p>The Game service's expiry sweep also publishes a cancellation event; Chat stores the notice for the participants.</p>
+${evidenceFigure('20-owner-chat-expired.png')}
 <h3>Live G06 demonstration</h3>
 <p>The live two-client run used two independent authenticated browser sessions and a real stack. It covered a duel invitation, acceptance, match start, forfeit result, withdrawal, expiry, and the transcript reload checkpoint. Both clients received the notices live. The expiry notice arrived after the reload checkpoint and was persisted once; it was not part of the before/after reload count.</p>
 ${mdToHtml(section(evidence, 'What was demonstrated'), evidencePath)}
 ${mdToHtml(section(evidence, 'What this does and does not prove'), evidencePath)}
-<p>${screenshotLink}. The source repository path is <code>docs/evidence/g06-live-demo/screenshots.pdf</code>; the full run record and individual images are documented in <code>docs/evidence/g06-live-demo/README.md</code>.</p>`;
+<p>${screenshotLink}. This chapter places ${figureImages.size} distinct images beside their matching topics: dark-mode product and coding views from Aimane’s account, plus selected two-client invitation and lifecycle evidence. It leaves out setup-only screens, repeated views of the same state, and screenshots that show an empty lobby. The complete 21-image run and its limits are documented in <code>docs/evidence/g06-live-demo/README.md</code>.</p>`;
+  if (includedEvidence.size !== expectedBookEvidence.size) {
+    const unplaced = [...expectedBookEvidence].filter((filename) => !includedEvidence.has(filename));
+    throw new Error(`G06 screenshots not placed in their matching sections: ${unplaced.join(', ')}`);
+  }
   chapter('Code Arena: Game service integration and evidence', html);
 }
 
@@ -636,7 +768,7 @@ img { max-width: 100%; }
 .auth { margin-left: auto; font-size: 7.5pt; padding: 1px 7px; border-radius: 9px; }
 .auth.pub { background: #dcfce7; color: #166534; } .auth.sec { background: #fee2e2; color: #991b1b; }
 h3.tag { background: #eef2ff; border: 0; padding: 5px 10px; border-radius: 6px; color: #312e81; }
-.gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } figure { margin: 0; page-break-inside: avoid; } figure img { border: 1px solid var(--line); border-radius: 6px; } figcaption { font-size: 8pt; color: var(--muted); text-align: center; }
+.gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .gallery figure.wide { grid-column: 1 / -1; } figure { margin: 0; page-break-inside: avoid; } figure img { border: 1px solid var(--line); border-radius: 6px; } figcaption { font-size: 8pt; color: var(--muted); text-align: center; }
 `;
 
 const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Nook: The Application Book</title><style>${css}</style></head><body>${cover}${tocHtml}${parts.join('\n')}</body></html>`;

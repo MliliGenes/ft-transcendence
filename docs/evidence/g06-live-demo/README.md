@@ -12,10 +12,8 @@ Run date: **2026-11-11**. Branch: `integration/nook-arena-platform`, commit
 
 ## What was demonstrated
 
-Two disposable accounts (`g06_owner_1794394411485` and
-`g06_rival_1794394411485`, both `@example.invalid`) in **two separate
-browser contexts** — two independent sessions, two independent users — with
-one direct conversation between them.
+Two disposable accounts in **two separate browser contexts** — two
+independent sessions and users — with one direct conversation between them.
 
 | Step | What happened | Owner saw | Second account saw |
 |---|---|---|---|

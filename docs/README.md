@@ -29,7 +29,7 @@ One document per service, and one per place where services meet.
 | [Product context](project/PROJECT_CONTEXT.md) | Vision, spaces, decisions |
 | [Points roadmap](project/POINTS_ROADMAP.md) | Module plan and point targets |
 | [Module tracker](requirements/index.html) | ft_transcendence module checklist, open in a browser |
-| [Handbook PDF](book/Nook-Book.pdf) | Core product, service, integration, API and code-map reference, including a Code Arena summary and [21-page G06 screenshot proof](evidence/g06-live-demo/screenshots.pdf). Rebuild with `cd docs/book && npm install && npm run build` |
+| [Handbook PDF](book/Nook-Book.pdf) | Core product, service, integration, API and code-map reference, with Aimane’s dark-mode profile, Games tab, Play page, leaderboard, two-player 1v1 lobby, ready gate, coding screen, scored-round reveal, live 2v2 editor/team-chat workspace and forfeit result placed beside their matching topics. Selected two-client invitation and lifecycle screenshots sit beside the related behavior; the book also links the complete [21-page G06 screenshot proof](evidence/g06-live-demo/screenshots.pdf). Source captures are in `book/assets`, so the illustrated pages rebuild with the PDF; no personal or disposable-account email addresses are included. Rebuild with `cd docs/book && npm install && npm run build` |
 | [UI mockups](client/ui-mockups/) | Reference screens |
 | Design tokens | `client/NOOK_DESIGN_SYSTEM.json`, kept next to the code because a test checks it |
 
