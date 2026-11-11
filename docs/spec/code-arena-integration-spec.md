@@ -12,6 +12,8 @@ The 2v2 mode gives each team a shared CodeMirror/Yjs editor, readiness gates and
 
 Direct-message invitations are ordinary persistent Chat messages with a recognized Code Arena card. Opening a card routes to the room; the card queries `GET /api/game/lobby/rooms/lookup/:code` to render a live status badge (`Open`, `In Match`, or `Expired`), links directly to active matches, or disables expired rooms.
 
+Game lifecycle notifications are separate from the invitation card. The Game service publishes authoritative match events on the `game.events` RabbitMQ exchange; the Chat service consumes them and writes ordinary system messages (`kind = SYSTEM`) into the conversation that carries the challenge: one message when the match starts, one when it ends (win, draw, forfeit or deadline) and one when a challenge is cancelled before it starts. The invitation message carries the private-room code so the Chat service can link the challenge to its conversation. See [the Chat service notes](../services/chat-service.md#code-arena-lifecycle-notifications).
+
 ## Service boundaries
 
 ```mermaid
@@ -25,6 +27,8 @@ flowchart LR
   Chat --> ChatDB[(Chat PostgreSQL)]
   User --> Events[RabbitMQ · user events]
   Events --> Chat
+  Game --> GameEvents[RabbitMQ · game events]
+  GameEvents --> Chat
   Chat --> MinIO[MinIO · attachment objects]
   Game --> GameDB[(Game PostgreSQL)]
   Game -->|private judge network| Judge[Judge worker]
@@ -43,7 +47,7 @@ The Game service persists state in its own PostgreSQL database using atomic matc
 - `/api/game/users/:userId/stats`: authenticated win/loss/draw and win-rate aggregates.
 - `/api/game/leaderboard`: authenticated top-player summaries, limited to 50 players.
 - `/api/game/socket.io/`: the shared Engine.IO transport path. The authenticated Socket.IO namespaces are the default `/` namespace for match state and `/collab`, `/chat`, and `/lobby` for Yjs collaboration, team chat, and room events.
-- `/api/chat/*`: persisted direct conversations, including Code Arena invitation messages.
+- `/api/chat/*`: persisted direct conversations, including Code Arena invitation messages (`POST /api/chat/conversations/:id/messages` accepts `gameChallenge: { roomCode }` to link the challenge to its conversation) and the game lifecycle notifications written back into it.
 
 The history response contains up to 25 recent matches, each with its ID, mode, outcome, opponents, score, and `playedAt` completion timestamp. Stats and leaderboard responses contain aggregate counts and win rate; leaderboard entries also contain rank. These responses do not contain source code, editor snapshots, or hidden tests. Game HTTP requests use same-origin paths and the authenticated access token; Socket.IO clients send the token in their authenticated handshake. The API returns no rating because this build has no rating system.
 
@@ -56,5 +60,7 @@ Erasure removes the account's matchmaking rows and private-room membership. If i
 ## Verification
 
 Automated checks are run from the repository root or `client/` as described in the [root README](../../README.md). In the default no-`DATABASE_URL` test setup, the Game HTTP integration tests cover principal-protected history, stats, and leaderboard responses with the development principal fixture and in-memory store. Account-erasure tests cover forfeit/anonymization, source and collaboration deletion, lobby cleanup, token-block expiry, and access denial on existing sockets. A separate unit test checks that default matchmaking selects three distinct problem IDs. The PostgreSQL persistence contract, including atomic source deletion, requires `TEST_PG_URL` to point to a disposable test database. Do not point tests at a database containing user data.
+
+Game lifecycle notifications are covered at both sides of the contract. `services/game/src/game/game-events.test.ts` proves that the Game service publishes a match start (with the room code), a forfeit result, a withdrawn challenge and an expired challenge, and that no event carries source, editor or hidden test data. `chat-service/test/game-notifications.spec.ts` and `chat-service/test/game-notifications.postgres.test.mjs` prove that Chat validates the event, checks the conversation correlation, writes one persisted system message, ignores a replayed event, rejects participants who are not conversation members, and receives the event over RabbitMQ in the disposable integration environment. `client/tests/arena-game-notifications.test.mjs` proves that only system messages are rendered as notification cards and that an invitation links its room code to the conversation.
 
 Before claiming G02, demonstrate two clients on separate computers completing a match and recovering from a disconnection. For the project's full 2v2 demonstration and stronger G03 evidence, demonstrate four synchronized clients; the local tracker sets G03's minimum at three simultaneous players. Live evaluator demonstrations are not replaced by unit tests or a successful container build.

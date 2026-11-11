@@ -16,7 +16,8 @@ Related documents: [user-chat integration](../integrations/user-chat.md) (identi
 | `src/chat/groups/` | Groups, members, roles, channels |
 | `src/chat/gateway/chat.gateway.ts` | Socket.IO connection, rooms, broadcasts |
 | `src/chat/presence/` | In-memory online status and its audience |
-| `src/events/` | RabbitMQ consumer for user events |
+| `src/chat/game-notifications.service.ts` | Code Arena lifecycle notifications written from game events |
+| `src/events/` | RabbitMQ consumers for user events and game events |
 | `src/feed/` | Global feed group, membership, per-user posts |
 | `src/minio/` | MinIO clients, signed URLs, object checks |
 | `prisma/schema.prisma` | Data model |
@@ -29,8 +30,9 @@ Related documents: [user-chat integration](../integrations/user-chat.md) (identi
 | `Group` | Name, description, rules |
 | `GroupMember` | Membership with a per-group `ADMIN` or `MEMBER` role |
 | `Conversation` | `DM` (two sorted user IDs) or `CHANNEL` (`groupId`, `name`, `topic`) |
-| `Message` | Content up to 2000 characters, `attachments String[]`, `createdAt`, `editedAt`, `deletedAt`, `clientRequestId`, `requestHash`, `version` |
+| `Message` | Content up to 2000 characters, `attachments String[]`, `createdAt`, `editedAt`, `deletedAt`, `clientRequestId`, `requestHash`, `version`, and `kind` (`USER` or `SYSTEM`) |
 | `ConversationReadState` | One row per conversation and user, with `lastReadMessageId` |
+| `GameChallenge` | Links a Code Arena room code to the conversation that carries the invitation, plus the match it started |
 | `Reaction` | Schema only, no API yet |
 
 There are no foreign keys across databases. `ChatUser` is the boundary with user-service.
@@ -61,7 +63,7 @@ Paths are as the service sees them. Through the gateway, `/chat/...` becomes `/a
 | --- | --- |
 | `POST /chat/conversations/dm` | Existing or new DM with `userId` |
 | `GET /chat/conversations` | Caller's DMs with `lastReadMessageId` and `unreadCount` |
-| `POST /chat/conversations/:id/messages` | Send, with `content`, `clientRequestId`, optional `attachments` (max 5) |
+| `POST /chat/conversations/:id/messages` | Send, with `content`, `clientRequestId`, optional `attachments` (max 5) and optional `gameChallenge: { roomCode }` |
 | `GET /chat/conversations/:id/messages` | History, newest first, `limit` 1-100 (default 50), `before` |
 | `PATCH /chat/conversations/:id/read-state` | Save the read marker |
 | `PATCH /chat/messages/:id` | Edit own message |
@@ -82,7 +84,7 @@ Paths are as the service sees them. Through the gateway, `/chat/...` becomes `/a
 
 ### Sending and retries
 
-The client generates one `clientRequestId` per logical send. The server computes `requestHash` as the SHA-256 of `[conversationId, content, attachments]`.
+The client generates one `clientRequestId` per logical send. The server computes `requestHash` as the SHA-256 of `[conversationId, content, attachments, gameChallengeRoomCode]`.
 
 | Request | Result |
 | --- | --- |
@@ -105,6 +107,68 @@ The read marker is an upsert on `ConversationReadState`. Unread means messages f
 ## Direct messages
 
 The two user IDs are lowercased and sorted, so A-B and B-A are the same conversation. Before creating or using a DM, chat asks user-service whether either user has blocked the other. See [user-chat integration](../integrations/user-chat.md).
+
+## Code Arena lifecycle notifications
+
+Game events are announced in the conversation that carries the Code Arena challenge. The Game service owns match state and never writes to the Chat database: it publishes authoritative events on the `game.events` exchange and Chat turns them into ordinary messages.
+
+### Linking a challenge to a conversation
+
+A Code Arena invitation is a normal chat message. The client sends the private-room invite code with it:
+
+```json
+{
+  "content": "🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/AB12CD)",
+  "clientRequestId": "uuid-v4",
+  "gameChallenge": { "roomCode": "AB12CD" }
+}
+```
+
+`roomCode` must match `^[A-Z0-9]{6}$`; anything else is rejected with `400`. The first message that claims a room code owns the link (`GameChallenge`), so a later post cannot move it to another conversation. The link is written on every accepted send, including an idempotent retry.
+
+### Events that Chat consumes
+
+| Event | Routing key | Meaning |
+| --- | --- | --- |
+| Match started | `game.match.started` | The room started a match. Carries `matchId`, `mode`, `roomCode` and the participants. |
+| Match ended | `game.match.ended` | The match reached a result. Carries per-participant `outcome` and public `score`, plus the forfeit record when there is one. |
+| Challenge cancelled | `game.challenge.cancelled` | The challenge will not produce a match: the owner withdrew the room, or the invite window closed. |
+
+Chat validates every payload (`src/events/game-event.ts`); anything that does not match the contract is discarded. The payload never contains source code, editor state or hidden test data.
+
+### What is written
+
+A notification is an ordinary `Message` with `kind = SYSTEM`, written by the system account `0000a11e-0000-4000-8000-000000000000` (`Code Arena`). It is stored in the conversation, counts as unread and is broadcast live like any other message. The content has three lines:
+
+```
+🎮 Code Arena
+match-result · alice won 300 – 225
+[View match](/play/match/2f1c9d0e-6b3a-4f2e-9a7d-8c5b1e4a2f30)
+```
+
+The client parses this shape (`client/lib/arena/game-notifications.ts`) and renders a card with a link to the match. A user message can never be rendered as a notification, because only `kind = SYSTEM` messages are parsed that way.
+
+### Correlation checks
+
+Before anything is written, Chat re-checks the link:
+
+| Check | Result when it fails |
+| --- | --- |
+| The room code or match id is linked to a conversation | The event is ignored; no message is written |
+| Every participant of the event is a member of that conversation | The event is rejected; no message is written |
+| The link does not already point at a different match | The event is rejected |
+
+Members of the linked conversation are the recipients, so the notification lands with the intended participants and with nobody else.
+
+### Replay safety
+
+The notification's `clientRequestId` is derived from the conversation and the event (`match-started:<matchId>`, `match-result:<matchId>`, `challenge-cancelled:<roomCode>`). The unique index on `(authorId, clientRequestId)` therefore turns a redelivered or replayed event into a no-op: the stored message is returned unchanged and nothing is broadcast a second time. Reconnect and re-delivery therefore never produce repeated notifications.
+
+### Boundaries
+
+- Notifications follow the conversation, so a member who blocked the other party still cannot read the conversation: the block check in `getAccessibleConversation` runs for DM reads and sends.
+- Matches started from the matchmaking queue have no linked conversation and are not announced in chat; they are announced in the game itself.
+- The Game service and Chat service never read each other's database.
 
 ## Groups and channels
 
@@ -170,7 +234,7 @@ Nest errors normally use this JSON shape:
 
 Run `npm run start:dev`, `npm run build`, `npm run lint` and `npm test` from `chat-service/`. Container startup runs `prisma migrate deploy` before starting Node.
 
-`test/dm.postgres.test.mjs` reads `prisma/constraints.sql`, which is no longer in the repository, so that suite needs fixing before it can run. `test/chat.service.spec.ts` has two type errors because `sendMessage` gained a parameter.
+`npm test` runs the Vitest suites, including `test/game-notifications.spec.ts` (event validation, correlation checks, replay safety and the payload privacy rule). `test/dm.postgres.test.mjs` and `test/game-notifications.postgres.test.mjs` need a disposable PostgreSQL database; the project gate runs them in `npm run check`, where the notification suite also proves the RabbitMQ round trip against the disposable broker.
 
 ## Current limitations
 

@@ -1,5 +1,5 @@
 import { ForbiddenException, NotFoundException } from "@nestjs/common";
-import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Injectable, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import {
   ArenaEngine,
@@ -29,6 +29,7 @@ import type { MatchMode } from "arena-model";
 import { MatchSocketPresence } from "./match-socket-presence.js";
 import { createGameJudge } from "./judge-factory.js";
 import { buildLeaderboard, statisticsForUser, summarizeCompletedMatch } from "./match-statistics.js";
+import { GameEventsPublisher } from "./game-events.publisher.js";
 
 const LOBBY_PROBLEM_POOL = ["even-ledger", "double-it", "sum-array"];
 const DELETED_ACCOUNT_TOKEN_BLOCK_MS = 20 * 60 * 1000;
@@ -65,8 +66,11 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   private deadlineTimer?: NodeJS.Timeout;
   private accountErasureCleanupTimer?: NodeJS.Timeout;
   private activeSocketSweepTimer?: NodeJS.Timeout;
+  private challengeExpiryTimer?: NodeJS.Timeout;
+  /** Room codes whose expiry cancellation was already published. */
+  private readonly cancelledChallengeCodes = new Set<string>();
 
-  constructor() {
+  constructor(@Optional() private readonly events?: GameEventsPublisher) {
     this.matchSocketPresence = new MatchSocketPresence({
       participantSide: (userId, matchId) => this.engine.participantSide(userId, matchId),
       modeOf: (matchId) => this.engine.modeOf(matchId),
@@ -218,6 +222,12 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     this.engine.on((event, payload) => {
       const matchId = (payload as { matchId?: string } | null)?.matchId;
       if (typeof matchId === "string" && matchId) {
+        if (event === "match.ended") {
+          const result = (payload as { result?: string }).result;
+          void this.publishMatchEnded(matchId, result).catch((error) =>
+            console.error("[game] failed to publish the match result event", error),
+          );
+        }
         for (const l of this.listeners) l(event, matchId, payload);
       }
     });
@@ -239,6 +249,14 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
       }
     }, 10000);
     this.graceTimer.unref();
+    // Challenges that nobody accepts expire on their own; announce the
+    // cancellation so the linked conversation is not left waiting.
+    this.challengeExpiryTimer = setInterval(() => {
+      void this.sweepExpiredChallenges().catch((error) =>
+        console.error("[lobby] challenge expiry sweep failed", error),
+      );
+    }, 30000);
+    this.challengeExpiryTimer.unref();
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -246,6 +264,7 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     if (this.deadlineTimer) clearInterval(this.deadlineTimer);
     if (this.accountErasureCleanupTimer) clearInterval(this.accountErasureCleanupTimer);
     if (this.activeSocketSweepTimer) clearInterval(this.activeSocketSweepTimer);
+    if (this.challengeExpiryTimer) clearInterval(this.challengeExpiryTimer);
     await this.stores?.close();
   }
 
@@ -404,6 +423,7 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
       for (const listener of this.lobbyListeners) {
         listener("lobby.queueMatched", { matchId: result.matchId, userIds: result.entries.map((e: QueueEntry) => e.userId) });
       }
+      await this.publishMatchStarted(result.matchId, null);
     }
     return result;
   }
@@ -422,10 +442,15 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
 
   async leavePrivateRoom(userId: string, roomId: string): Promise<{ left: boolean; closed: boolean }> {
     this.checkLobbyRateLimit(userId);
+    const before = await this.lobbyStore.getRoomWithMembers(roomId);
     const res = await this.lobbyStore.leavePrivateRoom(userId, roomId);
     const updated = await this.lobbyStore.getRoomWithMembers(roomId);
     if (updated) {
       this.broadcastRoomUpdate(roomId, updated.room, updated.members);
+    }
+    if (res.closed && before) {
+      // The owner withdrew the challenge before any match started.
+      await this.publishChallengeCancelled(before.room.code, "room-closed", before.members.map((member) => member.userId));
     }
     return res;
   }
@@ -457,6 +482,7 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     for (const listener of this.lobbyListeners) {
       listener("lobby.matchFound", { roomId, matchId, userIds: room!.members.map((member) => member.userId) });
     }
+    await this.publishMatchStarted(matchId, room!.room.code);
     return { matchId };
   }
 
@@ -491,6 +517,104 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
       } catch {
         // Already revealed/advanced by a concurrent path; safe to ignore.
       }
+    }
+  }
+
+  // ─── Lifecycle events for other services ───────────────────────────────────
+
+  /**
+   * Announce a started match. The event carries only public match facts; the
+   * Game database stays the single source of truth for anything else.
+   */
+  private async publishMatchStarted(matchId: string, roomCode: string | null): Promise<void> {
+    if (!this.events) return;
+    const match = await this.matchStore.load(matchId);
+    if (!match) return;
+    await this.events.publishMatchStarted({
+      matchId,
+      mode: match.mode,
+      roomCode,
+      participants: match.participants.map((participant) => ({
+        userId: participant.userId,
+        sideId: participant.sideId,
+      })),
+    });
+  }
+
+  /**
+   * Announce a finished match. Runs after the engine committed the terminal
+   * state, so the persisted record is the authority for scores and forfeit.
+   */
+  private async publishMatchEnded(matchId: string, result: string | undefined): Promise<void> {
+    if (!this.events) return;
+    const match = await this.matchStore.load(matchId);
+    if (!match || match.roundPhase !== "MATCH_COMPLETE") return;
+
+    const totalFor = (sideId: string) =>
+      match.rounds.reduce((total, round) => total + (round.counted[sideId]?.score ?? 0), 0);
+    const totals = new Map<string, number>();
+    for (const participant of match.participants) {
+      totals.set(participant.sideId, totalFor(participant.sideId));
+    }
+    const opponentTotal = (sideId: string) => {
+      const other = match.participants.find((participant) => participant.sideId !== sideId);
+      return other ? (totals.get(other.sideId) ?? 0) : 0;
+    };
+
+    const participants = match.participants.map((participant) => {
+      const score = totals.get(participant.sideId) ?? 0;
+      const against = opponentTotal(participant.sideId);
+      const outcome: "win" | "loss" | "draw" = match.forfeit
+        ? match.forfeit.winner === participant.sideId
+          ? "win"
+          : "loss"
+        : score > against
+          ? "win"
+          : score < against
+            ? "loss"
+            : "draw";
+      return { userId: participant.userId, sideId: participant.sideId, outcome, score };
+    });
+
+    await this.events.publishMatchEnded({
+      matchId,
+      mode: match.mode,
+      participants,
+      forfeit: match.forfeit
+        ? { winnerSideId: match.forfeit.winner, loserSideId: match.forfeit.loser, reason: match.forfeit.reason }
+        : null,
+      endedBecause: match.forfeit ? "forfeit" : result === "deadline" ? "deadline" : "completed",
+    });
+  }
+
+  /** Announce that a challenge will not produce a match. */
+  private async publishChallengeCancelled(
+    roomCode: string,
+    reason: "room-closed" | "expired",
+    participantUserIds: string[],
+  ): Promise<void> {
+    if (!this.events) return;
+    await this.events.publishChallengeCancelled({ roomCode, reason, participantUserIds });
+  }
+
+  /** Announce challenges whose invite window closed without a match. */
+  async sweepExpiredChallenges(): Promise<void> {
+    if (!this.events) return;
+    const rooms = await this.lobbyStore.listExpiredOpenRooms(Date.now());
+    for (const room of rooms) {
+      if (this.cancelledChallengeCodes.has(room.room.code)) continue;
+      this.cancelledChallengeCodes.add(room.room.code);
+      await this.publishChallengeCancelled(
+        room.room.code,
+        "expired",
+        room.members.map((member) => member.userId),
+      );
+    }
+    // Keep the guard bounded: the oldest codes can no longer matter.
+    while (this.cancelledChallengeCodes.size > 1000) {
+      const oldest = this.cancelledChallengeCodes.values().next();
+      if (oldest.done) break;
+      this.cancelledChallengeCodes.delete(oldest.value);
     }
   }
 }

@@ -18,6 +18,7 @@ import { ChatGateway } from '../dist/chat/gateway/chat.gateway.js';
 import { UserProfilesService } from '../dist/chat/user-profiles.service.js';
 import { MinioService } from '../dist/minio/minio.service.js';
 import { FeedService } from '../dist/feed/feed.service.js';
+import { GameNotificationsService } from '../dist/chat/game-notifications.service.js';
 import { AuthModule } from '../dist/auth/auth.module.js';
 
 // Never reset an existing schema: each run owns only this random schema.
@@ -77,6 +78,7 @@ describe('POST /chat/conversations/dm (real HTTP, JWT and PostgreSQL)', () => {
       controllers: [ChatController],
       providers: [
         ChatService,
+        GameNotificationsService,
         { provide: PrismaService, useValue: prisma },
         { provide: ChatGateway, useValue: {} },
         { provide: MinioService, useValue: {} },

@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SYSTEM_AUTHOR_ID } from '../chat/system-author.js';
 import {
   FEED_CHANNEL_ID,
   FEED_CHANNEL_NAME,
@@ -73,7 +74,12 @@ export class FeedService implements OnApplicationBootstrap {
     let cursor: string | undefined;
     for (;;) {
       const users = await this.prisma.chatUser.findMany({
-        where: { deletedAt: null, username: { not: null } },
+        // The system account is not a person and never posts to the feed.
+        where: {
+          deletedAt: null,
+          username: { not: null },
+          id: { not: SYSTEM_AUTHOR_ID },
+        },
         select: { id: true },
         orderBy: { id: 'asc' },
         take: BACKFILL_BATCH,

@@ -1,0 +1,130 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GameService } from "./game.service.js";
+import type { GameEventsPublisher } from "./game-events.publisher.js";
+
+type PublishedEvent = { type: string; data: unknown };
+
+function stubPublisher() {
+  const published: PublishedEvent[] = [];
+  const publisher = {
+    publishMatchStarted: vi.fn(async (data: unknown) => {
+      published.push({ type: "game.match.started", data });
+      return true;
+    }),
+    publishMatchEnded: vi.fn(async (data: unknown) => {
+      published.push({ type: "game.match.ended", data });
+      return true;
+    }),
+    publishChallengeCancelled: vi.fn(async (data: unknown) => {
+      published.push({ type: "game.challenge.cancelled", data });
+      return true;
+    }),
+  } as unknown as GameEventsPublisher;
+  return { publisher, published };
+}
+
+const ALICE = "11111111-1111-4111-8111-111111111111";
+const BOB = "22222222-2222-4222-8222-222222222222";
+
+describe("Game service lifecycle events", () => {
+  let game: GameService;
+  let publisher: GameEventsPublisher;
+  let published: PublishedEvent[];
+  let now: number;
+
+  beforeEach(async () => {
+    published = [];
+    ({ publisher, published } = stubPublisher());
+    now = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    game = new GameService(publisher);
+    await game.onModuleInit();
+  });
+
+  afterEach(async () => {
+    await game.onModuleDestroy();
+    vi.restoreAllMocks();
+  });
+
+  async function readyRoom() {
+    const created = await game.createPrivateRoom(ALICE, "1v1");
+    await game.joinPrivateRoom(BOB, created.room.code);
+    await game.setRoomMemberReady(ALICE, created.room.id, true);
+    await game.setRoomMemberReady(BOB, created.room.id, true);
+    return created;
+  }
+
+  it("announces a started match with its room code and participants", async () => {
+    const room = await readyRoom();
+    const { matchId } = await game.startPrivateRoom(ALICE, room.room.id);
+
+    expect(publisher.publishMatchStarted).toHaveBeenCalledWith({
+      matchId,
+      mode: "1v1",
+      roomCode: room.room.code,
+      participants: expect.arrayContaining([
+        { userId: ALICE, sideId: "left" },
+        { userId: BOB, sideId: "right" },
+      ]),
+    });
+    const started = published.find((event) => event.type === "game.match.started");
+    expect(started?.data).toMatchObject({ matchId, roomCode: room.room.code });
+  });
+
+  it("announces a forfeit when a player leaves the match", async () => {
+    const room = await readyRoom();
+    const { matchId } = await game.startPrivateRoom(ALICE, room.room.id);
+
+    await game.leave(BOB, matchId);
+
+    expect(publisher.publishMatchEnded).toHaveBeenCalledWith({
+      matchId,
+      mode: "1v1",
+      participants: expect.arrayContaining([
+        expect.objectContaining({ userId: ALICE, sideId: "left", outcome: "win" }),
+        expect.objectContaining({ userId: BOB, sideId: "right", outcome: "loss" }),
+      ]),
+      forfeit: { winnerSideId: "left", loserSideId: "right", reason: "leave" },
+      endedBecause: "forfeit",
+    });
+  });
+
+  it("announces a withdrawn challenge when the owner closes the room", async () => {
+    const room = await readyRoom();
+
+    const result = await game.leavePrivateRoom(ALICE, room.room.id);
+
+    expect(result.closed).toBe(true);
+    expect(publisher.publishChallengeCancelled).toHaveBeenCalledWith({
+      roomCode: room.room.code,
+      reason: "room-closed",
+      participantUserIds: expect.arrayContaining([ALICE, BOB]),
+    });
+  });
+
+  it("announces an expired challenge once", async () => {
+    const room = await game.createPrivateRoom(ALICE, "1v1");
+    now += 21 * 60 * 1000;
+    vi.mocked(Date.now).mockReturnValue(now);
+
+    await game.sweepExpiredChallenges();
+    await game.sweepExpiredChallenges();
+
+    expect(publisher.publishChallengeCancelled).toHaveBeenCalledTimes(1);
+    expect(publisher.publishChallengeCancelled).toHaveBeenCalledWith({
+      roomCode: room.room.code,
+      reason: "expired",
+      participantUserIds: [ALICE],
+    });
+  });
+
+  it("never publishes source code, editor state or hidden test data", async () => {
+    const room = await readyRoom();
+    const { matchId } = await game.startPrivateRoom(ALICE, room.room.id);
+    await game.leave(BOB, matchId);
+
+    const serialized = JSON.stringify(published);
+    expect(serialized).not.toMatch(/source|hidden|editor|submission/i);
+    expect(serialized).toContain(matchId);
+  });
+});

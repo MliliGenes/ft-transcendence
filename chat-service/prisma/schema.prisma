@@ -76,12 +76,32 @@ model Conversation {
 
   messages Message[]
   readStates  ConversationReadState[]
+  gameChallenges GameChallenge[]
 
   // PostgreSQL permits multiple null pairs, so group channels can coexist.
   @@unique([dmUserAId, dmUserBId])
   @@index([dmUserAId, createdAt, id])
   @@index([dmUserBId, createdAt, id])
   @@index([groupId, createdAt, id])
+}
+
+// Links a Code Arena challenge (a private-room invite code) to the
+// conversation that carries the invitation, so match lifecycle events can be
+// announced in that conversation. Owned by Chat: the Game service never reads
+// this table and never writes to it.
+model GameChallenge {
+  roomCode       String   @id @db.VarChar(6)
+  conversationId String   @db.Uuid
+  // Set when the challenge starts a match; unique so one match maps to one
+  // conversation.
+  matchId        String?  @db.VarChar(64)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId])
+  @@index([conversationId])
 }
 
 model ConversationReadState {
@@ -106,6 +126,10 @@ model Message {
   createdAt      DateTime  @default(now())
   editedAt       DateTime?
   deletedAt      DateTime?
+
+  // USER messages are written by an account; SYSTEM messages are written by
+  // the Chat service itself (game lifecycle notifications).
+  kind MessageKind @default(USER)
 
   // The browser generates this once per logical send and reuses it on retry.
   clientRequestId String @db.Uuid
@@ -145,6 +169,11 @@ enum GroupRole {
 enum ConversationKind {
   DM
   CHANNEL
+}
+
+enum MessageKind {
+  USER
+  SYSTEM
 }
 
 // Map these stable API values to emoji glyphs in the frontend.

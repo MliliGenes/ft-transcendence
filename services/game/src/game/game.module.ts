@@ -10,6 +10,7 @@ import { TeamChatGateway } from "./team-chat.gateway.js";
 import { GameService } from "./game.service.js";
 import { ActiveAccountGuard } from "./active-account.guard.js";
 import { GameUserEventsConsumer } from "./user-events.consumer.js";
+import { GameEventsPublisher } from "./game-events.publisher.js";
 import { devPrincipalMiddleware } from "./principal.js";
 
 @Module({
@@ -21,6 +22,7 @@ import { devPrincipalMiddleware } from "./principal.js";
     TeamChatGateway,
     LobbyGateway,
     GameUserEventsConsumer,
+    GameEventsPublisher,
     { provide: APP_GUARD, useClass: ActiveAccountGuard },
   ],
 })

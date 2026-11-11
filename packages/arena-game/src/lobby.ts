@@ -160,6 +160,12 @@ export interface ILobbyStore {
   getRoomByCode(code: string): Promise<RoomWithMembers | null>;
   getRoomWithMembers(roomId: string): Promise<RoomWithMembers | null>;
   userActiveRoom(userId: string): Promise<RoomWithMembers | null>;
+  /**
+   * Open rooms whose invite window has closed. Read-only: the room keeps its
+   * current status so existing expiry handling (and its error codes) is
+   * unchanged.
+   */
+  listExpiredOpenRooms(now: number): Promise<RoomWithMembers[]>;
 }
 
 // ─── Postgres Implementation ────────────────────────────────────────────────
@@ -831,6 +837,22 @@ export class LobbyStore implements ILobbyStore {
     };
   }
 
+  /** Open rooms whose invite window closed; the stored status is left untouched. */
+  async listExpiredOpenRooms(now: number): Promise<RoomWithMembers[]> {
+    const res = await this.pool.query(
+      `SELECT id FROM arena_private_rooms
+       WHERE status = 'open' AND expires_at <= $1
+       ORDER BY expires_at ASC LIMIT 200`,
+      [now],
+    );
+    const rooms: RoomWithMembers[] = [];
+    for (const row of res.rows) {
+      const room = await this.getRoomWithMembers(row.id as string);
+      if (room) rooms.push(room);
+    }
+    return rooms;
+  }
+
   async userActiveRoom(userId: string): Promise<RoomWithMembers | null> {
     const res = await this.pool.query(
       `SELECT r.id FROM arena_private_rooms r
@@ -1181,6 +1203,17 @@ export class InMemoryLobbyStore implements ILobbyStore {
     if (!room) return null;
     const mems = this.members.get(roomId) ?? [];
     return { room: { ...room }, members: mems.map((m) => ({ ...m })) };
+  }
+
+  /** Open rooms whose invite window closed; the stored status is left untouched. */
+  async listExpiredOpenRooms(now: number): Promise<RoomWithMembers[]> {
+    const expired: RoomWithMembers[] = [];
+    for (const room of this.rooms.values()) {
+      if (room.status !== "open" || room.expiresAt > now) continue;
+      const withMembers = await this.getRoomWithMembers(room.id);
+      if (withMembers) expired.push(withMembers);
+    }
+    return expired;
   }
 
   async userActiveRoom(userId: string): Promise<RoomWithMembers | null> {

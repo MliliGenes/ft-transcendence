@@ -14,6 +14,7 @@ import { accountImageSource } from "@/lib/accounts/images";
 import { accountDisplayName } from "@/lib/accounts/status-icons";
 import { chatApi, type AttachmentPreview, type ChatMessage } from "@/lib/chat/client";
 import { parseCodeArenaInvite } from "@/lib/arena/invitations";
+import { gameNotificationTitle, parseGameNotification, type GameNotification } from "@/lib/arena/game-notifications";
 import { LobbyClient } from "@/lib/arena/lobby";
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
@@ -70,20 +71,28 @@ function MessageRow({ message, own, continued, readerCount }: { message: ChatMes
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const canManage = own && !message.deletedAt;
-  const invite = message.content && !message.deletedAt ? parseCodeArenaInvite(message.content) : null;
+  const system = message.kind === "SYSTEM";
+  const invite = message.content && !message.deletedAt && !system ? parseCodeArenaInvite(message.content) : null;
+  const notification = system && message.content && !message.deletedAt ? parseGameNotification(message.content) : null;
   return <li className={`group relative -mx-3 flex gap-3 px-3 py-0.5 transition-colors hover:bg-muted/60 sm:-mx-4 sm:px-4 ${continued ? "" : "mt-3 pt-1.5"}`} aria-label={`${name}, ${fullFormat.format(created)}`}>
     {canManage && !editing && <MessageOwnerActions onEdit={() => setEditing(true)} onDelete={() => setConfirmingDelete(true)} className="absolute right-3 top-0 z-10 border border-border bg-card opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 sm:right-4" />}
     {canManage && <DeleteMessageDialog message={message} open={confirmingDelete} onOpenChange={setConfirmingDelete} />}
     <div className="w-10 shrink-0">
       {continued
         ? <time dateTime={message.createdAt} title={fullFormat.format(created)} className="block pt-1 text-right text-[11px] leading-5 text-muted-foreground opacity-0 tabular-nums group-hover:opacity-100 group-focus-within:opacity-100">{timeFormat.format(created)}</time>
-        : <Link href={`/profile/${encodeURIComponent(author.id)}`} aria-label={`View ${name}'s profile`} className="block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+        : system
+          ? <span aria-hidden="true" className="grid size-10 place-items-center rounded-full border border-primary/30 bg-primary/10 text-primary">
+            <IconDeviceGamepad2 size={20} stroke={1.75} />
+          </span>
+          : <Link href={`/profile/${encodeURIComponent(author.id)}`} aria-label={`View ${name}'s profile`} className="block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
           <AccountAvatar source={accountImageSource(author.avatarUrl)} seed={author.id} label={`${name} avatar`} size={40} className="size-10 object-cover" />
         </Link>}
     </div>
     <div className="min-w-0 flex-1">
       {!continued && <div className="flex flex-wrap items-baseline gap-x-2">
-        <Link href={`/profile/${encodeURIComponent(author.id)}`} className={`text-sm font-semibold hover:underline focus-visible:outline-2 focus-visible:outline-ring ${own ? "text-nook-accent-text" : ""}`}>{name}</Link>
+        {system
+          ? <span className="text-sm font-semibold text-primary">{name}</span>
+          : <Link href={`/profile/${encodeURIComponent(author.id)}`} className={`text-sm font-semibold hover:underline focus-visible:outline-2 focus-visible:outline-ring ${own ? "text-nook-accent-text" : ""}`}>{name}</Link>}
         <time dateTime={message.createdAt} title={fullFormat.format(created)} className="text-xs text-muted-foreground tabular-nums">{timeFormat.format(created)}</time>
         {own && <span className="sr-only">(you)</span>}
       </div>}
@@ -91,6 +100,8 @@ function MessageRow({ message, own, continued, readerCount }: { message: ChatMes
         ? <p className="text-sm italic text-muted-foreground">Message deleted</p>
         : editing
           ? <MessageEditor message={message} onClose={() => setEditing(false)} submitOnEnter />
+          : notification
+            ? <GameNotificationCard notification={notification} />
           : invite
             ? <DuelInviteCard code={invite.code} own={own} authorName={name} />
           : message.content && <>
@@ -137,6 +148,24 @@ export function MessageAttachment({ conversationId, objectKey }: { conversationI
     <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">PDF document</span>{downloadError ? <span role="alert" className="block text-xs text-destructive">{downloadError}</span> : <span className="block text-xs text-muted-foreground">Attachment</span>}</span>
     <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0" onClick={() => { setDownloadError(""); void download(); }} aria-label="Download PDF"><IconDownload size={18} aria-hidden="true" /></Button>
   </div>;
+}
+
+function GameNotificationCard({ notification }: { notification: GameNotification }) {
+  const title = gameNotificationTitle(notification.type);
+  return (
+    <section className="my-2 max-w-sm border border-primary/30 bg-primary/5 p-3" aria-label={`Code Arena ${title.toLowerCase()}`}>
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <IconDeviceGamepad2 size={17} className="text-primary" aria-hidden="true" />
+        Code Arena · {title}
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{notification.summary}</p>
+      {notification.matchId && (
+        <Button render={<Link href={`/play/match/${notification.matchId}`} />} size="sm" variant="outline" className="mt-3 min-h-10">
+          View Match
+        </Button>
+      )}
+    </section>
+  );
 }
 
 function DuelInviteCard({ code, own, authorName }: { code: string; own: boolean; authorName: string }) {

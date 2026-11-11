@@ -12,6 +12,7 @@ import { EditMessageDto } from './dtos/edit-message.dto.js';
 import { ChatGateway } from './gateway/chat.gateway.js';
 import { UserProfilesService } from './user-profiles.service.js';
 import { MinioService } from '../minio/minio.service.js';
+import { GameNotificationsService } from './game-notifications.service.js';
 
 @Injectable()
 export class ChatService {
@@ -20,6 +21,7 @@ export class ChatService {
     private readonly chatGateway: ChatGateway,
     private readonly userProfiles: UserProfilesService,
     private readonly minio: MinioService,
+    private readonly gameNotifications: GameNotificationsService,
   ) {}
 
   async createAttachmentUploadUrl(
@@ -294,7 +296,14 @@ export class ChatService {
 
     const attachments = msg.attachments ?? [];
     const requestHash = createHash('sha256')
-      .update(JSON.stringify([conversationId, msg.content, attachments]))
+      .update(
+        JSON.stringify([
+          conversationId,
+          msg.content,
+          attachments,
+          msg.gameChallenge?.roomCode ?? null,
+        ]),
+      )
       .digest('hex');
 
     const existingMessage = await this.prisma.message.findFirst({
@@ -315,6 +324,8 @@ export class ChatService {
           'Request ID was already used for another message',
         );
       }
+
+      await this.linkChallenge(conversationId, msg);
 
       return existingMessage;
     }
@@ -350,7 +361,25 @@ export class ChatService {
 
     this.chatGateway.broadcastMessageCreated(recipientIds, newMessage);
 
+    await this.linkChallenge(conversationId, msg);
+
     return newMessage;
+  }
+
+  /**
+   * A Code Arena challenge announces a private room. Remember which
+   * conversation carries it so match start and result events can be delivered
+   * here.
+   */
+  private async linkChallenge(
+    conversationId: string,
+    msg: SendMessageDto,
+  ): Promise<void> {
+    if (!msg.gameChallenge?.roomCode) return;
+    await this.gameNotifications.linkChallenge(
+      conversationId,
+      msg.gameChallenge.roomCode,
+    );
   }
 
   private async getAccessibleConversation(

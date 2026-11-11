@@ -19,7 +19,7 @@ Nook's first game is Code Arena, a timed coding game for 1v1 duels and 2v2 teams
 
 5. **Keep code evaluation behind a dedicated boundary.** Game sends evaluation requests to the judge worker on a private Compose network. The worker starts resource-limited containers with networking disabled and restricted filesystem/capabilities. Match history, profile summaries and the leaderboard expose result summaries, never source code or hidden test data.
 
-6. **Use both Nook Chat and game team chat for their intended jobs.** Direct-message invitations are persisted by Chat and link to a private Game room. Match-scoped 2v2 team chat runs on Game's `/chat` namespace so it is isolated to the active team's match.
+6. **Use both Nook Chat and game team chat for their intended jobs.** Direct-message invitations are persisted by Chat and link to a private Game room. Match-scoped 2v2 team chat runs on Game's `/chat` namespace so it is isolated to the active team's match. Match lifecycle notifications travel over the `game.events` broker exchange: Game publishes them, Chat validates them and writes them into the conversation that carries the challenge, so no service reads another service's database.
 
 7. **Use the integrated `/play` routes.** `/play` provides matchmaking and private-room entry; `/play/lobby/[code]` assembles participants and readiness; `/play/match/[id]` hosts gameplay; `/play/leaderboard` shows public results. CodeMirror and Yjs stay in client components because the editor needs browser APIs.
 
@@ -31,5 +31,6 @@ Nook's first game is Code Arena, a timed coding game for 1v1 duels and 2v2 teams
 - The game supports four simultaneous participants in 2v2; separate-client remote play and reconnect behavior must still be demonstrated during evaluation.
 - Profile statistics and leaderboard currently use wins, losses, draws and win rate; there is no Elo rating, achievement or progression system.
 - The invitation card opens the lobby and the Game service checks joinability, but the chat card does not display a separate live availability status.
+- Game lifecycle notifications are announced only in the conversation that carries the challenge. A match started from the matchmaking queue has no linked conversation and is not announced in chat.
 - Account deletion propagates to Chat's cached profile but not to Game. Prior match identifiers, code submissions and collaborative snapshots can remain in Game PostgreSQL; see the [Privacy Policy](../../client/app/(legal)/privacy/page.tsx).
 - Module eligibility is not guaranteed by this architecture decision. Use the [local module tracker](../requirements/index.html) and verify each criterion with the team and evaluator.

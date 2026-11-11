@@ -23,7 +23,16 @@ export async function createCodeArenaInvite(input: {
   const { room } = await lobby.createRoom("1v1");
   try {
     const content = formatCodeArenaInvite(room.code);
-    await chatApi.send(input.conversationId, content, globalThis.crypto.randomUUID(), input.token);
+    // The room code travels with the message so the chat service can link
+    // this conversation to the match and announce its lifecycle here.
+    await chatApi.send(
+      input.conversationId,
+      content,
+      globalThis.crypto.randomUUID(),
+      input.token,
+      [],
+      { roomCode: room.code },
+    );
     return { code: room.code };
   } catch (error) {
     await lobby.leaveRoom(room.id).catch(() => undefined);

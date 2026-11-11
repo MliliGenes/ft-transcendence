@@ -15,6 +15,8 @@ export type ChatMessage = {
   deletedAt: string | null;
   clientRequestId: string;
   version: number;
+  /** USER messages come from an account; SYSTEM messages come from the service. */
+  kind: "USER" | "SYSTEM";
 };
 export type AttachmentUpload = {
   objectKey: string;
@@ -129,7 +131,7 @@ export const chatApi = {
   conversations: (token: string) => request<DirectConversation[]>("/conversations", token),
   openDm: (userId: string, token: string) => request<DirectConversation>("/conversations/dm", token, json({ userId })),
   messages: (conversationId: string, token: string, before?: string) => request<ChatMessage[]>(`/conversations/${encodeURIComponent(conversationId)}/messages?limit=50${before ? `&before=${encodeURIComponent(before)}` : ""}`, token),
-  send: (conversationId: string, content: string, clientRequestId: string, token: string, attachments: string[] = []) => request<ChatMessage>(`/conversations/${encodeURIComponent(conversationId)}/messages`, token, json({ content, clientRequestId, ...(attachments.length ? { attachments } : {}) })),
+  send: (conversationId: string, content: string, clientRequestId: string, token: string, attachments: string[] = [], gameChallenge?: { roomCode: string }) => request<ChatMessage>(`/conversations/${encodeURIComponent(conversationId)}/messages`, token, json({ content, clientRequestId, ...(attachments.length ? { attachments } : {}), ...(gameChallenge ? { gameChallenge } : {}) })),
   editMessage: (messageId: string, content: string, token: string) => request<ChatMessage>(`/messages/${encodeURIComponent(messageId)}`, token, { method: "PATCH", body: JSON.stringify({ content }) }),
   deleteMessage: (messageId: string, token: string) => request<void>(`/messages/${encodeURIComponent(messageId)}`, token, { method: "DELETE" }),
   createAttachmentUpload: (conversationId: string, contentType: string, token: string) => request<AttachmentUpload>(`/conversations/${encodeURIComponent(conversationId)}/attachments/upload-url`, token, json({ contentType })),
