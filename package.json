@@ -17,14 +17,19 @@
   "scripts": {
     "build:packages": "npm run build --workspace arena-model && npm run build --workspace arena-game-engine && npm run build --workspace arena-game",
     "pretest": "npm run build:packages",
-    "test": "npm test --workspaces --if-present",
+    "test": "node scripts/checks/arena-tests.mjs",
     "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present",
+    "lint": "node scripts/checks/verify.mjs --lint",
     "build": "npm run build:packages && npm run build --workspace arena-game && npm run build --workspace arena-judge-worker",
     "certs": "bash scripts/gen-dev-certs.sh",
     "play": "bash scripts/play.sh",
     "up": "docker compose up --build",
-    "down": "docker compose down"
+    "down": "docker compose down",
+    "check": "node scripts/checks/verify.mjs",
+    "test:integration": "node scripts/checks/integration.mjs",
+    "checks:setup": "node scripts/checks/install-scanner.mjs && node scripts/checks/install-hooks.mjs",
+    "secrets:staged": "node scripts/checks/secrets.mjs staged",
+    "secrets:ci": "node scripts/checks/secrets.mjs ci"
   },
   "license": "ISC"
 }

@@ -1,0 +1,8 @@
+title = "Nook secret prevention"
+[extend]
+useDefault = true
+
+[[rules]]
+id = "nook-private-key"
+description = "Private signing, SSH or TLS key header"
+regex = '''-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'''

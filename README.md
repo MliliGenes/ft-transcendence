@@ -120,6 +120,10 @@ Prometheus, Loki, Alloy, databases, backend services and the judge worker are no
 
 The databases have separate owners and no cross-database foreign keys. The Chat service receives profile changes through RabbitMQ and stores the existing User UUID. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records. See the [User service guide](docs/services/user-service.md), [Chat schema notes](docs/services/chat-service.md), and [game persistence implementation](packages/arena-game/src/postgres-store.ts).
 
+## Verification
+
+Run `npm run check` for the complete project gate. Setup, disposable integration tests, local secret hooks and CI scope are documented in [Repeatable verification](docs/project/VERIFICATION.md).
+
 ## Code Arena integration
 
 - 1v1 matchmaking and private rooms; 2v2 team rooms.

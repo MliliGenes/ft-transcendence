@@ -368,9 +368,10 @@ describe("persistence + process restart", () => {
 // Real Postgres collab persistence (ticket 15 §13/§15): skips loudly without
 // a DB. Uses its OWN database (arena_test_collab) so parallel suites sharing
 // arena_test (postgres.test.ts) never cross-talk via TRUNCATE.
-const PG_BASE = process.env.TEST_PG_URL ?? "postgres://postgres:postgres@localhost:5433/arena_test";
+const PG_BASE = process.env.TEST_PG_URL ?? "";
 const PG_URL = PG_BASE.replace(/\/[^/]*$/, "/arena_test_collab");
 async function pgUp(): Promise<boolean> {
+  if (!PG_BASE) return false;
   try {
     const { Pool } = await import("pg");
     const adminUrl = new URL(PG_BASE);

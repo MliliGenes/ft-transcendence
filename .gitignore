@@ -41,3 +41,7 @@ graphify-out/20*/
 # Generated development TLS material; regenerate per clone.
 /infra/nginx/certs/*.key
 /infra/nginx/certs/*.crt
+
+# Local verification tools and reports.
+/.tools/
+/.verification/

@@ -1,3 +1,4 @@
+import { GAME_SCHEMA } from '../src/postgres-store.js';
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   InMemoryLobbyStore,
@@ -289,6 +290,7 @@ describe.runIf(Boolean(dbUrl))("Lobby and Matchmaking (Postgres Real Database)",
   beforeAll(async () => {
     pool = new Pool({ connectionString: dbUrl });
     lobby = new LobbyStore(pool);
+    await pool.query(GAME_SCHEMA);
     await lobby.ensureSchema();
   });
 

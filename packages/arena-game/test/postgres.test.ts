@@ -11,9 +11,10 @@ import { ScriptedJudge, type ScriptPlan } from "./scripted-judge.js";
 // Real Postgres integration (ticket 09): needs a reachable database.
 // Default points at an ephemeral local instance; override with TEST_PG_URL.
 // Skips (loudly) when no database answers so unit runs stay green everywhere.
-const PG_URL = process.env.TEST_PG_URL ?? "postgres://postgres:postgres@localhost:5433/arena_test";
+const PG_URL = process.env.TEST_PG_URL ?? "";
 
 async function pgUp(): Promise<boolean> {
+  if (!PG_URL) return false;
   try {
     const stores = new PostgresStores(PG_URL);
     await stores.ensureSchema();

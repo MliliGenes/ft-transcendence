@@ -196,11 +196,12 @@ describe("MatchPersistence contract", () => {
   });
 });
 
-const PG_BASE = process.env.TEST_PG_URL ?? "postgres://postgres:postgres@localhost:5433/arena_test";
+const PG_BASE = process.env.TEST_PG_URL ?? "";
 const PG_DATABASE = "arena_persistence_contract";
 const PG_CONTRACT_URL = PG_BASE.replace(/\/[^/]*$/, `/${PG_DATABASE}`);
 
 async function postgresAvailable(): Promise<boolean> {
+  if (!PG_BASE) return false;
   const target = new Pool({ connectionString: PG_CONTRACT_URL });
   try {
     await target.query("SELECT 1");

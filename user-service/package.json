@@ -19,7 +19,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "oxlint src/ test/",
-    "test": "vitest run",
+    "test": "node ../scripts/checks/user-tests.mjs",
     "test:register": "npm run build && node --test --test-isolation=none test/register-tokens.test.mjs",
     "test:auth": "npm run build && node --test --test-isolation=none test/register-tokens.test.mjs test/login-tokens.test.mjs test/current-user.test.mjs test/refresh-tokens.test.mjs",
     "test:auth:postgres": "npm run build && node --test --test-isolation=none test/refresh-race.postgres.test.mjs",
@@ -30,7 +30,8 @@
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "test:discord": "npm run build && node --test --test-isolation=none test/discord-oauth.test.mjs",
-    "test:discord:postgres": "npm run build && node --env-file=.env --test --test-isolation=none test/discord-link.postgres.test.mjs"
+    "test:discord:postgres": "npm run build && node --env-file=.env --test --test-isolation=none test/discord-link.postgres.test.mjs",
+    "pretest": "npm run build"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

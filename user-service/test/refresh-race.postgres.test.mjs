@@ -61,7 +61,7 @@ test(
         audience: 'ft-transcendence-api',
       },
     });
-    const service = new AuthService(base, jwt);
+    const service = new AuthService(base, jwt, { sendVerificationEmail: async () => {} });
 
     async function seed(testContext) {
       const unique = randomUUID();

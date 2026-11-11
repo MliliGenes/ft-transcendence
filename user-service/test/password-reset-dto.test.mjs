@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -12,7 +13,7 @@ test('password reset endpoints validate input before calling the service', async
   const calls = [];
   const module = await Test.createTestingModule({
     controllers: [AuthController],
-    providers: [{ provide: AuthService, useValue: {
+    providers: [{ provide: ConfigService, useValue: new ConfigService({}) }, { provide: AuthService, useValue: {
       requestPasswordReset: async (...args) => { calls.push(args); },
       confirmPasswordReset: async (...args) => { calls.push(args); },
     } }],

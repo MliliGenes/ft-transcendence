@@ -45,3 +45,7 @@ One document per service, and one per place where services meet.
 | [Official subject](../ft_trans_subject.pdf) | ft_transcendence v21.2 requirements |
 | [Privacy Policy](../client/app/(legal)/privacy/page.tsx) and [Terms](../client/app/(legal)/terms/page.tsx) | Current public user notices |
 | [Integration plan](superpowers/plans/2026-11-11-nook-arena-platform-integration.md) | Branch reconciliation decisions, checks and remaining operator actions |
+
+## Engineering checks
+
+[Repeatable verification](project/VERIFICATION.md) is the entry point for the full gate, disposable services, secret hooks and CI.

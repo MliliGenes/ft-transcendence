@@ -1,3 +1,6 @@
+import { MailService } from '../dist/mail/mail.service.js';
+import { RabbitMqEventsService } from '../dist/events/rabbitmq-events.service.js';
+import { readSession } from './helpers/session.mjs';
 ﻿import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -22,7 +25,7 @@ test('Discord authorization-code login', async (t) => {
   const config = {
     JWT_PRIVATE_KEY: keys.privateKey,
     JWT_PUBLIC_KEY: keys.publicKey,
-    DISCORD_CLIENT_ID: '123456789012345678',
+    DISCORD_CLIENT_ID: '123456789012345678', // gitleaks:allow -- synthetic public app ID, not a credential.
     DISCORD_CLIENT_SECRET: 'test-secret',
     DISCORD_REDIRECT_URI: 'http://localhost:3000/auth/discord/callback',
   };
@@ -153,6 +156,10 @@ test('Discord authorization-code login', async (t) => {
   const module = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PrismaService)
     .useValue(prisma)
+    .overrideProvider(MailService)
+    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
+    .overrideProvider(RabbitMqEventsService)
+    .useValue({ publishCreated: async () => {}, publishUpdated: async () => {}, publishDeleted: async () => {} })
     .overrideProvider(ConfigService)
     .useValue(new ConfigService(config))
     .compile();
@@ -308,7 +315,7 @@ test('Discord authorization-code login', async (t) => {
         (await module.get(JwtService).verifyAsync(result.body.accessToken)).sub,
         localUser.id,
       );
-      const [id, secret] = result.body.refreshToken.split('.');
+      const [id, secret] = readSession(result).refreshToken.split('.');
       assert.equal(sessions.at(-1).id, id);
       assert.equal(sessions.at(-1).tokenHash, digest(secret));
       assert.ok(!JSON.stringify(result.body).includes('discord-private-token'));
