@@ -20,11 +20,13 @@ npm run checks:setup
 npm run check              # Full project gate, including real disposable integration tests
 npm run lint               # Client, Chat and User's real linters
 npm run test:integration   # Build/setup and run only disposable database/socket suites
+npm run evidence:g06       # Validate the saved G06 demo record and screenshot bundle
+npm run evidence:g06:pdf   # Rebuild its 21-page screenshot PDF (requires Chrome/Chromium)
 npm run secrets:staged     # Scan the index, including staged content hidden by unstaged edits
 npm run secrets:ci         # Scan the index and new history after the rollout baseline
 ```
 
-The full gate explicitly calls the commands defined by each component, including Node-based User tests, backup regressions, workspace typechecks/tests, service builds and the client production build. Root `npm test` remains the Arena workspace suite with application database variables removed and legacy engine database probes pointed at an unavailable test target; use `npm run check` for the whole product. A failure stops the run and produces a nonzero exit. Stage results and durations are written to ignored `.verification/latest.json`.
+The full gate explicitly calls the commands defined by each component, including Node-based User tests, backup regressions, workspace typechecks/tests, service builds and the client production build. Root `npm test` remains the Arena workspace suite with application database variables removed and legacy engine database probes pointed at an unavailable test target; use `npm run check` for the whole product. A failure stops the run and produces a nonzero exit. Full and lint-only runs write separate ignored `.verification/latest-full.json` and `.verification/latest-lint.json` reports. Each report records its mode, start and finish times, checked commit, whether the worktree was dirty, and per-stage results.
 
 Default Arena tests can report skips for database suites and optional external judge providers. The full gate then exercises the required database/reconnect cases separately using its own services; optional third-party judge-provider checks still require their own environment. A successful full gate does not claim those optional providers were exercised.
 
@@ -40,7 +42,9 @@ The Game real-socket suites use fixed test listener ports (3217/3218 as defined 
 
 The G06 acceptance check (Code Arena game notifications in chat) was demonstrated live in two independent browser sessions on 2026-11-11. The run used a **disposable Compose project** — its own network, volumes and host ports (`https://localhost:8443`, RabbitMQ management on `15673`, MinIO console on `9002`) — built from the current source, so the running Nook stack and its user data were never touched. Credentials were generated for the run; none were read from `envs/*.env`. A Mailpit SMTP sink let the two disposable accounts complete real email verification.
 
-The demonstration drove the real client UI only (profile page, chat workspace, lobby, match arena) and showed: the owner's duel invitation, the second account accepting it, the match-started notice, the match-result notice after a forfeit, the challenge-cancelled notice after a withdrawal, and the challenge-cancelled notice after an expiry. Both clients received every notice live over the Socket.IO gateway, and reloading both clients left exactly one copy of each. Full record, screenshots and the exact stored message rows: [docs/evidence/g06-live-demo](../evidence/g06-live-demo/README.md).
+The demonstration drove the real client UI only (profile page, chat workspace, lobby, match arena) and showed: the owner's duel invitation, the second account accepting it, the match-started notice, the match-result notice after a forfeit, the challenge-cancelled notice after a withdrawal, and the challenge-cancelled notice after an expiry. Both clients received every notice live over the Socket.IO gateway. Reloading preserved the notices that had arrived by then; the expiry notice arrived afterward and was observed live and persisted once, but was not part of that reload check. Validate the saved timeline and 21 screenshots with `npm run evidence:g06`. Full record, screenshots and the exact stored message rows: [docs/evidence/g06-live-demo](../evidence/g06-live-demo/README.md).
+
+Pre-commit and full-gate secret scanning also rejects NUL bytes in tracked source and documentation text files. This protects review tools from treating a source file as binary while leaving image and other binary assets alone.
 
 Two limits are part of that record and are not hidden by it: broker delivery is best effort (the publisher never blocks gameplay and holds no outbox, so an event published just before a Game service restart can be lost), and the run covered the 1v1 mode on one machine.
 

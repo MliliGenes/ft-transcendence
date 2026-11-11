@@ -111,6 +111,12 @@ The two user IDs are lowercased and sorted, so A-B and B-A are the same conversa
 
 ## Code Arena lifecycle notifications
 
+Follow the room-owner authorization and Game-to-Chat event contract here; the
+linked unit and PostgreSQL suites exercise both sides of the service boundary.
+The [integration specification](../spec/code-arena-integration-spec.md)
+records the public contract and the [G06 evidence bundle](../evidence/g06-live-demo/README.md)
+records the live browser run and links its combined screenshot PDF.
+
 Game events are announced in the conversation that carries the Code Arena challenge. The Game service owns match state and never writes to the Chat database: it publishes authoritative events on the `game.events` exchange and Chat turns them into ordinary messages.
 
 ### Linking a challenge to a conversation
@@ -177,7 +183,7 @@ Members of the linked conversation are the recipients, so the notification lands
 
 The notification's `clientRequestId` is derived from the conversation and the event (`match-started:<matchId>`, `match-result:<matchId>`, `challenge-cancelled:<roomCode>`). The unique index on `(authorId, clientRequestId)` therefore turns a redelivered or replayed event into a no-op: the stored message is returned unchanged and nothing is broadcast a second time. Reconnect and re-delivery therefore never produce repeated notifications.
 
-This was also shown live: on 2026-11-11 two independent browser clients received every notice in real time, and reloading both of them left exactly one stored copy of each notification. Evidence: [docs/evidence/g06-live-demo](../evidence/g06-live-demo/README.md).
+This was also shown live: on 2026-11-11 two independent browser clients received every notice in real time. Reloading preserved the five cards present at those checkpoints; the expiry notice arrived afterward and was received live and persisted once, but was not part of the reload check. Evidence: [docs/evidence/g06-live-demo](../evidence/g06-live-demo/README.md).
 
 ### Boundaries
 

@@ -51,6 +51,6 @@ jobs:
       - name: Print stage summary
         if: always()
         run: |
-          if test -f .verification/latest.json; then
-            cat .verification/latest.json
+          if test -f .verification/latest-full.json; then
+            cat .verification/latest-full.json
           fi

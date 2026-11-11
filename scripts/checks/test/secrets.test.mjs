@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { forbiddenPath, scanStaged, scanHistory, scanTree } from '../secrets.mjs';
+import { assertNoNulTextFiles } from '../text-files.mjs';
 
 function repository(t) {
   const dir = mkdtempSync(join(tmpdir(), 'nook-secret-test-'));
@@ -65,4 +66,24 @@ test('unstaged secrets do not replace the safe content actually being committed'
   writeFileSync(join(dir, 'notes.txt'), 'safe staged content'); git('add', 'notes.txt');
   writeFileSync(join(dir, 'notes.txt'), syntheticKey());
   await scanStaged({ cwd: dir });
+});
+
+test('tracked source files containing NUL bytes are rejected without showing content', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'nook-text-test-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const source = join(dir, 'chat.service.ts');
+  const marker = 'synthetic-private-marker';
+  writeFileSync(source, Buffer.concat([Buffer.from('const hidden = '), Buffer.from([0]), Buffer.from(`${marker};`)]));
+  await assert.rejects(assertNoNulTextFiles(['chat.service.ts'], { baseDirectory: dir }), (error) => {
+    assert.match(error.message, /chat\.service\.ts/);
+    assert.equal(error.message.includes(marker), false);
+    return true;
+  });
+});
+
+test('binary assets are excluded from the tracked text-file NUL scan', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'nook-text-test-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'badge.png'), Buffer.from([137, 80, 78, 71, 0, 0, 1]));
+  await assert.doesNotReject(assertNoNulTextFiles(['badge.png'], { baseDirectory: dir }));
 });

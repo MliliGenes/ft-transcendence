@@ -1,5 +1,9 @@
 # G06 live two-client demonstration
 
+All 21 screenshots are also available as a single [21-page PDF](screenshots.pdf).
+Regenerate it from the repository root with `npm run evidence:g06:pdf`, then
+check the record, images and PDF together with `npm run evidence:g06`.
+
 Evidence for the G06 acceptance check: the Code Arena **game notifications** in
 chat, shown live in two independent browser sessions against a real stack.
 
@@ -20,8 +24,8 @@ one direct conversation between them.
 | 3 | Both marked ready, owner started the match | `Code Arena · Match started` | `Code Arena · Match started` |
 | 4 | Second account forfeited from the match arena | `Code Arena · Match result` (`won by forfeit`) | `Code Arena · Match result` (`won by forfeit`) |
 | 5 | Owner withdrew a second challenge from the lobby | `Code Arena · Challenge cancelled` (`withdrawn before it started`) | the same cancellation notice |
-| 6 | A third challenge expired in the Game service's own sweep | `Code Arena · Challenge cancelled` (`expired before it started`) | the same cancellation notice |
-| 7 | Both clients reloaded the conversation | 5 cards, unchanged | 5 cards, unchanged |
+| 6 | Both clients reloaded the conversation | 5 cards, unchanged | 5 cards, unchanged |
+| 7 | A third challenge expired in the Game service's own sweep | `Code Arena · Challenge cancelled` (`expired before it started`) | the same cancellation notice |
 
 Every notification reached **both** clients live, over the real Socket.IO
 gateway, and was persisted in the conversation.
@@ -69,6 +73,9 @@ The same five cards, no duplicates. The database agrees: seven rows in that
 conversation, three `USER` invitations and four `SYSTEM` notifications, each
 with a distinct request id.
 
+The expiry notice arrived after the reload check. It was observed live in both
+clients and persisted once, but was not part of the before/after reload counts.
+
 ## How it was run
 
 A disposable Compose project (`nook-g06-demo`), separate from the running
@@ -89,6 +96,12 @@ Nook stack:
 The demonstration was driven by Playwright against Google Chrome, using the
 real client UI only: the profile page, the chat workspace, the lobby page and
 the match arena. No service was called directly to produce a notification.
+
+The service-side scenario is reproducible with `npm run test:integration`.
+That command provisions disposable PostgreSQL and RabbitMQ services, applies
+the real migrations, and exercises Game-to-Chat delivery through the real
+Game service. It does not replay the browser clicks or regenerate these
+screenshots; those are the record of the live run below.
 
 Screenshots are in this directory, in the order the run took them:
 
@@ -120,6 +133,9 @@ Screenshots are in this directory, in the order the run took them:
 its timestamp, the exact card labels and text each client showed, and the
 before/after reload counts.
 
+Run `npm run evidence:g06` to validate the timestamps, reload counts, expiry
+claim and numbered screenshot bundle before sharing this record.
+
 ## What this does and does not prove
 
 Proven by this run:
@@ -131,7 +147,9 @@ Proven by this run:
   produce one persisted notice that both clients receive live;
 - an expired challenge produces the same cancellation notice through the
   Game service's own expiry sweep;
-- reloading and reconnecting neither loses nor duplicates a notice.
+- reloading and reconnecting preserved the five cards present at those
+  checkpoints. The later expiry notices were received live and persisted once,
+  but were not part of the reload check.
 
 Not proven by this run, and still limited:
 

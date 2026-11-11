@@ -3,6 +3,7 @@ import { join, sep, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { root, run, cli, isMain } from './process.mjs';
 import { requireScanner } from './install-scanner.mjs';
+import { assertNoNulTextFiles } from './text-files.mjs';
 
 // Explicit rollout boundary, not a claim that earlier published history is clean.
 export const baseline = 'ecbbfdda3fa52538bd00a192a311f3f8f36ff11e';
@@ -43,6 +44,7 @@ async function scanIndex(cwd) {
   const directory = await mkdtemp(join(tmpdir(), 'nook-index-scan-'));
   try {
     await run('git', ['checkout-index', '--all', `--prefix=${directory}${sep}`], { cwd, capture: true });
+    await assertNoNulTextFiles(paths, { baseDirectory: directory });
     await runScanner(scanner, ['dir', directory, '--config', join(root, '.gitleaks.toml'), '--redact', '--no-banner', '--no-color', '--log-level', 'warn', '--max-archive-depth', '3'], { snapshot: directory });
   } catch (error) { throw new Error(`Secret/credential scan failed: ${error.message}`); }
   finally { await rm(directory, { recursive: true, force: true }); }

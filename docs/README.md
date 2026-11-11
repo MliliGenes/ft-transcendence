@@ -38,6 +38,8 @@ One document per service, and one per place where services meet.
 | Document | Covers |
 | --- | --- |
 | [Integration specification](spec/code-arena-integration-spec.md) | Game routes, HTTP/socket contracts, data ownership and demonstration requirements |
+| [Chat lifecycle notifications](services/chat-service.md#code-arena-lifecycle-notifications) | Room-owner authorization, Game event publishing, Chat delivery and related tests |
+| [G06 demo evidence](evidence/g06-live-demo/README.md) | Two-client screenshots, a single-file PDF, stored message rows and live demonstration limits |
 | [Integration decision](adr/0015-code-arena-nook-integration.md) | Service boundaries and accepted decisions |
 | [Game engine](../packages/arena-game/src/engine.ts) and [Game service](../services/game/src/game/game.service.ts) | Authoritative gameplay and authenticated API |
 | [Complete backup/recovery guide](infra/BACKUP_RECOVERY.md) | User, Chat, Game and MinIO snapshots; restore limitations |

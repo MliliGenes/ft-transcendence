@@ -27,6 +27,8 @@
     "down": "docker compose down",
     "check": "node scripts/checks/verify.mjs",
     "test:integration": "node scripts/checks/integration.mjs",
+    "evidence:g06": "node scripts/checks/g06-evidence.mjs",
+    "evidence:g06:pdf": "node scripts/evidence/render-g06-pdf.mjs",
     "checks:setup": "node scripts/checks/install-scanner.mjs && node scripts/checks/install-hooks.mjs",
     "secrets:staged": "node scripts/checks/secrets.mjs staged",
     "secrets:ci": "node scripts/checks/secrets.mjs ci"

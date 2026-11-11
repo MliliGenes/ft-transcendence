@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { workspaceTestSteps } from '../arena-tests.mjs';
-import { verificationSteps, runSteps } from '../verify.mjs';
+import {
+  verificationSteps,
+  runSteps,
+  createVerificationReport,
+  verificationReportName,
+} from '../verify.mjs';
 
 test('full verification covers every product surface and real lint commands', () => {
   const steps = verificationSteps();
@@ -24,6 +29,29 @@ test('verification stops at the first failure and records its result', async () 
   }), /exit 17/);
   assert.deepEqual(seen, ['first', 'broken']);
   assert.deepEqual(results.map((r) => [r.id, r.ok]), [['first', true], ['broken', false]]);
+});
+
+test('lint and full runs write distinct reports with source identity', () => {
+  assert.equal(verificationReportName('full'), 'latest-full.json');
+  assert.equal(verificationReportName('lint'), 'latest-lint.json');
+  const report = createVerificationReport({
+    mode: 'full',
+    startedAt: '2026-11-11T00:00:00.000Z',
+    generatedAt: '2026-11-11T00:01:00.000Z',
+    commit: 'a'.repeat(40),
+    dirty: true,
+    completed: true,
+    results: [{ id: 'engine-postgres', ok: true }],
+  });
+  assert.deepEqual(report, {
+    mode: 'full',
+    startedAt: '2026-11-11T00:00:00.000Z',
+    generatedAt: '2026-11-11T00:01:00.000Z',
+    commit: 'a'.repeat(40),
+    dirty: true,
+    ok: true,
+    results: [{ id: 'engine-postgres', ok: true }],
+  });
 });
 
 test('preliminary engine suites cannot fall back to an existing local PostgreSQL', () => {
