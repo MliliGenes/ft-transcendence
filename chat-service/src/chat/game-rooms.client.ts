@@ -7,9 +7,14 @@ type RoomLookupResponse = {
   room?: { id?: string; code?: string } | null;
 };
 
+/**
+ * The Game service answers a room read with `{ ok: true, ...roomWithMembers }`,
+ * so the room record (and its owner) sits under `room`.
+ */
 type RoomResponse = {
   ok?: boolean;
-  ownerUserId?: string;
+  room?: { id?: string; code?: string; ownerUserId?: string } | null;
+  members?: Array<{ userId: string }>;
 };
 
 /**
@@ -63,7 +68,7 @@ export class GameRoomsClient {
       authorization,
     );
     if (!room) return false;
-    return room.ownerUserId === userId;
+    return room.room?.ownerUserId === userId;
   }
 
   private async request<T>(path: string, authorization: string): Promise<T | null> {

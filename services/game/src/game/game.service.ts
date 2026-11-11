@@ -612,7 +612,7 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
       return { userId: participant.userId, sideId: participant.sideId, outcome, score };
     });
 
-    await this.events.publishMatchEnded({
+    return this.events.publishMatchEnded({
       matchId,
       mode: match.mode,
       participants,
@@ -621,7 +621,6 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
         : null,
       endedBecause: match.forfeit ? "forfeit" : result === "deadline" ? "deadline" : "completed",
     });
-    return true;
   }
 
   /**

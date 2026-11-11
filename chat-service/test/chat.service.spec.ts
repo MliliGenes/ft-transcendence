@@ -5,7 +5,6 @@ import { PrismaService } from '../src/prisma/prisma.service.js';
 import { ChatGateway } from '../src/chat/gateway/chat.gateway.js';
 import { UserProfilesService } from '../src/chat/user-profiles.service.js';
 import { MinioService } from '../src/minio/minio.service.js';
-import { GameNotificationsService } from '../src/chat/game-notifications.service.js';
 import { GameRoomsClient } from '../src/chat/game-rooms.client.js';
 
 describe('ChatService.sendMessage channel delivery', () => {
@@ -41,7 +40,6 @@ describe('ChatService.sendMessage channel delivery', () => {
       gateway,
       {} as UserProfilesService,
       {} as MinioService,
-      { linkChallenge: vi.fn() } as unknown as GameNotificationsService,
       { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 
@@ -77,7 +75,6 @@ describe('ChatService.sendMessage channel delivery', () => {
       gateway,
       {} as UserProfilesService,
       {} as MinioService,
-      { linkChallenge: vi.fn() } as unknown as GameNotificationsService,
       { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 
@@ -128,7 +125,6 @@ describe('ChatService block enforcement', () => {
       gateway,
       userProfiles,
       {} as MinioService,
-      { linkChallenge: vi.fn() } as unknown as GameNotificationsService,
       { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 
@@ -175,7 +171,6 @@ describe('ChatService read receipts', () => {
       gateway,
       {} as UserProfilesService,
       {} as MinioService,
-      { linkChallenge: vi.fn() } as unknown as GameNotificationsService,
       { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 
@@ -220,7 +215,6 @@ describe('ChatService read receipts', () => {
       {} as ChatGateway,
       {} as UserProfilesService,
       {} as MinioService,
-      { linkChallenge: vi.fn() } as unknown as GameNotificationsService,
       { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 

@@ -121,6 +121,15 @@ function fakePrisma() {
   return { prisma, challenges, messages, conversations };
 }
 
+/** The challenge binding the Chat service writes with the invitation. */
+async function linkChallenge(fake: ReturnType<typeof fakePrisma>, roomCode: string, conversationId: string) {
+  await fake.prisma.gameChallenge.upsert({
+    where: { roomCode },
+    create: { roomCode, conversationId },
+    update: {},
+  });
+}
+
 function build() {
   const fake = fakePrisma();
   const gateway = { broadcastMessageCreated: vi.fn() } as unknown as ChatGateway;
@@ -185,17 +194,9 @@ describe('Game event contract', () => {
 });
 
 describe('GameNotificationsService', () => {
-  it('links a challenge to the conversation that carries the invitation', async () => {
-    const { service, challenges } = build();
-    await service.linkChallenge(CONVERSATION, ROOM);
-    await service.linkChallenge(CONVERSATION, ROOM);
-    expect(challenges.get(ROOM)).toMatchObject({ conversationId: CONVERSATION });
-    expect(challenges.size).toBe(1);
-  });
-
   it('announces a started match in the linked conversation and delivers it live', async () => {
-    const { service, gateway, messages } = build();
-    await service.linkChallenge(CONVERSATION, ROOM);
+    const { service, gateway, messages, ...fake } = build();
+    await linkChallenge(fake, ROOM, CONVERSATION);
 
     const outcome = await service.applyGameEvent(matchStarted);
 
@@ -216,8 +217,8 @@ describe('GameNotificationsService', () => {
   });
 
   it('does not repeat a notification when the same event is delivered twice', async () => {
-    const { service, gateway, messages } = build();
-    await service.linkChallenge(CONVERSATION, ROOM);
+    const { service, gateway, messages, ...fake } = build();
+    await linkChallenge(fake, ROOM, CONVERSATION);
 
     await service.applyGameEvent(matchStarted);
     const second = await service.applyGameEvent(matchStarted);
@@ -236,8 +237,8 @@ describe('GameNotificationsService', () => {
   });
 
   it('rejects an event whose participants are not members of the conversation', async () => {
-    const { service, messages } = build();
-    await service.linkChallenge(CONVERSATION, ROOM);
+    const { service, messages, ...fake } = build();
+    await linkChallenge(fake, ROOM, CONVERSATION);
 
     const outcome = await service.applyGameEvent({
       ...matchStarted,
@@ -256,8 +257,8 @@ describe('GameNotificationsService', () => {
   });
 
   it('announces the match result with the public score', async () => {
-    const { service, messages } = build();
-    await service.linkChallenge(CONVERSATION, ROOM);
+    const { service, messages, ...fake } = build();
+    await linkChallenge(fake, ROOM, CONVERSATION);
     await service.applyGameEvent(matchStarted);
 
     const outcome = await service.applyGameEvent(matchEnded);
@@ -272,8 +273,8 @@ describe('GameNotificationsService', () => {
   });
 
   it('announces a forfeit without inventing a score', async () => {
-    const { service, messages } = build();
-    await service.linkChallenge(CONVERSATION, ROOM);
+    const { service, messages, ...fake } = build();
+    await linkChallenge(fake, ROOM, CONVERSATION);
     await service.applyGameEvent(matchStarted);
 
     await service.applyGameEvent({
@@ -296,8 +297,8 @@ describe('GameNotificationsService', () => {
   });
 
   it('announces a draw with both public totals', async () => {
-    const { service, messages } = build();
-    await service.linkChallenge(CONVERSATION, ROOM);
+    const { service, messages, ...fake } = build();
+    await linkChallenge(fake, ROOM, CONVERSATION);
     await service.applyGameEvent(matchStarted);
 
     await service.applyGameEvent({
@@ -318,8 +319,8 @@ describe('GameNotificationsService', () => {
   });
 
   it('announces a cancelled challenge', async () => {
-    const { service, messages } = build();
-    await service.linkChallenge(CONVERSATION, ROOM);
+    const { service, messages, ...fake } = build();
+    await linkChallenge(fake, ROOM, CONVERSATION);
 
     const outcome = await service.applyGameEvent({
       eventId: '9f8b1c2d-4444-4444-8444-444444444444',
@@ -335,8 +336,8 @@ describe('GameNotificationsService', () => {
   });
 
   it('never leaks source code, editor state or hidden test data', async () => {
-    const { service, messages } = build();
-    await service.linkChallenge(CONVERSATION, ROOM);
+    const { service, messages, ...fake } = build();
+    await linkChallenge(fake, ROOM, CONVERSATION);
     await service.applyGameEvent(matchStarted);
     await service.applyGameEvent(matchEnded);
 

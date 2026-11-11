@@ -45,24 +45,6 @@ export class GameNotificationsService {
   ) {}
 
   /**
-   * Remember which conversation a Code Arena challenge belongs to. The first
-   * invitation for a room code owns the link; later posts cannot move it.
-   */
-  async linkChallenge(conversationId: string, roomCode: string): Promise<void> {
-    try {
-      await this.prisma.gameChallenge.upsert({
-        where: { roomCode },
-        create: { roomCode, conversationId },
-        update: {},
-      });
-    } catch (error) {
-      // Two concurrent invitations for the same room code: the first one owns
-      // the link, the second one is a no-op.
-      if (!isUniqueViolation(error)) throw error;
-    }
-  }
-
-  /**
    * Apply one lifecycle event. Returns what happened so the caller can log
    * rejected events without treating them as failures.
    */

@@ -13,7 +13,6 @@ import { EditMessageDto } from './dtos/edit-message.dto.js';
 import { ChatGateway } from './gateway/chat.gateway.js';
 import { UserProfilesService } from './user-profiles.service.js';
 import { MinioService } from '../minio/minio.service.js';
-import { GameNotificationsService } from './game-notifications.service.js';
 import { GameRoomsClient } from './game-rooms.client.js';
 
 @Injectable()
@@ -23,7 +22,6 @@ export class ChatService {
     private readonly chatGateway: ChatGateway,
     private readonly userProfiles: UserProfilesService,
     private readonly minio: MinioService,
-    private readonly gameNotifications: GameNotificationsService,
     private readonly gameRooms: GameRoomsClient,
   ) {}
 
@@ -328,8 +326,9 @@ export class ChatService {
         );
       }
 
-      await this.linkChallenge(conversationId, msg);
-
+      // The message and its challenge binding were written together, so a
+      // replay has nothing to add: it must not recreate a missing binding
+      // without checking the room again.
       return existingMessage;
     }
 
@@ -346,7 +345,6 @@ export class ChatService {
       // before that answer, so a refusal leaves no message and no link.
       await this.assertChallengeAuthorized(
         userId,
-        conversationId,
         roomCode,
         authorization,
       );
@@ -362,24 +360,15 @@ export class ChatService {
     };
 
     // A challenge and its message are written together, so a failure never
-    // leaves one of them behind.
+    // leaves one of them behind. The binding is also checked inside the
+    // transaction: a room code that another conversation owns is a conflict,
+    // and this message is rolled back with it.
     const newMessage = roomCode
-      ? await this.prisma.$transaction(async (tx) => {
-          const created = await tx.message.create({
-            data: messageData,
-            include: {
-              author: {
-                select: { id: true, username: true, displayName: true, avatarUrl: true },
-              },
-            },
-          });
-          await tx.gameChallenge.upsert({
-            where: { roomCode },
-            create: { roomCode, conversationId },
-            update: {},
-          });
-          return created;
-        })
+      ? await this.createChallengeMessage(
+          messageData,
+          roomCode,
+          conversationId,
+        )
       : await this.prisma.message.create({
           data: messageData,
           include: {
@@ -403,12 +392,10 @@ export class ChatService {
 
   /**
    * A Code Arena challenge may only be linked to a conversation when the
-   * caller owns that room, and only when the room is not already linked to a
-   * different conversation.
+   * caller owns that room.
    */
   private async assertChallengeAuthorized(
     userId: string,
-    conversationId: string,
     roomCode: string,
     authorization?: string,
   ): Promise<void> {
@@ -427,31 +414,62 @@ export class ChatService {
         'You may not announce that Code Arena room',
       );
     }
-    const existing = await this.prisma.gameChallenge.findUnique({
-      where: { roomCode },
-      select: { conversationId: true },
-    });
-    if (existing && existing.conversationId !== conversationId) {
-      throw new ConflictException(
-        'That Code Arena challenge is already linked to another conversation',
-      );
-    }
   }
 
   /**
-   * A Code Arena challenge announces a private room. Remember which
-   * conversation carries it so match start and result events can be delivered
-   * here.
+   * Write the message and bind the room in one transaction. The first
+   * conversation that binds a room code owns it; a second one is a conflict
+   * and its message is rolled back with the binding.
    */
-  private async linkChallenge(
+  private async createChallengeMessage(
+    messageData: {
+      conversationId: string;
+      authorId: string;
+      content: string;
+      attachments: string[];
+      clientRequestId: string;
+      requestHash: string;
+    },
+    roomCode: string,
     conversationId: string,
-    msg: SendMessageDto,
-  ): Promise<void> {
-    if (!msg.gameChallenge?.roomCode) return;
-    await this.gameNotifications.linkChallenge(
-      conversationId,
-      msg.gameChallenge.roomCode,
-    );
+  ) {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const created = await tx.message.create({
+          data: messageData,
+          include: {
+            author: {
+              select: { id: true, username: true, displayName: true, avatarUrl: true },
+            },
+          },
+        });
+        const link = await tx.gameChallenge.upsert({
+          where: { roomCode },
+          create: { roomCode, conversationId },
+          update: {},
+        });
+        if (link.conversationId !== conversationId) {
+          throw new ConflictException(
+            'That Code Arena challenge is already linked to another conversation',
+          );
+        }
+        return created;
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      // Two conversations claimed the same room code at once: the loser must
+      // not keep its message.
+      const link = await this.prisma.gameChallenge.findUnique({
+        where: { roomCode },
+        select: { conversationId: true },
+      });
+      if (link && link.conversationId !== conversationId) {
+        throw new ConflictException(
+          'That Code Arena challenge is already linked to another conversation',
+        );
+      }
+      throw error;
+    }
   }
 
   private async getAccessibleConversation(
@@ -607,4 +625,12 @@ export class ChatService {
 
     return { messageId, readAt };
   }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'P2002'
+  );
 }

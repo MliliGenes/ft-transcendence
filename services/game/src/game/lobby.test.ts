@@ -104,6 +104,25 @@ describe("Lobby and Matchmaking Service (HTTP + WebSocket)", () => {
     } finally { socket.disconnect(); }
   });
 
+  it("answers a room read with the room record nested under room", async () => {
+    const host = `shape-host-${Date.now()}`;
+    const guest = `shape-guest-${Date.now()}`;
+    const created = await api("POST", "/lobby/rooms", host, { mode: "1v1" });
+    const room = created.json.room;
+    await api("POST", "/lobby/rooms/join", guest, { code: room.code });
+
+    const read = await api("GET", `/lobby/rooms/${room.id}`, host);
+    expect(read.status).toBe(200);
+    // The owner lives inside the room record, not at the top level.
+    expect(read.json.room.ownerUserId).toBe(host);
+    expect(read.json.room.id).toBe(room.id);
+    expect(read.json.ownerUserId).toBeUndefined();
+    expect(read.json.members.map((m: any) => m.userId).sort()).toEqual([host, guest].sort());
+
+    const refused = await api("GET", `/lobby/rooms/${room.id}`, `stranger-${Date.now()}`);
+    expect(refused.status).toBe(403);
+  });
+
   it("returns HTTP errors for invalid modes and unknown invite codes", async () => {
     expect((await api("POST", "/lobby/queue", "invalid-mode", { mode: "3v3" })).status).toBe(400);
     expect((await api("POST", "/lobby/rooms/join", "invalid-code", { code: "ZZZZZZ" })).status).toBe(404);

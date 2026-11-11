@@ -1,6 +1,10 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { Test } from '@nestjs/testing';
@@ -22,7 +26,7 @@ import { GameNotificationsService } from '../dist/chat/game-notifications.servic
 import { GameRoomsClient } from '../dist/chat/game-rooms.client.js';
 import { GameEventsConsumer } from '../dist/events/game-events.consumer.js';
 import { AuthModule } from '../dist/auth/auth.module.js';
-import { startFakeGameService } from './fake-game-service.mjs';
+
 
 // Never reset an existing schema: each run owns only this random schema.
 const schema = `chat_game_test_${randomUUID().replaceAll('-', '')}`;
@@ -83,6 +87,15 @@ function endedEvent(matchId = 'match-1') {
   };
 }
 
+/** The binding the Chat service writes together with an invitation. */
+async function linkChallenge(conversationId, roomCode) {
+  await prisma.gameChallenge.upsert({
+    where: { roomCode },
+    create: { roomCode, conversationId },
+    update: {},
+  });
+}
+
 async function createDm() {
   const response = await request(app.getHttpServer())
     .post('/chat/conversations/dm')
@@ -90,6 +103,92 @@ async function createDm() {
     .send({ userId: bob })
     .expect(201);
   return response.body.id;
+}
+
+/**
+ * Starts the real Game service so the Chat service talks to the actual room
+ * endpoints. It needs no database: the lobby runs in memory.
+ */
+async function startGameService(publicKey) {
+  const serviceRoot = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../../services/game',
+  );
+  const port = await freePort();
+  const child = spawn(process.execPath, ['dist/main.js'], {
+    cwd: serviceRoot,
+    env: { ...process.env, PORT: String(port), JWT_PUBLIC_KEY: publicKey },
+    stdio: 'ignore',
+  });
+  const url = `http://127.0.0.1:${port}`;
+  const deadline = Date.now() + 20000;
+  for (;;) {
+    try {
+      const response = await fetch(`${url}/health`);
+      if (response.ok) break;
+    } catch {
+      // waiting for the port
+    }
+    if (Date.now() > deadline) {
+      child.kill('SIGKILL');
+      throw new Error('the game service did not start');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  return {
+    url,
+    close: async () => {
+      child.kill('SIGKILL');
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    },
+  };
+}
+
+async function freePort() {
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
+
+/** Closes the caller's current room; the Game service allows one open room. */
+async function leaveActiveRoom(userId) {
+  const active = await fetch(`${gameService.url}/lobby/active`, {
+    headers: { authorization: `Bearer ${token(userId)}` },
+  });
+  const body = await active.json();
+  // The active route answers { ok, queue, room: { room, members } }.
+  const roomId = body.room?.room?.id ?? body.room?.id;
+  if (!roomId) return;
+  await fetch(`${gameService.url}/lobby/rooms/${roomId}/leave`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token(userId)}` },
+  });
+}
+
+/** Creates a real private room in the Game service, owned by the caller. */
+async function createGameRoom(userId) {
+  await leaveActiveRoom(userId);
+  const response = await fetch(`${gameService.url}/lobby/rooms`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token(userId)}` },
+    body: JSON.stringify({ mode: '1v1' }),
+  });
+  if (!response.ok) throw new Error(`the game service refused the room: ${response.status}`);
+  const body = await response.json();
+  return body.room;
+}
+
+/** Joins a real private room in the Game service. */
+async function joinGameRoom(userId, code) {
+  const response = await fetch(`${gameService.url}/lobby/rooms/join`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token(userId)}` },
+    body: JSON.stringify({ code }),
+  });
+  if (!response.ok) throw new Error(`the game service refused the join: ${response.status}`);
+  return response.json();
 }
 
 describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () => {
@@ -115,12 +214,11 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       await connection.query('RESET search_path');
       connection.release();
     }
-    // The Game service owns rooms and their membership; this stand-in answers
-    // exactly as its room endpoints do.
-    gameService = await startFakeGameService([
-      { id: 'room-1', code: ROOM, ownerUserId: alice, members: [alice, bob] },
-      { id: 'room-2', code: 'CD34EF', ownerUserId: bob, members: [bob, alice] },
-    ]);
+    // The real Game service answers, so this suite cannot hide a change in
+    // its room contract behind an invented mock.
+    gameService = await startGameService(
+      keys.publicKey.export({ type: 'spki', format: 'pem' }),
+    );
     const gateway = {
       broadcastMessageCreated: (userIds, message) => broadcasts.push({ userIds, message }),
       broadcastReadState: () => {},
@@ -178,18 +276,19 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
 
   it('links a Code Arena challenge to the conversation that carries the invitation', async () => {
     const conversationId = await createDm();
+    const room = await createGameRoom(alice);
     const response = await request(app.getHttpServer())
       .post(`/chat/conversations/${conversationId}/messages`)
       .set('Authorization', `Bearer ${token()}`)
       .send({
-        content: '🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/AB12CD)',
+        content: `🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/${room.code})`,
         clientRequestId: randomUUID(),
-        gameChallenge: { roomCode: 'ab12cd' },
+        gameChallenge: { roomCode: room.code },
       })
       .expect(201);
 
     assert.equal(response.body.kind ?? 'USER', 'USER');
-    const link = await prisma.gameChallenge.findUnique({ where: { roomCode: ROOM } });
+    const link = await prisma.gameChallenge.findUnique({ where: { roomCode: room.code } });
     assert.ok(link, 'the challenge should be linked to the conversation');
     assert.equal(link.conversationId, conversationId);
     assert.equal(link.matchId, null);
@@ -210,6 +309,7 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
   });
 
   it('refuses a challenge from an account that is not in that room', async () => {
+    const room = await createGameRoom(alice);
     // The outsider is a member of a conversation and knows the invite code,
     // but does not belong to the room.
     const conversation = await request(app.getHttpServer())
@@ -222,9 +322,9 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       .post(`/chat/conversations/${conversationId}/messages`)
       .set('Authorization', `Bearer ${token(stranger)}`)
       .send({
-        content: '🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/AB12CD)',
+        content: `🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/${room.code})`,
         clientRequestId: randomUUID(),
-        gameChallenge: { roomCode: ROOM },
+        gameChallenge: { roomCode: room.code },
       })
       .expect(403);
 
@@ -235,6 +335,8 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
   });
 
   it('refuses a challenge from a room member that did not create the room', async () => {
+    const room = await createGameRoom(alice);
+    await joinGameRoom(bob, room.code);
     // Bob is in the room, but Alice created it, so only Alice may announce it.
     const conversation = await request(app.getHttpServer())
       .post('/chat/conversations/dm')
@@ -245,9 +347,9 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       .post(`/chat/conversations/${conversation.body.id}/messages`)
       .set('Authorization', `Bearer ${token(bob)}`)
       .send({
-        content: '🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/AB12CD)',
+        content: `🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/${room.code})`,
         clientRequestId: randomUUID(),
-        gameChallenge: { roomCode: ROOM },
+        gameChallenge: { roomCode: room.code },
       })
       .expect(403);
 
@@ -256,14 +358,15 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
   });
 
   it('refuses to move a challenge to another conversation', async () => {
+    const room = await createGameRoom(alice);
     const conversationId = await createDm();
     await request(app.getHttpServer())
       .post(`/chat/conversations/${conversationId}/messages`)
       .set('Authorization', `Bearer ${token()}`)
       .send({
-        content: '🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/AB12CD)',
+        content: `🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/${room.code})`,
         clientRequestId: randomUUID(),
-        gameChallenge: { roomCode: ROOM },
+        gameChallenge: { roomCode: room.code },
       })
       .expect(201);
 
@@ -278,18 +381,59 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       .send({
         content: 'the same challenge again',
         clientRequestId: randomUUID(),
-        gameChallenge: { roomCode: ROOM },
+        gameChallenge: { roomCode: room.code },
       })
       .expect(409);
 
-    const link = await prisma.gameChallenge.findUnique({ where: { roomCode: ROOM } });
+    const link = await prisma.gameChallenge.findUnique({ where: { roomCode: room.code } });
     assert.equal(link.conversationId, conversationId);
     assert.equal(await prisma.message.count({ where: { conversationId: other.body.id } }), 0);
   });
 
+  it('gives a room code to one conversation when two claim it at once', async () => {
+    const room = await createGameRoom(alice);
+    const first = await createDm();
+    const second = await request(app.getHttpServer())
+      .post('/chat/conversations/dm')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ userId: stranger })
+      .expect(201);
+    const secondId = second.body.id;
+
+    const responses = await Promise.all([
+      request(app.getHttpServer())
+        .post(`/chat/conversations/${first}/messages`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({
+          content: `🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/${room.code})`,
+          clientRequestId: randomUUID(),
+          gameChallenge: { roomCode: room.code },
+        }),
+      request(app.getHttpServer())
+        .post(`/chat/conversations/${secondId}/messages`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({
+          content: `🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/${room.code})`,
+          clientRequestId: randomUUID(),
+          gameChallenge: { roomCode: room.code },
+        }),
+    ]);
+
+    const statuses = responses.map((response) => response.status).sort();
+    assert.deepEqual(statuses, [201, 409]);
+
+    // Only the winning conversation keeps its message and the binding.
+    const links = await prisma.gameChallenge.findMany({ where: { roomCode: room.code } });
+    assert.equal(links.length, 1);
+    const owner = links[0].conversationId;
+    const loser = owner === first ? secondId : first;
+    assert.equal(await prisma.message.count({ where: { conversationId: owner } }), 1);
+    assert.equal(await prisma.message.count({ where: { conversationId: loser } }), 0);
+  });
+
   it('persists one notification for a match start and ignores the replay', async () => {
     const conversationId = await createDm();
-    await notifications.linkChallenge(conversationId, ROOM);
+    await linkChallenge(conversationId, ROOM);
 
     const first = await notifications.applyGameEvent(startedEvent());
     const replay = await notifications.applyGameEvent(startedEvent());
@@ -307,7 +451,7 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
 
   it('persists the match result in the same conversation', async () => {
     const conversationId = await createDm();
-    await notifications.linkChallenge(conversationId, ROOM);
+    await linkChallenge(conversationId, ROOM);
     await notifications.applyGameEvent(startedEvent());
     await notifications.applyGameEvent(endedEvent());
 
@@ -320,7 +464,7 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
 
   it('rejects a notification for participants outside the linked conversation', async () => {
     const conversationId = await createDm();
-    await notifications.linkChallenge(conversationId, ROOM);
+    await linkChallenge(conversationId, ROOM);
 
     const outcome = await notifications.applyGameEvent({
       ...startedEvent(),
@@ -339,7 +483,7 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
 
   it('announces a cancelled challenge and a forfeit result', async () => {
     const conversationId = await createDm();
-    await notifications.linkChallenge(conversationId, ROOM);
+    await linkChallenge(conversationId, ROOM);
 
     const cancelled = await notifications.applyGameEvent({
       eventId: randomUUID(),
@@ -373,7 +517,7 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
 
   it('keeps notification payloads free of source, editor and hidden test data', async () => {
     const conversationId = await createDm();
-    await notifications.linkChallenge(conversationId, ROOM);
+    await linkChallenge(conversationId, ROOM);
     await notifications.applyGameEvent(startedEvent());
     await notifications.applyGameEvent(endedEvent());
 
@@ -405,7 +549,7 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
     );
     consumer.onModuleInit();
     const conversationId = await createDm();
-    await notifications.linkChallenge(conversationId, ROOM);
+    await linkChallenge(conversationId, ROOM);
 
     const brokerUrl = new URL(`amqp://${process.env.RABBITMQ_HOST}`);
     brokerUrl.port = process.env.RABBITMQ_PORT ?? '5672';

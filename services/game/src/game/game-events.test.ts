@@ -23,7 +23,7 @@ function stubPublisher() {
     publishMatchEnded,
     publishChallengeCancelled,
   } as unknown as GameEventsPublisher;
-  return { publisher, published, publishChallengeCancelled };
+  return { publisher, published, publishChallengeCancelled, publishMatchEnded };
 }
 
 const ALICE = "11111111-1111-4111-8111-111111111111";
@@ -34,11 +34,12 @@ describe("Game service lifecycle events", () => {
   let publisher: GameEventsPublisher;
   let published: PublishedEvent[];
   let publishChallengeCancelled: ReturnType<typeof vi.fn>;
+  let publishMatchEnded: ReturnType<typeof vi.fn>;
   let now: number;
 
   beforeEach(async () => {
     published = [];
-    ({ publisher, published, publishChallengeCancelled } = stubPublisher());
+    ({ publisher, published, publishChallengeCancelled, publishMatchEnded } = stubPublisher());
     now = Date.now();
     vi.spyOn(Date, "now").mockReturnValue(now);
     game = new GameService(publisher);
@@ -143,6 +144,23 @@ describe("Game service lifecycle events", () => {
       reason: "expired",
       participantUserIds: [ALICE],
     });
+  });
+
+  it("republishes a match result the broker did not confirm", async () => {
+    const room = await readyRoom();
+    const { matchId } = await game.startPrivateRoom(ALICE, room.room.id);
+    // The first result publication is not confirmed by the broker.
+    publishMatchEnded.mockResolvedValueOnce(false);
+
+    await game.leave(BOB, matchId);
+
+    await vi.waitFor(
+      () => expect(publishMatchEnded).toHaveBeenCalledTimes(2),
+      { timeout: 8000, interval: 100 },
+    );
+    expect(publishMatchEnded).toHaveBeenLastCalledWith(
+      expect.objectContaining({ matchId, endedBecause: "forfeit" }),
+    );
   });
 
   it("announces every expired challenge, not only the first page", async () => {

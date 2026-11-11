@@ -130,10 +130,12 @@ A Code Arena invitation is a normal chat message. The client sends the private-r
 The code alone does not authorize anything. Before Chat writes the message it asks the **Game service**, which owns rooms and their membership:
 
 1. `GET {GAME_SERVICE_URL}/lobby/rooms/lookup/:code` resolves the invite code to a room.
-2. `GET {GAME_SERVICE_URL}/lobby/rooms/:id` is read with the **caller's own access token**. The Game service refuses a non-member with `403`, so membership is decided by the service that owns the room, not by the browser and not by Chat.
+2. `GET {GAME_SERVICE_URL}/lobby/rooms/:id` is read with the **caller's own access token**. The Game service refuses a non-member with `403`, so membership is decided by the service that owns the room, not by the browser and not to Chat. The answer is `{ ok, room: { id, code, ownerUserId, ... }, members: [...] }`, so the owner is read from `room.ownerUserId`.
 3. The room record the Game service returns names its owner. Only that account may announce the room, because only that account created the challenge; the client always creates the room it announces.
 
-An account that is not in the room, or that is in the room but did not create it, gets `403` and the request writes **nothing**: no message and no `GameChallenge` row. A room code that is already linked to a different conversation gets `409`. The message and the link are written in one transaction, so a failure never leaves one of them behind. The first invitation for a room code owns the link; a later post cannot move it.
+An account that is not in the room, or that is in the room but did not create it, gets `403` and the request writes **nothing**: no message and no `GameChallenge` row. A room code that another conversation already owns gets `409`, and the message is rolled back with it: the binding is checked inside the same transaction that writes the message, so two conversations claiming one code at once leave exactly one message and one binding. The first invitation for a room code owns the link; a later post cannot move it.
+
+An idempotent replay returns the stored message and writes nothing: it never recreates a missing binding, because a binding is only written together with the message it belongs to and only after the room was checked.
 
 If the Game service cannot answer, the request fails with `503` and nothing is written: an unknown answer is never treated as a permission.
 
