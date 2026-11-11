@@ -21,7 +21,7 @@ export function verificationSteps() {
     step('arena-tests', '.', ['scripts/checks/arena-tests.mjs'], process.execPath),
     step('client-tests', 'client', ['test']),
     step('chat-tests', 'chat-service', ['test']),
-    step('user-tests', 'user-service', ['--test', '--test-isolation=none', ...userTestFiles()], process.execPath),
+    step('user-tests', 'user-service', ['--test', '--test-isolation=none', '--test-concurrency=1', ...userTestFiles()], process.execPath),
     step('client-build', 'client', ['run', 'build']),
   ];
 }

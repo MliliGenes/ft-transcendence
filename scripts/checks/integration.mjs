@@ -82,10 +82,13 @@ export async function runIntegration({ prepared = false, signal, report = () => 
       }
     }
     await stage('user-test-schema', process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], 'user-service', user);
+    // The Chat migrations must apply to a real database, not only through
+    // the generated DDL the tests use.
+    await stage('chat-test-schema', process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], 'chat-service', chat);
     await stage('engine-postgres', process.execPath, ['../../node_modules/vitest/vitest.mjs', 'run', 'test/postgres.test.ts', 'test/lobby-atomic.test.ts', 'test/lobby.test.ts', 'test/collab.test.ts', 'test/persistence.test.ts', '--no-file-parallelism'], 'packages/arena-game', { ...engine, DATABASE_URL: engine.TEST_PG_URL });
     await stage('game-postgres-reconnect', process.execPath, ['../../node_modules/vitest/vitest.mjs', 'run', 'src/game/service.test.ts', 'src/game/reconnect.test.ts', '--no-file-parallelism', '--testTimeout', '30000'], 'services/game', game);
-    await stage('chat-postgres', process.execPath, ['--test', '--test-isolation=none', 'test/dm.postgres.test.mjs', 'test/game-notifications.postgres.test.mjs'], 'chat-service', chat);
-    await stage('user-postgres', process.execPath, ['--test', '--test-isolation=none', 'test/refresh-race.postgres.test.mjs', 'test/discord-link.postgres.test.mjs', 'test/bootstrap-superadmin.postgres.test.mjs'], 'user-service', user);
+    await stage('chat-postgres', process.execPath, ['--test', '--test-isolation=none', '--test-concurrency=1', 'test/dm.postgres.test.mjs', 'test/game-notifications.postgres.test.mjs'], 'chat-service', chat);
+    await stage('user-postgres', process.execPath, ['--test', '--test-isolation=none', '--test-concurrency=1', 'test/refresh-race.postgres.test.mjs', 'test/discord-link.postgres.test.mjs', 'test/bootstrap-superadmin.postgres.test.mjs'], 'user-service', user);
   }, { signal });
 }
 if (isMain(import.meta.url)) await cli((signal) => runIntegration({ signal }));
