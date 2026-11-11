@@ -21,6 +21,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [formError, setFormError] = useState("");
   const [formNotice, setFormNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [termsError, setTermsError] = useState(false);
 
   useEffect(() => {
     const notice = takeOAuthNotice("login");
@@ -45,7 +47,13 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     setFormNotice("");
     const firstInvalid = Object.keys(nextErrors)[0];
     if (firstInvalid) (form.elements.namedItem(firstInvalid) as HTMLInputElement)?.focus();
+    const termsMissing = registering && !acceptedTerms;
+    setTermsError(termsMissing);
     if (firstInvalid) return;
+    if (termsMissing) {
+      (form.elements.namedItem("acceptTerms") as HTMLInputElement)?.focus();
+      return;
+    }
 
     setBusy(true);
     try {
@@ -79,6 +87,9 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
             Continue with {label}
           </Button>
         ))}
+        <p className="text-center text-xs leading-5 text-nook-text-muted [&_a]:text-nook-accent-text [&_a]:underline [&_a]:underline-offset-4">
+          By continuing with GitHub or Discord, you agree to our <Link href="/terms" target="_blank" rel="noreferrer">Terms of Service</Link> and <Link href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</Link>.
+        </p>
       </div>
 
       <div className="my-8 flex items-center gap-4 text-xs text-nook-text-muted">
@@ -119,6 +130,17 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           {registering && <p id="password-hint" className="text-xs leading-5 text-nook-text-muted">8–32 characters, up to 72 UTF-8 bytes. Emojis can use multiple bytes.</p>}
           {errors.password && <p id="password-error" role="alert" className="text-sm text-destructive">{errors.password}</p>}
         </div>
+        {registering && (
+          <div className="space-y-2.5">
+            <div className="flex items-start gap-3">
+              <input id="acceptTerms" name="acceptTerms" type="checkbox" checked={acceptedTerms} aria-invalid={termsError} aria-describedby={termsError ? "accept-terms-error" : undefined} onChange={event => { setAcceptedTerms(event.target.checked); if (event.target.checked) setTermsError(false); }} className="mt-0.5 size-5 shrink-0 cursor-pointer accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />
+              <label htmlFor="acceptTerms" className="cursor-pointer text-sm leading-6 text-nook-text-secondary [&_a]:text-nook-accent-text [&_a]:underline [&_a]:underline-offset-4">
+                I agree to the <Link href="/terms" target="_blank" rel="noreferrer">Terms of Service</Link> and the <Link href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</Link>.
+              </label>
+            </div>
+            {termsError && <p id="accept-terms-error" role="alert" className="text-sm text-destructive">Please accept the Terms of Service and Privacy Policy to create an account.</p>}
+          </div>
+        )}
         {formNotice && <p role="status" className="text-sm leading-5 text-nook-success">{formNotice}</p>}
         {formError && <p role="alert" className="text-sm leading-5 text-destructive">{formError}</p>}
         <Button type="submit" disabled={busy} className="h-12 w-full gap-2 text-sm hover:bg-nook-accent-hover active:bg-nook-accent-pressed">{busy ? "Please wait…" : registering ? "Create account" : "Log in"}{!busy && <IconArrowRight size={18} stroke={1.75} aria-hidden="true" />}</Button>

@@ -1,3 +1,6 @@
+import { readSession } from './helpers/session.mjs';
+import { RabbitMqEventsService } from '../dist/events/rabbitmq-events.service.js';
+import { MailService } from '../dist/mail/mail.service.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import {
@@ -100,8 +103,12 @@ test('refresh-token verification and rotation', async (t) => {
     return { id, secret, token: `${id}.${secret}` };
   }
   const module = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(RabbitMqEventsService)
+    .useValue({ publishCreated: async () => {}, publishUpdated: async () => {}, publishDeleted: async () => {} })
     .overrideProvider(PrismaService)
     .useValue(prisma)
+    .overrideProvider(MailService)
+    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({
@@ -136,10 +143,11 @@ test('refresh-token verification and rotation', async (t) => {
       const response = await request(server)
         .post('/auth/refresh')
         .auth(expiredAccess, { type: 'bearer' })
-        .send({ refreshToken: original.token })
+        .set("Cookie", `auth-refresh=${original.token}`)
+        .send({})
         .expect(200);
       assert.equal(response.headers['cache-control'], 'no-store');
-      const result = response.body;
+      const result = readSession(response);
       assert.deepEqual(result.user, user);
       assert.equal(result.expiresIn, 900);
       assert.equal(result.refreshExpiresIn, 604800);
@@ -173,22 +181,19 @@ test('refresh-token verification and rotation', async (t) => {
         .expect(200);
       await request(server)
         .post('/auth/refresh')
-        .send({ refreshToken: result.refreshToken })
+        .set("Cookie", `auth-refresh=${result.refreshToken}`)
+        .send({})
         .expect(200);
     },
   );
 
-  await t.test('rejects malformed bodies before database access', async () => {
+  await t.test('rejects missing, malformed and duplicate refresh cookies before database access', async () => {
     const before = lookupCount;
-    for (const body of [
-      {},
-      { refreshToken: 123 },
-      { refreshToken: 'invalid' },
-      { refreshToken: `${randomUUID()}.short` },
-      { refreshToken: seed().token, extra: true },
-    ]) {
-      await request(server).post('/auth/refresh').send(body).expect(400);
+    for (const cookie of ['', 'auth-refresh=invalid', `auth-refresh=${randomUUID()}.short`, 'auth-refresh=a; auth-refresh=b']) {
+      await request(server).post('/auth/refresh').set('Cookie', cookie).send({}).expect(401);
     }
+    // A valid token supplied only in JSON is not accepted as a browser session.
+    await request(server).post('/auth/refresh').send({ refreshToken: seed().token }).expect(401);
     assert.equal(lookupCount, before);
   });
 
@@ -199,20 +204,23 @@ test('refresh-token verification and rotation', async (t) => {
 
     await request(server)
       .post('/auth/logout')
-      .send({ refreshToken: wrong })
+      .set("Cookie", `auth-refresh=${wrong}`)
+        .send({})
       .expect(204);
     assert.equal(rows.get(active.id).revokedAt, null);
 
     const response = await request(server)
       .post('/auth/logout')
-      .send({ refreshToken: active.token })
+      .set("Cookie", `auth-refresh=${active.token}`)
+        .send({})
       .expect(204);
     assert.equal(response.text, '');
     assert.ok(rows.get(active.id).revokedAt instanceof Date);
 
     await request(server)
       .post('/auth/refresh')
-      .send({ refreshToken: active.token })
+      .set("Cookie", `auth-refresh=${active.token}`)
+        .send({})
       .expect(401);
   });
 
@@ -233,7 +241,8 @@ test('refresh-token verification and rotation', async (t) => {
       ]) {
         const response = await request(server)
           .post('/auth/refresh')
-          .send({ refreshToken: token })
+          .set("Cookie", `auth-refresh=${token}`)
+        .send({})
           .expect(401);
         assert.equal(
           response.body.message,
@@ -254,7 +263,8 @@ test('refresh-token verification and rotation', async (t) => {
       const first = await service.refresh({ refreshToken: old.token });
       await request(server)
         .post('/auth/refresh')
-        .send({ refreshToken: old.token })
+        .set("Cookie", `auth-refresh=${old.token}`)
+        .send({})
         .expect(401);
       assert.ok(rows.get(first.refreshToken.split('.')[0]).revokedAt);
       assert.equal(rows.get(otherSession.id).revokedAt, null);

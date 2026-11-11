@@ -2,7 +2,7 @@
 # Generate local-only self-signed TLS certs (git-ignored). Production mounts
 # real certificates at the same paths; nothing here ships.
 set -euo pipefail
-DIR="$(dirname "$0")/../infra/nginx/certs"
+DIR="$(dirname "$0")/../volumes/nginx/certs"
 mkdir -p "$DIR"
 DIR="$(cd "$DIR" && pwd)"
 openssl req -x509 -newkey rsa:2048 -sha256 -days 30 -nodes \

@@ -1,6 +1,6 @@
 # Monitoring stack for Nook (included from compose.yaml, so `docker compose up`
 # starts it with the app). Only Grafana is reachable, through Nginx at
-# https://localhost/grafana/. See docs/infra/monitoring.md.
+# https://localhost/grafana/. See docs/services/infrastructure.md.
 
 x-logging: &logging
   driver: json-file

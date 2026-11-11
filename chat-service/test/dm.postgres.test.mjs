@@ -3,9 +3,8 @@ import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { Test } from '@nestjs/testing';
-import { ValidationPipe } from '@nestjs/common';
+import { NotFoundException, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -15,6 +14,10 @@ import { PrismaClient } from '../dist/generated/prisma/client.js';
 import { PrismaService } from '../dist/prisma/prisma.service.js';
 import { ChatController } from '../dist/chat/chat.controller.js';
 import { ChatService } from '../dist/chat/chat.service.js';
+import { ChatGateway } from '../dist/chat/gateway/chat.gateway.js';
+import { UserProfilesService } from '../dist/chat/user-profiles.service.js';
+import { MinioService } from '../dist/minio/minio.service.js';
+import { FeedService } from '../dist/feed/feed.service.js';
 import { AuthModule } from '../dist/auth/auth.module.js';
 
 // Never reset an existing schema: each run owns only this random schema.
@@ -46,14 +49,20 @@ describe('POST /chat/conversations/dm (real HTTP, JWT and PostgreSQL)', () => {
     const ddl = execFileSync(process.execPath, [
       'node_modules/prisma/build/index.js', 'migrate', 'diff',
       '--from-empty', '--to-schema', 'prisma/schema.prisma', '--script',
-    ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: {
+      ...process.env,
+      POSTGRES_HOST: new URL(url).hostname,
+      POSTGRES_PORT: new URL(url).port || '5432',
+      POSTGRES_USER: decodeURIComponent(new URL(url).username),
+      POSTGRES_PASSWORD: decodeURIComponent(new URL(url).password),
+      POSTGRES_DB: decodeURIComponent(new URL(url).pathname.slice(1)),
+    } });
     await pool.query(`CREATE SCHEMA "${schema}"`);
     ownsSchema = true;
     const connection = await pool.connect();
     try {
       await connection.query(`SET search_path TO "${schema}"`);
       await connection.query(ddl.replaceAll('"public"', `"${schema}"`));
-      await connection.query(readFileSync('prisma/constraints.sql', 'utf8'));
     } finally {
       await connection.query('RESET search_path');
       connection.release();
@@ -66,7 +75,21 @@ describe('POST /chat/conversations/dm (real HTTP, JWT and PostgreSQL)', () => {
         AuthModule,
       ],
       controllers: [ChatController],
-      providers: [ChatService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        ChatService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: ChatGateway, useValue: {} },
+        { provide: MinioService, useValue: {} },
+        { provide: FeedService, useValue: {} },
+        { provide: UserProfilesService, useValue: {
+          // This suite owns HTTP/JWT/SQL DM behavior, not the separate User HTTP service.
+          ensureCanContact: async () => {},
+          ensureActiveUsers: async (ids) => {
+            const count = await prisma.chatUser.count({ where: { id: { in: ids }, deletedAt: null } });
+            if (count !== new Set(ids).size) throw new NotFoundException('Unknown user');
+          },
+        } },
+      ],
     }).compile();
     app = module.createNestApplication({ logger: false });
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));

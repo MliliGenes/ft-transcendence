@@ -181,17 +181,17 @@ export class ChatService {
     otherUserId: string,
     authorization: string,
   ) {
-    if (userId === otherUserId) {
-      throw new Error('Cannot create a DM with yourself.');
-    }
-
     const [dmUserAId, dmUserBId] = [
       userId.toLowerCase(),
       otherUserId.toLowerCase(),
     ].sort();
 
-    await this.userProfiles.ensureCanContact(otherUserId, authorization);
-    await this.userProfiles.ensureActiveUsers([otherUserId]);
+    if (dmUserAId === dmUserBId) {
+      throw new BadRequestException('Cannot create a DM with yourself.');
+    }
+
+    await this.userProfiles.ensureCanContact(otherUserId.toLowerCase(), authorization);
+    await this.userProfiles.ensureActiveUsers([otherUserId.toLowerCase()]);
 
     const existingConversation = await this.prisma.conversation.findUnique({
       where: {

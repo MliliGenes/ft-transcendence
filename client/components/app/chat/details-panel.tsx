@@ -104,8 +104,9 @@ export function DirectDetails({ user, presence }: { user: ChatUser; presence: st
 }
 
 function GroupMark({ name, className = "size-14 text-lg" }: { name: string; className?: string }) {
-  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]?.toUpperCase()).join("") || "#";
-  return <span aria-hidden="true" className={`grid shrink-0 place-items-center bg-nook-accent-subtle font-semibold text-nook-accent-text ${className}`}>{initials}</span>;
+  return <span aria-hidden="true" className={`block shrink-0 overflow-hidden ${className}`}>
+    <AccountAvatar source={null} seed={name.trim() || "New group"} label="" size={56} className="size-full" />
+  </span>;
 }
 export { GroupMark };
 

@@ -31,5 +31,5 @@ Nook's first game is Code Arena, a timed coding game for 1v1 duels and 2v2 teams
 - The game supports four simultaneous participants in 2v2; separate-client remote play and reconnect behavior must still be demonstrated during evaluation.
 - Profile statistics and leaderboard currently use wins, losses, draws and win rate; there is no Elo rating, achievement or progression system.
 - The invitation card opens the lobby and the Game service checks joinability, but the chat card does not display a separate live availability status.
-- Account deletion propagates to Chat's cached profile but not to Game. Prior match identifiers, code submissions and collaborative snapshots can remain in Game PostgreSQL; see the [Privacy Policy](../../client/app/privacy/page.tsx).
+- Account deletion propagates to Chat's cached profile but not to Game. Prior match identifiers, code submissions and collaborative snapshots can remain in Game PostgreSQL; see the [Privacy Policy](../../client/app/(legal)/privacy/page.tsx).
 - Module eligibility is not guaranteed by this architecture decision. Use the [local module tracker](../requirements/index.html) and verify each criterion with the team and evaluator.

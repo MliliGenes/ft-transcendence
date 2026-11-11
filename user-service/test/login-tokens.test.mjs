@@ -1,3 +1,6 @@
+import { readSession } from './helpers/session.mjs';
+import { RabbitMqEventsService } from '../dist/events/rabbitmq-events.service.js';
+import { MailService } from '../dist/mail/mail.service.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { createHash, generateKeyPairSync } from 'node:crypto';
@@ -56,8 +59,12 @@ test('email and password login', async (t) => {
     },
   };
   const module = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(RabbitMqEventsService)
+    .useValue({ publishCreated: async () => {}, publishUpdated: async () => {}, publishDeleted: async () => {} })
     .overrideProvider(PrismaService)
     .useValue(prisma)
+    .overrideProvider(MailService)
+    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({
@@ -87,7 +94,7 @@ test('email and password login', async (t) => {
         .send(dto)
         .expect(200);
       const end = Date.now();
-      const result = response.body;
+      const result = readSession(response);
       assert.equal(response.headers['cache-control'], 'no-store');
       assert.deepEqual(result.user, publicUser);
       assert.equal(result.tokenType, 'Bearer');
@@ -130,7 +137,7 @@ test('email and password login', async (t) => {
         .post('/auth/login')
         .send(dto)
         .expect(200);
-      assert.notEqual(next.body.refreshToken, result.refreshToken);
+      assert.notEqual(readSession(next).refreshToken, result.refreshToken);
       assert.equal(sessions.length, 2);
     },
   );

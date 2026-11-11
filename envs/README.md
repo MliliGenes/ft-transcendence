@@ -100,4 +100,4 @@ an example file.
 For standalone User-service development, use
 [`user-service/.env.example`](../user-service/.env.example). It includes all
 settings in one local file and uses host addresses instead of Compose DNS.
-See [Compose setup](../docs/project/COMPOSE.md) for the full deployment workflow.
+See [Infrastructure](../docs/services/infrastructure.md) for the full deployment workflow.

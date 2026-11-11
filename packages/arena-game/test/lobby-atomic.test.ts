@@ -25,6 +25,9 @@ describe.runIf(Boolean(url))("lobby atomicity (isolated PostgreSQL schema)", () 
       async save(match) { await pool.query("INSERT INTO matches VALUES ($1, $2)", [match.id, match]); },
       async load(id) { return (await pool.query("SELECT data FROM matches WHERE id=$1", [id])).rows[0]?.data; },
       async listIds() { return (await pool.query("SELECT id FROM matches")).rows.map(r => r.id); },
+      // Atomic-lobby scenarios never complete a match; history is outside this fixture.
+      async listCompleted() { return []; },
+      async listCompletedForUser() { return []; },
     }});
   });
   beforeEach(async () => { await pool.query("TRUNCATE arena_queue_entries, arena_private_rooms, matches CASCADE"); });

@@ -87,14 +87,14 @@ function AppNavigation() {
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, defaultSidebarOpen = true }: { children: ReactNode; defaultSidebarOpen?: boolean }) {
   const pathname = usePathname();
   const currentPage = navigation.find(item => pathname === item.href || pathname.startsWith(`${item.href}/`));
   const title = pathname === "/play/chess" ? "Chess" : currentPage?.label ?? (pathname === "/settings" ? "Settings" : "Nook");
 
   return (
     <TooltipProvider>
-      <SidebarProvider>
+      <SidebarProvider defaultOpen={defaultSidebarOpen}>
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-primary focus:p-3 focus:text-primary-foreground">Skip to content</a>
         <AppNavigation />
         <div className="flex min-h-svh min-w-0 flex-1 flex-col">

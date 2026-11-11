@@ -118,7 +118,7 @@ Prometheus, Loki, Alloy, databases, backend services and the judge worker are no
 | Game PostgreSQL | Private rooms, match snapshots, rounds, submissions, results and collaborative editor snapshots | Code Arena service, SQL schema initialization |
 | MinIO | Chat attachment objects | Chat service presigned upload/download flows |
 
-The databases have separate owners and no cross-database foreign keys. The Chat service receives profile changes through RabbitMQ and stores the existing User UUID. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records. See the [User service guide](docs/user-service/SERVICE.md), [Chat schema notes](docs/chat-service/PRISMA_README.md), and [game persistence implementation](packages/arena-game/src/postgres-store.ts).
+The databases have separate owners and no cross-database foreign keys. The Chat service receives profile changes through RabbitMQ and stores the existing User UUID. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records. See the [User service guide](docs/services/user-service.md), [Chat schema notes](docs/services/chat-service.md), and [game persistence implementation](packages/arena-game/src/postgres-store.ts).
 
 ## Code Arena integration
 
@@ -147,7 +147,7 @@ The [ft_transcendence v21.2 subject](ft_trans_subject.pdf) is the requirements s
 | W09 · Real-time collaboration | 1 | Code Arena 2v2 implements synchronized multi-user code editing with CodeMirror and Yjs CRDTs over authenticated Socket.IO (`/collab` namespace), with conflict resolution and document revision tracking. |
 | G06 · Advanced chat | 1 | Persistent history, bidirectional block enforcement, game invitations, profile access, typing indicators and durable read receipts are implemented, with prior automated and live dual-user verification recorded. Verify game notifications in chat separately from invitations against subject §IV.6 before claiming the full module. |
 | D03 · Backend microservices | 2 | User, Chat, Game and judge responsibilities have separate service boundaries and APIs/events. Demonstrate the service interactions. |
-| D04 · Health/status/backups/recovery | 1 | Compose health checks cover all service containers; public `/status` page and `/api/status` endpoint; automated multi-database (User, Chat, Game) and MinIO backup/restore scripts with SHA-256 verification, retention rotation, and proven recovery procedures. Demonstrate the disaster recovery drill. |
+| D04 · Health/status/backups/recovery | 1 | Compose health checks cover all service containers; public `/status` page and `/api/status` endpoint; multi-database (User, Chat, Game) and MinIO snapshot/restore scripts with checksums and retention. Install one operator-managed schedule and demonstrate clean-service recovery; prior live restore smoke checks do not establish that. See [backup guidance](docs/infra/BACKUP_RECOVERY.md). |
 
 No final module total is claimed here. If every listed module were accepted at its maximum, their arithmetic subtotal would be **14 points** (2 + 2 + 2 + 2 + 1 + 1 + 1 + 2 + 1); incomplete modules contribute zero until the team completes and demonstrates their requirements. Reconcile the full project score with the subject and tracker before submission. G06 remains conditional on the separate notification check above. G09 gamification is a candidate outside this subtotal: achievements, leaderboards and XP/levels exist, but database persistence across restart, visual feedback and clear progression rules still need an acceptance demonstration against subject §IV.6.
 
@@ -180,3 +180,32 @@ cd .. && node nginx/check.mjs
 ```
 
 The game Postgres restart test needs `TEST_PG_URL`; the in-memory game suite does not exercise the configured deployment database. `nginx/check.mjs` verifies local gateway routing after the stack is running. See [all project documentation](docs/README.md) for service guides, plans, diagrams and setup details.
+
+## Git activity report
+
+Requires Git and Node.js 20+; no dependencies to install. From the repository root:
+
+```sh
+node git-analytics.mjs
+node git-analytics.mjs --no-fetch
+node git-analytics.mjs --branch main
+node git-analytics.mjs --json > git-report.json
+```
+
+The default command fetches all `origin` branches, prunes stale remote-tracking
+refs, and downloads full history for shallow clones. It does not merge, switch
+branches, or change working files. Fetch failures stop the report; `--no-fetch`
+explicitly uses cached refs instead.
+
+Reports include unique commit counts, authored/co-authored credit per contributor,
+7/30-day pulse, 12 weeks of activity, branch history counts, and recent commits.
+Contributor counts and pulse exclude merges; merge totals are shown separately.
+Activity uses author dates in UTC. `.mailmap` combines known contributor aliases
+for both authors and co-authors without rewriting history; add aliases there as
+needed. A person is credited once per commit, and shared commits credit each
+participant. These counts describe recorded history, not effort or code quality.
+
+Only history reachable from `origin` branches is included, so local backup and
+review branches do not inflate totals. Shared commit IDs count once overall;
+branch totals overlap. Distinct commits created by cherry-picks or history rewrites
+remain distinct. JSON output includes contributor email addresses.

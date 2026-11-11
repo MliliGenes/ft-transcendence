@@ -1,36 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { IconCheck, IconAlertTriangle, IconX, IconRefresh, IconArrowLeft } from "@tabler/icons-react";
 import type { PlatformStatus } from "@/app/api/status/route";
 import { Button } from "@/components/ui/button";
 
 export default function StatusPage() {
-  const [data, setData] = useState<PlatformStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  async function loadStatus() {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/status", { cache: "no-store" });
-      if (!res.ok) throw new Error("Status endpoint error");
-      const json: PlatformStatus = await res.json();
-      setData(json);
-      setError(null);
-    } catch {
-      setError("Unable to reach the platform status endpoint.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void loadStatus();
-    const timer = setInterval(() => void loadStatus(), 15000);
-    return () => clearInterval(timer);
-  }, []);
+  const { data, error: statusError, isFetching: loading, refetch } = useQuery<PlatformStatus>({
+    queryKey: ["public", "platform-status"],
+    queryFn: async ({ signal }) => {
+      const response = await fetch("/api/status", { cache: "no-store", signal });
+      if (!response.ok) throw new Error("Status endpoint error");
+      return response.json();
+    },
+    refetchInterval: 15000,
+    retry: false,
+  });
+  const error = statusError ? "Unable to reach the platform status endpoint." : null;
 
   const allOperational = data?.status === "operational";
 
@@ -58,7 +45,7 @@ export default function StatusPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => void loadStatus()}
+                onClick={() => void refetch()}
                 disabled={loading}
                 className="gap-1.5 text-xs"
               >

@@ -1,3 +1,4 @@
+import { MailService } from '../dist/mail/mail.service.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
@@ -92,8 +93,12 @@ test('account endpoints use the authenticated identity and validate changes', as
     $transaction: async (callback) => callback(prisma),
   };
   const module = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(RabbitMqEventsService)
+    .useValue({ publishCreated: async () => {}, publishUpdated: async () => {}, publishDeleted: async () => {} })
     .overrideProvider(PrismaService)
     .useValue(prisma)
+    .overrideProvider(MailService)
+    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({
@@ -323,6 +328,8 @@ test('account search matches public username and display name results with pagin
     })
     .overrideProvider(RabbitMqEventsService)
     .useValue({})
+    .overrideProvider(MailService)
+    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({
@@ -388,6 +395,8 @@ test('account search applies filters and sorting, and browses without a term', a
     })
     .overrideProvider(RabbitMqEventsService)
     .useValue({})
+    .overrideProvider(MailService)
+    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({

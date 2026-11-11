@@ -16,11 +16,12 @@
     "start:prod": "node dist/main",
     "prisma:generate": "prisma generate",
     "lint": "oxlint src/ test/",
-    "test": "vitest run",
+    "test": "vitest run --exclude \"**/*.postgres.test.mjs\"",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "test:postgres": "npm run build && node --test --test-isolation=none test/dm.postgres.test.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

@@ -9,6 +9,8 @@ import {
   IconMessageCircle,
   IconMoodSmile,
   IconPaperclip,
+  IconPhoto,
+  IconPlayerPlayFilled,
   IconSend2,
   IconUser,
 } from "@tabler/icons-react";
@@ -126,6 +128,51 @@ export function HeroPreview() {
           </div>
           <Composer placeholder="Write a message to Amina" />
         </div>
+      </div>
+    </Window>
+  );
+}
+
+function PreviewPost({ name, handle, time, children }: { name: string; handle: string; time: string; children: React.ReactNode }) {
+  return (
+    <div className="border border-border bg-nook-surface p-3.5">
+      <div className="flex items-center gap-2.5">
+        <Avatar name={name} />
+        <div className="min-w-0 leading-tight">
+          <div className="truncate text-[12px] font-semibold">{name}</div>
+          <div className="truncate text-[11px] text-nook-text-muted">@{handle} · {time}</div>
+        </div>
+      </div>
+      <div className="mt-2.5 text-[12px] leading-5">{children}</div>
+    </div>
+  );
+}
+
+/** Feed: post composer above post cards, one with a video. */
+export function FeedPreview({ className }: { className?: string }) {
+  return (
+    <Window title="nook / feed" className={className}>
+      <div className="h-[420px] space-y-3 overflow-hidden p-4">
+        <div className="border border-border bg-nook-surface p-3.5">
+          <div className="flex items-center gap-2.5">
+            <Avatar name="You" />
+            <span className="truncate text-[12px] text-nook-text-muted">What’s on your mind?</span>
+          </div>
+          <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5">
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-nook-text-secondary"><IconPhoto size={14} className="text-primary" />Photo / video</span>
+            <span className="bg-primary px-3 py-1 text-[11px] font-medium text-primary-foreground">Post</span>
+          </div>
+        </div>
+        <PreviewPost name="Sara" handle="sara" time="2m">
+          First run of the game night highlights. Who’s in for round two?
+          <span className="relative mt-2.5 grid h-32 place-items-center bg-gradient-to-br from-primary/70 via-primary/30 to-nook-surface-raised">
+            <span className="grid size-10 place-items-center rounded-full bg-background/90 text-primary"><IconPlayerPlayFilled size={16} /></span>
+            <span className="absolute bottom-1.5 right-2 text-[10px] text-foreground/80">0:42</span>
+          </span>
+        </PreviewPost>
+        <PreviewPost name="Yassine" handle="yassine" time="18m">
+          Finally got the <b>build</b> green. Coffee is on me tomorrow.
+        </PreviewPost>
       </div>
     </Window>
   );

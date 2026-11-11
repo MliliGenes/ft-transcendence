@@ -6,7 +6,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-BACKUP_ROOT="${ROOT_DIR}/backups"
+BACKUP_ROOT="${BACKUP_ROOT:-${ROOT_DIR}/backups}"
+COMPOSE=(docker compose --project-directory "${ROOT_DIR}" -f "${ROOT_DIR}/compose.yaml")
+
+# This overwrites live data. Routine verification must use isolated databases.
+if [ "${ALLOW_LIVE_RESTORE:-}" != "1" ]; then
+  echo "ERROR: Live restore requires ALLOW_LIVE_RESTORE=1 during an approved maintenance window." >&2
+  exit 1
+fi
 
 TARGET_DIR="${1:-}"
 
@@ -26,6 +33,8 @@ if [ ! -d "${TARGET_DIR}" ]; then
   exit 1
 fi
 
+TARGET_DIR="$(cd "${TARGET_DIR}" && pwd)"
+
 echo "=========================================="
 echo "Nook Disaster Recovery Restore"
 echo "Source archive: ${TARGET_DIR}"
@@ -43,32 +52,24 @@ if command -v sha256sum >/dev/null 2>&1; then
   sha256sum -c SHA256SUMS --status || { echo "ERROR: Checksum verification failed!"; exit 1; }
 elif command -v shasum >/dev/null 2>&1; then
   shasum -a 256 -c SHA256SUMS --status || { echo "ERROR: Checksum verification failed!"; exit 1; }
+else
+  echo "ERROR: SHA-256 tool required." >&2
+  exit 1
 fi
 echo "    Checksum verification passed."
 
-# 2. Restore User PostgreSQL database
-echo "--> Restoring User database..."
-gunzip -c "${TARGET_DIR}/user-db.sql.gz" | docker exec -i nook-user-db-1 psql -U nook_user -d nook --quiet >/dev/null
-USER_COUNT=$(docker exec nook-user-db-1 psql -U nook_user -d nook -t -A -c 'SELECT count(*) FROM "User";' 2>/dev/null || echo "0")
-echo "    User DB restored successfully (${USER_COUNT} user accounts)."
-
-# 3. Restore Chat PostgreSQL database
-echo "--> Restoring Chat database..."
-gunzip -c "${TARGET_DIR}/chat-db.sql.gz" | docker exec -i nook-chat-db-1 psql -U nook_chat -d nook_chat --quiet >/dev/null
-CONV_COUNT=$(docker exec nook-chat-db-1 psql -U nook_chat -d nook_chat -t -A -c 'SELECT count(*) FROM "Conversation";' 2>/dev/null || echo "0")
-echo "    Chat DB restored successfully (${CONV_COUNT} conversations)."
-
-# 4. Restore Game PostgreSQL database
-echo "--> Restoring Game database..."
-gunzip -c "${TARGET_DIR}/game-db.sql.gz" | docker exec -i nook-game-db-1 psql -U nook_game -d nook_game --quiet >/dev/null
-MATCH_COUNT=$(docker exec nook-game-db-1 psql -U nook_game -d nook_game -t -A -c 'SELECT count(*) FROM matches;' 2>/dev/null || echo "0")
-echo "    Game DB restored successfully (${MATCH_COUNT} arena matches)."
+# Restore each database using its running configuration; stop on any SQL error.
+for SERVICE in user-db chat-db game-db; do
+  echo "--> Restoring ${SERVICE}..."
+  gunzip -c "${TARGET_DIR}/${SERVICE}.sql.gz" | "${COMPOSE[@]}" exec -T "${SERVICE}" sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" --set=ON_ERROR_STOP=1 --single-transaction --quiet' >/dev/null
+  echo "    ${SERVICE} SQL restore completed."
+done
 
 # 5. Restore MinIO attachments
 echo "--> Restoring MinIO attachments..."
-docker exec -i nook-minio-1 tar xzf - -C /data < "${TARGET_DIR}/minio-attachments.tar.gz"
+"${COMPOSE[@]}" exec -T minio tar xzf - -C /data < "${TARGET_DIR}/minio-attachments.tar.gz"
 echo "    MinIO chat attachments restored."
 
 echo "=========================================="
-echo "Restore drill complete and verified!"
+echo "Restore commands completed; verify application behavior before reopening access."
 echo "=========================================="

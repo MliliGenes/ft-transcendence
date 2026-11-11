@@ -1,65 +1,57 @@
-# Nook Backup, Disaster Recovery, and Retention (Module D04)
+# Complete snapshots and recovery (D04)
 
-This document describes Nook's backup, retention, and disaster recovery procedures for PostgreSQL databases (`user-db`, `chat-db`, `game-db`) and MinIO object storage.
+The complete snapshot workflow covers User, Chat and Game PostgreSQL plus the MinIO `chat-attachments` bucket. Database commands use the running service's `POSTGRES_USER` and `POSTGRES_DB`; they do not assume example names or a fixed container name.
 
----
+## Snapshot contents
 
-## 1. Protected Data & Components
+| File | Source |
+| --- | --- |
+| `user-db.sql.gz` | Account, authentication, profile and social tables |
+| `chat-db.sql.gz` | Conversations, messages, groups and read receipts |
+| `game-db.sql.gz` | Matches, submissions, results and collaborative snapshots |
+| `minio-attachments.tar.gz` | MinIO `chat-attachments` data directory |
+| `SHA256SUMS` / `manifest.json` | Integrity checks and snapshot metadata |
 
-| Component | Container | Persistent Data | Backup Mechanism |
-|---|---|---|---|
-| **User Service** | `nook-user-db-1` | Accounts, profiles, friendships, auth tokens | `pg_dump -U nook_user -d nook --clean --if-exists` |
-| **Chat Service** | `nook-chat-db-1` | Cached profiles, channels, direct messages, read receipts | `pg_dump -U nook_chat -d nook_chat --clean --if-exists` |
-| **Game Service** | `nook-game-db-1` | 1v1 and 2v2 matches, rounds, submissions, collaborative revisions | `pg_dump -U nook_game -d nook_game --clean --if-exists` |
-| **MinIO Storage** | `nook-minio-1` | Chat attachment files and images (`/data/chat-attachments`) | `tar czf - -C /data chat-attachments` |
+The database dumps omit ownership/ACL statements; provision roles and grants separately. These are sequential per-service backups, not one cross-service transaction. Coordinate writes for an application-consistent recovery point. User-service filesystem uploads, other MinIO buckets, TLS keys, environment secrets, broker state, logs and monitoring volumes are outside this snapshot and need their own retention/recovery policy.
 
----
+## Create and schedule snapshots
 
-## 2. Backup Script (`infra/backup/backup.sh`)
+From the repository root, with the stack running:
 
-The automated script [`infra/backup/backup.sh`](file:///Users/ayousr/orca/workspaces/ft-transcendence/nook-client/infra/backup/backup.sh):
-1. Creates a timestamped directory under `backups/nook_backup_YYYYMMDD_HHMMSSZ/`.
-2. Dumps and compresses each PostgreSQL database using `gzip`.
-3. Streams and compresses the MinIO `chat-attachments` folder into a `.tar.gz` archive.
-4. Computes SHA-256 checksums for each archive and writes `SHA256SUMS`.
-5. Emits `manifest.json` describing backup metadata.
-6. Enforces the automated **retention policy** (default: keeps the last 7 backups, automatically deleting older snapshots).
-
-### Running Manually:
-```bash
+```sh
 ./infra/backup/backup.sh
 ```
 
-### Scheduling with Cron:
-To run backups daily at 03:00 UTC with log output:
+Snapshots go to `backups/nook_backup_YYYYMMDD_HHMMSSZ/`. `BACKUP_ROOT` can select another absolute destination. `RETENTION_COUNT` defaults to 7 snapshots. Store protected, encrypted off-host copies as well; a local backup does not protect against loss of the host.
+
+Install one host cron entry as the deployment operator. The time below is 03:00 in the cron daemon's timezone; use UTC only if that daemon is configured for UTC:
+
 ```crontab
-0 3 * * * cd /path/to/nook-client && ./infra/backup/backup.sh >> /var/log/nook-backup.log 2>&1
+0 3 * * * cd /path/to/nook-client && ./infra/backup/backup.sh >> /path/to/protected/nook-backup.log 2>&1
 ```
 
----
+Ordinary Compose startup does not install this schedule. Avoid overlapping manual/scheduled runs. The [database-only Compose profile](../services/infrastructure.md#optional-database-only-backups) is an alternative PostgreSQL scheduler, including Game, with daily/weekly/monthly retention. Do not enable it alongside the complete snapshot schedule unintentionally; it does not include MinIO.
 
-## 3. Restore Script (`infra/backup/restore.sh`)
+## Restore during maintenance
 
-The restore script [`infra/backup/restore.sh`](file:///Users/ayousr/orca/workspaces/ft-transcendence/nook-client/infra/backup/restore.sh):
-1. Verifies the cryptographic integrity of all archive files against `SHA256SUMS`.
-2. Restores each PostgreSQL database via piped `psql` transactions.
-3. Unpacks and restores MinIO attachment objects into `/data`.
-4. Executes sanity queries asserting table counts (`User`, `Conversation`, `matches`).
+[`restore.sh`](../../infra/backup/restore.sh) overwrites live database and attachment state. Stop application writes, preserve a pre-restore copy and choose a maintenance window before opting in:
 
-### Running a Restore:
-```bash
-# Restore from the latest available backup:
-./infra/backup/restore.sh
-
-# Or specify a target backup directory:
-./infra/backup/restore.sh backups/nook_backup_20261110_033419Z
+```sh
+ALLOW_LIVE_RESTORE=1 ./infra/backup/restore.sh /absolute/path/to/snapshot
 ```
 
----
+Without `ALLOW_LIVE_RESTORE=1`, the command refuses before accessing Docker. It checks SHA-256 hashes and runs each SQL restore with `ON_ERROR_STOP=1` in a transaction. This is one transaction per database, not a rollback across all databases and MinIO. A failure can therefore leave a partially restored platform; keep writes stopped until recovery is completed and application behavior is verified.
 
-## 4. Disaster Recovery Drill (`infra/backup/verify-recovery.sh`)
+[`verify-recovery.sh`](../../infra/backup/verify-recovery.sh) is a legacy **live maintenance check**, not a clean-service drill. It backs up, restores into the live services and runs basic row-count checks. It also requires `ALLOW_LIVE_RESTORE=1`. Do not run it as a routine smoke test or treat positive counts as proof of complete recovery.
 
-An end-to-end automated verification script is provided at [`infra/backup/verify-recovery.sh`](file:///Users/ayousr/orca/workspaces/ft-transcendence/nook-client/infra/backup/verify-recovery.sh). It executes a live backup, tests checksum validation, performs the restore pass, and checks record integrity in one command:
-```bash
-./infra/backup/verify-recovery.sh
+## Non-destructive verification
+
+The [infrastructure guide](../services/infrastructure.md#restore-into-a-new-database) shows restoring a SQL dump into a newly named database without overwriting the source. Validate all three databases, matching attachment data, schema/migrations and application flows in an isolated deployment before claiming a full disaster-recovery demonstration. This integration does not perform a destructive live restore.
+
+The mocked script regression checks runtime database-name handling, complete snapshot file coverage, checksum validation, SQL error handling and the live-restore opt-in gate:
+
+```sh
+node --test infra/backup/backup.test.mjs
 ```
+
+That test does not replace a real PostgreSQL/object-storage recovery drill.

@@ -59,7 +59,7 @@ The consolidated initial migration requires a fresh database. This stack uses a 
 
 ## Monitoring
 
-The monitoring stack (Grafana, Prometheus, Loki, Alloy, cAdvisor) starts with the app. It is defined in `compose.monitoring.yaml` and included by `compose.yaml`. Copy `envs/grafana.env.example` and `envs/monitoring.env.example` before the first start, then open https://localhost/grafana/. See [Monitoring](../infra/monitoring.md).
+The monitoring stack (Grafana, Prometheus, Loki, Alloy, cAdvisor) starts with the app. It is defined in `compose.monitoring.yaml` and included by `compose.yaml`. Copy `envs/grafana.env.example` and `envs/monitoring.env.example` before the first start, then open https://localhost/grafana/. See [Monitoring](../services/infrastructure.md).
 
 ## Network and storage
 
@@ -83,7 +83,7 @@ The existing RabbitMQ service carries User events to Chat. A separate notificati
 
 The `client` container builds and serves the Next.js app; Nginx routes non-API paths to it. Browser code calls User through `/api/`, Chat through `/api/chat/`, and Game through `/api/game/` plus `/api/game/socket.io/` on the same HTTPS origin, never through internal Docker hostnames. It needs no project-specific env file; the old `VITE_API_URL` and `API_PROXY_TARGET` settings are unused. Source changes require `docker compose up --build -d client`. Never put secrets in `NEXT_PUBLIC_` variables; they are exposed to the browser.
 
-The previous Vite test frontend (`auth-profile-web`) was removed; its notes are in [docs/archive/auth-profile-web.md](../archive/auth-profile-web.md).
+The previous Vite test frontend (`auth-profile-web`) was removed; its notes are in [docs/archive/auth-profile-web.md](../services/client.md).
 
 ## Local HTTPS and OAuth
 

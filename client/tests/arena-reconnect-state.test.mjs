@@ -9,10 +9,10 @@ function loadTypeScript(sourcePath, dependencies = {}, globals = {}) {
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  const module = { exports: {} };
+  const loadedModule = { exports: {} };
   runInNewContext(compiled, {
-    exports: module.exports,
-    module,
+    exports: loadedModule.exports,
+    module: loadedModule,
     require(name) {
       if (!(name in dependencies)) throw new Error(`unexpected import: ${name}`);
       return dependencies[name];
@@ -23,7 +23,7 @@ function loadTypeScript(sourcePath, dependencies = {}, globals = {}) {
     setTimeout,
     ...globals,
   });
-  return module.exports;
+  return loadedModule.exports;
 }
 
 class FakeSocket {

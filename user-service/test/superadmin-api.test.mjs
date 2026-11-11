@@ -1,3 +1,5 @@
+import { RabbitMqEventsService } from '../dist/events/rabbitmq-events.service.js';
+import { MailService } from '../dist/mail/mail.service.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -122,8 +124,12 @@ test('superadmin HTTP API', async (t) => {
     publicKeyEncoding: { type: 'spki', format: 'pem' },
   });
   const module = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(RabbitMqEventsService)
+    .useValue({ publishCreated: async () => {}, publishUpdated: async () => {}, publishDeleted: async () => {} })
     .overrideProvider(PrismaService)
     .useValue(prisma)
+    .overrideProvider(MailService)
+    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({

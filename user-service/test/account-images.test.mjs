@@ -1,3 +1,4 @@
+import { MailService } from '../dist/mail/mail.service.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
@@ -85,6 +86,8 @@ test('avatar and banner uploads', async (t) => {
     .useValue(prisma)
     .overrideProvider(RabbitMqEventsService)
     .useValue({ publishUpdated: async (profile) => updates.push(profile) })
+    .overrideProvider(MailService)
+    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({

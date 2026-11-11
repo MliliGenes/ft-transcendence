@@ -1,3 +1,5 @@
+import { readSession } from './helpers/session.mjs';
+import { RabbitMqEventsService } from '../dist/events/rabbitmq-events.service.js';
 // Compiled classes preserve the Nest dependency-injection and DTO metadata.
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
@@ -46,6 +48,8 @@ test('registration issues tokens and prepares a nested user/session write', asyn
     },
   };
   const module = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(RabbitMqEventsService)
+    .useValue({ publishCreated: async () => {}, publishUpdated: async () => {}, publishDeleted: async () => {} })
     .overrideProvider(PrismaService)
     .useValue(prisma)
     .overrideProvider(MailService)
@@ -82,9 +86,9 @@ test('registration issues tokens and prepares a nested user/session write', asyn
         .expect(201);
       const end = Date.now();
       assert.equal(response.headers['cache-control'], 'no-store');
-      const result = response.body;
+      const result = readSession(response);
       const { data, select } = writes[0];
-      assert.deepEqual(select, { id: true, email: true, username: true });
+      assert.deepEqual(select, { id: true, email: true, username: true, displayName: true, avatarUrl: true, updatedAt: true });
       assert.deepEqual(result.user, {
         id: data.id,
         username: dto.username,
@@ -127,7 +131,7 @@ test('registration issues tokens and prepares a nested user/session write', asyn
         .post('/auth/register')
         .send({ ...dto, username: 'tester2', email: 'test2@example.com' })
         .expect(201);
-      assert.notEqual(next.body.refreshToken, result.refreshToken);
+      assert.notEqual(readSession(next).refreshToken, result.refreshToken);
       assert.notEqual(next.body.user.id, result.user.id);
     },
   );

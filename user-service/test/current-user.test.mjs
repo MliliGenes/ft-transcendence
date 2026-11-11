@@ -1,3 +1,5 @@
+import { RabbitMqEventsService } from '../dist/events/rabbitmq-events.service.js';
+import { MailService } from '../dist/mail/mail.service.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
@@ -32,7 +34,13 @@ test('GET /accounts/me uses the verified access-token identity', async (t) => {
   };
   let lookups = 0;
   let lastPage;
+  user.bio = null;
+  user.statusText = null;
+  user.statusIcon = null;
   const publicUser = {
+    bio: user.bio,
+    statusText: user.statusText,
+    statusIcon: user.statusIcon,
     id: user.id,
     username: user.username,
     displayName: user.displayName,
@@ -67,8 +75,12 @@ test('GET /accounts/me uses the verified access-token identity', async (t) => {
     refreshToken: { create: async ({ data }) => data },
   };
   const module = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(RabbitMqEventsService)
+    .useValue({ publishCreated: async () => {}, publishUpdated: async () => {}, publishDeleted: async () => {} })
     .overrideProvider(PrismaService)
     .useValue(prisma)
+    .overrideProvider(MailService)
+    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({

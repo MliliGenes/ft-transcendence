@@ -10,7 +10,7 @@ The earlier 10-point baseline and 18-point target were planning estimates, not e
 
 ## Phase 1 — Finish group chat on the backend
 
-Keep the existing [Chat Service Plan](../chat-service/PLAN.md) as the detailed behavior and architecture reference. Finish one complete, secured group/channel flow before starting the main UI.
+Keep the existing [Chat Service Plan](../services/chat-service.md) as the detailed behavior and architecture reference. Finish one complete, secured group/channel flow before starting the main UI.
 
 - [ ] Create a group and make its creator an admin.
 - [ ] List a caller's groups and read group details and members.
@@ -84,9 +84,9 @@ The main frontend is the Next.js App Router application in `client/`. Continue t
 - [x] Add a health check for the User service and verify coverage for all required services (2026-11-10).
 - [x] Add a public status endpoint (`/api/status`) and responsive status page (`/status`) showing live service availability and latency without exposing secrets or internal details (2026-11-10).
 - [x] Automated backups for User, Chat, and Game databases and MinIO attachments with SHA-256 integrity verification and automated retention rotation (`infra/backup/backup.sh`) (2026-11-10).
-- [x] Document and demonstrate restoring the databases and required attachment data into clean services (`infra/backup/restore.sh`, `infra/backup/verify-recovery.sh`, and `docs/infra/BACKUP_RECOVERY.md`) (2026-11-10).
+- [ ] Demonstrate all three databases and matching attachment data restored into clean, isolated services. The earlier 2026-11-10 record referred to live restore/count checks; inspection during integration found that `verify-recovery.sh` writes into live services, so that evidence does not prove clean-service recovery. See `docs/infra/BACKUP_RECOVERY.md`.
 
-**Point target: D04 (+1) Complete.** Full Compose healthcheck coverage across all containers, live public status page, automated multi-database + MinIO backups, cryptographic verification, retention rotation, and proven disaster recovery procedures.
+**Conditional point target: D04 (+1).** Health/status and complete snapshot scripts are implemented. Verify the operator-installed schedule and demonstrate isolated full recovery before claiming completion.
 
 ## Phase 5 — Complete and demonstrate Code Arena
 
@@ -115,7 +115,7 @@ The implementation items above are present. The checklist below records prior ve
 - [x] Consume `user.deleted` events in Game; revoke pre-deletion access tokens, remove lobby records and affected-side source/editor data, forfeit unfinished matches, anonymize retained results, and document 2v2 shared-code deletion (2026-11-10).
 - [x] Live expiry and joinability indicators on duel invitation cards: direct chat renders real-time status badges (`Open`, `In Match`, `Expired`) via `GET /lobby/rooms/lookup/:code` and dynamically routes to active matches or disables expired rooms (2026-11-10).
 - [x] Player progression and achievements system for Code Arena: dynamic XP, level thresholds, rank titles, and 6 unlockable badges based on completed matches and scores, integrated in `/api/game/users/:userId/stats`, user profile Games tab, and leaderboard (2026-11-10).
-- [x] Complete the D04 backup and restore work in Phase 4 for the Game database and any required attachment data, then demonstrate recovery into clean services (2026-11-10).
+- [ ] Close D04 with an installed schedule and isolated clean-service recovery for Game and matching attachment data; see the corrected Phase 4 acceptance gate above.
 - [x] Record prior G06 Advanced Chat implementation and verification (2026-11-10; separate notification acceptance check remains below): enforced bidirectional block checks on direct messages (`ensureCanContact`), real-time Socket.IO typing indicators (`typing:changed`) with peer notification and debounced UI display, durable read receipts in PostgreSQL (`ConversationReadState`) with REST endpoints and real-time socket delivery (`read:updated`), profile access navigation from message rows, persistent message history, and interactive Code Arena challenge/duel notification cards. Verified with automated unit tests in `chat-service` (12/12) and `client` (38/38) and live dual-user browser sessions.
 
 ### Open acceptance checks
@@ -146,7 +146,7 @@ Invitation expiry/joinability labels are implemented and polled every ten second
 ## Other module candidates
 
 - [ ] **G06 Advanced Chat (+1):** Blocking, direct game invitations, profile navigation, persistent history, typing indicators and read receipts are implemented with prior test/live evidence. Full module acceptance remains conditional on the separate game-notification check above; invitations and notifications are distinct subject requirements.
-- [ ] **W06 Public API (+2):** defer until stable, useful endpoints are ready for external clients. Use the planned [Public API adapter](PUBLIC_API_ADAPTER_PLAN.md) for key management, per-key limits, scopes, and allowlisted routing; document at least five database-backed endpoints covering GET, POST, PUT, and DELETE. Keep private conversation data out of it.
+- [ ] **W06 Public API (+2):** defer until stable, useful endpoints are ready for external clients. Use the planned [Public API adapter](POINTS_ROADMAP.md) for key management, per-key limits, scopes, and allowlisted routing; document at least five database-backed endpoints covering GET, POST, PUT, and DELETE. Keep private conversation data out of it.
 - [ ] **W10 SSR (+1):** if using Next.js, render a public content surface server-side for performance/SEO. Choosing Next.js alone is not sufficient.
 - [ ] **W08 Notifications (+1):** cover relevant create, update, and delete actions across the product; a message alert alone is insufficient.
 

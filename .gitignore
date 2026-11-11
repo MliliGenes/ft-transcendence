@@ -1,5 +1,7 @@
 # Local credentials; commit only examples.
 /envs/*.env
+/envs.zip
+/envs/*.zip
 
 # Dependencies in the client and service workspaces.
 node_modules/
@@ -35,3 +37,7 @@ graphify-out/20*/
 .ua/tmp/
 .ua/intermediate/*
 !.ua/intermediate/scan-result.json
+
+# Generated development TLS material; regenerate per clone.
+/infra/nginx/certs/*.key
+/infra/nginx/certs/*.crt

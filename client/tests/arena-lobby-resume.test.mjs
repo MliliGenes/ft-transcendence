@@ -23,17 +23,17 @@ function loadLobbyClient(fetch) {
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  const module = { exports: {} };
+  const loadedModule = { exports: {} };
   runInNewContext(compiled, {
-    exports: module.exports,
-    module,
+    exports: loadedModule.exports,
+    module: loadedModule,
     require(name) {
       assert.equal(name, "socket.io-client");
       return { io() { throw new Error("socket should not be used in an HTTP lobby lookup"); } };
     },
     fetch,
   });
-  return module.exports;
+  return loadedModule.exports;
 }
 
 function response(body, status = 200) {
