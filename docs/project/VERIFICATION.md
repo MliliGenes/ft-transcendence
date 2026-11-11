@@ -30,7 +30,9 @@ Default Arena tests can report skips for database suites and optional external j
 
 ## Disposable service boundary
 
-The runner creates uniquely named, labeled PostgreSQL 18 and RabbitMQ 4 containers on dynamically allocated loopback ports. It creates separate engine, Game, Chat and User test databases, applies User migrations, and supplies those connection settings directly to test processes. It does not read connection settings from `envs/*.env`, start the application Compose stack, run a live restore, or drop application databases. Cleanup removes only the names created by this run, including their anonymous volumes, on normal completion, test failure or handled interruption. An uncatchable process/host failure can still require manual removal of containers labeled `nook.verification`.
+The runner creates uniquely named, labeled PostgreSQL 18 and RabbitMQ 4 containers on dynamically allocated loopback ports. It creates separate engine, Game, Chat and User test databases, applies the User and Chat migrations, and supplies those connection settings directly to test processes. It does not read connection settings from `envs/*.env`, start the application Compose stack, run a live restore, or drop application databases. Cleanup removes only the names created by this run, including their anonymous volumes, on normal completion, test failure or handled interruption. An uncatchable process/host failure can still require manual removal of containers labeled `nook.verification`.
+
+The Chat and User migrations are applied to their disposable databases with `prisma migrate deploy`, so a migration is exercised by the required check and not only through the DDL the test suites generate.
 
 The Game real-socket suites use fixed test listener ports (3217/3218 as defined in their fixtures); run one full/integration gate at a time on a host. Their default timeout is raised to 30 seconds for real Docker/SQL/socket work; explicit longer restart deadlines remain in the tests.
 
