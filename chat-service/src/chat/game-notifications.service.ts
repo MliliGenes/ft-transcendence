@@ -350,7 +350,8 @@ export class GameNotificationsService {
     const winnerIndex = winnerSide ? sides.indexOf(winnerSide) : -1;
     const winnerLabel =
       winnerIndex >= 0 ? (sideLabels[winnerIndex] ?? UNKNOWN_PLAYER) : UNKNOWN_PLAYER;
-    const loserIndex = winnerIndex >= 0 ? sides.findIndex((side) => side !== winnerSide) : 0;
+    const loserIndex =
+      winnerIndex >= 0 ? sides.findIndex((side) => side !== winnerSide) : -1;
     const loserLabel =
       loserIndex >= 0 ? (sideLabels[loserIndex] ?? UNKNOWN_PLAYER) : UNKNOWN_PLAYER;
 
@@ -362,12 +363,17 @@ export class GameNotificationsService {
       return `${winnerLabel} won by forfeit (${loserLabel} ${cause})`;
     }
 
-    const winnerTotal = winnerSide ? (sideTotals.get(winnerSide) ?? 0) : 0;
+    if (winnerIndex < 0) {
+      // A draw: both sides count the same public total.
+      const first = sides[0] ? (sideTotals.get(sides[0]) ?? 0) : 0;
+      const second = sides[1] ? (sideTotals.get(sides[1]) ?? 0) : 0;
+      return `Draw ${first} – ${second}`;
+    }
+
+    const winnerTotal = sideTotals.get(winnerSide!) ?? 0;
     const loserTotal = loserIndex >= 0 ? (sideTotals.get(sides[loserIndex]!) ?? 0) : 0;
-    const scores = `${winnerTotal} – ${loserTotal}`;
-    if (!winnerSide) return `Draw ${scores}`;
     const deadline = data.endedBecause === 'deadline' ? ' (time limit reached)' : '';
-    return `${winnerLabel} won ${scores}${deadline}`;
+    return `${winnerLabel} won ${winnerTotal} – ${loserTotal}${deadline}`;
   }
 }
 

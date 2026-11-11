@@ -169,6 +169,7 @@ The notification's `clientRequestId` is derived from the conversation and the ev
 - Notifications follow the conversation, so a member who blocked the other party still cannot read the conversation: the block check in `getAccessibleConversation` runs for DM reads and sends.
 - Matches started from the matchmaking queue have no linked conversation and are not announced in chat; they are announced in the game itself.
 - The Game service and Chat service never read each other's database.
+- The Game service publishes its events without blocking gameplay and in order, so a broker outage cannot delay a match and a start is never announced after its result.
 
 ## Groups and channels
 

@@ -69,6 +69,8 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   private challengeExpiryTimer?: NodeJS.Timeout;
   /** Room codes whose expiry cancellation was already published. */
   private readonly cancelledChallengeCodes = new Set<string>();
+  /** Serializes lifecycle events so a start is never published after its end. */
+  private publishChain: Promise<void> = Promise.resolve();
 
   constructor(@Optional() private readonly events?: GameEventsPublisher) {
     this.matchSocketPresence = new MatchSocketPresence({
@@ -224,9 +226,7 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
       if (typeof matchId === "string" && matchId) {
         if (event === "match.ended") {
           const result = (payload as { result?: string }).result;
-          void this.publishMatchEnded(matchId, result).catch((error) =>
-            console.error("[game] failed to publish the match result event", error),
-          );
+          this.queuePublish(() => this.publishMatchEnded(matchId, result));
         }
         for (const l of this.listeners) l(event, matchId, payload);
       }
@@ -423,7 +423,7 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
       for (const listener of this.lobbyListeners) {
         listener("lobby.queueMatched", { matchId: result.matchId, userIds: result.entries.map((e: QueueEntry) => e.userId) });
       }
-      await this.publishMatchStarted(result.matchId, null);
+      this.queuePublish(() => this.publishMatchStarted(result.matchId, null));
     }
     return result;
   }
@@ -450,7 +450,13 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     }
     if (res.closed && before) {
       // The owner withdrew the challenge before any match started.
-      await this.publishChallengeCancelled(before.room.code, "room-closed", before.members.map((member) => member.userId));
+      this.queuePublish(() =>
+        this.publishChallengeCancelled(
+          before.room.code,
+          "room-closed",
+          before.members.map((member) => member.userId),
+        ),
+      );
     }
     return res;
   }
@@ -482,7 +488,7 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     for (const listener of this.lobbyListeners) {
       listener("lobby.matchFound", { roomId, matchId, userIds: room!.members.map((member) => member.userId) });
     }
-    await this.publishMatchStarted(matchId, room!.room.code);
+    this.queuePublish(() => this.publishMatchStarted(matchId, room!.room.code));
     return { matchId };
   }
 
@@ -521,6 +527,17 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   }
 
   // ─── Lifecycle events for other services ───────────────────────────────────
+
+  /**
+   * Publish a lifecycle event without blocking the caller: a broker outage
+   * must never delay a match start or a lobby action. Events are chained so
+   * they reach the broker in the order the Game service decided them.
+   */
+  private queuePublish(task: () => Promise<void>): void {
+    this.publishChain = this.publishChain
+      .then(task)
+      .catch((error) => console.error("[game] failed to publish a game lifecycle event", error));
+  }
 
   /**
    * Announce a started match. The event carries only public match facts; the

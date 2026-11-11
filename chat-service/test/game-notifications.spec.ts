@@ -295,6 +295,28 @@ describe('GameNotificationsService', () => {
     expect(messages[1]!.content).toContain('left the match');
   });
 
+  it('announces a draw with both public totals', async () => {
+    const { service, messages } = build();
+    await service.linkChallenge(CONVERSATION, ROOM);
+    await service.applyGameEvent(matchStarted);
+
+    await service.applyGameEvent({
+      ...matchEnded,
+      eventId: '9f8b1c2d-5555-4555-8555-555555555555',
+      data: {
+        ...matchEnded.data,
+        participants: [
+          { userId: ALICE, sideId: 'left', outcome: 'draw', score: 250 },
+          { userId: BOB, sideId: 'right', outcome: 'draw', score: 250 },
+        ],
+      },
+    });
+
+    expect(messages).toHaveLength(2);
+    expect(messages[1]!.content).toContain('Draw 250 – 250');
+    expect(messages[1]!.content).not.toContain('Draw 0 –');
+  });
+
   it('announces a cancelled challenge', async () => {
     const { service, messages } = build();
     await service.linkChallenge(CONVERSATION, ROOM);

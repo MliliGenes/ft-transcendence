@@ -58,6 +58,7 @@ describe("Game service lifecycle events", () => {
     const room = await readyRoom();
     const { matchId } = await game.startPrivateRoom(ALICE, room.room.id);
 
+    await vi.waitFor(() => expect(publisher.publishMatchStarted).toHaveBeenCalled());
     expect(publisher.publishMatchStarted).toHaveBeenCalledWith({
       matchId,
       mode: "1v1",
@@ -77,6 +78,7 @@ describe("Game service lifecycle events", () => {
 
     await game.leave(BOB, matchId);
 
+    await vi.waitFor(() => expect(publisher.publishMatchEnded).toHaveBeenCalled());
     expect(publisher.publishMatchEnded).toHaveBeenCalledWith({
       matchId,
       mode: "1v1",
@@ -95,6 +97,7 @@ describe("Game service lifecycle events", () => {
     const result = await game.leavePrivateRoom(ALICE, room.room.id);
 
     expect(result.closed).toBe(true);
+    await vi.waitFor(() => expect(publisher.publishChallengeCancelled).toHaveBeenCalled());
     expect(publisher.publishChallengeCancelled).toHaveBeenCalledWith({
       roomCode: room.room.code,
       reason: "room-closed",
@@ -110,7 +113,7 @@ describe("Game service lifecycle events", () => {
     await game.sweepExpiredChallenges();
     await game.sweepExpiredChallenges();
 
-    expect(publisher.publishChallengeCancelled).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(publisher.publishChallengeCancelled).toHaveBeenCalledTimes(1));
     expect(publisher.publishChallengeCancelled).toHaveBeenCalledWith({
       roomCode: room.room.code,
       reason: "expired",
@@ -123,8 +126,21 @@ describe("Game service lifecycle events", () => {
     const { matchId } = await game.startPrivateRoom(ALICE, room.room.id);
     await game.leave(BOB, matchId);
 
+    await vi.waitFor(() => expect(publisher.publishMatchEnded).toHaveBeenCalled());
     const serialized = JSON.stringify(published);
     expect(serialized).not.toMatch(/source|hidden|editor|submission/i);
     expect(serialized).toContain(matchId);
+  });
+
+  it("publishes a match start before its result", async () => {
+    const room = await readyRoom();
+    const { matchId } = await game.startPrivateRoom(ALICE, room.room.id);
+    await game.leave(BOB, matchId);
+
+    await vi.waitFor(() => expect(published.map((event) => event.type)).toEqual([
+      "game.match.started",
+      "game.match.ended",
+    ]));
+    expect(matchId).toBeTruthy();
   });
 });
