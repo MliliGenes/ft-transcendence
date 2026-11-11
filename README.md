@@ -167,7 +167,7 @@ We used AI tools openly. The team chose the product, architecture, API contracts
 |---|---|
 | Claude Code | Planning, implementation assistance, code review, tests and repository documentation |
 | Codex (OpenAI) | Code Arena/Nook integration audit and implementation assistance, fixes, verification and documentation |
-| OpenCode / Antigravity | Advanced chat (G06) typing indicators and read receipts implementation, verification, and session continuation |
+| OpenCode / Antigravity | Advanced chat (G06) typing indicators and read receipts implementation, verification, and session continuation; game lifecycle notifications in chat (game event contract and publisher, Chat consumer and correlation checks, client rendering) with tests |
 | Graphify | Generated a code relationship map in `graphify-out/` |
 | Understand Anything | Generated a repository knowledge graph and codebase tour in `.ua/` |
 
