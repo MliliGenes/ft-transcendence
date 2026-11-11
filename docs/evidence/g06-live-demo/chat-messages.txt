@@ -1,0 +1,11 @@
+  kind  | copies | distinct_ids |                                                                                     content                                                                                     
+--------+--------+--------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ USER   |      1 |            1 | 🎮 Code Arena challenge ~  ~ [Accept & Join](/play/lobby/JW2UTV)
+ USER   |      1 |            1 | 🎮 Code Arena challenge ~  ~ [Accept & Join](/play/lobby/N9ZDV3)
+ USER   |      1 |            1 | 🎮 Code Arena challenge ~  ~ [Accept & Join](/play/lobby/ZD3X56)
+ SYSTEM |      1 |            1 | 🎮 Code Arena ~ challenge-cancelled · the duel challenge expired before it started
+ SYSTEM |      1 |            1 | 🎮 Code Arena ~ challenge-cancelled · the duel challenge was withdrawn before it started
+ SYSTEM |      1 |            1 | 🎮 Code Arena ~ match-result · g06_owner_1794394411485 won by forfeit (g06_rival_1794394411485 left the match) ~ [View match](/play/match/2ede07ca-a6c6-415e-8568-0a30ff877f66)
+ SYSTEM |      1 |            1 | 🎮 Code Arena ~ match-started · 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 ~ [View match](/play/match/2ede07ca-a6c6-415e-8568-0a30ff877f66)
+(7 rows)
+

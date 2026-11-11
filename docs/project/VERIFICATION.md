@@ -36,6 +36,14 @@ The Chat and User migrations are applied to their disposable databases with `pri
 
 The Game real-socket suites use fixed test listener ports (3217/3218 as defined in their fixtures); run one full/integration gate at a time on a host. Their default timeout is raised to 30 seconds for real Docker/SQL/socket work; explicit longer restart deadlines remain in the tests.
 
+## Live two-client demonstration
+
+The G06 acceptance check (Code Arena game notifications in chat) was demonstrated live in two independent browser sessions on 2026-11-11. The run used a **disposable Compose project** — its own network, volumes and host ports (`https://localhost:8443`, RabbitMQ management on `15673`, MinIO console on `9002`) — built from the current source, so the running Nook stack and its user data were never touched. Credentials were generated for the run; none were read from `envs/*.env`. A Mailpit SMTP sink let the two disposable accounts complete real email verification.
+
+The demonstration drove the real client UI only (profile page, chat workspace, lobby, match arena) and showed: the owner's duel invitation, the second account accepting it, the match-started notice, the match-result notice after a forfeit, the challenge-cancelled notice after a withdrawal, and the challenge-cancelled notice after an expiry. Both clients received every notice live over the Socket.IO gateway, and reloading both clients left exactly one copy of each. Full record, screenshots and the exact stored message rows: [docs/evidence/g06-live-demo](../evidence/g06-live-demo/README.md).
+
+Two limits are part of that record and are not hidden by it: broker delivery is best effort (the publisher never blocks gameplay and holds no outbox, so an event published just before a Game service restart can be lost), and the run covered the 1v1 mode on one machine.
+
 ## Secret prevention and historical exposure
 
 Pre-commit scans the exact Git index; ignored local credentials are not copied into the scan. Pre-push scans outgoing history, so adding then deleting a secret in separate commits is rejected. Credential env files, private-key files and recognizable credential archives are blocked by pathname; Gitleaks default rules and a private-key rule scan contents and nested archives. Scanner output is redacted. Example env files remain permitted, but their contents are still scanned.

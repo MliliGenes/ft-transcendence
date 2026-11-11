@@ -365,7 +365,7 @@ export class GameNotificationsService {
  * (authorId, clientRequestId) turns a replay into a no-op.
  */
 export function deterministicUuid(...parts: string[]): string {
-  const digest = createHash('sha256').update(parts.join(' ')).digest();
+  const digest = createHash('sha256').update(parts.join('\x00')).digest();
   const bytes = Buffer.from(digest.subarray(0, 16));
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;

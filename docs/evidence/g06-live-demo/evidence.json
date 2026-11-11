@@ -1,0 +1,354 @@
+{
+  "base": "https://localhost:8443",
+  "startedAt": "2026-11-11T10:53:31.485Z",
+  "steps": [
+    {
+      "step": "registered",
+      "at": "2026-11-11T10:53:40.051Z",
+      "owner": "g06_owner_1794394411485",
+      "rival": "g06_rival_1794394411485"
+    },
+    {
+      "step": "owner-sent-invitation",
+      "at": "2026-11-11T10:53:44.136Z",
+      "cards": [
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel Open You sent a duel challenge. Open Lobby"
+        }
+      ],
+      "transcript": [
+        {
+          "system": false,
+          "label": null,
+          "text": "Today"
+        },
+        {
+          "system": true,
+          "label": "Code Arena duel invitation",
+          "text": "g06_owner_1794394411485 10:53 AM (you) Code Arena · 1v1 Duel Open You sent a duel challenge. Open Lobby"
+        }
+      ]
+    },
+    {
+      "step": "rival-received-invitation",
+      "at": "2026-11-11T10:53:50.777Z",
+      "cards": [
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel Open g06_owner_1794394411485 challenged you to a duel. Accept & Join"
+        }
+      ],
+      "transcript": [
+        {
+          "system": false,
+          "label": null,
+          "text": "Today"
+        },
+        {
+          "system": true,
+          "label": "Code Arena duel invitation",
+          "text": "g06_owner_1794394411485 10:53 AM Code Arena · 1v1 Duel Open g06_owner_1794394411485 challenged you to a duel. Accept & Join"
+        }
+      ]
+    },
+    {
+      "step": "rival-joined-lobby",
+      "at": "2026-11-11T10:53:54.709Z",
+      "href": "https://localhost:8443/play/lobby/N9ZDV3"
+    },
+    {
+      "step": "after-start",
+      "at": "2026-11-11T10:54:07.488Z",
+      "owner": [
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel Open You sent a duel challenge. Open Lobby"
+        },
+        {
+          "label": "Code Arena match started",
+          "text": "Code Arena · Match started 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 View Match"
+        }
+      ],
+      "rival": [
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel Open g06_owner_1794394411485 challenged you to a duel. Accept & Join"
+        },
+        {
+          "label": "Code Arena match started",
+          "text": "Code Arena · Match started 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 View Match"
+        }
+      ]
+    },
+    {
+      "step": "after-result",
+      "at": "2026-11-11T10:54:21.781Z",
+      "owner": [
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel In Match The match is currently underway or finished. View Match"
+        },
+        {
+          "label": "Code Arena match started",
+          "text": "Code Arena · Match started 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 View Match"
+        },
+        {
+          "label": "Code Arena match result",
+          "text": "Code Arena · Match result g06_owner_1794394411485 won by forfeit (g06_rival_1794394411485 left the match) View Match"
+        }
+      ],
+      "rival": [
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel In Match The match is currently underway or finished. View Match"
+        },
+        {
+          "label": "Code Arena match started",
+          "text": "Code Arena · Match started 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 View Match"
+        },
+        {
+          "label": "Code Arena match result",
+          "text": "Code Arena · Match result g06_owner_1794394411485 won by forfeit (g06_rival_1794394411485 left the match) View Match"
+        }
+      ]
+    },
+    {
+      "step": "owner-withdrew-challenge",
+      "at": "2026-11-11T10:54:34.696Z",
+      "href": "https://localhost:8443/play/lobby/ZD3X56"
+    },
+    {
+      "step": "after-withdrawal",
+      "at": "2026-11-11T10:54:38.702Z",
+      "owner": [
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel In Match The match is currently underway or finished. View Match"
+        },
+        {
+          "label": "Code Arena match started",
+          "text": "Code Arena · Match started 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 View Match"
+        },
+        {
+          "label": "Code Arena match result",
+          "text": "Code Arena · Match result g06_owner_1794394411485 won by forfeit (g06_rival_1794394411485 left the match) View Match"
+        },
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel Expired This challenge room has expired or ended. Room Expired"
+        },
+        {
+          "label": "Code Arena challenge cancelled",
+          "text": "Code Arena · Challenge cancelled the duel challenge was withdrawn before it started"
+        }
+      ],
+      "rival": [
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel In Match The match is currently underway or finished. View Match"
+        },
+        {
+          "label": "Code Arena match started",
+          "text": "Code Arena · Match started 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 View Match"
+        },
+        {
+          "label": "Code Arena match result",
+          "text": "Code Arena · Match result g06_owner_1794394411485 won by forfeit (g06_rival_1794394411485 left the match) View Match"
+        },
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel Expired This challenge room has expired or ended. Room Expired"
+        },
+        {
+          "label": "Code Arena challenge cancelled",
+          "text": "Code Arena · Challenge cancelled the duel challenge was withdrawn before it started"
+        }
+      ]
+    },
+    {
+      "step": "after-reload",
+      "at": "2026-11-11T10:54:46.476Z",
+      "before": {
+        "owner": 5,
+        "rival": 5
+      },
+      "after": {
+        "owner": 5,
+        "rival": 5
+      },
+      "owner": [
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel In Match The match is currently underway or finished. View Match"
+        },
+        {
+          "label": "Code Arena match started",
+          "text": "Code Arena · Match started 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 View Match"
+        },
+        {
+          "label": "Code Arena match result",
+          "text": "Code Arena · Match result g06_owner_1794394411485 won by forfeit (g06_rival_1794394411485 left the match) View Match"
+        },
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel Expired This challenge room has expired or ended. Room Expired"
+        },
+        {
+          "label": "Code Arena challenge cancelled",
+          "text": "Code Arena · Challenge cancelled the duel challenge was withdrawn before it started"
+        }
+      ],
+      "rival": [
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel In Match The match is currently underway or finished. View Match"
+        },
+        {
+          "label": "Code Arena match started",
+          "text": "Code Arena · Match started 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 View Match"
+        },
+        {
+          "label": "Code Arena match result",
+          "text": "Code Arena · Match result g06_owner_1794394411485 won by forfeit (g06_rival_1794394411485 left the match) View Match"
+        },
+        {
+          "label": "Code Arena duel invitation",
+          "text": "Code Arena · 1v1 Duel Expired This challenge room has expired or ended. Room Expired"
+        },
+        {
+          "label": "Code Arena challenge cancelled",
+          "text": "Code Arena · Challenge cancelled the duel challenge was withdrawn before it started"
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-11-11T10:54:46.561Z",
+  "owner": {
+    "username": "g06_owner_1794394411485",
+    "email": "g06_owner_1794394411485@example.invalid"
+  },
+  "rival": {
+    "username": "g06_rival_1794394411485",
+    "email": "g06_rival_1794394411485@example.invalid"
+  },
+  "final": {
+    "owner": [
+      {
+        "label": "Code Arena duel invitation",
+        "text": "Code Arena · 1v1 Duel In Match The match is currently underway or finished. View Match"
+      },
+      {
+        "label": "Code Arena match started",
+        "text": "Code Arena · Match started 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 View Match"
+      },
+      {
+        "label": "Code Arena match result",
+        "text": "Code Arena · Match result g06_owner_1794394411485 won by forfeit (g06_rival_1794394411485 left the match) View Match"
+      },
+      {
+        "label": "Code Arena duel invitation",
+        "text": "Code Arena · 1v1 Duel Expired This challenge room has expired or ended. Room Expired"
+      },
+      {
+        "label": "Code Arena challenge cancelled",
+        "text": "Code Arena · Challenge cancelled the duel challenge was withdrawn before it started"
+      }
+    ],
+    "rival": [
+      {
+        "label": "Code Arena duel invitation",
+        "text": "Code Arena · 1v1 Duel In Match The match is currently underway or finished. View Match"
+      },
+      {
+        "label": "Code Arena match started",
+        "text": "Code Arena · Match started 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 View Match"
+      },
+      {
+        "label": "Code Arena match result",
+        "text": "Code Arena · Match result g06_owner_1794394411485 won by forfeit (g06_rival_1794394411485 left the match) View Match"
+      },
+      {
+        "label": "Code Arena duel invitation",
+        "text": "Code Arena · 1v1 Duel Expired This challenge room has expired or ended. Room Expired"
+      },
+      {
+        "label": "Code Arena challenge cancelled",
+        "text": "Code Arena · Challenge cancelled the duel challenge was withdrawn before it started"
+      }
+    ],
+    "beforeReload": {
+      "owner": 5,
+      "rival": 5
+    },
+    "afterReload": {
+      "owner": 5,
+      "rival": 5
+    }
+  },
+  "expiry": {
+    "roomCode": "JW2UTV",
+    "conversationId": "35262738-f345-4e9b-8067-b91e7534082a",
+    "owner": [
+      {
+        "label": "Code Arena duel invitation",
+        "text": "Code Arena · 1v1 Duel In Match The match is currently underway or finished. View Match"
+      },
+      {
+        "label": "Code Arena match started",
+        "text": "Code Arena · Match started 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 View Match"
+      },
+      {
+        "label": "Code Arena match result",
+        "text": "Code Arena · Match result g06_owner_1794394411485 won by forfeit (g06_rival_1794394411485 left the match) View Match"
+      },
+      {
+        "label": "Code Arena duel invitation",
+        "text": "Code Arena · 1v1 Duel Expired This challenge room has expired or ended. Room Expired"
+      },
+      {
+        "label": "Code Arena challenge cancelled",
+        "text": "Code Arena · Challenge cancelled the duel challenge was withdrawn before it started"
+      },
+      {
+        "label": "Code Arena duel invitation",
+        "text": "Code Arena · 1v1 Duel Open You sent a duel challenge. Open Lobby"
+      },
+      {
+        "label": "Code Arena challenge cancelled",
+        "text": "Code Arena · Challenge cancelled the duel challenge expired before it started"
+      }
+    ],
+    "rival": [
+      {
+        "label": "Code Arena duel invitation",
+        "text": "Code Arena · 1v1 Duel In Match The match is currently underway or finished. View Match"
+      },
+      {
+        "label": "Code Arena match started",
+        "text": "Code Arena · Match started 1v1 duel started: g06_owner_1794394411485 vs g06_rival_1794394411485 View Match"
+      },
+      {
+        "label": "Code Arena match result",
+        "text": "Code Arena · Match result g06_owner_1794394411485 won by forfeit (g06_rival_1794394411485 left the match) View Match"
+      },
+      {
+        "label": "Code Arena duel invitation",
+        "text": "Code Arena · 1v1 Duel Expired This challenge room has expired or ended. Room Expired"
+      },
+      {
+        "label": "Code Arena challenge cancelled",
+        "text": "Code Arena · Challenge cancelled the duel challenge was withdrawn before it started"
+      },
+      {
+        "label": "Code Arena duel invitation",
+        "text": "Code Arena · 1v1 Duel Open g06_owner_1794394411485 challenged you to a duel. Accept & Join"
+      },
+      {
+        "label": "Code Arena challenge cancelled",
+        "text": "Code Arena · Challenge cancelled the duel challenge expired before it started"
+      }
+    ],
+    "at": "2026-11-11T10:55:06.872Z"
+  }
+}

@@ -177,6 +177,8 @@ Members of the linked conversation are the recipients, so the notification lands
 
 The notification's `clientRequestId` is derived from the conversation and the event (`match-started:<matchId>`, `match-result:<matchId>`, `challenge-cancelled:<roomCode>`). The unique index on `(authorId, clientRequestId)` therefore turns a redelivered or replayed event into a no-op: the stored message is returned unchanged and nothing is broadcast a second time. Reconnect and re-delivery therefore never produce repeated notifications.
 
+This was also shown live: on 2026-11-11 two independent browser clients received every notice in real time, and reloading both of them left exactly one stored copy of each notification. Evidence: [docs/evidence/g06-live-demo](../evidence/g06-live-demo/README.md).
+
 ### Boundaries
 
 - Notifications follow the conversation, so a member who blocked the other party still cannot read the conversation: the block check in `getAccessibleConversation` runs for DM reads and sends.
