@@ -124,6 +124,20 @@ const userApi = rdJson('docs/api/user-service.openapi.json');
 const chatApi = rdJson('docs/api/chat-service.openapi.json');
 const HEAD = git('rev-parse --short HEAD');
 const BRANCH = git('rev-parse --abbrev-ref HEAD');
+const uaSourceCommit = uaMeta.gitCommitHash || '';
+const uaMatchesHead = Boolean(uaSourceCommit)
+  && (uaSourceCommit.startsWith(HEAD) || HEAD.startsWith(uaSourceCommit));
+const uaFreshness = uaMatchesHead ? 'current at repository HEAD' : 'stale snapshot';
+const origin = git('remote get-url origin')
+  .replace(/^git@github\.com:/, 'https://github.com/')
+  .replace(/^ssh:\/\/git@github\.com\//, 'https://github.com/')
+  .replace(/\.git$/, '');
+const screenshotUrl = /^https:\/\/github\.com\//.test(origin)
+  ? `${origin}/blob/${HEAD}/docs/evidence/g06-live-demo/screenshots.pdf`
+  : '';
+const specUrl = /^https:\/\/github\.com\//.test(origin)
+  ? `${origin}/blob/${HEAD}/docs/spec/code-arena-integration-spec.md`
+  : '';
 
 const excluded = (p = '') => /\.scratch|\.keys|next-env\.d\.ts|\.pem$/.test(p);
 const uaNodes = ua.nodes.filter((n) => !excluded(n.filePath));
@@ -142,9 +156,9 @@ const cover = `
   <table class="cover-meta">
     <tr><td>Generated</td><td>${new Date().toISOString().slice(0, 10)}</td></tr>
     <tr><td>Repository</td><td>ft-transcendence @ <code>${esc(BRANCH)}</code> (<code>${esc(HEAD)}</code>)</td></tr>
-    <tr><td>Code graph</td><td>graphify, ${gg.nodes.length} nodes / ${gg.links.length} edges, refreshed at build</td></tr>
-    <tr><td>Knowledge graph</td><td>Understand-Anything, ${ua.nodes.length} nodes / ${ua.edges.length} edges, analysed at <code>${esc(uaMeta.gitCommitHash.slice(0, 8))}</code></td></tr>
-    <tr><td>API contracts</td><td>OpenAPI 3.1: user service (${Object.keys(userApi.paths).length} paths), chat service (${Object.keys(chatApi.paths).length} paths)</td></tr>
+    <tr><td>Code graph</td><td>graphify, ${gg.nodes.length} nodes / ${gg.links.length} edges, source commit <code>${esc((gg.built_at_commit || '').slice(0, 8) || 'unknown')}</code></td></tr>
+    <tr><td>Knowledge graph</td><td>Understand-Anything, ${ua.nodes.length} nodes / ${ua.edges.length} edges, ${uaFreshness} at <code>${esc(uaSourceCommit.slice(0, 8) || 'unknown')}</code></td></tr>
+    <tr><td>API contracts</td><td>OpenAPI 3.1: User (${Object.keys(userApi.paths).length} paths) and Chat (${Object.keys(chatApi.paths).length} paths); Game HTTP and Socket.IO contracts are summarized in Part III</td></tr>
   </table>
 </section>`;
 
@@ -168,44 +182,55 @@ function arrow(x1, y1, x2, y2, label = '', dash = false, t = 0.62) {
   return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="ar${dash ? ' dash' : ''}" marker-end="url(#ah)"/>${label ? `<text x="${lx}" y="${ly - 5}" class="lb" text-anchor="middle">${esc(label)}</text>` : ''}`;
 }
 const diagram = `
-<svg viewBox="0 0 900 440" class="diagram" role="img" aria-label="System architecture">
+<svg viewBox="0 0 980 460" class="diagram" role="img" aria-label="System architecture">
   <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#475569"/></marker></defs>
-  ${box(8, 180, 110, 50, 'Browser', 'React, Socket.IO', 'ext')}
-  ${box(150, 170, 120, 70, 'Nginx', ':443 TLS, :9443 S3', 'gw')}
-  ${box(370, 20, 160, 50, 'Web client', 'Next.js :3000', 'app')}
-  ${box(370, 96, 160, 50, 'User service', 'NestJS, auth, profiles', 'app')}
-  ${box(370, 194, 160, 50, 'Chat service', 'NestJS, Socket.IO', 'app')}
-  ${box(370, 280, 160, 50, 'MinIO', 'S3 storage :9000', 'store')}
-  ${box(370, 365, 160, 50, 'Grafana', 'dashboards', 'mon')}
-  ${box(600, 100, 140, 42, 'User DB', 'PostgreSQL', 'db')}
-  ${box(600, 152, 140, 36, 'RabbitMQ', '', 'mq')}
-  ${box(600, 198, 140, 42, 'Chat DB', 'PostgreSQL', 'db')}
-  ${box(600, 285, 140, 40, 'minio-init', 'one-shot job', 'job')}
-  ${box(600, 370, 290, 40, 'Prometheus, Loki, Alloy, cAdvisor', '', 'mon')}
-  ${arrow(118, 205, 150, 205)}
-  ${arrow(270, 190, 370, 45, '/', false, 0.7)}
-  ${arrow(270, 200, 370, 121, '/api/', false, 0.72)}
-  ${arrow(270, 215, 370, 219, '/api/chat/', false, 0.5)}
-  ${arrow(270, 230, 370, 305, ':9443', true, 0.6)}
-  ${arrow(270, 238, 370, 390, '/grafana/', true, 0.62)}
-  ${arrow(530, 121, 600, 121)}
-  ${arrow(530, 219, 600, 219)}
-  ${arrow(530, 135, 600, 162, '', true)}
-  ${arrow(600, 180, 530, 205, '', true)}
-  ${arrow(450, 244, 450, 280, 'S3 API', false, 0.5)}
-  ${arrow(600, 305, 530, 305, 'provisions', true, 0.5)}
-  ${arrow(600, 390, 530, 390, 'scrape', true, 0.5)}
+  ${box(8, 207, 110, 50, 'Browser', 'React, Socket.IO', 'ext')}
+  ${box(150, 197, 120, 70, 'Nginx', 'TLS gateway', 'gw')}
+  ${box(370, 18, 160, 46, 'Web client', 'Next.js :3000', 'app')}
+  ${box(370, 82, 160, 46, 'User service', 'NestJS, auth, profiles', 'app')}
+  ${box(370, 146, 160, 46, 'Chat service', 'NestJS, Socket.IO', 'app')}
+  ${box(370, 210, 160, 46, 'Game service', 'NestJS, Socket.IO', 'app')}
+  ${box(370, 292, 160, 46, 'MinIO', 'S3 storage :9000', 'store')}
+  ${box(370, 375, 160, 46, 'Grafana', 'dashboards', 'mon')}
+  ${box(600, 80, 140, 42, 'User DB', 'PostgreSQL', 'db')}
+  ${box(600, 132, 140, 36, 'RabbitMQ', 'user + game events', 'mq')}
+  ${box(600, 178, 140, 42, 'Chat DB', 'PostgreSQL', 'db')}
+  ${box(600, 226, 140, 42, 'Game DB', 'PostgreSQL', 'db')}
+  ${box(600, 275, 140, 42, 'Judge worker', 'private network', 'job')}
+  ${box(600, 325, 140, 38, 'minio-init', 'one-shot job', 'job')}
+  ${box(785, 275, 165, 42, 'Sandbox containers', 'no network access', 'job')}
+  ${box(600, 382, 350, 40, 'Prometheus, Loki, Alloy, cAdvisor', '', 'mon')}
+  ${arrow(118, 232, 150, 232)}
+  ${arrow(270, 204, 370, 41, '/', false, 0.72)}
+  ${arrow(270, 216, 370, 105, '/api/', false, 0.72)}
+  ${arrow(270, 230, 370, 169, '/api/chat/', false, 0.7)}
+  ${arrow(270, 244, 370, 233, '/api/game/', false, 0.55)}
+  ${arrow(270, 254, 370, 315, ':9443', true, 0.62)}
+  ${arrow(270, 260, 370, 398, '/grafana/', true, 0.72)}
+  ${arrow(530, 105, 600, 101)}
+  ${arrow(530, 169, 600, 199)}
+  ${arrow(530, 233, 600, 247)}
+  ${arrow(530, 105, 600, 147, 'user events', true, 0.7)}
+  ${arrow(530, 233, 600, 158, 'game.events', true, 0.68)}
+  ${arrow(600, 151, 530, 166, 'to Chat', true, 0.55)}
+  ${arrow(530, 170, 450, 292, 'S3 API', false, 0.45)}
+  ${arrow(530, 233, 600, 296, 'judge request', true, 0.62)}
+  ${arrow(740, 296, 785, 296)}
+  ${arrow(600, 344, 530, 315, 'provisions', true, 0.5)}
+  ${arrow(600, 402, 530, 398, 'scrape', true, 0.5)}
 </svg>`;
 
 const arch = `
-<p>Nook is a small set of cooperating containers behind a single TLS gateway. The browser only talks to Nginx. Nginx fans requests out by path, so the Next.js client, the two NestJS services and Grafana all appear under one origin.</p>
+<p>Nook is a set of cooperating containers behind a single TLS gateway. The browser only talks to Nginx. Nginx fans requests out by path, so the Next.js client, the User, Chat and Game services, and Grafana appear under one origin.</p>
 ${diagram}
-<p class="cap">Figure 1. Runtime topology. Solid arrows are request paths. Dashed arrows are provisioning, observability, or asynchronous traffic; the two dashed arrows around RabbitMQ are User service publishing events and Chat service consuming them.</p>
+<p class="cap">Figure 1. Runtime topology. Solid arrows are request paths. Dashed arrows show provisioning, observability, asynchronous events, and private judge traffic. Game match events flow through RabbitMQ to Chat; submitted code runs in isolated sandbox containers.</p>
 <h3>Request routing at the gateway</h3>
 ${table(['Public path', 'Upstream', 'Notes'], [
   ['<code>/api/</code>', 'user-service:3000', 'Auth, accounts, social, admin. Rate limited per route (login 10/min, register 3/min, password reset 3 and 5/min).'],
   ['<code>/api/chat/</code>', 'chat-service:3000', 'REST for DMs, groups and channels. Mapped onto <code>/chat/</code> internally.'],
   ['<code>/api/chat/socket.io/</code>, <code>/socket.io/</code>', 'chat-service:3000', 'WebSocket upgrade for realtime messages and presence.'],
+  ['<code>/api/game/</code>', 'game-service:3000', 'Authenticated REST for matchmaking, rooms, matches, history, stats and leaderboard.'],
+  ['<code>/api/game/socket.io/</code>', 'game-service:3000', 'Canonical Socket.IO transport for lobby, match, collaboration and team chat namespaces.'],
   ['<code>/grafana/</code>', 'grafana:3000', 'Only Grafana is exposed; Prometheus, Loki, Alloy and cAdvisor have no public route.'],
   ['<code>/</code>', 'client:3000', 'The Next.js web client.'],
   ['<code>:9443</code>', 'minio:9000', 'TLS front for presigned MinIO URLs, bound to loopback in the default compose file.'],
@@ -214,7 +239,9 @@ ${table(['Public path', 'Upstream', 'Notes'], [
 ${table(['Component', 'Responsibility', 'Owns'], [
   ['User service', 'Registration, login, JWT (RS256) issue and refresh, OAuth providers, profiles, friendships and blocks, admin tools, account search', 'user-db, uploaded account images'],
   ['Chat service', 'Direct messages, groups and channels, read state, reactions, presence, attachments; verifies the User service JWT but never issues tokens', 'chat-db, MinIO bucket <code>chat-attachments</code>'],
-  ['RabbitMQ', 'Carries user lifecycle events from User service so Chat can keep a local <code>ChatUser</code> table in sync', 'event queue'],
+  ['Game service', 'Matchmaking, private rooms, matches, rounds, submissions, collaboration, match results and lifecycle events', 'game-db'],
+  ['Judge worker', 'Executes coding submissions in bounded, resource-limited, no-network containers', 'ephemeral judge jobs'],
+  ['RabbitMQ', 'Carries User lifecycle events and Game match events to Chat; gameplay does not wait for Chat delivery', 'durable event queues'],
   ['MinIO', 'S3-compatible object storage for chat attachments, reached with direct browser uploads through presigned POST policies and GET URLs', 'volumes/minio'],
   ['minio-init', 'Idempotent bootstrap: creates the bucket and a bucket-scoped service account so a fresh volume works without console steps', 'nothing (exits)'],
   ['Monitoring stack', 'Prometheus, Loki, Alloy, cAdvisor and Grafana for metrics, logs and dashboards', 'metrics and log storage'],
@@ -236,7 +263,8 @@ chapter('System architecture', arch);
   const byEdge = {};
   ua.edges.forEach((e) => (byEdge[e.type] = (byEdge[e.type] || 0) + 1));
   const html = `
-<p>The Understand-Anything analysis grouped the repository into <b>${ua.layers.length} architectural layers</b>. Every file-level node belongs to exactly one layer. The graph holds ${uaNodes.length} nodes and ${ua.edges.length} edges, analysed at commit <code>${esc(uaMeta.gitCommitHash.slice(0, 8))}</code>.</p>
+<p>The Understand-Anything analysis grouped the repository into <b>${ua.layers.length} architectural layers</b>. Every file-level node belongs to exactly one layer. The graph holds ${uaNodes.length} nodes and ${ua.edges.length} edges, analysed at commit <code>${esc(uaSourceCommit.slice(0, 8) || 'unknown')}</code>.</p>
+${uaMatchesHead ? '' : `<p><b>Freshness:</b> This is a historical snapshot that predates repository HEAD <code>${esc(HEAD)}</code>. Refresh the Understand-Anything analysis before using it as a map of the current code.</p>`}
 ${table(['Layer', 'What belongs here', 'Files', 'Composition'], rows)}
 <h3>Node and edge inventory</h3>
 <div class="two">
@@ -257,7 +285,7 @@ ${table(['Edge type', 'Count'], Object.entries(byEdge).sort((a, b) => b[1] - a[1
       }</div>`;
     })
     .join('');
-  chapter('Guided tour of the codebase', `<p>The suggested reading order produced by the knowledge-graph analysis, from product context to the runtime stack, the two backend domains, the client and the tests.</p>${html}`);
+  chapter('Guided tour of the codebase', `<p>The suggested reading order produced by the knowledge-graph analysis, from product context to the runtime stack, the User, Chat and Game services, the client and the tests.</p>${html}`);
 }
 
 // ---- graphify analysis
@@ -296,7 +324,7 @@ ${table(['Edge type', 'Count'], Object.entries(byEdge).sort((a, b) => b[1] - a[1
 
   const summary = section(ggReport, 'Summary');
   const html = `
-<p>graphify builds a deterministic code graph from the AST (functions, classes, imports, calls) and links documentation to the code it describes. It is rebuilt locally with <code>graphify update .</code> at no model cost. This build used <b>${nodes.length} nodes</b> and <b>${links.length} edges</b> grouped into <b>${commSizes.size} communities</b>, built at commit <code>${esc((gg.built_at_commit || '').slice(0, 8))}</code>.</p>
+<p>graphify builds the code graph deterministically from local AST parsing (functions, classes, imports, calls) and links documentation to the code it describes. This run named 161 previously unlabeled communities with local Ollama <code>qwen3.5:4b</code>; the 47 saved labels were preserved, and two duplicate Docker labels were clarified during review. The extraction and naming pass used no hosted model. This build contains <b>${nodes.length} nodes</b> and <b>${links.length} edges</b> grouped into <b>${commSizes.size} communities</b>, built at commit <code>${esc((gg.built_at_commit || '').slice(0, 8))}</code>.</p>
 <h3>Graph summary</h3>
 ${mdToHtml(summary)}
 <h3>Footprint per top-level folder</h3>
@@ -315,7 +343,7 @@ ${mdToHtml(section(ggReport, 'Surprising Connections (you probably didn\'t know 
 <h3>Import cycles</h3>
 ${mdToHtml(section(ggReport, 'Import Cycles'))}
 <h3>The 30 largest communities</h3>
-<p>Communities are clusters of tightly related code. The label is the hub node; cohesion is not shown here (see the full report in <code>graphify-out/GRAPH_REPORT.md</code>).</p>
+<p>Communities are clusters of tightly related code. Their labels summarize the member nodes; cohesion is not shown here (see the full report in <code>graphify-out/GRAPH_REPORT.md</code>).</p>
 ${table(['#', 'Community (hub)', 'Members', 'Main folders', 'Sample members'], top.map((c, i) => [
   String(i + 1), `<b>${esc(c.name)}</b>`, String(c.size),
   Object.entries(c.files).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([d]) => `<code>${esc(d || '-')}</code>`).join('<br>'),
@@ -358,8 +386,33 @@ docChapter('Chat and storage integration (MinIO, presigned URLs)', 'docs/integra
 docChapter('Client and backend integration', 'docs/integrations/client-backend.md');
 docChapter('Feed integration', 'docs/integrations/feed.md');
 
+// ---- Code Arena and the live acceptance evidence
+{
+  const specPath = 'docs/spec/code-arena-integration-spec.md';
+  const spec = rd(specPath);
+  const evidencePath = 'docs/evidence/g06-live-demo/README.md';
+  const evidence = rd(evidencePath);
+  const screenshotLink = screenshotUrl
+    ? `<a href="${esc(screenshotUrl)}">Download the 21-page screenshot proof</a>`
+    : `<code>docs/evidence/g06-live-demo/screenshots.pdf</code> (21-page screenshot proof)`;
+  const html = `
+<p>This chapter summarizes the integrated Code Arena contract. ${specUrl ? `<a href="${esc(specUrl)}">The integration specification</a>` : 'The integration specification'} remains the detailed source for route ownership, privacy behavior and automated verification.</p>
+<h3>Product behavior</h3>${mdToHtml(section(spec, 'Product behavior'), specPath)}
+<h3>Service boundary</h3>
+<p>The browser reaches Game through Nginx at <code>/api/game/</code> and <code>/api/game/socket.io/</code>. Game validates User-issued RS256 tokens and owns its PostgreSQL data. The Judge worker runs submissions on a private network in resource-limited containers without network access. Game publishes lifecycle events through RabbitMQ; Chat validates them and stores notices in the conversation linked to a challenge.</p>
+<h3>HTTP and realtime contracts</h3>${mdToHtml(section(spec, 'HTTP and realtime contracts'), specPath)}
+<h3>Persistence and privacy boundary</h3>${mdToHtml(section(spec, 'Persistence and privacy boundary'), specPath)}
+<h3>Verification and evaluation limits</h3>${mdToHtml(section(spec, 'Verification'), specPath)}
+<h3>Live G06 demonstration</h3>
+<p>The live two-client run used two independent authenticated browser sessions and a real stack. It covered a duel invitation, acceptance, match start, forfeit result, withdrawal, expiry, and the transcript reload checkpoint. Both clients received the notices live. The expiry notice arrived after the reload checkpoint and was persisted once; it was not part of the before/after reload count.</p>
+${mdToHtml(section(evidence, 'What was demonstrated'), evidencePath)}
+${mdToHtml(section(evidence, 'What this does and does not prove'), evidencePath)}
+<p>${screenshotLink}. The source repository path is <code>docs/evidence/g06-live-demo/screenshots.pdf</code>; the full run record and individual images are documented in <code>docs/evidence/g06-live-demo/README.md</code>.</p>`;
+  chapter('Code Arena: Game service integration and evidence', html);
+}
+
 // ============================================================== PART IV
-part('Part IV: API Reference', 'Every HTTP route of both services, generated from the OpenAPI contracts, plus the realtime Socket.IO protocol.');
+part('Part IV: API Reference', 'User and Chat HTTP routes from the OpenAPI contracts, plus the Game HTTP and Socket.IO contract summarized in Part III.');
 
 // ---- OpenAPI renderer
 function resolveRef(spec, node) {
@@ -476,8 +529,8 @@ part('Part V: Data Model and Code Map', 'The database schemas and an index of ev
 {
   const prisma = (p) => `<pre><code>${esc(rd(p))}</code></pre>`;
   const tables = uaNodes.filter((n) => n.type === 'table' || n.type === 'schema');
-  chapter('Database schemas (Prisma)',
-    `<p>Each service owns its own PostgreSQL database; the two never share tables. Chat keeps a local <code>ChatUser</code> projection that is filled from RabbitMQ events and an HTTP fallback, never by reading the user database.</p>
+  chapter('Database schemas and ownership',
+    `<p>User, Chat and Game each own a separate PostgreSQL database; they never share tables. The Prisma schemas below cover User and Chat. Game persists its own match state and migrations under the Game service. Chat keeps a local <code>ChatUser</code> projection filled from RabbitMQ events and an HTTP fallback, never by reading the User database.</p>
 <h3>User service schema</h3>${prisma('user-service/prisma/schema.prisma')}
 <h3>Chat service schema</h3>${prisma('chat-service/prisma/schema.prisma')}
 <h3>Tables and schemas found by the knowledge graph</h3>
@@ -594,6 +647,9 @@ console.log(`HTML written: ${(html.length / 1024).toFixed(0)} KB, ${toc.length} 
 // ================================================================== PDF
 const chromeCandidates = [
   process.env.CHROME_PATH,
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   '/usr/bin/google-chrome',

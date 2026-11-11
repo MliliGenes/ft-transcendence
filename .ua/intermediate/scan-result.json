@@ -1,6 +1,6 @@
 {
-  "name": "ft-transcendence",
-  "description": "This repository contains the FT_TRANSCENDENCE project. Its README describes how AI tools were used across the services and client. Note: this project has over 100 source files; consider scoping analysis to a subdirectory for faster results.",
+  "name": "nook-code-arena",
+  "description": "Code Arena, the first-game implementation baseline for Nook's ft_transcendence project. Note: this project has over 100 source files; consider scoping analysis to a subdirectory for faster results.",
   "languages": [
     "alloy",
     "conf",
@@ -12,19 +12,25 @@
     "javascript",
     "json",
     "markdown",
-    "pem",
     "powershell",
     "prisma",
     "shell",
     "sql",
     "toml",
-    "toon",
+    "txt",
     "typescript",
     "unknown",
     "yaml"
   ],
   "frameworks": [
-    "Docker"
+    "Docker",
+    "GitHub Actions",
+    "NestJS",
+    "Next.js",
+    "Prisma",
+    "React",
+    "Tailwind CSS",
+    "Vitest"
   ],
   "files": [
     {
@@ -34,15 +40,51 @@
       "fileCategory": "code"
     },
     {
+      "path": ".githooks/pre-commit",
+      "language": "unknown",
+      "sizeLines": 4,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".githooks/pre-push",
+      "language": "unknown",
+      "sizeLines": 4,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".github/workflows/verify.yml",
+      "language": "yaml",
+      "sizeLines": 56,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".gitleaks.toml",
+      "language": "toml",
+      "sizeLines": 8,
+      "fileCategory": "config"
+    },
+    {
       "path": ".graphifyignore",
       "language": "unknown",
       "sizeLines": 11,
       "fileCategory": "code"
     },
     {
+      "path": ".mailmap",
+      "language": "unknown",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "CONTEXT.md",
+      "language": "markdown",
+      "sizeLines": 42,
+      "fileCategory": "docs"
+    },
+    {
       "path": "README.md",
       "language": "markdown",
-      "sizeLines": 40,
+      "sizeLines": 215,
       "fileCategory": "docs"
     },
     {
@@ -66,7 +108,7 @@
     {
       "path": "chat-service/package.json",
       "language": "json",
-      "sizeLines": 63,
+      "sizeLines": 64,
       "fileCategory": "config"
     },
     {
@@ -94,6 +136,12 @@
       "fileCategory": "data"
     },
     {
+      "path": "chat-service/prisma/migrations/20261111090000_game_notifications/migration.sql",
+      "language": "sql",
+      "sizeLines": 28,
+      "fileCategory": "data"
+    },
+    {
       "path": "chat-service/prisma/migrations/migration_lock.toml",
       "language": "toml",
       "sizeLines": 3,
@@ -102,7 +150,7 @@
     {
       "path": "chat-service/prisma/schema.prisma",
       "language": "prisma",
-      "sizeLines": 158,
+      "sizeLines": 187,
       "fileCategory": "data"
     },
     {
@@ -156,25 +204,25 @@
     {
       "path": "chat-service/src/chat/chat.controller.ts",
       "language": "typescript",
-      "sizeLines": 139,
+      "sizeLines": 165,
       "fileCategory": "code"
     },
     {
       "path": "chat-service/src/chat/chat.module.ts",
       "language": "typescript",
-      "sizeLines": 16,
+      "sizeLines": 20,
       "fileCategory": "code"
     },
     {
       "path": "chat-service/src/chat/chat.service.ts",
       "language": "typescript",
-      "sizeLines": 446,
+      "sizeLines": 636,
       "fileCategory": "code"
     },
     {
       "path": "chat-service/src/chat/dtos/create-attachment-upload-url.dto.ts",
       "language": "typescript",
-      "sizeLines": 15,
+      "sizeLines": 18,
       "fileCategory": "code"
     },
     {
@@ -204,7 +252,7 @@
     {
       "path": "chat-service/src/chat/dtos/message.dto.ts",
       "language": "typescript",
-      "sizeLines": 29,
+      "sizeLines": 48,
       "fileCategory": "code"
     },
     {
@@ -214,9 +262,27 @@
       "fileCategory": "code"
     },
     {
+      "path": "chat-service/src/chat/game-notification-format.ts",
+      "language": "typescript",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "chat-service/src/chat/game-notifications.service.ts",
+      "language": "typescript",
+      "sizeLines": 389,
+      "fileCategory": "code"
+    },
+    {
+      "path": "chat-service/src/chat/game-rooms.client.ts",
+      "language": "typescript",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
       "path": "chat-service/src/chat/gateway/chat.gateway.ts",
       "language": "typescript",
-      "sizeLines": 122,
+      "sizeLines": 197,
       "fileCategory": "code"
     },
     {
@@ -270,7 +336,7 @@
     {
       "path": "chat-service/src/chat/groups/groups.service.ts",
       "language": "typescript",
-      "sizeLines": 318,
+      "sizeLines": 323,
       "fileCategory": "code"
     },
     {
@@ -292,6 +358,12 @@
       "fileCategory": "code"
     },
     {
+      "path": "chat-service/src/chat/system-author.ts",
+      "language": "typescript",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
       "path": "chat-service/src/chat/user-profiles.service.ts",
       "language": "typescript",
       "sizeLines": 125,
@@ -300,7 +372,19 @@
     {
       "path": "chat-service/src/events/events.module.ts",
       "language": "typescript",
-      "sizeLines": 5,
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "chat-service/src/events/game-event.ts",
+      "language": "typescript",
+      "sizeLines": 184,
+      "fileCategory": "code"
+    },
+    {
+      "path": "chat-service/src/events/game-events.consumer.ts",
+      "language": "typescript",
+      "sizeLines": 124,
       "fileCategory": "code"
     },
     {
@@ -312,7 +396,25 @@
     {
       "path": "chat-service/src/events/user-events.consumer.ts",
       "language": "typescript",
-      "sizeLines": 146,
+      "sizeLines": 154,
+      "fileCategory": "code"
+    },
+    {
+      "path": "chat-service/src/feed/feed.constants.ts",
+      "language": "typescript",
+      "sizeLines": 7,
+      "fileCategory": "code"
+    },
+    {
+      "path": "chat-service/src/feed/feed.module.ts",
+      "language": "typescript",
+      "sizeLines": 8,
+      "fileCategory": "code"
+    },
+    {
+      "path": "chat-service/src/feed/feed.service.ts",
+      "language": "typescript",
+      "sizeLines": 142,
       "fileCategory": "code"
     },
     {
@@ -342,7 +444,7 @@
     {
       "path": "chat-service/src/minio/minio.service.ts",
       "language": "typescript",
-      "sizeLines": 130,
+      "sizeLines": 149,
       "fileCategory": "code"
     },
     {
@@ -358,15 +460,33 @@
       "fileCategory": "code"
     },
     {
+      "path": "chat-service/test/chat.gateway.spec.ts",
+      "language": "typescript",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
       "path": "chat-service/test/chat.service.spec.ts",
       "language": "typescript",
-      "sizeLines": 89,
+      "sizeLines": 230,
       "fileCategory": "code"
     },
     {
       "path": "chat-service/test/dm.postgres.test.mjs",
       "language": "javascript",
-      "sizeLines": 150,
+      "sizeLines": 177,
+      "fileCategory": "code"
+    },
+    {
+      "path": "chat-service/test/game-notifications.postgres.test.mjs",
+      "language": "javascript",
+      "sizeLines": 623,
+      "fileCategory": "code"
+    },
+    {
+      "path": "chat-service/test/game-notifications.spec.ts",
+      "language": "typescript",
+      "sizeLines": 348,
       "fileCategory": "code"
     },
     {
@@ -424,6 +544,12 @@
       "fileCategory": "code"
     },
     {
+      "path": "client/app/(app)/error.tsx",
+      "language": "typescript",
+      "sizeLines": 23,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/app/(app)/feed/page.tsx",
       "language": "typescript",
       "sizeLines": 8,
@@ -432,13 +558,19 @@
     {
       "path": "client/app/(app)/layout.tsx",
       "language": "typescript",
+      "sizeLines": 17,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/app/(app)/loading.tsx",
+      "language": "typescript",
       "sizeLines": 6,
       "fileCategory": "code"
     },
     {
       "path": "client/app/(app)/not-found.tsx",
       "language": "typescript",
-      "sizeLines": 4,
+      "sizeLines": 17,
       "fileCategory": "code"
     },
     {
@@ -448,9 +580,27 @@
       "fileCategory": "code"
     },
     {
+      "path": "client/app/(app)/play/leaderboard/page.tsx",
+      "language": "typescript",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/app/(app)/play/lobby/[code]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/app/(app)/play/match/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/app/(app)/play/page.tsx",
       "language": "typescript",
-      "sizeLines": 8,
+      "sizeLines": 11,
       "fileCategory": "code"
     },
     {
@@ -492,7 +642,7 @@
     {
       "path": "client/app/(auth)/layout.tsx",
       "language": "typescript",
-      "sizeLines": 23,
+      "sizeLines": 27,
       "fileCategory": "code"
     },
     {
@@ -514,9 +664,51 @@
       "fileCategory": "code"
     },
     {
+      "path": "client/app/(auth)/verify-email/page.tsx",
+      "language": "typescript",
+      "sizeLines": 8,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/app/(legal)/layout.tsx",
+      "language": "typescript",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/app/(legal)/privacy/page.tsx",
+      "language": "typescript",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/app/(legal)/terms/page.tsx",
+      "language": "typescript",
+      "sizeLines": 64,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/app/api/status/route.ts",
+      "language": "typescript",
+      "sizeLines": 85,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/app/error.tsx",
+      "language": "typescript",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/app/global-error.tsx",
+      "language": "typescript",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/app/globals.css",
       "language": "css",
-      "sizeLines": 249,
+      "sizeLines": 246,
       "fileCategory": "markup"
     },
     {
@@ -526,21 +718,33 @@
       "fileCategory": "code"
     },
     {
+      "path": "client/app/loading.tsx",
+      "language": "typescript",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/app/not-found.tsx",
       "language": "typescript",
-      "sizeLines": 10,
+      "sizeLines": 16,
       "fileCategory": "code"
     },
     {
       "path": "client/app/page.tsx",
       "language": "typescript",
-      "sizeLines": 128,
+      "sizeLines": 264,
       "fileCategory": "code"
     },
     {
       "path": "client/app/providers.tsx",
       "language": "typescript",
       "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/app/status/page.tsx",
+      "language": "typescript",
+      "sizeLines": 162,
       "fileCategory": "code"
     },
     {
@@ -564,7 +768,7 @@
     {
       "path": "client/components/app/chat-workspace.tsx",
       "language": "typescript",
-      "sizeLines": 617,
+      "sizeLines": 785,
       "fileCategory": "code"
     },
     {
@@ -582,7 +786,7 @@
     {
       "path": "client/components/app/chat/details-panel.tsx",
       "language": "typescript",
-      "sizeLines": 196,
+      "sizeLines": 197,
       "fileCategory": "code"
     },
     {
@@ -604,9 +808,21 @@
       "fileCategory": "code"
     },
     {
+      "path": "client/components/app/chat/message-actions.tsx",
+      "language": "typescript",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/components/app/chat/message-list.tsx",
       "language": "typescript",
-      "sizeLines": 119,
+      "sizeLines": 225,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/app/code-arena-profile.tsx",
+      "language": "typescript",
+      "sizeLines": 161,
       "fileCategory": "code"
     },
     {
@@ -628,6 +844,30 @@
       "fileCategory": "code"
     },
     {
+      "path": "client/components/app/feed/feed-composer.tsx",
+      "language": "typescript",
+      "sizeLines": 144,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/app/feed/feed-view.tsx",
+      "language": "typescript",
+      "sizeLines": 168,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/app/feed/post-card.tsx",
+      "language": "typescript",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/app/feed/profile-posts.tsx",
+      "language": "typescript",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/components/app/group-management.tsx",
       "language": "typescript",
       "sizeLines": 258,
@@ -642,13 +882,13 @@
     {
       "path": "client/components/app/profile-editor.tsx",
       "language": "typescript",
-      "sizeLines": 209,
+      "sizeLines": 213,
       "fileCategory": "code"
     },
     {
       "path": "client/components/app/public-profile.tsx",
       "language": "typescript",
-      "sizeLines": 250,
+      "sizeLines": 269,
       "fileCategory": "code"
     },
     {
@@ -664,6 +904,12 @@
       "fileCategory": "code"
     },
     {
+      "path": "client/components/app/status-composer.tsx",
+      "language": "typescript",
+      "sizeLines": 85,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/components/app/status-dot.tsx",
       "language": "typescript",
       "sizeLines": 17,
@@ -672,13 +918,91 @@
     {
       "path": "client/components/app/status-icon.tsx",
       "language": "typescript",
-      "sizeLines": 10,
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/ArenaHeader.tsx",
+      "language": "typescript",
+      "sizeLines": 101,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/ArenaWorkspace.tsx",
+      "language": "typescript",
+      "sizeLines": 252,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/DuelPanel.tsx",
+      "language": "typescript",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/EditorAdapter.tsx",
+      "language": "typescript",
+      "sizeLines": 240,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/LeaderboardView.tsx",
+      "language": "typescript",
+      "sizeLines": 75,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/LobbyView.tsx",
+      "language": "typescript",
+      "sizeLines": 315,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/MatchResult.tsx",
+      "language": "typescript",
+      "sizeLines": 51,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/MatchView.tsx",
+      "language": "typescript",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/PlayLandingView.tsx",
+      "language": "typescript",
+      "sizeLines": 217,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/ProblemPanel.tsx",
+      "language": "typescript",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/RoundScoreReveal.tsx",
+      "language": "typescript",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/TeamChat.tsx",
+      "language": "typescript",
+      "sizeLines": 112,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/arena/TestPanel.tsx",
+      "language": "typescript",
+      "sizeLines": 142,
       "fileCategory": "code"
     },
     {
       "path": "client/components/auth/auth-form.tsx",
       "language": "typescript",
-      "sizeLines": 133,
+      "sizeLines": 155,
       "fileCategory": "code"
     },
     {
@@ -697,6 +1021,36 @@
       "path": "client/components/auth/password-recovery-forms.tsx",
       "language": "typescript",
       "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/auth/verify-email-view.tsx",
+      "language": "typescript",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/error-page.tsx",
+      "language": "typescript",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/landing/previews.tsx",
+      "language": "typescript",
+      "sizeLines": 289,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/legal/legal-document.tsx",
+      "language": "typescript",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/components/loading-screen.tsx",
+      "language": "typescript",
+      "sizeLines": 11,
       "fileCategory": "code"
     },
     {
@@ -808,6 +1162,12 @@
       "fileCategory": "code"
     },
     {
+      "path": "client/hooks/useArena.ts",
+      "language": "typescript",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/lib/accounts/client.ts",
       "language": "typescript",
       "sizeLines": 218,
@@ -826,9 +1186,75 @@
       "fileCategory": "code"
     },
     {
+      "path": "client/lib/arena/chat.ts",
+      "language": "typescript",
+      "sizeLines": 230,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/lib/arena/collab.ts",
+      "language": "typescript",
+      "sizeLines": 274,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/lib/arena/game-notifications.ts",
+      "language": "typescript",
+      "sizeLines": 56,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/lib/arena/invitations.ts",
+      "language": "typescript",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/lib/arena/lobby-session.ts",
+      "language": "typescript",
+      "sizeLines": 209,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/lib/arena/lobby.ts",
+      "language": "typescript",
+      "sizeLines": 243,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/lib/arena/sidecars.ts",
+      "language": "typescript",
+      "sizeLines": 240,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/lib/arena/socket.ts",
+      "language": "typescript",
+      "sizeLines": 500,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/lib/arena/stats.ts",
+      "language": "typescript",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/lib/arena/transport.ts",
+      "language": "typescript",
+      "sizeLines": 95,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/lib/arena/types.ts",
+      "language": "typescript",
+      "sizeLines": 117,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/lib/auth/client.ts",
       "language": "typescript",
-      "sizeLines": 77,
+      "sizeLines": 82,
       "fileCategory": "code"
     },
     {
@@ -844,15 +1270,33 @@
       "fileCategory": "code"
     },
     {
+      "path": "client/lib/chat/attachments.ts",
+      "language": "typescript",
+      "sizeLines": 19,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/lib/chat/client.ts",
       "language": "typescript",
-      "sizeLines": 141,
+      "sizeLines": 156,
       "fileCategory": "code"
     },
     {
       "path": "client/lib/chat/emoji-data.ts",
       "language": "typescript",
       "sizeLines": 130,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/lib/chat/receipts.ts",
+      "language": "typescript",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/lib/chat/typing.ts",
+      "language": "typescript",
+      "sizeLines": 7,
       "fileCategory": "code"
     },
     {
@@ -876,13 +1320,67 @@
     {
       "path": "client/package.json",
       "language": "json",
-      "sizeLines": 40,
+      "sizeLines": 48,
       "fileCategory": "config"
+    },
+    {
+      "path": "client/tests/arena-game-notifications.test.mjs",
+      "language": "javascript",
+      "sizeLines": 99,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/tests/arena-invitations.test.mjs",
+      "language": "javascript",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/tests/arena-lobby-identities.test.mjs",
+      "language": "javascript",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/tests/arena-lobby-resume.test.mjs",
+      "language": "javascript",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/tests/arena-reconnect-state.test.mjs",
+      "language": "javascript",
+      "sizeLines": 112,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/tests/arena-socket-path.test.mjs",
+      "language": "javascript",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/tests/arena-stats-api.test.mjs",
+      "language": "javascript",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/tests/arena-team-chat-history.test.mjs",
+      "language": "javascript",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/tests/auth-restore.test.mjs",
+      "language": "javascript",
+      "sizeLines": 48,
+      "fileCategory": "code"
     },
     {
       "path": "client/tests/auth-validation.test.mjs",
       "language": "javascript",
-      "sizeLines": 39,
+      "sizeLines": 54,
       "fileCategory": "code"
     },
     {
@@ -892,9 +1390,15 @@
       "fileCategory": "code"
     },
     {
+      "path": "client/tests/chat-receipts.test.mjs",
+      "language": "javascript",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/tests/oauth.test.mjs",
       "language": "javascript",
-      "sizeLines": 36,
+      "sizeLines": 48,
       "fileCategory": "code"
     },
     {
@@ -904,9 +1408,21 @@
       "fileCategory": "code"
     },
     {
+      "path": "client/tests/route-uniqueness.test.mjs",
+      "language": "javascript",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/tests/social-client.test.mjs",
       "language": "javascript",
       "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "client/tests/status-api.test.mjs",
+      "language": "javascript",
+      "sizeLines": 49,
       "fileCategory": "code"
     },
     {
@@ -930,157 +1446,115 @@
     {
       "path": "compose.yaml",
       "language": "yaml",
-      "sizeLines": 149,
+      "sizeLines": 335,
       "fileCategory": "infra"
     },
     {
       "path": "docs/README.md",
       "language": "markdown",
-      "sizeLines": 61,
+      "sizeLines": 55,
       "fileCategory": "docs"
     },
     {
-      "path": "docs/archive/auth-profile-web.md",
+      "path": "docs/adr/0015-code-arena-nook-integration.md",
       "language": "markdown",
-      "sizeLines": 78,
+      "sizeLines": 36,
       "fileCategory": "docs"
     },
     {
-      "path": "docs/chat-service/API.md",
-      "language": "markdown",
-      "sizeLines": 535,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/chat-service/CHAT_OVERVIEW.md",
-      "language": "markdown",
-      "sizeLines": 322,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/chat-service/DM_TESTS.md",
-      "language": "markdown",
-      "sizeLines": 23,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/chat-service/MINIO_ATTACHMENTS.md",
-      "language": "markdown",
-      "sizeLines": 83,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/chat-service/MVP_PLAN.md",
-      "language": "markdown",
-      "sizeLines": 176,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/chat-service/PLAN.md",
-      "language": "markdown",
-      "sizeLines": 362,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/chat-service/PRISMA_LEARNING.md",
-      "language": "markdown",
-      "sizeLines": 90,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/chat-service/PRISMA_README.md",
-      "language": "markdown",
-      "sizeLines": 35,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/chat-service/RABBITMQ_USER_SYNC.md",
-      "language": "markdown",
-      "sizeLines": 160,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/chat-service/README.md",
-      "language": "markdown",
-      "sizeLines": 117,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/chat-service/minio-attachments-plan.md",
-      "language": "markdown",
-      "sizeLines": 63,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/chat-service/openapi.json",
+      "path": "docs/api/chat-service.openapi.json",
       "language": "json",
-      "sizeLines": 2202,
+      "sizeLines": 2541,
       "fileCategory": "config"
     },
     {
-      "path": "docs/client/CHAT_DESIGN_PROPOSAL.toon",
-      "language": "toon",
-      "sizeLines": 175,
+      "path": "docs/api/user-service.openapi.json",
+      "language": "json",
+      "sizeLines": 4195,
+      "fileCategory": "config"
+    },
+    {
+      "path": "docs/archive/client-plan.md",
+      "language": "markdown",
+      "sizeLines": 95,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/book/build.mjs",
+      "language": "javascript",
+      "sizeLines": 682,
       "fileCategory": "code"
     },
     {
-      "path": "docs/client/CHAT_INTEGRATION_PLAN.toon",
-      "language": "toon",
-      "sizeLines": 294,
-      "fileCategory": "code"
+      "path": "docs/book/package.json",
+      "language": "json",
+      "sizeLines": 8,
+      "fileCategory": "config"
     },
     {
-      "path": "docs/client/NOOK_CHAT_DEMO.html",
-      "language": "html",
-      "sizeLines": 648,
-      "fileCategory": "markup"
-    },
-    {
-      "path": "docs/client/PLAN.md",
+      "path": "docs/evidence/g06-live-demo/README.md",
       "language": "markdown",
-      "sizeLines": 92,
+      "sizeLines": 180,
       "fileCategory": "docs"
     },
     {
-      "path": "docs/client/PROFILE_DESIGN_SPEC.md",
-      "language": "markdown",
-      "sizeLines": 147,
+      "path": "docs/evidence/g06-live-demo/chat-messages.txt",
+      "language": "txt",
+      "sizeLines": 11,
       "fileCategory": "docs"
     },
     {
-      "path": "docs/client/SEARCH_SOCIAL_PLAN.md",
+      "path": "docs/evidence/g06-live-demo/evidence.json",
+      "language": "json",
+      "sizeLines": 354,
+      "fileCategory": "config"
+    },
+    {
+      "path": "docs/infra/BACKUP_RECOVERY.md",
       "language": "markdown",
-      "sizeLines": 34,
+      "sizeLines": 57,
       "fileCategory": "docs"
     },
     {
-      "path": "docs/infra/MONITORING_PLAN.md",
+      "path": "docs/integrations/chat-storage.md",
       "language": "markdown",
-      "sizeLines": 51,
+      "sizeLines": 279,
       "fileCategory": "docs"
     },
     {
-      "path": "docs/infra/minio.md",
+      "path": "docs/integrations/client-backend.md",
       "language": "markdown",
-      "sizeLines": 16,
+      "sizeLines": 54,
       "fileCategory": "docs"
     },
     {
-      "path": "docs/infra/monitoring.md",
+      "path": "docs/integrations/feed.md",
       "language": "markdown",
-      "sizeLines": 106,
+      "sizeLines": 60,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/integrations/user-chat.md",
+      "language": "markdown",
+      "sizeLines": 287,
       "fileCategory": "docs"
     },
     {
       "path": "docs/project/COMPOSE.md",
       "language": "markdown",
-      "sizeLines": 105,
+      "sizeLines": 109,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/project/INTEGRATION_STATUS.md",
+      "language": "markdown",
+      "sizeLines": 52,
       "fileCategory": "docs"
     },
     {
       "path": "docs/project/POINTS_ROADMAP.md",
       "language": "markdown",
-      "sizeLines": 143,
+      "sizeLines": 164,
       "fileCategory": "docs"
     },
     {
@@ -1090,9 +1564,9 @@
       "fileCategory": "docs"
     },
     {
-      "path": "docs/project/PUBLIC_API_ADAPTER_PLAN.md",
+      "path": "docs/project/VERIFICATION.md",
       "language": "markdown",
-      "sizeLines": 61,
+      "sizeLines": 65,
       "fileCategory": "docs"
     },
     {
@@ -1102,39 +1576,51 @@
       "fileCategory": "markup"
     },
     {
-      "path": "docs/user-service/API.md",
+      "path": "docs/services/chat-service.md",
       "language": "markdown",
-      "sizeLines": 853,
+      "sizeLines": 273,
       "fileCategory": "docs"
     },
     {
-      "path": "docs/user-service/SERVICE.md",
+      "path": "docs/services/client.md",
       "language": "markdown",
-      "sizeLines": 172,
+      "sizeLines": 96,
       "fileCategory": "docs"
     },
     {
-      "path": "docs/user-service/SETUP.md",
+      "path": "docs/services/infrastructure.md",
       "language": "markdown",
-      "sizeLines": 79,
+      "sizeLines": 294,
       "fileCategory": "docs"
     },
     {
-      "path": "docs/user-service/nook-profile-status-plan.md",
+      "path": "docs/services/user-service.md",
       "language": "markdown",
-      "sizeLines": 38,
+      "sizeLines": 157,
       "fileCategory": "docs"
     },
     {
-      "path": "docs/user-service/openapi.json",
-      "language": "json",
-      "sizeLines": 4195,
-      "fileCategory": "config"
+      "path": "docs/spec/code-arena-integration-spec.md",
+      "language": "markdown",
+      "sizeLines": 66,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-11-11-nook-arena-platform-integration.md",
+      "language": "markdown",
+      "sizeLines": 82,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-11-11-verification-guardrails.md",
+      "language": "markdown",
+      "sizeLines": 48,
+      "fileCategory": "docs"
     },
     {
       "path": "envs/README.md",
       "language": "markdown",
-      "sizeLines": 88,
+      "sizeLines": 103,
       "fileCategory": "docs"
     },
     {
@@ -1152,13 +1638,31 @@
     {
       "path": "envs/chat-service.env.example",
       "language": "example",
-      "sizeLines": 51,
+      "sizeLines": 56,
+      "fileCategory": "code"
+    },
+    {
+      "path": "envs/game-db.env.example",
+      "language": "example",
+      "sizeLines": 4,
+      "fileCategory": "code"
+    },
+    {
+      "path": "envs/game-service.env.example",
+      "language": "example",
+      "sizeLines": 13,
       "fileCategory": "code"
     },
     {
       "path": "envs/grafana.env.example",
       "language": "example",
       "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "envs/judge-worker.env.example",
+      "language": "example",
+      "sizeLines": 9,
       "fileCategory": "code"
     },
     {
@@ -1182,7 +1686,7 @@
     {
       "path": "envs/user-auth.env.example",
       "language": "example",
-      "sizeLines": 41,
+      "sizeLines": 40,
       "fileCategory": "code"
     },
     {
@@ -1196,6 +1700,36 @@
       "language": "example",
       "sizeLines": 42,
       "fileCategory": "code"
+    },
+    {
+      "path": "git-analytics.mjs",
+      "language": "javascript",
+      "sizeLines": 179,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infra/backup/backup.sh",
+      "language": "shell",
+      "sizeLines": 98,
+      "fileCategory": "script"
+    },
+    {
+      "path": "infra/backup/backup.test.mjs",
+      "language": "javascript",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infra/backup/restore.sh",
+      "language": "shell",
+      "sizeLines": 75,
+      "fileCategory": "script"
+    },
+    {
+      "path": "infra/backup/verify-recovery.sh",
+      "language": "shell",
+      "sizeLines": 36,
+      "fileCategory": "script"
     },
     {
       "path": "infra/monitoring/alloy/config.alloy",
@@ -1282,6 +1816,18 @@
       "fileCategory": "code"
     },
     {
+      "path": "minio-init/Dockerfile",
+      "language": "dockerfile",
+      "sizeLines": 10,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "minio-init/init.sh",
+      "language": "shell",
+      "sizeLines": 43,
+      "fileCategory": "script"
+    },
+    {
       "path": "minio/Dockerfile",
       "language": "dockerfile",
       "sizeLines": 10,
@@ -1308,13 +1854,13 @@
     {
       "path": "nginx/check.mjs",
       "language": "javascript",
-      "sizeLines": 30,
+      "sizeLines": 37,
       "fileCategory": "code"
     },
     {
       "path": "nginx/default.conf",
       "language": "conf",
-      "sizeLines": 160,
+      "sizeLines": 203,
       "fileCategory": "code"
     },
     {
@@ -1322,6 +1868,918 @@
       "language": "shell",
       "sizeLines": 18,
       "fileCategory": "script"
+    },
+    {
+      "path": "package.json",
+      "language": "json",
+      "sizeLines": 37,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/arena-game/package.json",
+      "language": "json",
+      "sizeLines": 24,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/arena-game/src/collab.ts",
+      "language": "typescript",
+      "sizeLines": 155,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/container-judge.ts",
+      "language": "typescript",
+      "sizeLines": 452,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/engine.ts",
+      "language": "typescript",
+      "sizeLines": 1505,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/evaluation-orchestration.ts",
+      "language": "typescript",
+      "sizeLines": 549,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/evaluation-telemetry.ts",
+      "language": "typescript",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/file-bank.ts",
+      "language": "typescript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/judge.ts",
+      "language": "typescript",
+      "sizeLines": 140,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/judge0.ts",
+      "language": "typescript",
+      "sizeLines": 404,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/lobby.ts",
+      "language": "typescript",
+      "sizeLines": 1291,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/match-authority.ts",
+      "language": "typescript",
+      "sizeLines": 180,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/persistence.ts",
+      "language": "typescript",
+      "sizeLines": 287,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/postgres-store.ts",
+      "language": "typescript",
+      "sizeLines": 543,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/principal.ts",
+      "language": "typescript",
+      "sizeLines": 15,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/records.ts",
+      "language": "typescript",
+      "sizeLines": 149,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/round-lifecycle.ts",
+      "language": "typescript",
+      "sizeLines": 252,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/store.ts",
+      "language": "typescript",
+      "sizeLines": 143,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/team-collaboration.ts",
+      "language": "typescript",
+      "sizeLines": 395,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/src/worker-judge.ts",
+      "language": "typescript",
+      "sizeLines": 161,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/account-erasure-lobby.test.ts",
+      "language": "typescript",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/account-erasure.test.ts",
+      "language": "typescript",
+      "sizeLines": 150,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/collab.test.ts",
+      "language": "typescript",
+      "sizeLines": 684,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/compiled-bank.test.ts",
+      "language": "typescript",
+      "sizeLines": 84,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/concurrency.test.ts",
+      "language": "typescript",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/container-judge-trust.test.ts",
+      "language": "typescript",
+      "sizeLines": 169,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/container-judge.test.ts",
+      "language": "typescript",
+      "sizeLines": 101,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/cross-isolation.test.ts",
+      "language": "typescript",
+      "sizeLines": 303,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/deadline-closure.test.ts",
+      "language": "typescript",
+      "sizeLines": 175,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/evaluation-orchestration.test.ts",
+      "language": "typescript",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/evaluation-telemetry.test.ts",
+      "language": "typescript",
+      "sizeLines": 49,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/judge-security.test.ts",
+      "language": "typescript",
+      "sizeLines": 325,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/judge0.test.ts",
+      "language": "typescript",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/lifecycle-1v1.test.ts",
+      "language": "typescript",
+      "sizeLines": 64,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/lobby-atomic.test.ts",
+      "language": "typescript",
+      "sizeLines": 162,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/lobby.test.ts",
+      "language": "typescript",
+      "sizeLines": 423,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/match-revision.test.ts",
+      "language": "typescript",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/persistence.test.ts",
+      "language": "typescript",
+      "sizeLines": 252,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/post-commit-events.test.ts",
+      "language": "typescript",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/postgres.test.ts",
+      "language": "typescript",
+      "sizeLines": 486,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/reconnect.test.ts",
+      "language": "typescript",
+      "sizeLines": 714,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/round-lifecycle.test.ts",
+      "language": "typescript",
+      "sizeLines": 89,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/run-path.test.ts",
+      "language": "typescript",
+      "sizeLines": 90,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/scoring-reveal.test.ts",
+      "language": "typescript",
+      "sizeLines": 133,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/scripted-judge.ts",
+      "language": "typescript",
+      "sizeLines": 146,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/sealing.test.ts",
+      "language": "typescript",
+      "sizeLines": 57,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/setup.ts",
+      "language": "typescript",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/submit-path.test.ts",
+      "language": "typescript",
+      "sizeLines": 236,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/team-2v2.test.ts",
+      "language": "typescript",
+      "sizeLines": 488,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/team-collaboration.test.ts",
+      "language": "typescript",
+      "sizeLines": 119,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/test/worker-judge.test.ts",
+      "language": "typescript",
+      "sizeLines": 130,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-game/tsconfig.build.json",
+      "language": "json",
+      "sizeLines": 11,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/arena-game/tsconfig.json",
+      "language": "json",
+      "sizeLines": 10,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/arena-harness/package.json",
+      "language": "json",
+      "sizeLines": 18,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/arena-harness/src/fake-judge.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-harness/src/fixtures.ts",
+      "language": "typescript",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-harness/src/judge-port.ts",
+      "language": "typescript",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-harness/src/mock-game.ts",
+      "language": "typescript",
+      "sizeLines": 306,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-harness/test/bank.test.ts",
+      "language": "typescript",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-harness/test/lifecycle.test.ts",
+      "language": "typescript",
+      "sizeLines": 369,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-harness/tsconfig.json",
+      "language": "json",
+      "sizeLines": 10,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/arena-model/package.json",
+      "language": "json",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/arena-model/src/chat.ts",
+      "language": "typescript",
+      "sizeLines": 51,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-model/src/events.ts",
+      "language": "typescript",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-model/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-model/src/model.ts",
+      "language": "typescript",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-model/src/scoring.ts",
+      "language": "typescript",
+      "sizeLines": 109,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-model/src/transitions.ts",
+      "language": "typescript",
+      "sizeLines": 106,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-model/test/events.test.ts",
+      "language": "typescript",
+      "sizeLines": 19,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-model/test/scoring.test.ts",
+      "language": "typescript",
+      "sizeLines": 127,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-model/test/transitions.test.ts",
+      "language": "typescript",
+      "sizeLines": 177,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/arena-model/tsconfig.build.json",
+      "language": "json",
+      "sizeLines": 11,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/arena-model/tsconfig.json",
+      "language": "json",
+      "sizeLines": 12,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/problem-bank/problems/double-it.json",
+      "language": "json",
+      "sizeLines": 57,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/problem-bank/problems/even-ledger.json",
+      "language": "json",
+      "sizeLines": 123,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/problem-bank/problems/sum-array.json",
+      "language": "json",
+      "sizeLines": 57,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/problem-bank/schema.json",
+      "language": "json",
+      "sizeLines": 84,
+      "fileCategory": "config"
+    },
+    {
+      "path": "scripts/checks/arena-tests.mjs",
+      "language": "javascript",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/g06-evidence.mjs",
+      "language": "javascript",
+      "sizeLines": 67,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/install-hooks.mjs",
+      "language": "javascript",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/install-scanner.mjs",
+      "language": "javascript",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/integration.mjs",
+      "language": "javascript",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/process.mjs",
+      "language": "javascript",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/secrets.mjs",
+      "language": "javascript",
+      "sizeLines": 96,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/test/g06-evidence.test.mjs",
+      "language": "javascript",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/test/integration.test.mjs",
+      "language": "javascript",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/test/process.test.mjs",
+      "language": "javascript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/test/secrets.test.mjs",
+      "language": "javascript",
+      "sizeLines": 89,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/test/verify.test.mjs",
+      "language": "javascript",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/text-files.mjs",
+      "language": "javascript",
+      "sizeLines": 17,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/user-tests.mjs",
+      "language": "javascript",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/checks/verify.mjs",
+      "language": "javascript",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/evidence/render-g06-pdf.mjs",
+      "language": "javascript",
+      "sizeLines": 75,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/gen-dev-certs.sh",
+      "language": "shell",
+      "sizeLines": 11,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/play.sh",
+      "language": "shell",
+      "sizeLines": 42,
+      "fileCategory": "script"
+    },
+    {
+      "path": "services/game/Dockerfile",
+      "language": "dockerfile",
+      "sizeLines": 25,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "services/game/package.json",
+      "language": "json",
+      "sizeLines": 34,
+      "fileCategory": "config"
+    },
+    {
+      "path": "services/game/src/app.module.ts",
+      "language": "typescript",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/active-account.guard.test.ts",
+      "language": "typescript",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/active-account.guard.ts",
+      "language": "typescript",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/collab-ws.test.ts",
+      "language": "typescript",
+      "sizeLines": 281,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/collab.gateway.ts",
+      "language": "typescript",
+      "sizeLines": 135,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/dev-fixture-gate.test.ts",
+      "language": "typescript",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/errors.ts",
+      "language": "typescript",
+      "sizeLines": 31,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/game-event.ts",
+      "language": "typescript",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/game-events.publisher.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/game-events.test.ts",
+      "language": "typescript",
+      "sizeLines": 201,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/game-stats.controller.ts",
+      "language": "typescript",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/game.controller.ts",
+      "language": "typescript",
+      "sizeLines": 134,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/game.gateway.ts",
+      "language": "typescript",
+      "sizeLines": 153,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/game.module.ts",
+      "language": "typescript",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/game.service.test.ts",
+      "language": "typescript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/game.service.ts",
+      "language": "typescript",
+      "sizeLines": 681,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/judge-factory.test.ts",
+      "language": "typescript",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/judge-factory.ts",
+      "language": "typescript",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/jwt-verifier.test.ts",
+      "language": "typescript",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/jwt-verifier.ts",
+      "language": "typescript",
+      "sizeLines": 73,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/lobby.controller.ts",
+      "language": "typescript",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/lobby.gateway.ts",
+      "language": "typescript",
+      "sizeLines": 109,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/lobby.test.ts",
+      "language": "typescript",
+      "sizeLines": 270,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/match-progression.test.ts",
+      "language": "typescript",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/match-socket-presence.test.ts",
+      "language": "typescript",
+      "sizeLines": 101,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/match-socket-presence.ts",
+      "language": "typescript",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/match-statistics-erasure.test.ts",
+      "language": "typescript",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/match-statistics.ts",
+      "language": "typescript",
+      "sizeLines": 197,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/principal.ts",
+      "language": "typescript",
+      "sizeLines": 48,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/reconnect.test.ts",
+      "language": "typescript",
+      "sizeLines": 343,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/service.test.ts",
+      "language": "typescript",
+      "sizeLines": 185,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/socket-auth.test.ts",
+      "language": "typescript",
+      "sizeLines": 97,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/socket-auth.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/team-2v2.test.ts",
+      "language": "typescript",
+      "sizeLines": 308,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/team-chat.gateway.ts",
+      "language": "typescript",
+      "sizeLines": 252,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/team-chat.test.ts",
+      "language": "typescript",
+      "sizeLines": 357,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/user-events.consumer.test.ts",
+      "language": "typescript",
+      "sizeLines": 23,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/user-events.consumer.ts",
+      "language": "typescript",
+      "sizeLines": 143,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/health.controller.ts",
+      "language": "typescript",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/main.ts",
+      "language": "typescript",
+      "sizeLines": 13,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/tsconfig.json",
+      "language": "json",
+      "sizeLines": 14,
+      "fileCategory": "config"
+    },
+    {
+      "path": "services/judge-worker/Dockerfile",
+      "language": "dockerfile",
+      "sizeLines": 24,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "services/judge-worker/docker-entrypoint.sh",
+      "language": "shell",
+      "sizeLines": 16,
+      "fileCategory": "script"
+    },
+    {
+      "path": "services/judge-worker/package.json",
+      "language": "json",
+      "sizeLines": 20,
+      "fileCategory": "config"
+    },
+    {
+      "path": "services/judge-worker/src/http-server.ts",
+      "language": "typescript",
+      "sizeLines": 252,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/judge-worker/src/job-queue.ts",
+      "language": "typescript",
+      "sizeLines": 134,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/judge-worker/src/main.ts",
+      "language": "typescript",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/judge-worker/src/readiness.ts",
+      "language": "typescript",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/judge-worker/test/compose-topology.test.ts",
+      "language": "typescript",
+      "sizeLines": 70,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/judge-worker/test/http-server.test.ts",
+      "language": "typescript",
+      "sizeLines": 193,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/judge-worker/test/job-queue.test.ts",
+      "language": "typescript",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/judge-worker/test/readiness.test.ts",
+      "language": "typescript",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/judge-worker/tsconfig.build.json",
+      "language": "json",
+      "sizeLines": 8,
+      "fileCategory": "config"
+    },
+    {
+      "path": "services/judge-worker/tsconfig.json",
+      "language": "json",
+      "sizeLines": 12,
+      "fileCategory": "config"
     },
     {
       "path": "user-service/.dockerignore",
@@ -1332,7 +2790,7 @@
     {
       "path": "user-service/.env.example",
       "language": "config",
-      "sizeLines": 67,
+      "sizeLines": 66,
       "fileCategory": "config"
     },
     {
@@ -1344,7 +2802,7 @@
     {
       "path": "user-service/README.md",
       "language": "markdown",
-      "sizeLines": 122,
+      "sizeLines": 120,
       "fileCategory": "docs"
     },
     {
@@ -1362,7 +2820,7 @@
     {
       "path": "user-service/package.json",
       "language": "json",
-      "sizeLines": 75,
+      "sizeLines": 76,
       "fileCategory": "config"
     },
     {
@@ -1626,7 +3084,7 @@
     {
       "path": "user-service/src/events/rabbitmq-events.service.ts",
       "language": "typescript",
-      "sizeLines": 131,
+      "sizeLines": 140,
       "fileCategory": "code"
     },
     {
@@ -1740,13 +3198,13 @@
     {
       "path": "user-service/test/account-images.test.mjs",
       "language": "javascript",
-      "sizeLines": 306,
+      "sizeLines": 309,
       "fileCategory": "code"
     },
     {
       "path": "user-service/test/accounts.test.mjs",
       "language": "javascript",
-      "sizeLines": 603,
+      "sizeLines": 612,
       "fileCategory": "code"
     },
     {
@@ -1764,7 +3222,7 @@
     {
       "path": "user-service/test/current-user.test.mjs",
       "language": "javascript",
-      "sizeLines": 279,
+      "sizeLines": 291,
       "fileCategory": "code"
     },
     {
@@ -1776,19 +3234,25 @@
     {
       "path": "user-service/test/discord-oauth.test.mjs",
       "language": "javascript",
-      "sizeLines": 683,
+      "sizeLines": 690,
+      "fileCategory": "code"
+    },
+    {
+      "path": "user-service/test/helpers/session.mjs",
+      "language": "javascript",
+      "sizeLines": 15,
       "fileCategory": "code"
     },
     {
       "path": "user-service/test/login-tokens.test.mjs",
       "language": "javascript",
-      "sizeLines": 212,
+      "sizeLines": 219,
       "fileCategory": "code"
     },
     {
       "path": "user-service/test/password-reset-dto.test.mjs",
       "language": "javascript",
-      "sizeLines": 46,
+      "sizeLines": 47,
       "fileCategory": "code"
     },
     {
@@ -1812,19 +3276,19 @@
     {
       "path": "user-service/test/refresh-tokens.test.mjs",
       "language": "javascript",
-      "sizeLines": 339,
+      "sizeLines": 349,
       "fileCategory": "code"
     },
     {
       "path": "user-service/test/register-tokens.test.mjs",
       "language": "javascript",
-      "sizeLines": 190,
+      "sizeLines": 194,
       "fileCategory": "code"
     },
     {
       "path": "user-service/test/superadmin-api.test.mjs",
       "language": "javascript",
-      "sizeLines": 326,
+      "sizeLines": 332,
       "fileCategory": "code"
     },
     {
@@ -1858,12 +3322,18 @@
       "fileCategory": "code"
     }
   ],
-  "totalFiles": 305,
-  "filteredByIgnore": 38,
-  "estimatedComplexity": "large",
+  "totalFiles": 548,
+  "filteredByIgnore": 24,
+  "estimatedComplexity": "very-large",
   "importMap": {
     ".gitattributes": [],
+    ".githooks/pre-commit": [],
+    ".githooks/pre-push": [],
+    ".github/workflows/verify.yml": [],
+    ".gitleaks.toml": [],
     ".graphifyignore": [],
+    ".mailmap": [],
+    "CONTEXT.md": [],
     "README.md": [],
     "chat-service/Dockerfile": [],
     "chat-service/README.md": [],
@@ -1873,6 +3343,7 @@
     "chat-service/prisma/migrations/20261031040933_init/migration.sql": [],
     "chat-service/prisma/migrations/20261031063521_last_read/migration.sql": [],
     "chat-service/prisma/migrations/20261106120000_message_attachments/migration.sql": [],
+    "chat-service/prisma/migrations/20261111090000_game_notifications/migration.sql": [],
     "chat-service/prisma/migrations/migration_lock.toml": [],
     "chat-service/prisma/schema.prisma": [],
     "chat-service/src/app.controller.spec.ts": [
@@ -1909,22 +3380,27 @@
       "chat-service/src/chat/dtos/get-messages-query.dto.ts",
       "chat-service/src/chat/dtos/mark-read.dto.ts",
       "chat-service/src/chat/dtos/message.dto.ts",
-      "chat-service/src/chat/ensure-active-user.guard.ts"
+      "chat-service/src/chat/ensure-active-user.guard.ts",
+      "chat-service/src/feed/feed.service.ts"
     ],
     "chat-service/src/chat/chat.module.ts": [
       "chat-service/src/auth/auth.module.ts",
       "chat-service/src/chat/chat-shared.module.ts",
       "chat-service/src/chat/chat.controller.ts",
       "chat-service/src/chat/chat.service.ts",
+      "chat-service/src/chat/game-notifications.service.ts",
+      "chat-service/src/chat/game-rooms.client.ts",
       "chat-service/src/chat/gateway/chat.gateway.ts",
       "chat-service/src/chat/groups/groups.module.ts",
       "chat-service/src/chat/presence/presence.module.ts",
+      "chat-service/src/feed/feed.module.ts",
       "chat-service/src/minio/minio.module.ts"
     ],
     "chat-service/src/chat/chat.service.ts": [
       "chat-service/src/chat/dtos/edit-message.dto.ts",
       "chat-service/src/chat/dtos/get-messages-query.dto.ts",
       "chat-service/src/chat/dtos/message.dto.ts",
+      "chat-service/src/chat/game-rooms.client.ts",
       "chat-service/src/chat/gateway/chat.gateway.ts",
       "chat-service/src/chat/user-profiles.service.ts",
       "chat-service/src/minio/minio.service.ts",
@@ -1939,9 +3415,19 @@
     "chat-service/src/chat/ensure-active-user.guard.ts": [
       "chat-service/src/chat/user-profiles.service.ts"
     ],
+    "chat-service/src/chat/game-notification-format.ts": [],
+    "chat-service/src/chat/game-notifications.service.ts": [
+      "chat-service/src/chat/game-notification-format.ts",
+      "chat-service/src/chat/gateway/chat.gateway.ts",
+      "chat-service/src/chat/system-author.ts",
+      "chat-service/src/events/game-event.ts",
+      "chat-service/src/prisma/prisma.service.ts"
+    ],
+    "chat-service/src/chat/game-rooms.client.ts": [],
     "chat-service/src/chat/gateway/chat.gateway.ts": [
       "chat-service/src/chat/presence/presence-audience.service.ts",
-      "chat-service/src/chat/presence/presence.service.ts"
+      "chat-service/src/chat/presence/presence.service.ts",
+      "chat-service/src/prisma/prisma.service.ts"
     ],
     "chat-service/src/chat/groups/dtos/add-group-member.dto.ts": [],
     "chat-service/src/chat/groups/dtos/create-channel.dto.ts": [],
@@ -1972,6 +3458,7 @@
       "chat-service/src/chat/groups/dtos/update-channel.dto.ts",
       "chat-service/src/chat/groups/dtos/update-group.dto.ts",
       "chat-service/src/chat/user-profiles.service.ts",
+      "chat-service/src/feed/feed.constants.ts",
       "chat-service/src/prisma/prisma.service.ts"
     ],
     "chat-service/src/chat/presence/presence-audience.service.ts": [
@@ -1982,15 +3469,36 @@
       "chat-service/src/chat/presence/presence.service.ts"
     ],
     "chat-service/src/chat/presence/presence.service.ts": [],
+    "chat-service/src/chat/system-author.ts": [],
     "chat-service/src/chat/user-profiles.service.ts": [
       "chat-service/src/prisma/prisma.service.ts"
     ],
     "chat-service/src/events/events.module.ts": [
-      "chat-service/src/events/user-events.consumer.ts"
+      "chat-service/src/chat/chat.module.ts",
+      "chat-service/src/events/game-events.consumer.ts",
+      "chat-service/src/events/user-events.consumer.ts",
+      "chat-service/src/feed/feed.module.ts"
+    ],
+    "chat-service/src/events/game-event.ts": [
+      "chat-service/src/chat/game-notification-format.ts"
+    ],
+    "chat-service/src/events/game-events.consumer.ts": [
+      "chat-service/src/chat/game-notifications.service.ts",
+      "chat-service/src/events/game-event.ts"
     ],
     "chat-service/src/events/user-event.ts": [],
     "chat-service/src/events/user-events.consumer.ts": [
       "chat-service/src/events/user-event.ts",
+      "chat-service/src/feed/feed.service.ts",
+      "chat-service/src/prisma/prisma.service.ts"
+    ],
+    "chat-service/src/feed/feed.constants.ts": [],
+    "chat-service/src/feed/feed.module.ts": [
+      "chat-service/src/feed/feed.service.ts"
+    ],
+    "chat-service/src/feed/feed.service.ts": [
+      "chat-service/src/chat/system-author.ts",
+      "chat-service/src/feed/feed.constants.ts",
       "chat-service/src/prisma/prisma.service.ts"
     ],
     "chat-service/src/main.ts": [
@@ -2011,13 +3519,29 @@
       "chat-service/src/prisma/prisma.service.ts"
     ],
     "chat-service/src/prisma/prisma.service.ts": [],
+    "chat-service/test/chat.gateway.spec.ts": [
+      "chat-service/src/chat/gateway/chat.gateway.ts",
+      "chat-service/src/chat/presence/presence-audience.service.ts",
+      "chat-service/src/chat/presence/presence.service.ts",
+      "chat-service/src/prisma/prisma.service.ts"
+    ],
     "chat-service/test/chat.service.spec.ts": [
       "chat-service/src/chat/chat.service.ts",
+      "chat-service/src/chat/game-rooms.client.ts",
       "chat-service/src/chat/gateway/chat.gateway.ts",
       "chat-service/src/chat/user-profiles.service.ts",
+      "chat-service/src/minio/minio.service.ts",
       "chat-service/src/prisma/prisma.service.ts"
     ],
     "chat-service/test/dm.postgres.test.mjs": [],
+    "chat-service/test/game-notifications.postgres.test.mjs": [],
+    "chat-service/test/game-notifications.spec.ts": [
+      "chat-service/src/chat/game-notifications.service.ts",
+      "chat-service/src/chat/gateway/chat.gateway.ts",
+      "chat-service/src/chat/system-author.ts",
+      "chat-service/src/events/game-event.ts",
+      "chat-service/src/prisma/prisma.service.ts"
+    ],
     "chat-service/test/presence.service.spec.ts": [
       "chat-service/src/chat/presence/presence.service.ts"
     ],
@@ -2031,18 +3555,35 @@
     "client/app/(app)/chat/page.tsx": [
       "client/components/app/chat-workspace.tsx"
     ],
+    "client/app/(app)/error.tsx": [
+      "client/components/error-page.tsx"
+    ],
     "client/app/(app)/feed/page.tsx": [
-      "client/components/app/coming-soon.tsx"
+      "client/components/app/feed/feed-view.tsx"
     ],
     "client/app/(app)/layout.tsx": [
       "client/components/app/app-shell.tsx"
     ],
-    "client/app/(app)/not-found.tsx": [],
+    "client/app/(app)/loading.tsx": [
+      "client/components/loading-screen.tsx"
+    ],
+    "client/app/(app)/not-found.tsx": [
+      "client/components/error-page.tsx"
+    ],
     "client/app/(app)/play/chess/page.tsx": [
       "client/components/app/coming-soon.tsx"
     ],
+    "client/app/(app)/play/leaderboard/page.tsx": [
+      "client/components/arena/LeaderboardView.tsx"
+    ],
+    "client/app/(app)/play/lobby/[code]/page.tsx": [
+      "client/components/arena/LobbyView.tsx"
+    ],
+    "client/app/(app)/play/match/[id]/page.tsx": [
+      "client/components/arena/MatchView.tsx"
+    ],
     "client/app/(app)/play/page.tsx": [
-      "client/components/app/coming-soon.tsx"
+      "client/components/arena/PlayLandingView.tsx"
     ],
     "client/app/(app)/profile/[id]/page.tsx": [
       "client/components/app/public-profile.tsx"
@@ -2075,19 +3616,49 @@
     "client/app/(auth)/reset-password/page.tsx": [
       "client/components/auth/password-recovery-forms.tsx"
     ],
+    "client/app/(auth)/verify-email/page.tsx": [
+      "client/components/auth/verify-email-view.tsx"
+    ],
+    "client/app/(legal)/layout.tsx": [
+      "client/components/nook-logo.tsx",
+      "client/components/theme-selector.tsx"
+    ],
+    "client/app/(legal)/privacy/page.tsx": [
+      "client/components/legal/legal-document.tsx"
+    ],
+    "client/app/(legal)/terms/page.tsx": [
+      "client/components/legal/legal-document.tsx"
+    ],
+    "client/app/api/status/route.ts": [],
+    "client/app/error.tsx": [
+      "client/components/error-page.tsx"
+    ],
+    "client/app/global-error.tsx": [
+      "client/app/globals.css"
+    ],
     "client/app/globals.css": [],
     "client/app/layout.tsx": [
       "client/app/globals.css",
       "client/app/providers.tsx"
     ],
-    "client/app/not-found.tsx": [],
+    "client/app/loading.tsx": [
+      "client/components/loading-screen.tsx"
+    ],
+    "client/app/not-found.tsx": [
+      "client/components/error-page.tsx"
+    ],
     "client/app/page.tsx": [
+      "client/components/landing/previews.tsx",
       "client/components/nook-logo.tsx",
       "client/components/theme-selector.tsx"
     ],
     "client/app/providers.tsx": [
       "client/components/auth/auth-provider.tsx",
       "client/components/auth/oauth-return-handler.tsx"
+    ],
+    "client/app/status/page.tsx": [
+      "client/app/api/status/route.ts",
+      "client/components/ui/button.tsx"
     ],
     "client/components.json": [],
     "client/components/app/account-avatar.tsx": [],
@@ -2121,7 +3692,10 @@
       "client/lib/accounts/client.ts",
       "client/lib/accounts/images.ts",
       "client/lib/accounts/status-icons.ts",
+      "client/lib/arena/invitations.ts",
       "client/lib/chat/client.ts",
+      "client/lib/chat/receipts.ts",
+      "client/lib/chat/typing.ts",
       "client/lib/social/client.ts"
     ],
     "client/components/app/chat/chat-markdown.tsx": [],
@@ -2166,14 +3740,33 @@
       "client/lib/chat/client.ts"
     ],
     "client/components/app/chat/markdown-toolbar.tsx": [],
+    "client/components/app/chat/message-actions.tsx": [
+      "client/components/app/confirm-dialog.tsx",
+      "client/components/auth/auth-provider.tsx",
+      "client/components/ui/button.tsx",
+      "client/components/ui/textarea.tsx",
+      "client/lib/auth/client.ts",
+      "client/lib/chat/client.ts"
+    ],
     "client/components/app/chat/message-list.tsx": [
       "client/components/app/account-avatar.tsx",
       "client/components/app/chat/chat-markdown.tsx",
+      "client/components/app/chat/message-actions.tsx",
       "client/components/auth/auth-provider.tsx",
       "client/components/ui/button.tsx",
       "client/lib/accounts/images.ts",
       "client/lib/accounts/status-icons.ts",
+      "client/lib/arena/game-notifications.ts",
+      "client/lib/arena/invitations.ts",
+      "client/lib/arena/lobby.ts",
       "client/lib/chat/client.ts"
+    ],
+    "client/components/app/code-arena-profile.tsx": [
+      "client/components/auth/auth-provider.tsx",
+      "client/components/ui/button.tsx",
+      "client/lib/accounts/client.ts",
+      "client/lib/accounts/status-icons.ts",
+      "client/lib/arena/stats.ts"
     ],
     "client/components/app/coming-soon.tsx": [],
     "client/components/app/confirm-dialog.tsx": [
@@ -2186,6 +3779,40 @@
       "client/hooks/use-current-account.ts",
       "client/lib/auth/client.ts",
       "client/lib/auth/oauth.ts"
+    ],
+    "client/components/app/feed/feed-composer.tsx": [
+      "client/components/app/account-avatar.tsx",
+      "client/components/auth/auth-provider.tsx",
+      "client/components/ui/button.tsx",
+      "client/hooks/use-current-account.ts",
+      "client/lib/accounts/images.ts",
+      "client/lib/accounts/status-icons.ts",
+      "client/lib/chat/attachments.ts",
+      "client/lib/chat/client.ts"
+    ],
+    "client/components/app/feed/feed-view.tsx": [
+      "client/components/app/feed/feed-composer.tsx",
+      "client/components/app/feed/post-card.tsx",
+      "client/components/auth/auth-provider.tsx",
+      "client/components/ui/button.tsx",
+      "client/components/ui/skeleton.tsx",
+      "client/lib/chat/client.ts"
+    ],
+    "client/components/app/feed/post-card.tsx": [
+      "client/components/app/account-avatar.tsx",
+      "client/components/app/chat/chat-markdown.tsx",
+      "client/components/app/chat/message-actions.tsx",
+      "client/components/app/chat/message-list.tsx",
+      "client/lib/accounts/images.ts",
+      "client/lib/accounts/status-icons.ts",
+      "client/lib/chat/client.ts"
+    ],
+    "client/components/app/feed/profile-posts.tsx": [
+      "client/components/app/feed/post-card.tsx",
+      "client/components/auth/auth-provider.tsx",
+      "client/components/ui/button.tsx",
+      "client/components/ui/skeleton.tsx",
+      "client/lib/chat/client.ts"
     ],
     "client/components/app/group-management.tsx": [
       "client/components/app/account-avatar.tsx",
@@ -2209,6 +3836,7 @@
     "client/components/app/profile-editor.tsx": [
       "client/components/app/account-avatar.tsx",
       "client/components/app/image-crop-dialog.tsx",
+      "client/components/app/status-composer.tsx",
       "client/components/auth/auth-provider.tsx",
       "client/components/ui/button.tsx",
       "client/components/ui/input.tsx",
@@ -2220,7 +3848,9 @@
     ],
     "client/components/app/public-profile.tsx": [
       "client/components/app/account-avatar.tsx",
+      "client/components/app/code-arena-profile.tsx",
       "client/components/app/confirm-dialog.tsx",
+      "client/components/app/feed/profile-posts.tsx",
       "client/components/app/status-icon.tsx",
       "client/components/auth/auth-provider.tsx",
       "client/components/ui/button.tsx",
@@ -2230,6 +3860,7 @@
       "client/lib/accounts/client.ts",
       "client/lib/accounts/images.ts",
       "client/lib/accounts/status-icons.ts",
+      "client/lib/arena/invitations.ts",
       "client/lib/chat/client.ts",
       "client/lib/social/client.ts"
     ],
@@ -2254,8 +3885,81 @@
       "client/lib/accounts/client.ts",
       "client/lib/auth/validation.ts"
     ],
+    "client/components/app/status-composer.tsx": [
+      "client/components/app/status-icon.tsx",
+      "client/components/ui/label.tsx"
+    ],
     "client/components/app/status-dot.tsx": [],
     "client/components/app/status-icon.tsx": [],
+    "client/components/arena/ArenaHeader.tsx": [
+      "client/components/ui/button.tsx",
+      "client/lib/arena/transport.ts",
+      "client/lib/arena/types.ts"
+    ],
+    "client/components/arena/ArenaWorkspace.tsx": [
+      "client/components/arena/ArenaHeader.tsx",
+      "client/components/arena/DuelPanel.tsx",
+      "client/components/arena/MatchResult.tsx",
+      "client/components/arena/ProblemPanel.tsx",
+      "client/components/arena/RoundScoreReveal.tsx",
+      "client/components/arena/TeamChat.tsx",
+      "client/components/arena/TestPanel.tsx",
+      "client/components/ui/button.tsx",
+      "client/hooks/useArena.ts",
+      "client/lib/arena/sidecars.ts",
+      "client/lib/arena/transport.ts"
+    ],
+    "client/components/arena/DuelPanel.tsx": [
+      "client/lib/arena/types.ts"
+    ],
+    "client/components/arena/EditorAdapter.tsx": [
+      "client/lib/arena/collab.ts"
+    ],
+    "client/components/arena/LeaderboardView.tsx": [
+      "client/components/app/account-avatar.tsx",
+      "client/components/auth/auth-provider.tsx",
+      "client/components/ui/button.tsx",
+      "client/lib/accounts/client.ts",
+      "client/lib/accounts/images.ts",
+      "client/lib/accounts/status-icons.ts",
+      "client/lib/arena/stats.ts"
+    ],
+    "client/components/arena/LobbyView.tsx": [
+      "client/components/app/account-avatar.tsx",
+      "client/components/auth/auth-provider.tsx",
+      "client/components/ui/button.tsx",
+      "client/lib/accounts/client.ts",
+      "client/lib/accounts/images.ts",
+      "client/lib/arena/lobby.ts"
+    ],
+    "client/components/arena/MatchResult.tsx": [
+      "client/components/ui/button.tsx",
+      "client/lib/arena/types.ts"
+    ],
+    "client/components/arena/MatchView.tsx": [
+      "client/components/arena/ArenaWorkspace.tsx",
+      "client/components/auth/auth-provider.tsx",
+      "client/lib/arena/socket.ts"
+    ],
+    "client/components/arena/PlayLandingView.tsx": [
+      "client/components/auth/auth-provider.tsx",
+      "client/components/ui/button.tsx",
+      "client/lib/arena/lobby.ts"
+    ],
+    "client/components/arena/ProblemPanel.tsx": [
+      "client/lib/arena/types.ts"
+    ],
+    "client/components/arena/RoundScoreReveal.tsx": [
+      "client/components/ui/button.tsx",
+      "client/lib/arena/types.ts"
+    ],
+    "client/components/arena/TeamChat.tsx": [
+      "client/components/ui/button.tsx",
+      "client/lib/arena/chat.ts"
+    ],
+    "client/components/arena/TestPanel.tsx": [
+      "client/lib/arena/types.ts"
+    ],
     "client/components/auth/auth-form.tsx": [
       "client/components/auth/auth-provider.tsx",
       "client/components/ui/button.tsx",
@@ -2279,6 +3983,23 @@
       "client/components/ui/label.tsx",
       "client/lib/auth/client.ts",
       "client/lib/auth/validation.ts"
+    ],
+    "client/components/auth/verify-email-view.tsx": [
+      "client/components/ui/button.tsx",
+      "client/lib/auth/client.ts"
+    ],
+    "client/components/error-page.tsx": [
+      "client/components/nook-logo.tsx",
+      "client/components/theme-selector.tsx",
+      "client/components/ui/button.tsx"
+    ],
+    "client/components/landing/previews.tsx": [
+      "client/components/app/status-dot.tsx",
+      "client/lib/utils.ts"
+    ],
+    "client/components/legal/legal-document.tsx": [],
+    "client/components/loading-screen.tsx": [
+      "client/components/nook-logo.tsx"
     ],
     "client/components/nook-logo.tsx": [
       "client/lib/utils.ts"
@@ -2318,18 +4039,55 @@
     ],
     "client/hooks/use-media-query.ts": [],
     "client/hooks/use-mobile.ts": [],
+    "client/hooks/useArena.ts": [
+      "client/lib/arena/transport.ts",
+      "client/lib/arena/types.ts"
+    ],
     "client/lib/accounts/client.ts": [
       "client/lib/auth/client.ts"
     ],
     "client/lib/accounts/images.ts": [],
     "client/lib/accounts/status-icons.ts": [],
+    "client/lib/arena/chat.ts": [
+      "client/lib/arena/types.ts"
+    ],
+    "client/lib/arena/collab.ts": [],
+    "client/lib/arena/game-notifications.ts": [],
+    "client/lib/arena/invitations.ts": [
+      "client/lib/arena/lobby.ts",
+      "client/lib/chat/client.ts"
+    ],
+    "client/lib/arena/lobby-session.ts": [
+      "client/lib/arena/lobby.ts",
+      "client/lib/arena/types.ts"
+    ],
+    "client/lib/arena/lobby.ts": [
+      "client/lib/arena/types.ts"
+    ],
+    "client/lib/arena/sidecars.ts": [
+      "client/lib/arena/chat.ts",
+      "client/lib/arena/collab.ts",
+      "client/lib/arena/types.ts"
+    ],
+    "client/lib/arena/socket.ts": [
+      "client/lib/arena/transport.ts",
+      "client/lib/arena/types.ts"
+    ],
+    "client/lib/arena/stats.ts": [],
+    "client/lib/arena/transport.ts": [
+      "client/lib/arena/types.ts"
+    ],
+    "client/lib/arena/types.ts": [],
     "client/lib/auth/client.ts": [],
     "client/lib/auth/oauth.ts": [],
     "client/lib/auth/validation.ts": [],
+    "client/lib/chat/attachments.ts": [],
     "client/lib/chat/client.ts": [
       "client/lib/auth/client.ts"
     ],
     "client/lib/chat/emoji-data.ts": [],
+    "client/lib/chat/receipts.ts": [],
+    "client/lib/chat/typing.ts": [],
     "client/lib/social/client.ts": [
       "client/lib/accounts/client.ts",
       "client/lib/auth/client.ts"
@@ -2337,63 +4095,76 @@
     "client/lib/utils.ts": [],
     "client/next.config.ts": [],
     "client/package.json": [],
-    "client/tests/auth-validation.test.mjs": [
-      "client/lib/auth/validation.ts"
-    ],
+    "client/tests/arena-game-notifications.test.mjs": [],
+    "client/tests/arena-invitations.test.mjs": [],
+    "client/tests/arena-lobby-identities.test.mjs": [],
+    "client/tests/arena-lobby-resume.test.mjs": [],
+    "client/tests/arena-reconnect-state.test.mjs": [],
+    "client/tests/arena-socket-path.test.mjs": [],
+    "client/tests/arena-stats-api.test.mjs": [],
+    "client/tests/arena-team-chat-history.test.mjs": [],
+    "client/tests/auth-restore.test.mjs": [],
+    "client/tests/auth-validation.test.mjs": [],
     "client/tests/chat-markdown.test.mjs": [],
-    "client/tests/oauth.test.mjs": [
-      "client/lib/auth/oauth.ts"
-    ],
+    "client/tests/chat-receipts.test.mjs": [],
+    "client/tests/oauth.test.mjs": [],
     "client/tests/public-profile.test.mjs": [],
+    "client/tests/route-uniqueness.test.mjs": [],
     "client/tests/social-client.test.mjs": [],
+    "client/tests/status-api.test.mjs": [
+      "client/app/api/status/route.ts"
+    ],
     "client/tests/theme-tokens.test.mjs": [],
     "client/tsconfig.json": [],
     "compose.monitoring.yaml": [],
     "compose.yaml": [],
     "docs/README.md": [],
-    "docs/archive/auth-profile-web.md": [],
-    "docs/chat-service/API.md": [],
-    "docs/chat-service/CHAT_OVERVIEW.md": [],
-    "docs/chat-service/DM_TESTS.md": [],
-    "docs/chat-service/MINIO_ATTACHMENTS.md": [],
-    "docs/chat-service/MVP_PLAN.md": [],
-    "docs/chat-service/PLAN.md": [],
-    "docs/chat-service/PRISMA_LEARNING.md": [],
-    "docs/chat-service/PRISMA_README.md": [],
-    "docs/chat-service/RABBITMQ_USER_SYNC.md": [],
-    "docs/chat-service/README.md": [],
-    "docs/chat-service/minio-attachments-plan.md": [],
-    "docs/chat-service/openapi.json": [],
-    "docs/client/CHAT_DESIGN_PROPOSAL.toon": [],
-    "docs/client/CHAT_INTEGRATION_PLAN.toon": [],
-    "docs/client/NOOK_CHAT_DEMO.html": [],
-    "docs/client/PLAN.md": [],
-    "docs/client/PROFILE_DESIGN_SPEC.md": [],
-    "docs/client/SEARCH_SOCIAL_PLAN.md": [],
-    "docs/infra/MONITORING_PLAN.md": [],
-    "docs/infra/minio.md": [],
-    "docs/infra/monitoring.md": [],
+    "docs/adr/0015-code-arena-nook-integration.md": [],
+    "docs/api/chat-service.openapi.json": [],
+    "docs/api/user-service.openapi.json": [],
+    "docs/archive/client-plan.md": [],
+    "docs/book/build.mjs": [],
+    "docs/book/package.json": [],
+    "docs/evidence/g06-live-demo/README.md": [],
+    "docs/evidence/g06-live-demo/chat-messages.txt": [],
+    "docs/evidence/g06-live-demo/evidence.json": [],
+    "docs/infra/BACKUP_RECOVERY.md": [],
+    "docs/integrations/chat-storage.md": [],
+    "docs/integrations/client-backend.md": [],
+    "docs/integrations/feed.md": [],
+    "docs/integrations/user-chat.md": [],
     "docs/project/COMPOSE.md": [],
+    "docs/project/INTEGRATION_STATUS.md": [],
     "docs/project/POINTS_ROADMAP.md": [],
     "docs/project/PROJECT_CONTEXT.md": [],
-    "docs/project/PUBLIC_API_ADAPTER_PLAN.md": [],
+    "docs/project/VERIFICATION.md": [],
     "docs/requirements/index.html": [],
-    "docs/user-service/API.md": [],
-    "docs/user-service/SERVICE.md": [],
-    "docs/user-service/SETUP.md": [],
-    "docs/user-service/nook-profile-status-plan.md": [],
-    "docs/user-service/openapi.json": [],
+    "docs/services/chat-service.md": [],
+    "docs/services/client.md": [],
+    "docs/services/infrastructure.md": [],
+    "docs/services/user-service.md": [],
+    "docs/spec/code-arena-integration-spec.md": [],
+    "docs/superpowers/plans/2026-11-11-nook-arena-platform-integration.md": [],
+    "docs/superpowers/plans/2026-11-11-verification-guardrails.md": [],
     "envs/README.md": [],
     "envs/backend.env.example": [],
     "envs/chat-db.env.example": [],
     "envs/chat-service.env.example": [],
+    "envs/game-db.env.example": [],
+    "envs/game-service.env.example": [],
     "envs/grafana.env.example": [],
+    "envs/judge-worker.env.example": [],
     "envs/minio.env.example": [],
     "envs/monitoring.env.example": [],
     "envs/rabbitmq.env.example": [],
     "envs/user-auth.env.example": [],
     "envs/user-db.env.example": [],
     "envs/user-service.env.example": [],
+    "git-analytics.mjs": [],
+    "infra/backup/backup.sh": [],
+    "infra/backup/backup.test.mjs": [],
+    "infra/backup/restore.sh": [],
+    "infra/backup/verify-recovery.sh": [],
     "infra/monitoring/alloy/config.alloy": [],
     "infra/monitoring/grafana/build-dashboards.mjs": [],
     "infra/monitoring/grafana/dashboards/nook-containers.json": [],
@@ -2408,6 +4179,8 @@
     "infra/monitoring/prometheus/prometheus.yml": [],
     "infra/postgres/10-monitoring-role.sh": [],
     "infra/rabbitmq/enabled_plugins": [],
+    "minio-init/Dockerfile": [],
+    "minio-init/init.sh": [],
     "minio/Dockerfile": [],
     "nginx/.dockerignore": [],
     "nginx/.gitattributes": [],
@@ -2415,6 +4188,494 @@
     "nginx/check.mjs": [],
     "nginx/default.conf": [],
     "nginx/entrypoint.sh": [],
+    "package.json": [],
+    "packages/arena-game/package.json": [],
+    "packages/arena-game/src/collab.ts": [],
+    "packages/arena-game/src/container-judge.ts": [
+      "packages/arena-game/src/judge.ts"
+    ],
+    "packages/arena-game/src/engine.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/evaluation-orchestration.ts",
+      "packages/arena-game/src/evaluation-telemetry.ts",
+      "packages/arena-game/src/judge.ts",
+      "packages/arena-game/src/match-authority.ts",
+      "packages/arena-game/src/persistence.ts",
+      "packages/arena-game/src/principal.ts",
+      "packages/arena-game/src/records.ts",
+      "packages/arena-game/src/round-lifecycle.ts",
+      "packages/arena-game/src/store.ts",
+      "packages/arena-game/src/team-collaboration.ts"
+    ],
+    "packages/arena-game/src/evaluation-orchestration.ts": [
+      "packages/arena-game/src/evaluation-telemetry.ts",
+      "packages/arena-game/src/judge.ts",
+      "packages/arena-game/src/match-authority.ts",
+      "packages/arena-game/src/persistence.ts",
+      "packages/arena-game/src/records.ts",
+      "packages/arena-game/src/round-lifecycle.ts"
+    ],
+    "packages/arena-game/src/evaluation-telemetry.ts": [],
+    "packages/arena-game/src/file-bank.ts": [
+      "packages/arena-game/src/engine.ts"
+    ],
+    "packages/arena-game/src/index.ts": [],
+    "packages/arena-game/src/judge.ts": [],
+    "packages/arena-game/src/judge0.ts": [
+      "packages/arena-game/src/judge.ts"
+    ],
+    "packages/arena-game/src/lobby.ts": [
+      "packages/arena-game/src/postgres-store.ts",
+      "packages/arena-game/src/records.ts",
+      "packages/arena-game/src/store.ts"
+    ],
+    "packages/arena-game/src/match-authority.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/persistence.ts",
+      "packages/arena-game/src/principal.ts",
+      "packages/arena-game/src/records.ts"
+    ],
+    "packages/arena-game/src/persistence.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/records.ts",
+      "packages/arena-game/src/store.ts"
+    ],
+    "packages/arena-game/src/postgres-store.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/lobby.ts",
+      "packages/arena-game/src/persistence.ts",
+      "packages/arena-game/src/records.ts",
+      "packages/arena-game/src/store.ts"
+    ],
+    "packages/arena-game/src/principal.ts": [],
+    "packages/arena-game/src/records.ts": [
+      "packages/arena-game/src/judge.ts"
+    ],
+    "packages/arena-game/src/round-lifecycle.ts": [
+      "packages/arena-game/src/judge.ts",
+      "packages/arena-game/src/match-authority.ts",
+      "packages/arena-game/src/records.ts"
+    ],
+    "packages/arena-game/src/store.ts": [
+      "packages/arena-game/src/records.ts"
+    ],
+    "packages/arena-game/src/team-collaboration.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/judge.ts",
+      "packages/arena-game/src/match-authority.ts",
+      "packages/arena-game/src/records.ts"
+    ],
+    "packages/arena-game/src/worker-judge.ts": [
+      "packages/arena-game/src/judge.ts"
+    ],
+    "packages/arena-game/test/account-erasure-lobby.test.ts": [
+      "packages/arena-game/src/lobby.ts"
+    ],
+    "packages/arena-game/test/account-erasure.test.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/engine.ts",
+      "packages/arena-game/src/file-bank.ts",
+      "packages/arena-game/src/persistence.ts",
+      "packages/arena-game/src/principal.ts",
+      "packages/arena-game/src/store.ts",
+      "packages/arena-game/test/scripted-judge.ts",
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/test/collab.test.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/engine.ts",
+      "packages/arena-game/src/file-bank.ts",
+      "packages/arena-game/src/judge.ts",
+      "packages/arena-game/src/postgres-store.ts",
+      "packages/arena-game/src/principal.ts",
+      "packages/arena-game/src/store.ts",
+      "packages/arena-game/test/scripted-judge.ts"
+    ],
+    "packages/arena-game/test/compiled-bank.test.ts": [
+      "packages/arena-game/src/container-judge.ts",
+      "packages/arena-game/src/engine.ts",
+      "packages/arena-game/src/file-bank.ts",
+      "packages/arena-game/src/judge.ts",
+      "packages/arena-game/src/principal.ts"
+    ],
+    "packages/arena-game/test/concurrency.test.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/persistence.ts",
+      "packages/arena-game/src/store.ts",
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/test/container-judge-trust.test.ts": [
+      "packages/arena-game/src/container-judge.ts",
+      "packages/arena-game/src/judge.ts"
+    ],
+    "packages/arena-game/test/container-judge.test.ts": [
+      "packages/arena-game/src/container-judge.ts",
+      "packages/arena-game/src/judge.ts"
+    ],
+    "packages/arena-game/test/cross-isolation.test.ts": [
+      "packages/arena-game/src/file-bank.ts",
+      "packages/arena-game/src/index.ts",
+      "packages/arena-game/src/principal.ts",
+      "packages/arena-game/src/store.ts",
+      "packages/arena-game/test/scripted-judge.ts"
+    ],
+    "packages/arena-game/test/deadline-closure.test.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/engine.ts",
+      "packages/arena-game/src/file-bank.ts",
+      "packages/arena-game/src/principal.ts",
+      "packages/arena-game/src/store.ts",
+      "packages/arena-game/test/scripted-judge.ts",
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/test/evaluation-orchestration.test.ts": [
+      "packages/arena-game/src/evaluation-orchestration.ts"
+    ],
+    "packages/arena-game/test/evaluation-telemetry.test.ts": [
+      "packages/arena-game/src/evaluation-telemetry.ts"
+    ],
+    "packages/arena-game/test/judge-security.test.ts": [
+      "packages/arena-game/src/container-judge.ts",
+      "packages/arena-game/src/judge.ts"
+    ],
+    "packages/arena-game/test/judge0.test.ts": [
+      "packages/arena-game/src/judge.ts",
+      "packages/arena-game/src/judge0.ts"
+    ],
+    "packages/arena-game/test/lifecycle-1v1.test.ts": [
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/test/lobby-atomic.test.ts": [
+      "packages/arena-game/src/engine.ts",
+      "packages/arena-game/src/file-bank.ts",
+      "packages/arena-game/src/lobby.ts",
+      "packages/arena-game/src/postgres-store.ts",
+      "packages/arena-game/test/scripted-judge.ts"
+    ],
+    "packages/arena-game/test/lobby.test.ts": [
+      "packages/arena-game/src/lobby.ts",
+      "packages/arena-game/src/postgres-store.ts"
+    ],
+    "packages/arena-game/test/match-revision.test.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/persistence.ts",
+      "packages/arena-game/src/records.ts",
+      "packages/arena-game/src/store.ts"
+    ],
+    "packages/arena-game/test/persistence.test.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/persistence.ts",
+      "packages/arena-game/src/postgres-store.ts",
+      "packages/arena-game/src/records.ts",
+      "packages/arena-game/src/store.ts"
+    ],
+    "packages/arena-game/test/post-commit-events.test.ts": [
+      "packages/arena-game/src/store.ts",
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/test/postgres.test.ts": [
+      "packages/arena-game/src/engine.ts",
+      "packages/arena-game/src/file-bank.ts",
+      "packages/arena-game/src/postgres-store.ts",
+      "packages/arena-game/src/principal.ts",
+      "packages/arena-game/src/records.ts",
+      "packages/arena-game/test/scripted-judge.ts",
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/test/reconnect.test.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/engine.ts",
+      "packages/arena-game/src/file-bank.ts",
+      "packages/arena-game/src/persistence.ts",
+      "packages/arena-game/src/principal.ts",
+      "packages/arena-game/src/records.ts",
+      "packages/arena-game/src/store.ts",
+      "packages/arena-game/test/scripted-judge.ts",
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/test/round-lifecycle.test.ts": [
+      "packages/arena-game/src/records.ts",
+      "packages/arena-game/src/round-lifecycle.ts"
+    ],
+    "packages/arena-game/test/run-path.test.ts": [
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/test/scoring-reveal.test.ts": [
+      "packages/arena-game/test/scripted-judge.ts",
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/test/scripted-judge.ts": [
+      "packages/arena-game/src/judge.ts"
+    ],
+    "packages/arena-game/test/sealing.test.ts": [
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/test/setup.ts": [
+      "packages/arena-game/src/engine.ts",
+      "packages/arena-game/src/file-bank.ts",
+      "packages/arena-game/src/principal.ts",
+      "packages/arena-game/test/scripted-judge.ts"
+    ],
+    "packages/arena-game/test/submit-path.test.ts": [
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/test/team-2v2.test.ts": [
+      "packages/arena-game/src/engine.ts",
+      "packages/arena-game/src/file-bank.ts",
+      "packages/arena-game/src/principal.ts",
+      "packages/arena-game/test/scripted-judge.ts",
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/test/team-collaboration.test.ts": [
+      "packages/arena-game/src/collab.ts",
+      "packages/arena-game/src/records.ts",
+      "packages/arena-game/src/team-collaboration.ts"
+    ],
+    "packages/arena-game/test/worker-judge.test.ts": [
+      "packages/arena-game/src/judge.ts",
+      "packages/arena-game/test/setup.ts"
+    ],
+    "packages/arena-game/tsconfig.build.json": [],
+    "packages/arena-game/tsconfig.json": [],
+    "packages/arena-harness/package.json": [],
+    "packages/arena-harness/src/fake-judge.ts": [
+      "packages/arena-harness/src/judge-port.ts"
+    ],
+    "packages/arena-harness/src/fixtures.ts": [],
+    "packages/arena-harness/src/judge-port.ts": [],
+    "packages/arena-harness/src/mock-game.ts": [
+      "packages/arena-harness/src/fixtures.ts",
+      "packages/arena-harness/src/judge-port.ts"
+    ],
+    "packages/arena-harness/test/bank.test.ts": [],
+    "packages/arena-harness/test/lifecycle.test.ts": [
+      "packages/arena-harness/src/fake-judge.ts",
+      "packages/arena-harness/src/fixtures.ts",
+      "packages/arena-harness/src/mock-game.ts"
+    ],
+    "packages/arena-harness/tsconfig.json": [],
+    "packages/arena-model/package.json": [],
+    "packages/arena-model/src/chat.ts": [],
+    "packages/arena-model/src/events.ts": [],
+    "packages/arena-model/src/index.ts": [],
+    "packages/arena-model/src/model.ts": [],
+    "packages/arena-model/src/scoring.ts": [],
+    "packages/arena-model/src/transitions.ts": [
+      "packages/arena-model/src/model.ts"
+    ],
+    "packages/arena-model/test/events.test.ts": [
+      "packages/arena-model/src/index.ts"
+    ],
+    "packages/arena-model/test/scoring.test.ts": [
+      "packages/arena-model/src/index.ts"
+    ],
+    "packages/arena-model/test/transitions.test.ts": [
+      "packages/arena-model/src/index.ts"
+    ],
+    "packages/arena-model/tsconfig.build.json": [],
+    "packages/arena-model/tsconfig.json": [],
+    "packages/problem-bank/problems/double-it.json": [],
+    "packages/problem-bank/problems/even-ledger.json": [],
+    "packages/problem-bank/problems/sum-array.json": [],
+    "packages/problem-bank/schema.json": [],
+    "scripts/checks/arena-tests.mjs": [
+      "scripts/checks/process.mjs"
+    ],
+    "scripts/checks/g06-evidence.mjs": [
+      "scripts/checks/process.mjs"
+    ],
+    "scripts/checks/install-hooks.mjs": [
+      "scripts/checks/process.mjs"
+    ],
+    "scripts/checks/install-scanner.mjs": [
+      "scripts/checks/process.mjs"
+    ],
+    "scripts/checks/integration.mjs": [
+      "scripts/checks/process.mjs"
+    ],
+    "scripts/checks/process.mjs": [],
+    "scripts/checks/secrets.mjs": [
+      "scripts/checks/install-scanner.mjs",
+      "scripts/checks/process.mjs",
+      "scripts/checks/text-files.mjs"
+    ],
+    "scripts/checks/test/g06-evidence.test.mjs": [
+      "scripts/checks/g06-evidence.mjs"
+    ],
+    "scripts/checks/test/integration.test.mjs": [
+      "scripts/checks/integration.mjs"
+    ],
+    "scripts/checks/test/process.test.mjs": [
+      "scripts/checks/process.mjs"
+    ],
+    "scripts/checks/test/secrets.test.mjs": [
+      "scripts/checks/secrets.mjs",
+      "scripts/checks/text-files.mjs"
+    ],
+    "scripts/checks/test/verify.test.mjs": [
+      "scripts/checks/arena-tests.mjs",
+      "scripts/checks/verify.mjs"
+    ],
+    "scripts/checks/text-files.mjs": [],
+    "scripts/checks/user-tests.mjs": [
+      "scripts/checks/process.mjs"
+    ],
+    "scripts/checks/verify.mjs": [
+      "scripts/checks/integration.mjs",
+      "scripts/checks/process.mjs",
+      "scripts/checks/secrets.mjs",
+      "scripts/checks/user-tests.mjs"
+    ],
+    "scripts/evidence/render-g06-pdf.mjs": [
+      "scripts/checks/process.mjs"
+    ],
+    "scripts/gen-dev-certs.sh": [],
+    "scripts/play.sh": [],
+    "services/game/Dockerfile": [],
+    "services/game/package.json": [],
+    "services/game/src/app.module.ts": [
+      "services/game/src/game/game.module.ts",
+      "services/game/src/health.controller.ts"
+    ],
+    "services/game/src/game/active-account.guard.test.ts": [
+      "services/game/src/game/active-account.guard.ts",
+      "services/game/src/game/game.service.ts"
+    ],
+    "services/game/src/game/active-account.guard.ts": [
+      "services/game/src/game/game.service.ts",
+      "services/game/src/game/socket-auth.ts"
+    ],
+    "services/game/src/game/collab-ws.test.ts": [],
+    "services/game/src/game/collab.gateway.ts": [
+      "services/game/src/game/game.service.ts",
+      "services/game/src/game/socket-auth.ts"
+    ],
+    "services/game/src/game/dev-fixture-gate.test.ts": [
+      "services/game/src/game/game.controller.ts"
+    ],
+    "services/game/src/game/errors.ts": [],
+    "services/game/src/game/game-event.ts": [],
+    "services/game/src/game/game-events.publisher.ts": [
+      "services/game/src/game/game-event.ts"
+    ],
+    "services/game/src/game/game-events.test.ts": [
+      "services/game/src/game/game-events.publisher.ts",
+      "services/game/src/game/game.service.ts"
+    ],
+    "services/game/src/game/game-stats.controller.ts": [
+      "services/game/src/game/errors.ts",
+      "services/game/src/game/game.service.ts",
+      "services/game/src/game/principal.ts"
+    ],
+    "services/game/src/game/game.controller.ts": [
+      "services/game/src/game/errors.ts",
+      "services/game/src/game/game.service.ts",
+      "services/game/src/game/principal.ts"
+    ],
+    "services/game/src/game/game.gateway.ts": [
+      "services/game/src/game/game.service.ts",
+      "services/game/src/game/socket-auth.ts"
+    ],
+    "services/game/src/game/game.module.ts": [
+      "services/game/src/game/active-account.guard.ts",
+      "services/game/src/game/collab.gateway.ts",
+      "services/game/src/game/game-events.publisher.ts",
+      "services/game/src/game/game-stats.controller.ts",
+      "services/game/src/game/game.controller.ts",
+      "services/game/src/game/game.gateway.ts",
+      "services/game/src/game/game.service.ts",
+      "services/game/src/game/lobby.controller.ts",
+      "services/game/src/game/lobby.gateway.ts",
+      "services/game/src/game/principal.ts",
+      "services/game/src/game/team-chat.gateway.ts",
+      "services/game/src/game/user-events.consumer.ts"
+    ],
+    "services/game/src/game/game.service.test.ts": [
+      "services/game/src/game/game.service.ts"
+    ],
+    "services/game/src/game/game.service.ts": [
+      "services/game/src/game/game-events.publisher.ts",
+      "services/game/src/game/judge-factory.ts",
+      "services/game/src/game/match-socket-presence.ts",
+      "services/game/src/game/match-statistics.ts"
+    ],
+    "services/game/src/game/judge-factory.test.ts": [],
+    "services/game/src/game/judge-factory.ts": [],
+    "services/game/src/game/jwt-verifier.test.ts": [
+      "services/game/src/game/jwt-verifier.ts"
+    ],
+    "services/game/src/game/jwt-verifier.ts": [],
+    "services/game/src/game/lobby.controller.ts": [
+      "services/game/src/game/errors.ts",
+      "services/game/src/game/game.service.ts",
+      "services/game/src/game/principal.ts"
+    ],
+    "services/game/src/game/lobby.gateway.ts": [
+      "services/game/src/game/game.service.ts",
+      "services/game/src/game/socket-auth.ts"
+    ],
+    "services/game/src/game/lobby.test.ts": [],
+    "services/game/src/game/match-progression.test.ts": [
+      "services/game/src/game/match-statistics.ts"
+    ],
+    "services/game/src/game/match-socket-presence.test.ts": [
+      "services/game/src/game/match-socket-presence.ts"
+    ],
+    "services/game/src/game/match-socket-presence.ts": [],
+    "services/game/src/game/match-statistics-erasure.test.ts": [
+      "services/game/src/game/match-statistics.ts"
+    ],
+    "services/game/src/game/match-statistics.ts": [],
+    "services/game/src/game/principal.ts": [
+      "services/game/src/game/jwt-verifier.ts"
+    ],
+    "services/game/src/game/reconnect.test.ts": [],
+    "services/game/src/game/service.test.ts": [],
+    "services/game/src/game/socket-auth.test.ts": [
+      "services/game/src/game/socket-auth.ts"
+    ],
+    "services/game/src/game/socket-auth.ts": [
+      "services/game/src/game/jwt-verifier.ts"
+    ],
+    "services/game/src/game/team-2v2.test.ts": [],
+    "services/game/src/game/team-chat.gateway.ts": [
+      "services/game/src/game/game.service.ts",
+      "services/game/src/game/socket-auth.ts"
+    ],
+    "services/game/src/game/team-chat.test.ts": [],
+    "services/game/src/game/user-events.consumer.test.ts": [
+      "services/game/src/game/user-events.consumer.ts"
+    ],
+    "services/game/src/game/user-events.consumer.ts": [
+      "services/game/src/game/game.service.ts"
+    ],
+    "services/game/src/health.controller.ts": [],
+    "services/game/src/main.ts": [
+      "services/game/src/app.module.ts"
+    ],
+    "services/game/tsconfig.json": [],
+    "services/judge-worker/Dockerfile": [],
+    "services/judge-worker/docker-entrypoint.sh": [],
+    "services/judge-worker/package.json": [],
+    "services/judge-worker/src/http-server.ts": [
+      "services/judge-worker/src/job-queue.ts",
+      "services/judge-worker/src/readiness.ts"
+    ],
+    "services/judge-worker/src/job-queue.ts": [],
+    "services/judge-worker/src/main.ts": [
+      "services/judge-worker/src/http-server.ts",
+      "services/judge-worker/src/job-queue.ts",
+      "services/judge-worker/src/readiness.ts"
+    ],
+    "services/judge-worker/src/readiness.ts": [],
+    "services/judge-worker/test/compose-topology.test.ts": [],
+    "services/judge-worker/test/http-server.test.ts": [
+      "services/judge-worker/src/job-queue.ts"
+    ],
+    "services/judge-worker/test/job-queue.test.ts": [],
+    "services/judge-worker/test/readiness.test.ts": [],
+    "services/judge-worker/tsconfig.build.json": [],
+    "services/judge-worker/tsconfig.json": [],
     "user-service/.dockerignore": [],
     "user-service/.env.example": [],
     "user-service/Dockerfile": [],
@@ -2625,20 +4886,28 @@
     ],
     "user-service/test/current-user.test.mjs": [],
     "user-service/test/discord-link.postgres.test.mjs": [],
-    "user-service/test/discord-oauth.test.mjs": [],
-    "user-service/test/login-tokens.test.mjs": [],
+    "user-service/test/discord-oauth.test.mjs": [
+      "user-service/test/helpers/session.mjs"
+    ],
+    "user-service/test/helpers/session.mjs": [],
+    "user-service/test/login-tokens.test.mjs": [
+      "user-service/test/helpers/session.mjs"
+    ],
     "user-service/test/password-reset-dto.test.mjs": [],
     "user-service/test/password-reset-retry.test.mjs": [],
     "user-service/test/password-reset-sessions.test.mjs": [],
     "user-service/test/refresh-race.postgres.test.mjs": [],
-    "user-service/test/refresh-tokens.test.mjs": [],
-    "user-service/test/register-tokens.test.mjs": [],
+    "user-service/test/refresh-tokens.test.mjs": [
+      "user-service/test/helpers/session.mjs"
+    ],
+    "user-service/test/register-tokens.test.mjs": [
+      "user-service/test/helpers/session.mjs"
+    ],
     "user-service/test/superadmin-api.test.mjs": [],
     "user-service/test/superadmin.test.mjs": [],
     "user-service/tsconfig.build.json": [],
     "user-service/tsconfig.json": [],
     "user-service/vitest.config.e2e.ts": [],
     "user-service/vitest.config.ts": []
-  },
-  "contentDigest": "84e404212f1e9f00419b3edc4f446e0526d5a66aab9f907942f1ae655fd99e4b"
+  }
 }
