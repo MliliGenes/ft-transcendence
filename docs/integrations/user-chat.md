@@ -1,6 +1,6 @@
 # User and chat integration
  
-Everything that connects user-service and chat-service. Most of it is the RabbitMQ profile sync, so this is also the full RabbitMQ guide: a primer, the implementation, infrastructure, a hands-on lab and evaluation Q&A. The other links, shared JWTs and block checks, are in [section 13](#13-the-other-links-between-the-two-services). Written from the code as of November 2026.
+This guide covers the User-to-Chat RabbitMQ flow that keeps account profiles in sync, plus the shared JWT, HTTP fallback and block checks. RabbitMQ also carries account-deletion events to Game and Game lifecycle notices to Chat; see the [Chat service guide](../services/chat-service.md#code-arena-lifecycle-notifications) and [Code Arena integration specification](../spec/code-arena-integration-spec.md). Written from the code as of November 2026.
 
 ---
 

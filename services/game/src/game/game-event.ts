@@ -49,7 +49,7 @@ export interface MatchEndedData {
   matchId: string;
   mode: GameMatchMode;
   participants: MatchEndedParticipant[];
-  forfeit: { winnerSideId: string; loserSideId: string; reason: "leave" | "grace-expired" } | null;
+  forfeit: { winnerSideId: string; loserSideId: string; reason: "leave" | "grace-expired" | "surrender" } | null;
   endedBecause: "completed" | "deadline" | "forfeit";
 }
 

@@ -58,6 +58,9 @@ export interface SubmissionDocument {
 export interface TeamMemberSnapshot {
   userId: string | null;
   presence: "online" | "offline";
+  departed: boolean;
+  approvalRequired: boolean | null;
+  surrenderPending: boolean;
   /** Own team only; opponent readiness and document revisions stay masked. */
   ready: boolean;
   readyRevision: DocumentRevision | null;
@@ -101,25 +104,34 @@ export class TeamCollaboration {
     this.collab = options.collab ?? new CollabDocs();
   }
 
-  readinessFor(match: MatchRecord, side: SideId): Readiness {
+  readinessFor(match: MatchRecord, side: SideId, now: number, reconnectGraceMs: number): Readiness {
     const members = this.teamMembers(match, side);
     const readiness = this.currentRound(match).readiness ?? {};
+    const required = members.map((member) => this.approvalRequired(match, member.userId, now, reconnectGraceMs));
     return {
-      you: readiness[members[0]?.userId ?? ""]?.ready === true,
-      mate: readiness[members[1]?.userId ?? ""]?.ready === true,
+      you: !required[0] || readiness[members[0]?.userId ?? ""]?.ready === true,
+      mate: !required[1] || readiness[members[1]?.userId ?? ""]?.ready === true,
     };
   }
 
-  documentRevisionMatches(match: MatchRecord, side: SideId, revision: DocumentRevision | undefined): boolean {
+  documentRevisionMatches(
+    match: MatchRecord,
+    side: SideId,
+    revision: DocumentRevision | undefined,
+    userId?: string,
+    now = this.clock(),
+    reconnectGraceMs = 90_000,
+  ): boolean {
     if (revision === undefined) return false;
     const round = this.currentRound(match);
     const doc = round.teamDocs?.[side];
     if (!doc || revision !== doc.revision) return false;
-    return this.teamMembers(match, side).every(
-      (member) =>
+    return this.teamMembers(match, side)
+      .filter((member) => member.userId === userId || this.approvalRequired(match, member.userId, now, reconnectGraceMs))
+      .every((member) =>
         round.readiness?.[member.userId]?.ready === true &&
         round.readiness?.[member.userId]?.documentRevision === doc.revision,
-    );
+      );
   }
 
   async setReady(
@@ -223,11 +235,13 @@ export class TeamCollaboration {
     side: SideId,
     language: string,
     documentRevision: DocumentRevision | undefined,
+    userId?: string,
+    reconnectGraceMs = 90_000,
   ): Promise<SubmissionDocument> {
     this.requireTeamMode(match);
     const round = this.currentRound(match);
     const doc = this.teamDocOf(match, side);
-    if (!this.documentRevisionMatches(match, side, documentRevision)) {
+    if (!this.documentRevisionMatches(match, side, documentRevision, userId, this.clock(), reconnectGraceMs)) {
       throw new IllegalStateError("submit rejected: stale document revision (re-ready the current revision)");
     }
     if (language !== doc.language) {
@@ -256,7 +270,7 @@ export class TeamCollaboration {
     return this.teamMembers(match, side).some((member) => match.memberPresence?.[member.userId] === "online");
   }
 
-  snapshots(match: MatchRecord, round: RoundState, mySide: SideId): TeamSnapshot[] {
+  snapshots(match: MatchRecord, round: RoundState, mySide: SideId, now: number, reconnectGraceMs: number): TeamSnapshot[] {
     return Object.keys(round.activities).map((side) => {
       const own = side === mySide;
       const doc = round.teamDocs?.[side];
@@ -269,6 +283,9 @@ export class TeamCollaboration {
           return {
             userId: participant.anonymized ? null : participant.userId,
             presence: match.memberPresence?.[participant.userId] ?? "offline",
+            departed: match.departedMembers?.includes(participant.userId) ?? false,
+            approvalRequired: own ? this.approvalRequired(match, participant.userId, now, reconnectGraceMs) : null,
+            surrenderPending: own && (match.surrenderVotes?.includes(participant.userId) ?? false),
             ready: record?.ready === true,
             readyRevision: record?.ready === true ? (record.documentRevision ?? null) : null,
           };
@@ -285,12 +302,18 @@ export class TeamCollaboration {
 
   private memberOf(match: MatchRecord, userId: string): Participant {
     const participant = match.participants.find((entry) => entry.userId === userId);
-    if (!participant) throw new NotMemberError(match.id);
+    if (!participant || match.departedMembers?.includes(userId)) throw new NotMemberError(match.id);
     return participant;
   }
 
   private teamMembers(match: MatchRecord, side: SideId): Participant[] {
     return match.participants.filter((participant) => participant.sideId === side);
+  }
+
+  private approvalRequired(match: MatchRecord, userId: string, now: number, reconnectGraceMs: number): boolean {
+    if (match.departedMembers?.includes(userId)) return false;
+    const offlineSince = match.memberOfflineSinceMs?.[userId];
+    return offlineSince === undefined || offlineSince + reconnectGraceMs > now;
   }
 
   private teamDocOf(match: MatchRecord, side: SideId): TeamDocState {

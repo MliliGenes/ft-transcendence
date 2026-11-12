@@ -33,8 +33,8 @@ The game is hosted inside Nook's web client under the `/play` route and follows 
 - **Round**: A single problem cycle within a match (3 rounds per standard match). Resets editor and test runner state; accumulates match score.
 - **Problem**: A coding task with description, input/output specifications, examples, constraints, and starter code per language.
 - **Run (Test Check)**: Running the current code against visible examples only. Handled without affecting score or touching the hidden suite.
-- **Submission**: Final code sent for evaluation against the sealed hidden test suite. In 2v2, requires both teammates to be marked `Ready`.
-- **Readiness**: The 2v2 gate. Both teammates must toggle Ready before the team's submission is accepted.
+- **Submission**: Final code sent for evaluation against the sealed hidden test suite. In 2v2, each participating teammate must approve the current shared document. If a teammate explicitly leaves, or remains disconnected past the 90-second reconnect window, the remaining teammate can approve and submit alone.
+- **Readiness**: The 2v2 gate. Approvals apply to the current document revision. A returning teammate must approve that revision again; see the [gameplay review](docs/spec/code-arena-gameplay-review.md) for the agreed rules.
 - **Hidden Suite**: Sealed evaluation tests evaluated inside `judge-worker`. Breakdown is disclosed only during Score Reveal.
 - **Reveal**: Per-round score disclosure (percentages and hidden-group breakdown) shown after evaluation settles.
 - **Match Phase**: State machine: `ROUND_INTRO` → `CODING` → (`RUNNING_TESTS` → `CODING`)* → `SUBMITTED` → `EVALUATING` → `SCORE_REVEAL` → next round / match end.

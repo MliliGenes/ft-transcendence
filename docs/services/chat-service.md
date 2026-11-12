@@ -85,7 +85,7 @@ Paths are as the service sees them. Through the gateway, `/chat/...` becomes `/a
 
 ### Sending and retries
 
-The client generates one `clientRequestId` per logical send. The server computes `requestHash` as the SHA-256 of `[conversationId, content, attachments, gameChallengeRoomCode]`.
+The client generates one `clientRequestId` per logical send. The server computes `requestHash` as the SHA-256 of `[conversationId, content, attachments, gameChallenge.roomCode ?? null]`.
 
 | Request | Result |
 | --- | --- |
@@ -217,11 +217,13 @@ The gateway applies the same token rules as HTTP and joins the socket to the pri
 | Event | Direction | Payload |
 | --- | --- | --- |
 | `message:created` | Server to client | Full stored message with `author` |
+| `typing:changed` | Client to server | `{ conversationId, typing }`; the server broadcasts `{ conversationId, userId, typing }` to the other current conversation members |
+| `read:updated` | Server to client | `{ conversationId, userId, messageId, readAt }` |
 | `presence:snapshot` | Server to client | `{ users: [{ userId, status }] }` |
 | `presence:changed` | Server to client | `{ userId, status }` |
 | `presence:activity` | Client to server | None |
 
-`message:created` goes to both DM participants, or to every member of the channel's group, including the sender so their other tabs update. Delivery is best effort. REST is the only way to write messages, and clients refetch history to catch up.
+`message:created` goes to both DM participants, or to every current member of the channel's group, including the sender so their other tabs update. Read markers are saved over HTTP and then broadcast live to conversation members. Typing updates are checked against current conversation membership before they are sent to the other members. Delivery is best effort; REST remains the way to write messages, and clients refetch history to catch up after reconnecting.
 
 ### Presence
 
@@ -261,10 +263,10 @@ Run `npm run start:dev`, `npm run build`, `npm run lint` and `npm test` from `ch
 
 ## Current limitations
 
-- Only message creation is broadcast. Edits, deletes and read state reach other clients when they refetch.
+- Message creation and read-state changes are broadcast. Edits and deletes are not broadcast, so other clients see them after refetching.
 - A group has no moderation: nobody can delete another member's message.
 - Reactions have a table but no API, and there are no replies.
-- A self-DM throws a plain `Error`, which returns `500` instead of `400`.
+- A self-DM is rejected with HTTP `400`.
 - Two simultaneous first requests for the same DM, or the same `clientRequestId`, can hit the unique constraint and return `500`.
 - Read markers can move backward, because the upsert does not compare positions.
 - Message pagination returns a raw array with a look-ahead row rather than a cursor envelope.

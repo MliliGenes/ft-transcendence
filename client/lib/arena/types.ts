@@ -23,7 +23,8 @@ export type PlayerStatus =
   | "running"
   | "submitted"
   | "evaluating"
-  | "locked";
+  | "locked"
+  | "left";
 
 export type Presence = "online" | "offline";
 
@@ -61,6 +62,7 @@ export interface SideView {
   status: PlayerStatus | "ready";
   presence: Presence;
   submissions: number;
+  departed?: boolean;
 }
 
 export interface TeamView {
@@ -108,6 +110,8 @@ export interface ArenaSnapshot {
    */
   docRevision: number | null;
   readyRevision: { you: number | null; mate: number | null } | null;
+  /** Pending surrender approvals from the current and partner team member. */
+  surrender: { you: boolean; mate: boolean };
   reveal: RevealView | null;
   notice: string | null;
   /** Server mutation counter (§3): orders snapshots against events. */

@@ -25,7 +25,7 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
-See the [service guide](../docs/services/user-service.md) for the endpoint reference, authentication flow, and local setup, or [postgres/README.md](../docs/services/infrastructure.md) to run the database in Docker instead of using a locally installed PostgreSQL server.
+See the [service guide](../docs/services/user-service.md) for the endpoint reference, authentication flow, and local setup, or the [infrastructure guide](../docs/services/infrastructure.md) to run the database in Docker instead of using a locally installed PostgreSQL server.
 
 ## Project setup
 

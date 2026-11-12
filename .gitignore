@@ -46,5 +46,7 @@ graphify-out/.graphify_labels.pending.json
 /infra/nginx/certs/*.crt
 
 # Local verification tools and reports.
+/.playwright-mcp/
+/compose.live-2v2.yaml
 /.tools/
 /.verification/

@@ -508,7 +508,7 @@ export class ArenaEngine {
       // Visible tests only. Runs outside the match lock: the other side stays free.
       const verdicts = await this.judge.runVisible(input.language as SupportedLanguage, setup.driver, input.code, setup.visible, this.limits);
       await this.withMatchLock(matchId, async () => {
-        const match = await this.requireMember(principal, matchId);
+        const match = await this.requireMember(principal, matchId, true);
         const round = match.rounds.find((r) => r.roundId === setup.roundId) ?? this.currentRound(match);
         this.emit("tests.updated", {
           matchId: match.id,
@@ -532,7 +532,7 @@ export class ArenaEngine {
       };
     } catch (error) {
       await this.withMatchLock(matchId, async () => {
-        const match = await this.requireMember(principal, matchId);
+        const match = await this.requireMember(principal, matchId, true);
         const round = match.rounds.find((r) => r.roundId === setup.roundId) ?? this.currentRound(match);
         await this.recordFailure(match, `run: ${error instanceof Error ? error.message : String(error)}`);
         delete round.runTests[setup.side];
@@ -562,7 +562,10 @@ export class ArenaEngine {
       // bound to the current document revision — stale R1 readiness can
       // never authorize an R2 submission. The lock makes the gate + record
       // atomic, so a concurrent edit deterministically wins or loses whole.
-      const readiness = match.mode === "2v2" ? this.teamCollaboration.readinessFor(match, side) : { you: false, mate: false };
+      this.requireActiveMember(match, principal.userId);
+      const readiness = match.mode === "2v2"
+        ? this.teamCollaboration.readinessFor(match, side, this.clock(), this.reconnectGraceMs)
+        : { you: false, mate: false };
       if (!canSubmit(match.roundPhase, match.mode, readiness)) {
         throw new IllegalStateError(`submit rejected in ${match.roundPhase} (team not both ready)`);
       }
@@ -574,7 +577,14 @@ export class ArenaEngine {
       let submitCode = input.code;
       let submitDocRevision: DocumentRevision | null = null;
       if (match.mode === "2v2") {
-        const document = await this.teamCollaboration.submissionDocument(match, side, input.language, input.documentRevision);
+        const document = await this.teamCollaboration.submissionDocument(
+          match,
+          side,
+          input.language,
+          input.documentRevision,
+          principal.userId,
+          this.reconnectGraceMs,
+        );
         submitCode = document.source;
         submitDocRevision = document.documentRevision;
       }
@@ -730,26 +740,68 @@ export class ArenaEngine {
     matchId: string,
     options: { graceMs?: number } = {},
   ): Promise<RevealSnapshot> {
+    const reveal = await this.publishRevealInternal(
+      matchId,
+      options,
+      () => this.requireMember(principal, matchId),
+      false,
+    );
+    if (!reveal) throw new IllegalStateError("reveal unavailable");
+    return reveal;
+  }
+
+  /** Game-owned auto reveal; no player identity is needed after an accepted score. */
+  async autoRevealIfAllSidesCounted(
+    matchId: string,
+    options: { graceMs?: number } = {},
+  ): Promise<RevealSnapshot | null> {
+    return this.publishRevealInternal(
+      matchId,
+      options,
+      () => this.loadMatchOrThrow(matchId),
+      true,
+    );
+  }
+
+  private async publishRevealInternal(
+    matchId: string,
+    options: { graceMs?: number },
+    loadMatch: () => Promise<MatchRecord>,
+    automatic: boolean,
+  ): Promise<RevealSnapshot | null> {
     if (this.deadlineHasElapsedOrUnknown(matchId) && await this.closeExpiredMatch(matchId)) {
-      const match = await this.requireMember(principal, matchId);
+      const match = await loadMatch();
       const reveal = this.currentRound(match).reveal;
-      if (reveal) return JSON.parse(JSON.stringify(reveal)) as RevealSnapshot;
-      throw new IllegalStateError("expired Match has no current Reveal");
+      return reveal ? JSON.parse(JSON.stringify(reveal)) as RevealSnapshot : null;
     }
-    const existingReveal = await this.withMatchLock(matchId, async () => {
-      const match = await this.requireMember(principal, matchId);
-      if (match.roundPhase === "MATCH_COMPLETE" && this.currentRound(match).reveal) {
-        return JSON.parse(JSON.stringify(this.currentRound(match).reveal)) as RevealSnapshot;
+    const start = await this.withMatchLock(matchId, async () => {
+      const match = await loadMatch();
+      const round = this.currentRound(match);
+      if ((match.roundPhase === "MATCH_COMPLETE" || automatic) && round.reveal) {
+        return { status: "existing" as const, reveal: JSON.parse(JSON.stringify(round.reveal)) as RevealSnapshot };
+      }
+      if (match.roundPhase === "MATCH_COMPLETE" || match.forfeit) {
+        return { status: "skip" as const };
+      }
+      if (automatic) {
+        const sides = Object.keys(round.activities);
+        if (match.roundPhase !== "CODING" || sides.length === 0 ||
+          !sides.every((side) => round.counted[side] !== undefined)) {
+          return { status: "skip" as const };
+        }
+        if (this.applyGraceToMatch(match)) {
+          await this.authority.saveMatch(match);
+          return { status: "skip" as const };
+        }
       }
       this.roundLifecycle.beginReveal(match);
       await this.authority.saveMatch(match);
-      return null;
+      return { status: "wait" as const, roundId: round.roundId };
     });
-    if (existingReveal) return existingReveal;
-    const first = await this.requireMember(principal, matchId);
-    const firstRound = this.currentRound(first);
+    if (start.status === "existing") return start.reveal;
+    if (start.status === "skip") return null;
     const graceMs = options.graceMs ?? this.revealGraceMs;
-    const pending = this.evaluation.forRound(matchId, firstRound.roundId);
+    const pending = this.evaluation.forRound(matchId, start.roundId);
     if (pending.length > 0 && graceMs > 0) {
       await Promise.race([
         Promise.allSettled(pending.map((p) => p.promise)),
@@ -757,16 +809,21 @@ export class ArenaEngine {
       ]);
     }
     return this.withMatchLock(matchId, async () => {
-      const match = await this.requireMember(principal, matchId);
-      const round = this.currentRound(match);
+      const match = await loadMatch();
+      const round = match.rounds.find((entry) => entry.roundId === start.roundId);
+      if (!round) throw new IllegalStateError("reveal round no longer exists");
+      if (automatic && round.reveal) return JSON.parse(JSON.stringify(round.reveal)) as RevealSnapshot;
+      if (match.roundPhase === "MATCH_COMPLETE" || match.forfeit) {
+        return round.reveal ? JSON.parse(JSON.stringify(round.reveal)) as RevealSnapshot : null;
+      }
       this.roundLifecycle.prepareReveal(
         match,
         new Set(
-          (await this.persistence.listRoundSubmissions(matchId, round.roundId))
+          (await this.persistence.listRoundSubmissions(matchId, start.roundId))
             .filter((s) => s.status === "completed")
             .map((s) => s.evaluationId),
         ),
-        this.evaluation.forRound(matchId, round.roundId).map((entry) => entry.evaluationId),
+        this.evaluation.forRound(matchId, start.roundId).map((entry) => entry.evaluationId),
       );
       const now = this.clock();
       const scores: Partial<Record<SideId, number>> = {};
@@ -826,27 +883,15 @@ export class ArenaEngine {
     matchId: string,
   ): Promise<{ scores: Partial<Record<SideId, number>>; outcome: "left" | "right" | "draw"; winner: SideId | null; forfeit: ForfeitRecord | null }> {
     if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
-    const match = await this.requireMember(principal, matchId);
+    const match = await this.requireMember(principal, matchId, true);
     if (match.roundPhase !== "MATCH_COMPLETE") throw new IllegalStateError("match not complete");
     return this.roundLifecycle.computeFinal(match);
-  }
-
-  /** Sides holding a counted result in the current round (reveal-condition input). */
-  async roundCountedSides(principal: AuthenticatedPrincipal, matchId: string): Promise<SideId[]> {
-    const match = await this.requireMember(principal, matchId);
-    return Object.keys(this.currentRound(match).counted);
-  }
-
-  /** All competing side ids of the current round. */
-  async roundSides(principal: AuthenticatedPrincipal, matchId: string): Promise<SideId[]> {
-    const match = await this.requireMember(principal, matchId);
-    return Object.keys(this.currentRound(match).activities);
   }
 
   async snapshot(principal: AuthenticatedPrincipal, matchId: string): Promise<SealedSnapshot> {
     if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
     return this.withRevisionRetry(matchId, async () => {
-      const match = await this.requireMember(principal, matchId);
+      const match = await this.requireMember(principal, matchId, true);
       this.applyGraceToMatch(match);
       await this.authority.saveMatch(match);
       const side = this.sideOf(match, principal);
@@ -883,7 +928,9 @@ export class ArenaEngine {
         revision: match.revision,
         pendingEvaluation: pending,
         final: match.roundPhase === "MATCH_COMPLETE" ? this.roundLifecycle.computeFinal(match) : null,
-        teams: match.mode === "2v2" ? this.teamCollaboration.snapshots(match, round, side) : undefined,
+        teams: match.mode === "2v2"
+          ? this.teamCollaboration.snapshots(match, round, side, now, this.reconnectGraceMs)
+          : undefined,
         problem: {
         problemVersionId: problem.problemVersionId,
         title: problem.statement.title,
@@ -910,7 +957,7 @@ export class ArenaEngine {
     if (this.blockedAccounts.has(userId)) throw new NotMemberError(matchId);
     const match = await this.loadMatchOrThrow(matchId);
     const found = match.participants.find((p) => p.userId === userId);
-    if (!found) throw new NotMemberError(matchId);
+    if (!found || match.departedMembers?.includes(userId)) throw new NotMemberError(matchId);
     return found.sideId;
   }
 
@@ -960,12 +1007,22 @@ export class ArenaEngine {
       const match = await this.loadMatchOrThrow(matchId);
       const participant = match.participants.find((p) => p.userId === userId);
       if (!participant) throw new NotMemberError(matchId);
+      if (this.applyGraceToMatch(match)) {
+        await this.authority.saveMatch(match);
+        return match.memberPresence?.[userId] ?? "offline";
+      }
       if (match.roundPhase === "MATCH_COMPLETE" || match.forfeit) {
         return match.memberPresence?.[userId] ?? match.presence[participant.sideId] ?? "offline";
       }
+      if (match.mode === "2v2" && match.departedMembers?.includes(userId)) return "offline";
       if (match.mode !== "2v2") return this.applySidePresence(match, participant.sideId, presence);
       match.memberPresence ??= {};
       if (presence === "online") {
+        const offlineSince = match.memberOfflineSinceMs?.[userId];
+        if (offlineSince !== undefined && offlineSince + this.reconnectGraceMs <= this.clock()) {
+          const readiness = this.currentRound(match).readiness;
+          if (readiness) delete readiness[userId];
+        }
         match.memberPresence[userId] = "online";
         if (match.memberOfflineSinceMs) delete match.memberOfflineSinceMs[userId];
       } else {
@@ -973,6 +1030,7 @@ export class ArenaEngine {
         match.memberOfflineSinceMs ??= {};
         match.memberOfflineSinceMs[userId] ??= this.clock();
       }
+        this.clearSurrenderVotesForSide(match, participant.sideId);
       await this.authority.saveMatch(match);
       this.emit("player.presenceChanged", { matchId: match.id, side: participant.sideId, userId, presence: match.memberPresence[userId] });
       return match.memberPresence[userId]!;
@@ -1180,11 +1238,29 @@ export class ArenaEngine {
    * Both sides past grace: earliest-offline side forfeits, deterministically.
    */
   private applyGraceToMatch(match: MatchRecord): boolean {
-    // ponytail: no 2v2 grace-forfeit rules exist yet (ticket 14 §20) — member
-    // offline windows are presence display only. 1v1 path below untouched.
-    if (match.mode === "2v2") return false;
     if (match.roundPhase === "MATCH_COMPLETE" || match.forfeit || this.isExpired(match)) return false;
     const now = this.clock();
+    if (match.mode === "2v2") {
+      const sides = Object.keys(match.rounds[0]?.activities ?? {});
+      const expiredSides = sides.flatMap((side) => {
+        const members = match.participants.filter((participant) => participant.sideId === side);
+        if (members.length === 0) return [];
+        const unavailableSince = members.map((member) => {
+          const offlineSince = match.memberOfflineSinceMs?.[member.userId];
+          if (offlineSince !== undefined) return offlineSince;
+          return match.departedMembers?.includes(member.userId) ? match.startedAt : undefined;
+        });
+        if (unavailableSince.some((timestamp) => timestamp === undefined)) return [];
+        const teamUnavailableSince = Math.max(...unavailableSince as number[]);
+        return teamUnavailableSince + this.reconnectGraceMs <= now ? [{ side, teamUnavailableSince }] : [];
+      }).sort((a, b) => a.teamUnavailableSince - b.teamUnavailableSince);
+      const loser = expiredSides[0]?.side;
+      if (!loser) return false;
+      const winner = sides.find((candidate) => candidate !== loser);
+      if (!winner) return false;
+      this.recordForfeit(match, winner, loser, "grace-expired");
+      return true;
+    }
     const expired = Object.entries(match.offlineSinceMs)
       .filter(([, since]) => since !== undefined && since + this.reconnectGraceMs <= now)
       .sort((a, b) => a[1]! - b[1]!);
@@ -1196,13 +1272,12 @@ export class ArenaEngine {
   }
 
   /**
-   * Deliberate leave (ticket 11 §15): immediate forfeit, never grace. Socket
-   * loss must never route here — only an explicit leave action.
+   * Explicit leave removes one 2v2 teammate; a 1v1 leave forfeits immediately.
    */
   async leaveMatch(
     principal: AuthenticatedPrincipal,
     matchId: string,
-  ): Promise<{ winner: SideId; loser: SideId }> {
+  ): Promise<{ winner: SideId; loser: SideId } | { winner: SideId | null; loser: SideId; teammateContinues: boolean }> {
     if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
     return this.withMatchLock(matchId, async () => {
       const match = await this.requireMember(principal, matchId);
@@ -1211,9 +1286,66 @@ export class ArenaEngine {
       }
       const loser = this.sideOf(match, principal);
       const winner = match.participants.find((p) => p.sideId !== loser)?.sideId ?? loser;
+      if (match.mode === "2v2") {
+        match.departedMembers ??= [];
+        if (!match.departedMembers.includes(principal.userId)) match.departedMembers.push(principal.userId);
+        match.memberPresence ??= {};
+        match.memberPresence[principal.userId] = "offline";
+        match.memberOfflineSinceMs ??= {};
+        match.memberOfflineSinceMs[principal.userId] = this.clock();
+        const round = this.currentRound(match);
+        if (round.readiness) delete round.readiness[principal.userId];
+        this.clearSurrenderVotesForSide(match, loser);
+        const teammates = match.participants.filter((member) => member.sideId === loser);
+        const everyoneLeft = teammates.every((member) => match.departedMembers?.includes(member.userId));
+        await this.authority.saveMatch(match);
+        return { winner: null, loser, teammateContinues: !everyoneLeft };
+      }
       this.recordForfeit(match, winner, loser, "leave");
       await this.authority.saveMatch(match);
       return { winner, loser };
+    });
+  }
+
+  /** Request or cancel a team's unanimous surrender. */
+  async setSurrenderVote(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+    approve: boolean,
+  ): Promise<{ complete: boolean }> {
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
+    return this.withMatchLock(matchId, async () => {
+      const match = await this.requireMember(principal, matchId);
+      if (match.roundPhase === "MATCH_COMPLETE" || match.forfeit) {
+        throw new IllegalStateError("match already complete");
+      }
+      this.requireUnexpired(match);
+      if (match.mode !== "2v2") throw new IllegalStateError("team surrender is only available in 2v2");
+      const side = this.sideOf(match, principal);
+      const activeMembers = match.participants.filter((member) => member.sideId === side &&
+        !match.departedMembers?.includes(member.userId) &&
+        (match.memberOfflineSinceMs?.[member.userId] === undefined ||
+          match.memberOfflineSinceMs[member.userId]! + this.reconnectGraceMs > this.clock()));
+      if (!activeMembers.some((member) => member.userId === principal.userId)) {
+        throw new NotMemberError(matchId);
+      }
+      const votes = new Set(match.surrenderVotes ?? []);
+      if (approve) votes.add(principal.userId);
+      else votes.delete(principal.userId);
+      const activeMemberIds = new Set(activeMembers.map((member) => member.userId));
+      match.surrenderVotes = [...votes].filter((userId) => {
+        const voter = match.participants.find((member) => member.userId === userId);
+        return voter !== undefined && (voter.sideId !== side || activeMemberIds.has(userId));
+      });
+      const complete = activeMembers.every((member) => votes.has(member.userId));
+      if (complete) {
+        const winner = match.participants.find((member) => member.sideId !== side)?.sideId;
+        if (!winner) throw new IllegalStateError("opposing team is missing");
+        this.recordForfeit(match, winner, side, "surrender");
+      }
+      await this.authority.saveMatch(match);
+      this.emit("surrender.changed", { matchId });
+      return { complete };
     });
   }
 
@@ -1250,10 +1382,19 @@ export class ArenaEngine {
           this.recordForfeit(match, winner, side, "leave");
         }
 
-        participant.userId = this.uniqueAnonymousId(match);
+        const anonymousId = this.uniqueAnonymousId(match);
+        const wasDeparted = match.departedMembers?.includes(userId) ?? false;
+        participant.userId = anonymousId;
         participant.anonymized = true;
         delete match.memberPresence?.[userId];
         delete match.memberOfflineSinceMs?.[userId];
+        if (match.departedMembers) {
+          match.departedMembers = match.departedMembers.filter((memberId) => memberId !== userId);
+          if (wasDeparted) match.departedMembers.push(anonymousId);
+        }
+        if (match.surrenderVotes) {
+          match.surrenderVotes = match.surrenderVotes.filter((voterId) => voterId !== userId);
+        }
         for (const round of match.rounds) {
           delete round.readiness?.[userId];
           delete round.runTests[side];
@@ -1271,6 +1412,13 @@ export class ArenaEngine {
     let userId = this.uuid();
     while (match.participants.some((participant) => participant.userId === userId)) userId = this.uuid();
     return userId;
+  }
+
+  private clearSurrenderVotesForSide(match: MatchRecord, side: SideId): void {
+    if (!match.surrenderVotes) return;
+    match.surrenderVotes = match.surrenderVotes.filter((voterId) =>
+      match.participants.some((participant) => participant.userId === voterId && participant.sideId !== side),
+    );
   }
 
   private recordForfeit(match: MatchRecord, winner: SideId, loser: SideId, reason: ForfeitRecord["reason"]): void {
@@ -1372,15 +1520,30 @@ export class ArenaEngine {
         await this.authority.saveMatch(match);
       });
     }
+    // Recovery can complete both sides' accepted scores with no live submit
+    // request, so the game-owned automatic reveal is triggered here as well.
+    // It is idempotent (an already published reveal is returned unchanged) and
+    // a failed publish is retried by the next recovery or the deadline
+    // closure, so the round never waits for a request that cannot arrive.
+    for (const id of ids) {
+      await this.autoRevealIfAllSidesCounted(id, { graceMs: 0 }).catch((error) => {
+        console.error(`[arena] recovery reveal failed for match ${id}`, error);
+      });
+    }
     await this.sweepExpiredMatches();
     return { matches: ids.length, retried, failed };
   }
 
-  private async requireMember(principal: AuthenticatedPrincipal, matchId: string): Promise<MatchRecord> {
+  private async requireMember(principal: AuthenticatedPrincipal, matchId: string, allowDeparted = false): Promise<MatchRecord> {
     if (this.blockedAccounts.has(principal.userId)) throw new NotMemberError(matchId);
     const match = await this.authority.requireMember(principal, matchId);
+    if (!allowDeparted && match.departedMembers?.includes(principal.userId)) throw new NotMemberError(matchId);
     this.rememberDeadline(match);
     return match;
+  }
+
+  private requireActiveMember(match: MatchRecord, userId: string): void {
+    if (match.departedMembers?.includes(userId)) throw new NotMemberError(match.id);
   }
 
   private async loadMatchOrThrow(matchId: string): Promise<MatchRecord> {

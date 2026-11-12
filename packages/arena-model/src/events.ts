@@ -8,6 +8,7 @@ export const ARENA_EVENTS = [
   "player.statusChanged",
   "player.presenceChanged",
   "readiness.changed",
+  "surrender.changed",
   "tests.updated",
   "reveal.published",
   "round.advanced",
@@ -34,6 +35,8 @@ export interface ArenaEventPayloads {
     documentRevision?: number;
     revision: number;
   };
+  /** A snapshot refresh signal; vote details stay private to the requesting team. */
+  "surrender.changed": { matchId: string; revision: number };
   "tests.updated": { tests: Array<{ id: string; status: string }>; revision: number };
   "reveal.published": { round: number; revision: number };
   "round.advanced": { round: number; problemId: string; revision: number };

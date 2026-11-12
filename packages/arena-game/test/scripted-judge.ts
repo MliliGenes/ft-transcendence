@@ -27,6 +27,7 @@ export class ScriptedJudge implements GameJudge {
   private readonly plan: ScriptPlan[];
   private parked: Array<(v: ScriptPlan) => void> = [];
   private failRun: string | null = null;
+  private failAfterRunGate: string | null = null;
   private queuedRunStatus: ExecutionStatus | null = null;
   private runArmed = false;
   private runGate: Array<() => void> = [];
@@ -41,6 +42,10 @@ export class ScriptedJudge implements GameJudge {
 
   failNextRun(message: string): void {
     this.failRun = message;
+  }
+
+  failNextDeferredRun(message: string): void {
+    this.failAfterRunGate = message;
   }
 
   queueRunStatus(status: ExecutionStatus): void {
@@ -86,6 +91,11 @@ export class ScriptedJudge implements GameJudge {
       await new Promise<void>((resolve) => {
         this.runGate.push(resolve);
       });
+    }
+    if (this.failAfterRunGate) {
+      const message = this.failAfterRunGate;
+      this.failAfterRunGate = null;
+      throw new JudgeInfraError(message);
     }
     if (this.queuedRunStatus) {
       const status = this.queuedRunStatus;

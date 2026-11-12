@@ -2,7 +2,7 @@
 
 How chat-service, MinIO, Nginx and the browser work together for attachments. This is also the full guide to presigned URLs: the concepts, the exact flow, the code, the infrastructure, a hands-on lab and evaluation Q&A. Written from the code as of November 2026.
 
-**Size limits.** Images and PDFs are limited to 10 MiB, and videos (MP4, WebM, MOV) to 50 MiB. Where this guide says "1..10MiB", read it as the limit for that file type. The limit is chosen from the declared content type when signing and again at send time.
+**Size limits.** JPEG, PNG, WebP, GIF and PDF files are limited to 10 MiB. MP4, WebM and QuickTime (MOV) videos are limited to 50 MiB. The upload policy applies the limit for the requested MIME type; message sending checks the stored content type and size again.
 
 ---
 
@@ -76,20 +76,20 @@ sequenceDiagram
 
     Browser->>Chat: POST /chat/conversations/{id}/attachments/upload-url {contentType}
     Chat->>Chat: JWT auth + conversation access + MIME allowlist
-    Chat->>Chat: build POST policy (key, type, 1..10MiB, 5 min)
+    Chat->>Chat: build POST policy (key, type, 1..10MiB or 1..50MiB for video, 5 min)
     Chat-->>Browser: {uploadUrl, fields, objectKey, maxBytes, expiresInSeconds}
     Browser->>S3: multipart POST (fields first, file last)
     S3-->>Browser: 204 (or error)
     Browser->>Chat: POST /chat/conversations/{id}/messages {content, attachments:[objectKey]}
-    Chat->>S3: statObject (exists? size 1..10MiB?)
+    Chat->>S3: statObject (exists? size within its 10/50MiB type limit?)
     Chat->>DB: save message + keys
     Chat-->>Browser: saved message
 ```
 
 Step by step:
 
-1. **Request.** The client sends only the MIME type. The DTO (`create-attachment-upload-url.dto.ts`) allows JPEG, PNG, WebP, GIF and PDF.
-2. **Sign.** `MinioService.createUploadUrl` builds the key, then a policy: bucket, exact key, exact content type, size 1 byte to 10 MiB, expires in 5 minutes. `presignedPostPolicy` returns `{postURL, formData}`. This is a **local computation**: no request to MinIO is made to produce it.
+1. **Request.** The client sends only the MIME type. The DTO (`create-attachment-upload-url.dto.ts`) allows JPEG, PNG, WebP, GIF, PDF, MP4, WebM and QuickTime (`video/quicktime`).
+2. **Sign.** `MinioService.createUploadUrl` builds the key, then a policy: bucket, exact key, exact content type, a size range of 1 byte to 10 MiB for images/PDF or 50 MiB for video, and a 5-minute expiry. `presignedPostPolicy` returns `{postURL, formData}`. This is a **local computation**: no request to MinIO is made to produce it.
 3. **Upload.** The browser sends the form fields followed by the file as `multipart/form-data` straight to MinIO. If the file is too large, the wrong type, or late, MinIO itself rejects it.
 4. **Send.** The message request carries the key(s). `chat.service.ts` calls `verifyUploadedAttachment` for each one **before** saving.
 
@@ -99,11 +99,11 @@ Step by step:
 
 1. Requires the key to start with `attachments/<this conversation>/<this user>/`. So a user cannot attach somebody else's upload, or an upload from another conversation.
 2. The remainder must be a valid UUID v4. This blocks path tricks such as `../` or other prefixes.
-3. `statObject` against MinIO (over the internal endpoint) must succeed, meaning the object really exists. Size must be between 1 byte and 10 MiB.
+3. `statObject` against MinIO (over the internal endpoint) must succeed, meaning the object really exists. Size must be between 1 byte and the applicable cap: 10 MiB for images/PDF, or 50 MiB for video.
 
 Only then is the message written. Why check at all if the policy already limited the upload? Because the client could simply send a key it never uploaded, or a key belonging to someone else. The key is a *reference*, never proof of anything.
 
-The idempotency hash for message retries also covers the attachment list (`JSON.stringify([conversationId, content, attachments])`), so retrying the same request ID with a different attachment set conflicts.
+The idempotency hash for message retries covers the conversation, message text, attachment list and optional challenge room code (`JSON.stringify([conversationId, content, attachments, gameChallenge?.roomCode ?? null])`). Retrying the same request ID with different attachments or a different challenge code conflicts.
 
 ### 4.3 Preview and download
 
@@ -269,7 +269,7 @@ Magic-byte validation and malware scanning, orphan cleanup, object deletion on m
 
 ```
 Browser --(JWT)--> chat-service: "I want to upload image/png to conversation X"
-chat-service: check membership -> sign POST policy {key=attachments/X/me/uuid, type, 1..10MiB, 5min}
+chat-service: check membership -> sign POST policy {key=attachments/X/me/uuid, type, 1..10MiB or 1..50MiB for video, 5min}
 Browser --multipart POST--> https://localhost:9443 (Nginx, Host kept) -> MinIO
 Browser --(JWT)--> chat-service: send message {attachments:[key]}
 chat-service: key prefix + uuid check -> statObject (internal http://minio:9000) -> save key in Postgres

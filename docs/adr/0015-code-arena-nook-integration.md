@@ -29,8 +29,9 @@ Nook's first game is Code Arena, a timed coding game for 1v1 duels and 2v2 teams
 
 - Code Arena provides three seeded problem IDs to a three-round match, avoiding repeats in the default pool.
 - The game supports four simultaneous participants in 2v2; separate-client remote play and reconnect behavior must still be demonstrated during evaluation.
-- Profile statistics and leaderboard currently use wins, losses, draws and win rate; there is no Elo rating, achievement or progression system.
-- The invitation card opens the lobby and the Game service checks joinability, but the chat card does not display a separate live availability status.
+- Profile statistics and leaderboard use wins, losses, draws and win rate; profile progression and achievement badges are implemented. There is no Elo rating.
+- The Chat invitation card shows a live `Open`, `In Match`, or `Expired` status. That status is informational; Game checks joinability again when a participant opens or joins the room.
 - Game lifecycle notifications are announced only in the conversation that carries the challenge. A match started from the matchmaking queue has no linked conversation and is not announced in chat.
-- Account deletion propagates to Chat's cached profile but not to Game. Prior match identifiers, code submissions and collaborative snapshots can remain in Game PostgreSQL; see the [Privacy Policy](../../client/app/(legal)/privacy/page.tsx).
+- Account deletion revokes active Game access, removes lobby participation, ends affected active matches, anonymizes retained match results, and deletes submissions, judge output and collaboration data for the affected side. The live Game database is covered; database backups and copied volumes follow the operator's retention policy. See the [integration specification](../spec/code-arena-integration-spec.md#persistence-and-privacy-boundary) and [Privacy Policy](../../client/app/(legal)/privacy/page.tsx).
+- The current default problem pool is three seeded problem versions. A larger, authored 42 Network-inspired catalog is deferred.
 - Module eligibility is not guaranteed by this architecture decision. Use the [local module tracker](../requirements/index.html) and verify each criterion with the team and evaluator.

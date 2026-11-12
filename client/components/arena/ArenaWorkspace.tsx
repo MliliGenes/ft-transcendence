@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { IconCheck, IconCode, IconPlayerPlay, IconSend } from "@tabler/icons-react";
+import { IconCheck, IconCode, IconFlag, IconPlayerPlay, IconSend } from "@tabler/icons-react";
 import type { ArenaTransport } from "@/lib/arena/transport";
 import { useArena } from "@/hooks/useArena";
 import { createArenaSidecarLifecycle, type SidecarState } from "@/lib/arena/sidecars";
@@ -85,6 +85,10 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
 
   async function handleToggleReady() {
     await transport.setReady(!snapshot.ready.you);
+  }
+
+  async function handleSurrender() {
+    await transport.surrender(!snapshot.surrender.you);
   }
 
   const isCoding = snapshot.roundPhase === "CODING";
@@ -171,17 +175,63 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                 </Button>
               )}
 
+              {snapshot.mode === "2v2" && (
+                <Button
+                  variant={snapshot.surrender.you ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={handleSurrender}
+                  disabled={snapshot.roundPhase === "MATCH_COMPLETE"}
+                  className="h-7 text-xs font-medium"
+                  title="Both active teammates must approve. After a teammate leaves or is disconnected for 90 seconds, you may decide alone."
+                >
+                  <IconFlag className="size-3.5 mr-1" />
+                  <span>
+                    {snapshot.surrender.you
+                      ? "Cancel surrender"
+                      : snapshot.surrender.mate
+                        ? "Approve surrender"
+                        : "Request surrender"}
+                  </span>
+                </Button>
+              )}
+
               <Button
                 size="sm"
                 onClick={handleSubmit}
                 disabled={isSubmitDisabled}
                 className="h-7 text-xs font-medium"
+                title="Your latest completed submission replaces your team's scored answer. The round reveals and closes after both teams have scored."
               >
                 <IconSend className="size-3.5 mr-1" />
                 <span>{isSubmitting ? "Evaluating…" : "Submit"}</span>
               </Button>
             </div>
           </div>
+
+          <p className="border-t border-border bg-muted/30 px-3 py-1 text-xs text-muted-foreground" role="status">
+            Your latest completed submission replaces your team&apos;s scored answer. The round reveals and closes after both teams have scored.
+          </p>
+          {snapshot.mode === "2v2" && (
+            <p className="border-t border-border bg-muted/30 px-3 py-1 text-xs text-muted-foreground" role="status">
+              Both teammates must approve until one leaves or stays disconnected for 90 seconds. A returning teammate must approve again.
+            </p>
+          )}
+
+          {snapshot.mode === "2v2" && snapshot.surrender.mate && !snapshot.surrender.you && (
+            <p className="border-t border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground" role="status">
+              Your teammate requested surrender. Approve to end the match, or keep playing.
+            </p>
+          )}
+          {snapshot.mode === "2v2" && snapshot.surrender.you && !snapshot.surrender.mate && (
+            <p className="border-t border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground" role="status">
+              Surrender requested. The match ends if your teammate approves.
+            </p>
+          )}
+          {snapshot.mode === "2v2" && snapshot.alpha.members[1].departed && (
+            <p className="border-t border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground" role="status">
+              Your teammate left. You can continue the match on your own.
+            </p>
+          )}
 
           {/* Editor Container */}
           <div className="flex-1 overflow-hidden relative">

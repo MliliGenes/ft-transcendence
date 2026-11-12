@@ -67,10 +67,16 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       principal = principalFromHandshake(client, { matchIdRequired: true });
       const { userId, matchId } = principal;
       await this.game.assertAccountActive(userId);
-      await this.game.snapshot(userId, matchId);
-      await this.game.noteSocketOpen(userId, matchId, client.id);
-      opened = true;
       attachSocketPrincipal(client, principal);
+      await this.game.snapshot(userId, matchId);
+      if (!client.connected) return;
+      opened = true;
+      await this.game.noteSocketOpen(userId, matchId, client.id);
+      if (!client.connected) {
+        await this.game.noteSocketClosed(userId, matchId, client.id);
+        opened = false;
+        return;
+      }
       await client.join(roomFor(matchId));
       client.emit("snapshot", await this.game.snapshot(userId, matchId));
     } catch {

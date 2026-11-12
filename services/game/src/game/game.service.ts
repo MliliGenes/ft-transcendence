@@ -49,7 +49,7 @@ export function selectLobbyProblems(): string[] {
 /**
  * Thin application layer over ArenaEngine: owns NOTHING domain (no scoring,
  * phases, or counting here). Handles engine lifecycle, store selection, the
- * 1v1 auto-reveal condition (all sides counted -> game-owned publish), and
+ * game-owned auto-reveal requests, and
  * event fan-out to the gateway.
  */
 @Injectable()
@@ -308,6 +308,10 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
     return this.engine.leaveMatch(this.principalFor(userId), matchId);
   }
 
+  async setSurrenderVote(userId: string, matchId: string, approve: boolean) {
+    return this.engine.setSurrenderVote(this.principalFor(userId), matchId, approve);
+  }
+
   async createMatch(input: { mode: "1v1" | "2v2"; participants: Array<{ userId: string; sideId: string }>; problemVersionIds: string[] }): Promise<{ matchId: string }> {
     const matchId = await this.engine.createMatch(input);
     return { matchId };
@@ -333,9 +337,10 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
 
   async submit(userId: string, matchId: string, input: { code: string; language: string; submissionId?: string; evaluationId?: string; documentRevision?: number }) {
     const receipt = await this.engine.submit(this.principalFor(userId), matchId, input);
-    // Reveal condition (game-owned): every side counted -> publish.
-    // Fire-and-forget: publish errors never fail the accepted submission.
-    void this.maybeAutoReveal(userId, matchId).catch(() => {});
+    // The engine checks the counted-score condition and publishes independently
+    // of this caller's membership, which may change while evaluation is running.
+    // Fire-and-forget: reveal errors never fail the accepted submission.
+    void this.engine.autoRevealIfAllSidesCounted(matchId, { graceMs: 1500 }).catch(() => {});
     return receipt;
   }
 
@@ -515,19 +520,6 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
 
   async userActiveRoom(userId: string): Promise<RoomWithMembers | null> {
     return this.lobbyStore.userActiveRoom(userId);
-  }
-
-  private async maybeAutoReveal(userId: string, matchId: string): Promise<void> {
-    const principal = this.principalFor(userId);
-    const sides = await this.engine.roundSides(principal, matchId);
-    const counted = await this.engine.roundCountedSides(principal, matchId);
-    if (sides.length > 0 && counted.length >= sides.length) {
-      try {
-        await this.engine.publishReveal(principal, matchId, { graceMs: 1500 });
-      } catch {
-        // Already revealed/advanced by a concurrent path; safe to ignore.
-      }
-    }
   }
 
   // ─── Lifecycle events for other services ───────────────────────────────────

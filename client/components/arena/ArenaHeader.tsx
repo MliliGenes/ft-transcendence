@@ -23,7 +23,10 @@ export function ArenaHeader({ snapshot, connection, onLeave }: ArenaHeaderProps)
   const { round, totalRounds, remainingSeconds, mode, roundPhase, you, opponent } = snapshot;
 
   async function handleLeave() {
-    if (confirm("Are you sure you want to forfeit and leave the match?")) {
+    const prompt = mode === "2v2"
+      ? "Leave this match? Your teammate can continue playing."
+      : "Are you sure you want to forfeit and leave the match?";
+    if (confirm(prompt)) {
       setLeaving(true);
       try {
         await onLeave();
@@ -65,7 +68,7 @@ export function ArenaHeader({ snapshot, connection, onLeave }: ArenaHeaderProps)
               ? "border-destructive bg-destructive/10 text-destructive animate-pulse"
               : "border-border bg-background text-foreground"
           }`}
-          aria-label="Remaining round time"
+          aria-label="Remaining match time"
         >
           <IconClock className="size-4 text-muted-foreground" aria-hidden="true" />
           <span>{formatClock(remainingSeconds)}</span>
@@ -88,7 +91,7 @@ export function ArenaHeader({ snapshot, connection, onLeave }: ArenaHeaderProps)
             size="sm"
             onClick={handleLeave}
             disabled={leaving}
-            aria-label="Forfeit and leave match"
+            aria-label={mode === "2v2" ? "Leave match" : "Forfeit and leave match"}
             className="text-muted-foreground hover:text-destructive"
           >
             <IconDoorExit className="size-4 mr-1" aria-hidden="true" />

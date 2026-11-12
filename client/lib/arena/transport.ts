@@ -92,4 +92,6 @@ export interface ArenaTransport {
   advance(): Promise<void>;
   /** Deliberate leave → immediate forfeit (§15). Never socket loss. */
   leave(): Promise<void>;
+  /** Request or withdraw the team's unanimous surrender vote. */
+  surrender(approve: boolean): Promise<void>;
 }

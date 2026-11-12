@@ -120,6 +120,13 @@ export class GameController {
     return this.game.leave(userId, id);
   }
 
+  @Post(":id/surrender")
+  surrender(@Req() req: Request, @Param("id") id: string, @Body() body: { approve: boolean }) {
+    const { userId } = requirePrincipal(req);
+    if (typeof body?.approve !== "boolean") throw new BadRequestException("approve must be a boolean");
+    return this.game.setSurrenderVote(userId, id, body.approve);
+  }
+
   @Get(":id/final")
   final(@Req() req: Request, @Param("id") id: string) {
     const { userId } = requirePrincipal(req);

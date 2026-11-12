@@ -40,13 +40,15 @@ Open `https://localhost` and accept the local certificate. Source changes need `
 
 | File | Holds |
 | --- | --- |
-| `backend.env` | Runtime mode for both backends |
-| `user-db.env`, `chat-db.env` | Database credentials, loaded by the database, its service, and its backup container |
-| `rabbitmq.env` | Broker credentials, loaded by the broker and both backends |
+| `backend.env` | Shared runtime mode for User, Chat and Game |
+| `user-db.env`, `chat-db.env`, `game-db.env` | Database credentials, loaded by each database and its backup container; User and Chat services also load their database settings |
+| `rabbitmq.env` | Broker credentials, loaded by RabbitMQ and the User, Chat and Game services |
 | `minio.env` | MinIO root account and CORS origins |
 | `user-service.env` | Internal addresses, SMTP, initial superadmin |
 | `user-auth.env` | JWT keys, frontend origin, OAuth |
 | `chat-service.env` | Internal addresses, public JWT key, storage credentials |
+| `game-service.env` | Game database URL, public JWT key, judge worker connection and game settings |
+| `judge-worker.env` | Shared judge token and execution limits |
 | `grafana.env`, `monitoring.env` | Monitoring credentials |
 
 ### Superadmin bootstrap
@@ -168,16 +170,20 @@ gzip -dc "$backup_file" |
 ```
 
 For Chat, replace `user-db-backup` with `chat-db-backup` and both occurrences of
-`nook_users_restore` with `nook_chat_restore`. A failed restore leaves the new
-database for inspection; it never drops a database automatically. To restore an
-older dump, use its timestamped path instead of the `latest` symlink.
+`nook_users_restore` with `nook_chat_restore`. For Game, use `game-db-backup` and
+replace both occurrences with `nook_game_restore`; the Game backup container
+provides the same `POSTGRES_*` settings, so the same command applies. A failed
+restore leaves the new database for inspection; it never drops a database
+automatically. To restore an older dump, use its timestamped path instead of the
+`latest` symlink.
 
-Inspect restored tables, row counts, and Prisma migration history, then exercise
-the application against isolated restored databases before planning a live
-recovery. Restore drills and application checks must be performed explicitly;
-adding this configuration alone does not prove recovery. Recreate any extra roles
-and grants separately. A live recovery also requires coordinating both services
-and restoring the matching MinIO files.
+Inspect restored tables and row counts, and check Prisma migration history for the
+User and Chat databases. For Game, compare the restored tables with the current
+Game service schema. Then exercise the applications against isolated restored
+databases before planning a live recovery. Restore drills and application checks
+must be performed explicitly; adding this configuration alone does not prove
+recovery. Recreate any extra roles and grants separately. A live recovery also
+requires coordinating all three services and restoring the matching MinIO files.
 
 ## Gateway (Nginx)
 

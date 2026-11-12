@@ -17,7 +17,7 @@ Before deployment, the instance owners must identify which exposed credentials r
 
 ## Release/evaluation gates
 
-The branch can be reviewed independently of the credential-rotation operation, but must not be described as deployment-ready until that operation is resolved. Separate-computer gameplay, G06 notification acceptance, team attribution and rubric demonstrations remain in the [points roadmap](POINTS_ROADMAP.md). Backup scheduling must be installed by the operator; destructive live restore commands are not routine smoke tests.
+The branch can be reviewed independently of the credential-rotation operation, but must not be described as deployment-ready until that operation is resolved. Separate-computer gameplay, full G06 module/evaluator confirmation, team attribution and rubric demonstrations remain in the [points roadmap](POINTS_ROADMAP.md). The G06 game-notification path has a live two-client demonstration; see its [evidence record](../evidence/g06-live-demo/README.md). Backup scheduling must be installed by the operator; destructive live restore commands are not routine smoke tests.
 
 ## Verification (2026-11-11)
 

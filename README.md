@@ -32,7 +32,8 @@ flowchart LR
   UserDB[(User PostgreSQL)]
   Chat[Chat service · NestJS]
   ChatDB[(Chat PostgreSQL)]
-  Events[RabbitMQ user events]
+  Events[RabbitMQ user.events]
+  GameEvents[RabbitMQ game.events]
   MinIO[MinIO attachments]
   Game[Code Arena · NestJS]
   GameDB[(Game PostgreSQL)]
@@ -49,6 +50,8 @@ flowchart LR
   User --> Events
   Events --> Chat
   Events --> Game
+  Game --> GameEvents
+  GameEvents --> Chat
   Chat --> ChatDB
   Chat --> MinIO
   Game --> GameDB
@@ -59,7 +62,7 @@ flowchart LR
   Monitor -. observes services .-> Game
 ```
 
-Nginx is the browser-facing HTTPS entry point. Service and database ports are private to the Compose network, apart from the explicitly loopback-bound development tools below. User owns account identity and authentication; Chat owns messages and groups; Code Arena owns matches, rounds, submissions and collaboration snapshots. The services use separate PostgreSQL databases. RabbitMQ propagates account profile and deletion events to Chat, and account deletion events to Game. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records.
+Nginx is the browser-facing HTTPS entry point. Service and database ports are private to the Compose network, apart from the explicitly loopback-bound development tools below. User owns account identity and authentication; Chat owns messages and groups; Code Arena owns matches, rounds, submissions and collaboration snapshots. The services use separate PostgreSQL databases. RabbitMQ carries User account events to Chat and account-deletion events to Game. Game also publishes match and challenge lifecycle events to Chat, which stores them as notices in the conversation that carries an invitation. Delivery is best effort because Game does not keep an outbox for replay after a broker failure. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records.
 
 The judge worker currently mounts the host Docker socket because it creates the isolated execution containers. Treat that worker as a privileged host component: keep the worker endpoint and shared token private, and review the Docker-host trust boundary before using this setup for an untrusted public multi-tenant service.
 
@@ -72,7 +75,7 @@ The judge worker currently mounts the host Docker socket because it creates the 
 | Account and Chat persistence | PostgreSQL and Prisma | Relational identity/social data and conversation/group data with migrations |
 | Game persistence | PostgreSQL with parameterized SQL | Atomic match snapshots, round/submission records and collaborative state |
 | Realtime | Socket.IO, Yjs | Presence, chat, matchmaking and collaborative 2v2 editing |
-| Service events | RabbitMQ | Profile synchronization to Chat and account deletion delivery to Chat and Game |
+| Service events | RabbitMQ | Profile synchronization to Chat, account deletion to Chat and Game, and Code Arena lifecycle notices to Chat |
 | Attachments | MinIO | Private object storage with presigned browser uploads/downloads |
 | Code execution | Judge worker and Docker | Isolated execution of Code Arena submissions |
 | Local orchestration | Docker Compose | Repeatable multi-service development and demonstration |
@@ -143,17 +146,17 @@ The [ft_transcendence v21.2 subject](ft_trans_subject.pdf) is the requirements s
 
 | Module | Maximum | Current evidence and remaining condition |
 |---|---:|---|
-| G01 · Complete web-based game | 2 | Code Arena has playable 1v1/2v2 modes, scoring and outcomes; the three-round Game-service HTTP flow passes. Demonstrate a complete match and explain the rules. |
+| G01 · Complete web-based game | 2 | Saved 1v1 evidence shows a live two-client match that ended in a forfeit — a completed match with a recorded winner — and a Round 1 score reveal (100 points earned; the cumulative score at 100–100 at that point, not a final result). The saved evidence does not include a completed three-round scored match. The [integration specification](docs/spec/code-arena-integration-spec.md) describes the rules and outcomes, and the [roadmap](docs/project/POINTS_ROADMAP.md) records the runs. Be ready to explain them during evaluation. |
 | G02 · Remote players | 2 | Server-authoritative deadlines, revisioned snapshots, reconnect grace, and visible connection state are covered by engine and real-socket/PostgreSQL restart tests. Demonstrate two clients on separate computers with latency/disconnection recovery. |
-| G03 · More than two players | 2 | Four-client 2v2 service/socket tests cover team isolation, collaborative readiness, and reveal delivery. Demonstrate fair synchronized play with all four clients. |
+| G03 · More than two players | 2 | A saved four-player 2v2 run put four isolated browser clients in one match: an edit made by one teammate appeared in the other teammate's editor, the opposing team kept its own separate shared document, and the Alpha team's two visible tests passed with output `10`. That run did not reach a completed match, a scored round or a final result, so no complete 2v2 result is claimed. The subject requires more than two players, fair play, and synchronized clients; separate computers are part of G02. A live reconnect is an optional team confidence check, not a separate G03 requirement. See the [gameplay review](docs/spec/code-arena-gameplay-review.md). |
 | U01 · User management | 2 | Account, profile, friend and presence flows exist. Verify the full rubric and demonstrate the flows. |
 | U02 · Game statistics/history | 1 | Match history, win/loss summaries, leaderboard, player progression (XP, levels, rank titles) and 6 unlockable achievements are implemented and displayed on profile and leaderboard. Demonstrate the flows. |
-| W09 · Real-time collaboration | 1 | Code Arena 2v2 implements synchronized multi-user code editing with CodeMirror and Yjs CRDTs over authenticated Socket.IO (`/collab` namespace), with conflict resolution and document revision tracking. |
-| G06 · Advanced chat | 1 | Persistent history, bidirectional block enforcement, game invitations, profile access, typing indicators and durable read receipts are implemented, with prior automated and live dual-user verification recorded. Game notifications in chat are now a separate, server-backed path: the Game service publishes authoritative match events and Chat writes match-start, match-result (including forfeit) and cancellation notices into the linked conversation, with automated evidence. Verify them live against subject §IV.6 before claiming the full module. |
+| W09 · Real-time collaboration | 1 | Code Arena 2v2 implements synchronized multi-user code editing with CodeMirror and Yjs over authenticated Socket.IO (`/collab` namespace), with conflict resolution and document revision tracking. The saved four-client run showed a teammate's edits arrive live while the other team's document stayed separate; details are in the [gameplay review](docs/spec/code-arena-gameplay-review.md). |
+| G06 · Advanced chat | 1 | Persistent history, bidirectional block enforcement, game invitations, profile access, typing indicators and durable read receipts are implemented, with prior automated and live dual-user verification recorded. Game notifications in chat are a separate server-backed path: the Game service publishes authoritative match events and Chat writes match-start, match-result (including forfeit) and cancellation notices into the linked conversation. Automated evidence and the live two-client demonstration (2026-11-11) are recorded in the [G06 evidence](docs/evidence/g06-live-demo/README.md). Full-module acceptance still depends on the complete subject rubric. |
 | D03 · Backend microservices | 2 | User, Chat, Game and judge responsibilities have separate service boundaries and APIs/events. Demonstrate the service interactions. |
 | D04 · Health/status/backups/recovery | 1 | Compose health checks cover all service containers; public `/status` page and `/api/status` endpoint; multi-database (User, Chat, Game) and MinIO snapshot/restore scripts with checksums and retention. Install one operator-managed schedule and demonstrate clean-service recovery; prior live restore smoke checks do not establish that. See [backup guidance](docs/infra/BACKUP_RECOVERY.md). |
 
-No final module total is claimed here. If every listed module were accepted at its maximum, their arithmetic subtotal would be **14 points** (2 + 2 + 2 + 2 + 1 + 1 + 1 + 2 + 1); incomplete modules contribute zero until the team completes and demonstrates their requirements. Reconcile the full project score with the subject and tracker before submission. G06 remains conditional on the separate notification check above. G09 gamification is a candidate outside this subtotal: achievements, leaderboards and XP/levels exist, but database persistence across restart, visual feedback and clear progression rules still need an acceptance demonstration against subject §IV.6.
+No evaluator-awarded total is recorded here. The nine listed modules have a **14-point maximum** (2 + 2 + 2 + 2 + 1 + 1 + 1 + 2 + 1), but several still need acceptance demonstrations; an implementation or local test alone does not guarantee points. The G06 notification check has been demonstrated live and is marked complete in the roadmap, while final module acceptance remains with the evaluators. G09 gamification is a candidate outside this subtotal: achievements, leaderboards and XP/levels exist, but database persistence across restart, visual feedback and clear progression rules still need an acceptance demonstration against subject §IV.6.
 
 ## Privacy, terms and operational notes
 
@@ -183,7 +186,7 @@ cd client && npm test && npm run lint && npm run build
 cd .. && node nginx/check.mjs
 ```
 
-The game Postgres restart test needs `TEST_PG_URL`; the in-memory game suite does not exercise the configured deployment database. `nginx/check.mjs` verifies local gateway routing after the stack is running. See [all project documentation](docs/README.md) for service guides, plans, diagrams and setup details.
+Direct Game PostgreSQL tests need `TEST_PG_URL` to point to a disposable test database; the in-memory game suite does not exercise persistent SQL behavior. `npm run test:integration` starts disposable PostgreSQL and RabbitMQ containers and runs the database/socket suites without a preconfigured `TEST_PG_URL`. `nginx/check.mjs` verifies local gateway routing after the stack is running. See [all project documentation](docs/README.md) for service guides, plans, diagrams and setup details.
 
 ## Git activity report
 

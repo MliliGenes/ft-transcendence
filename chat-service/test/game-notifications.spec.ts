@@ -296,6 +296,34 @@ describe('GameNotificationsService', () => {
     expect(messages[1]!.content).toContain('left the match');
   });
 
+  it('announces unanimous surrender as a surrender, not an ordinary leave', async () => {
+    const { service, messages, ...fake } = build();
+    await linkChallenge(fake, ROOM, CONVERSATION);
+    await service.applyGameEvent(matchStarted);
+
+    const surrenderEvent = {
+      ...matchEnded,
+      eventId: '9f8b1c2d-6666-4666-8666-666666666666',
+      data: {
+        ...matchEnded.data,
+        participants: [
+          { userId: ALICE, sideId: 'left', outcome: 'win', score: 0 },
+          { userId: BOB, sideId: 'right', outcome: 'loss', score: 0 },
+        ],
+        forfeit: { winnerSideId: 'left', loserSideId: 'right', reason: 'surrender' },
+        endedBecause: 'forfeit',
+      },
+    };
+    expect(parseGameEvent(surrenderEvent)).toMatchObject({
+      data: { forfeit: { reason: 'surrender' } },
+    });
+    const outcome = await service.applyGameEvent(surrenderEvent as never);
+
+    expect(outcome.delivered).toBe(true);
+    expect(messages).toHaveLength(2);
+    expect(messages[1]!.content).toContain('surrendered');
+  });
+
   it('announces a draw with both public totals', async () => {
     const { service, messages, ...fake } = build();
     await linkChallenge(fake, ROOM, CONVERSATION);

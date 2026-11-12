@@ -29,7 +29,7 @@ One document per service, and one per place where services meet.
 | [Product context](project/PROJECT_CONTEXT.md) | Vision, spaces, decisions |
 | [Points roadmap](project/POINTS_ROADMAP.md) | Module plan and point targets |
 | [Module tracker](requirements/index.html) | ft_transcendence module checklist, open in a browser |
-| [Handbook PDF](book/Nook-Book.pdf) | Core product, service, integration, API and code-map reference, with Aimane’s dark-mode profile, Games tab, Play page, leaderboard, two-player 1v1 lobby, ready gate, coding screen, scored-round reveal, live 2v2 editor/team-chat workspace and forfeit result placed beside their matching topics. Selected two-client invitation and lifecycle screenshots sit beside the related behavior; the book also links the complete [21-page G06 screenshot proof](evidence/g06-live-demo/screenshots.pdf). Source captures are in `book/assets`, so the illustrated pages rebuild with the PDF; no personal or disposable-account email addresses are included. Rebuild with `cd docs/book && npm install && npm run build` |
+| [Handbook PDF](book/Nook-Book.pdf) | Core product, service, integration, API and code-map reference, with Aimane’s dark-mode profile, Games tab, Play page, leaderboard, two-player 1v1 lobby, ready gate, coding screen, scored-round reveal, four-player 2v2 ready lobby, live 2v2 editor/team-chat workspace and forfeit result placed beside their matching topics. Selected two-client invitation and lifecycle screenshots sit beside the related behavior; the book also links the complete [21-page G06 screenshot proof](evidence/g06-live-demo/screenshots.pdf). Source captures are in `book/assets`, so the illustrated pages rebuild with the PDF; no personal or disposable-account email addresses are included. Rebuild with `cd docs/book && npm install && npm run build` |
 | [UI mockups](client/ui-mockups/) | Reference screens |
 | Design tokens | `client/NOOK_DESIGN_SYSTEM.json`, kept next to the code because a test checks it |
 
@@ -38,9 +38,11 @@ One document per service, and one per place where services meet.
 | Document | Covers |
 | --- | --- |
 | [Integration specification](spec/code-arena-integration-spec.md) | Game routes, HTTP/socket contracts, data ownership and demonstration requirements |
+| [Gameplay review](spec/code-arena-gameplay-review.md) | Agreed 2v2 rules, regression results, local four-client evidence and remaining limits |
 | [Chat lifecycle notifications](services/chat-service.md#code-arena-lifecycle-notifications) | Room-owner authorization, Game event publishing, Chat delivery and related tests |
 | [G06 demo evidence](evidence/g06-live-demo/README.md) and [screenshot PDF](evidence/g06-live-demo/screenshots.pdf) | Two-client screenshots in one 21-page file, stored message rows and live demonstration limits |
 | [Integration decision](adr/0015-code-arena-nook-integration.md) | Service boundaries and accepted decisions |
+| [Single-instance decision](adr/0016-one-game-service-instance.md) | One Game service instance for the initial release |
 | [Game engine](../packages/arena-game/src/engine.ts) and [Game service](../services/game/src/game/game.service.ts) | Authoritative gameplay and authenticated API |
 | [Complete backup/recovery guide](infra/BACKUP_RECOVERY.md) | User, Chat, Game and MinIO snapshots; restore limitations |
 | [Game deployment guide](project/COMPOSE.md) | Game/Judge environment and Compose setup |
@@ -51,5 +53,7 @@ One document per service, and one per place where services meet.
 ## Engineering checks
 
 [Repeatable verification](project/VERIFICATION.md) is the entry point for the full gate, disposable services, secret hooks and CI.
+
+The dated [2026-11-12 documentation drift audit](../2026-11-12_DRIFT_REPORT.md) records the initial findings and their resolution status.
 
 The committed code graph lives in `../graphify-out/` and can be refreshed with `graphify update .`. Code extraction is deterministic and local; optional community names use an LLM. The 2026-11-11 missing-label pass used Ollama with local `qwen3.5:4b`, preserved 47 existing labels, and manually clarified two duplicate Docker labels. The Understand-Anything snapshot in `../.ua/` records its source commit in `meta.json`; the handbook flags it as stale when that commit no longer matches `HEAD`.

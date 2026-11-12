@@ -341,7 +341,9 @@ export class GameNotificationsService {
       const cause =
         data.forfeit.reason === 'grace-expired'
           ? 'did not reconnect in time'
-          : 'left the match';
+          : data.forfeit.reason === 'surrender'
+            ? 'surrendered'
+            : 'left the match';
       return `${winnerLabel} won by forfeit (${loserLabel} ${cause})`;
     }
 

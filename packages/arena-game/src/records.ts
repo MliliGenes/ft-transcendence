@@ -8,7 +8,7 @@ export interface ForfeitRecord {
   loser: SideId;
   /** Server time of the terminal decision. */
   at: number;
-  reason: "grace-expired" | "leave";
+  reason: "grace-expired" | "leave" | "surrender";
 }
 
 export interface Participant {
@@ -102,7 +102,11 @@ export interface MatchRecord {
    */
   memberPresence?: Partial<Record<string, Presence>>;
   memberOfflineSinceMs?: Partial<Record<string, number>>;
-  /** Terminal forfeit decision (grace expiry or deliberate leave); null otherwise. */
+  /** Members who explicitly left; they cannot rejoin or act in this Match. */
+  departedMembers?: string[];
+  /** Members who have voted to surrender their team's active Match. */
+  surrenderVotes?: string[];
+  /** Terminal forfeit decision (grace expiry, leave, or surrender); null otherwise. */
   forfeit: ForfeitRecord | null;
 }
 

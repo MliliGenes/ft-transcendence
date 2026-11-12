@@ -200,7 +200,7 @@
         "tags": [
           "Messages"
         ],
-        "description": "Persists a message for an authenticated DM participant or a current member of the group that owns a CHANNEL conversation. The server emits a newly stored message to the DM participants or current group members through their private user rooms. clientRequestId scopes idempotency to the author. A same-ID request with a different conversation/content hash returns 409; an identical retry returns the existing message and does not emit again.",
+        "description": "Persists a message for an authenticated DM participant or a current member of the group that owns a CHANNEL conversation. The server emits a newly stored message to the DM participants or current group members through their private user rooms. clientRequestId scopes idempotency to the author. The request hash is SHA-256 of the JSON tuple [conversationId, content, attachments, gameChallenge.roomCode or null]. A same-ID request with a different hash returns 409; an identical retry returns the existing message and does not emit again.",
         "requestBody": {
           "required": true,
           "content": {
@@ -230,13 +230,20 @@
                       "id": "6681dc8a-eb00-4502-abc4-24706c2fa433",
                       "conversationId": "1ee9b51b-c93d-45da-ab9d-03eb1a76302d",
                       "authorId": "90299aa4-f556-4337-9c98-74e4d215fa29",
+                      "kind": "USER",
                       "content": "Hello from the chat service",
                       "createdAt": "2026-10-31T06:38:49.525Z",
                       "editedAt": null,
                       "deletedAt": null,
                       "clientRequestId": "908a6c18-78fc-45bf-9677-d5c7eb1317d3",
                       "requestHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                      "version": 1
+                      "version": 1,
+                      "author": {
+                        "id": "90299aa4-f556-4337-9c98-74e4d215fa29",
+                        "username": "player2",
+                        "displayName": "Player Two",
+                        "avatarUrl": null
+                      }
                     }
                   }
                 }
@@ -292,13 +299,20 @@
                     "id": "6681dc8a-eb00-4502-abc4-24706c2fa433",
                     "conversationId": "1ee9b51b-c93d-45da-ab9d-03eb1a76302d",
                     "authorId": "90299aa4-f556-4337-9c98-74e4d215fa29",
+                    "kind": "USER",
                     "content": "Newest message",
                     "createdAt": "2026-10-31T06:38:49.525Z",
                     "editedAt": null,
                     "deletedAt": null,
                     "clientRequestId": "f5a049b6-82af-49f4-b440-037b12e19a8c",
                     "requestHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                    "version": 1
+                    "version": 1,
+                    "author": {
+                      "id": "90299aa4-f556-4337-9c98-74e4d215fa29",
+                      "username": "player2",
+                      "displayName": "Player Two",
+                      "avatarUrl": null
+                    }
                   }
                 ]
               }
@@ -409,13 +423,20 @@
                   "id": "6681dc8a-eb00-4502-abc4-24706c2fa433",
                   "conversationId": "1ee9b51b-c93d-45da-ab9d-03eb1a76302d",
                   "authorId": "90299aa4-f556-4337-9c98-74e4d215fa29",
+                  "kind": "USER",
                   "content": "Updated message content",
                   "createdAt": "2026-10-31T06:38:49.525Z",
                   "editedAt": "2026-10-31T07:00:00.000Z",
                   "deletedAt": null,
                   "clientRequestId": "f5a049b6-82af-49f4-b440-037b12e19a8c",
                   "requestHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                  "version": 2
+                  "version": 2,
+                  "author": {
+                    "id": "90299aa4-f556-4337-9c98-74e4d215fa29",
+                    "username": "player2",
+                    "displayName": "Player Two",
+                    "avatarUrl": null
+                  }
                 }
               }
             }
@@ -1544,6 +1565,20 @@
               "maxLength": 200
             },
             "maxItems": 5
+          },
+          "gameChallenge": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "roomCode"
+            ],
+            "properties": {
+              "roomCode": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9]{6}$",
+                "description": "Six-character private-room code. The service trims surrounding spaces and normalizes the code to uppercase."
+              }
+            }
           }
         }
       },
@@ -1710,6 +1745,7 @@
           "id",
           "conversationId",
           "authorId",
+          "kind",
           "content",
           "createdAt",
           "editedAt",
@@ -1732,6 +1768,14 @@
           "authorId": {
             "type": "string",
             "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "USER",
+              "SYSTEM"
+            ],
+            "description": "USER messages are written by account holders; SYSTEM messages are created for service notices such as Code Arena lifecycle events."
           },
           "content": {
             "type": [
@@ -1766,7 +1810,7 @@
           "requestHash": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$",
-            "description": "Server-computed SHA-256 hex digest"
+            "description": "Server-computed SHA-256 hex digest of JSON.stringify([conversationId, content, attachments, gameChallenge?.roomCode ?? null])"
           },
           "version": {
             "type": "integer",
@@ -2527,7 +2571,7 @@
         }
       }
     },
-    "serverBehavior": "After authentication the socket joins user:<sub>. A newly committed DM message is emitted to both DM participants, and a newly committed group-channel message is emitted to the current group members, using their private user rooms. An idempotent HTTP retry does not emit again.",
+    "serverBehavior": "After authentication the socket joins user:<sub>. On connection, the server sends a presence snapshot. It broadcasts message creation and read-state updates to conversation members, and broadcasts typing changes only after checking current conversation membership. Presence changes go to the user's DM partners and group members. Messages are written over HTTP; socket delivery is best effort, and an idempotent HTTP retry does not emit a second message.",
     "applicationEvents": [
       {
         "name": "message:created",
@@ -2535,6 +2579,84 @@
         "payload": {
           "$ref": "#/components/schemas/Message"
         }
+      },
+      {
+        "name": "read:updated",
+        "direction": "server-to-client",
+        "payload": {
+          "type": "object",
+          "required": ["conversationId", "userId", "messageId", "readAt"],
+          "properties": {
+            "conversationId": { "type": "string", "format": "uuid" },
+            "userId": { "type": "string", "format": "uuid" },
+            "messageId": { "type": "string", "format": "uuid" },
+            "readAt": { "type": "string", "format": "date-time" }
+          }
+        }
+      },
+      {
+        "name": "typing:changed",
+        "direction": "client-to-server",
+        "payload": {
+          "type": "object",
+          "required": ["conversationId", "typing"],
+          "properties": {
+            "conversationId": { "type": "string", "format": "uuid" },
+            "typing": { "type": "boolean" }
+          }
+        },
+        "acknowledgement": { "type": "object", "properties": { "ok": { "type": "boolean" } } }
+      },
+      {
+        "name": "typing:changed",
+        "direction": "server-to-client",
+        "payload": {
+          "type": "object",
+          "required": ["conversationId", "userId", "typing"],
+          "properties": {
+            "conversationId": { "type": "string", "format": "uuid" },
+            "userId": { "type": "string", "format": "uuid" },
+            "typing": { "type": "boolean" }
+          }
+        }
+      },
+      {
+        "name": "presence:snapshot",
+        "direction": "server-to-client",
+        "payload": {
+          "type": "object",
+          "required": ["users"],
+          "properties": {
+            "users": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["userId", "status"],
+                "properties": {
+                  "userId": { "type": "string", "format": "uuid" },
+                  "status": { "type": "string", "enum": ["ONLINE", "AWAY", "OFFLINE"] }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "presence:changed",
+        "direction": "server-to-client",
+        "payload": {
+          "type": "object",
+          "required": ["userId", "status"],
+          "properties": {
+            "userId": { "type": "string", "format": "uuid" },
+            "status": { "type": "string", "enum": ["ONLINE", "AWAY", "OFFLINE"] }
+          }
+        }
+      },
+      {
+        "name": "presence:activity",
+        "direction": "client-to-server",
+        "payload": { "type": "null", "description": "No payload; records activity for the authenticated socket." }
       }
     ]
   }

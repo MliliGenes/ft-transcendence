@@ -456,6 +456,35 @@ docChapter('Feed integration', 'docs/integrations/feed.md');
   const scoreRevealImage = join(ROOT, scoreRevealPath);
   const collaborationImage = join(ROOT, collaborationPath);
   const forfeitImage = join(ROOT, forfeitPath);
+  const liveTwoVTwoCaptures = [
+    {
+      path: 'docs/book/assets/code-arena-lobby-ready-2v2-live-dark.png',
+      alt: 'Dark-mode Code Arena 2v2 match lobby with all four seats filled: Team Alpha 2 of 2 and Team Beta 2 of 2, with all four players marked Ready',
+      caption: 'Ready lobby before the match starts: both 2v2 teams are full (2/2) and all four players have marked Ready',
+    },
+    {
+      path: 'docs/book/assets/code-arena-live-2v2-alpha1-dark.png',
+      alt: 'Live dark-mode 2v2 Code Arena view from Alpha1: the shared team solution in the editor, with the teammate and opposing-team panels beside it',
+      caption: 'Alpha1 teammate view: the Alpha team’s shared document carries the synchronized solution',
+    },
+    {
+      path: 'docs/book/assets/code-arena-live-2v2-alpha2-dark.png',
+      alt: 'Live dark-mode 2v2 Code Arena view from Alpha2: the same shared team solution, with both visible test cases passing',
+      caption: 'Alpha2 teammate view: the same synchronized solution, with both visible test cases passing',
+    },
+    {
+      path: 'docs/book/assets/code-arena-live-2v2-beta1-dark.png',
+      alt: 'Live dark-mode 2v2 Code Arena view from Beta1: the opposing team’s own independent solution in its editor',
+      caption: 'Beta1 opposing-team view: the rival team works in its own document, isolated from the Alpha shared editor',
+    },
+    {
+      path: 'docs/book/assets/code-arena-live-2v2-beta2-dark.png',
+      alt: 'Live dark-mode 2v2 Code Arena view from Beta2: the opposing team’s own independent solution in its editor',
+      caption: 'Beta2 opposing-team view: the second Beta client sees the same independent Beta document',
+    },
+  ];
+  const liveTwoVTwoFigures = liveTwoVTwoCaptures.map((capture) =>
+    localFigure(join(ROOT, capture.path), capture.alt, capture.caption, 'wide'));
   const profileGallery = `<div class="gallery">${[
     localFigure(ownerProfileImage, 'Aimane Yousr Nook profile in dark mode with Code Arena actions', 'Aimane Yousr — Nook profile'),
     localFigure(ownerGamesImage, 'Nook Games profile with Code Arena match record, badges, and recent results', 'Games tab with progression, achievements, and recent matches'),
@@ -465,25 +494,20 @@ docChapter('Feed integration', 'docs/integrations/feed.md');
   const lobbyGallery = `<div class="gallery">${localFigure(lobbyImage, 'Aimane and Arena Guest in the same dark-mode private Code Arena 1v1 lobby', 'Live 1v1 lobby: both players occupy a team seat before readiness', 'wide')}</div>`;
   const readyGallery = `<div class="gallery">${localFigure(readyImage, 'Aimane and Guest both ready in a dark-mode Code Arena lobby, viewed from Guest’s client', 'Ready gate: both players show Ready in the guest-side lobby view', 'wide')}</div>`;
   const editorGallery = `<div class="gallery">${localFigure(editorImage, 'Aimane writing a C++ solution in a live dark-mode Code Arena match', 'Live coding: problem statement, examples, language controls, shared timer, editor, and case panel', 'wide')}</div>`;
-  const scoreRevealGallery = `<div class="gallery">${localFigure(scoreRevealImage, 'Dark-mode Code Arena score reveal after both visible cases passed, showing 100 points and 100–100 match totals', 'Judge result: both visible cases pass; hidden-test weights add 100 points, with match totals at 100–100', 'wide')}</div>`;
-  const collaborationGallery = `<div class="gallery">${localFigure(collaborationImage, 'Aimane in a live dark-mode 2v2 Code Arena workspace with a shared editor, teammates, and team chat', '2v2 collaboration: the active team workspace combines a shared editor, teammate status, and match-scoped chat', 'wide')}</div>`;
+  const scoreRevealGallery = `<div class="gallery">${localFigure(scoreRevealImage, 'Dark-mode Code Arena Round 1 of 3 score reveal after both visible cases passed, showing 100 points earned and a cumulative score of 100–100', 'Round 1 judge result: both visible cases pass and hidden-test weights add 100 points, so the cumulative score stands at 100–100 at that point — this is not a final match score', 'wide')}</div>`;
+  const collaborationGallery = `<div class="gallery">${[
+    localFigure(collaborationImage, 'Aimane in a live dark-mode 2v2 Code Arena workspace with a shared editor, teammates, and team chat', '2v2 collaboration: the active team workspace combines a shared editor, teammate status, and match-scoped chat', 'wide'),
+    ...liveTwoVTwoFigures,
+  ].join('')}</div>`;
   const forfeitGallery = `<div class="gallery">${localFigure(forfeitImage, 'Aimane sees a dark-mode Code Arena match result after the opponent forfeits', 'Forfeit result: the live match ends and records the winner', 'wide')}</div>`;
   const behaviorParagraphs = section(spec, 'Product behavior').trim().split(/\n\s*\n/);
-  if (behaviorParagraphs.length !== 4) throw new Error('Unexpected Code Arena product behavior structure; update the book figure placement.');
-  const profileDetailsStart = behaviorParagraphs[1].indexOf('The profile Games tab');
-  if (profileDetailsStart < 0) throw new Error('Could not locate the Code Arena profile details sentence for the profile screenshots.');
-  const [overview, collaboration, profileDetails, invitations, lifecycle] = [
-    behaviorParagraphs[0],
-    behaviorParagraphs[1].slice(0, profileDetailsStart).trim(),
-    behaviorParagraphs[1].slice(profileDetailsStart).trim(),
-    behaviorParagraphs[2],
-    behaviorParagraphs[3],
-  ];
-  const matchSentenceStart = overview.indexOf(' A match has three timed coding rounds');
+  if (behaviorParagraphs.length !== 6) throw new Error('Unexpected Code Arena product behavior structure; update the book figure placement.');
+  const [overview, scoring, collaboration, profileDetails, invitations, lifecycle] = behaviorParagraphs;
+  const matchSentenceStart = overview.indexOf(' A match has three coding rounds');
   if (matchSentenceStart < 0) throw new Error('Could not locate the Code Arena match-flow sentence for the editor screenshot.');
   const discoveryText = overview.slice(0, matchSentenceStart).trim();
   const matchAndProblems = overview.slice(matchSentenceStart + 1).trim();
-  const defaultProblemStart = matchAndProblems.indexOf(' Default problems are selected');
+  const defaultProblemStart = matchAndProblems.indexOf(' Default matchmaking currently selects');
   if (defaultProblemStart < 0) throw new Error('Could not locate the seeded-problem sentence in Code Arena product behavior.');
   const matchText = matchAndProblems.slice(0, defaultProblemStart).trim();
   const defaultProblemText = matchAndProblems.slice(defaultProblemStart + 1).trim();
@@ -498,7 +522,9 @@ docChapter('Feed integration', 'docs/integrations/feed.md');
     editorGallery,
     scoreRevealGallery,
     mdToHtml(defaultProblemText, specPath),
+    mdToHtml(scoring, specPath),
     mdToHtml(collaboration, specPath),
+    '<p>The live four-client run captured the ready lobby and every in-game session at once. The two Alpha clients share one synchronized team document, and the two Beta clients keep an independent document on the opposing side.</p>',
     collaborationGallery,
     mdToHtml(profileDetails, specPath),
     profileGallery,
@@ -535,7 +561,7 @@ ${evidenceFigure('20-owner-chat-expired.png')}
 <p>The live two-client run used two independent authenticated browser sessions and a real stack. It covered a duel invitation, acceptance, match start, forfeit result, withdrawal, expiry, and the transcript reload checkpoint. Both clients received the notices live. The expiry notice arrived after the reload checkpoint and was persisted once; it was not part of the before/after reload count.</p>
 ${mdToHtml(section(evidence, 'What was demonstrated'), evidencePath)}
 ${mdToHtml(section(evidence, 'What this does and does not prove'), evidencePath)}
-<p>${screenshotLink}. This chapter places ${figureImages.size} distinct images beside their matching topics: dark-mode product and coding views from Aimane’s account, plus selected two-client invitation and lifecycle evidence. It leaves out setup-only screens, repeated views of the same state, and screenshots that show an empty lobby. The complete 21-image run and its limits are documented in <code>docs/evidence/g06-live-demo/README.md</code>.</p>`;
+<p>${screenshotLink}. This chapter places ${figureImages.size} distinct images beside their matching topics: dark-mode product and coding views from Aimane’s account, the live four-client 2v2 viewport captures, plus selected two-client invitation and lifecycle evidence. It leaves out setup-only screens, repeated views of the same state, and screenshots that show an empty lobby. The complete 21-image run and its limits are documented in <code>docs/evidence/g06-live-demo/README.md</code>.</p>`;
   if (includedEvidence.size !== expectedBookEvidence.size) {
     const unplaced = [...expectedBookEvidence].filter((filename) => !includedEvidence.has(filename));
     throw new Error(`G06 screenshots not placed in their matching sections: ${unplaced.join(', ')}`);

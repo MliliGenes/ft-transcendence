@@ -9,6 +9,8 @@ How the browser talks to the services. The client calls one HTTPS origin, and Ng
 | `/api/auth/*`, `/api/accounts/*`, `/api/social/*` | user-service |
 | `/api/chat/*` | chat-service REST |
 | `/api/chat/socket.io/` | chat-service Socket.IO |
+| `/api/game/*` | Game service HTTP API |
+| `/api/game/socket.io/` | Game service Socket.IO transport for match, lobby, collaboration and team chat |
 | `https://localhost:9443/...` | MinIO, using signed URLs only |
 
 The `/api/chat/` location is more specific than `/api/`, so Nginx sends it to chat-service. Full routing is in [infrastructure](../services/infrastructure.md).

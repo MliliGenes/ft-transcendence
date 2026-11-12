@@ -4,6 +4,21 @@ import type { ArenaConnectionOptions, ArenaSnapshot, MatchFinalView, PlayerStatu
 
 export type SocketTransportOptions = ArenaConnectionOptions;
 
+/**
+ * Minimum spacing between snapshot requests (ms).
+ *
+ * The gateway rate-limits per client IP, and every accepted collaboration edit
+ * republishes readiness, so an uncoalesced event stream asks for a snapshot per
+ * keystroke and the gateway answers 429.
+ */
+const SNAPSHOT_REFRESH_MIN_INTERVAL_MS = 1000;
+
+/** Server hint about the newest snapshot (revision/round), when it carries one. */
+interface SnapshotTrigger {
+  revision?: number;
+  round?: number;
+}
+
 /** A non-idempotent command was rejected against a newer Match snapshot. */
 export class StaleCommandError extends Error {
   readonly code = 409;
@@ -11,6 +26,16 @@ export class StaleCommandError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "StaleCommandError";
+  }
+}
+
+/** The gateway rate-limited the request (HTTP 429). */
+export class RateLimitError extends Error {
+  readonly code = 429;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "RateLimitError";
   }
 }
 
@@ -38,7 +63,15 @@ interface ServerSnapshot {
     side: string;
     activity: PlayerStatus;
     submissions: number;
-    members: Array<{ userId: string; presence: SideView["presence"]; ready: boolean; readyRevision: number | null }>;
+    members: Array<{
+      userId: string | null;
+      presence: SideView["presence"];
+      ready: boolean;
+      readyRevision: number | null;
+      departed?: boolean;
+      approvalRequired?: boolean | null;
+      surrenderPending?: boolean;
+    }>;
     documentRevision: number | null;
     language: string | null;
   }>;
@@ -64,10 +97,11 @@ export function adaptFinal(
   const you = f.scores?.[mySide] ?? 0;
   const opponent = f.scores?.[otherId] ?? 0;
   if (f.forfeit) {
+    const loserText = f.forfeit.reason === "surrender" ? "surrendered" : "forfeited";
     return {
       you,
       opponent,
-      outcome: f.forfeit.winner === mySide ? "You win by forfeit." : "Opponent wins by forfeit.",
+      outcome: f.forfeit.winner === mySide ? `You win: opponent ${loserText}.` : `You ${loserText}.`,
     };
   }
   return {
@@ -119,6 +153,7 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
   let ready: ArenaSnapshot["ready"] = { you: false, mate: false };
   let docRevision: number | null = null;
   let readyRevision: ArenaSnapshot["readyRevision"] = null;
+  let surrender: ArenaSnapshot["surrender"] = { you: false, mate: false };
 
   let mateView: SideView = { name: "Teammate", status: "coding", presence: "online", submissions: 0 };
   let opponent2View: SideView = { name: "Opponent 2", status: "coding", presence: "online", submissions: 0 };
@@ -131,7 +166,11 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
       const mateMember = myTeam.members.find((m) => m.userId !== userId);
       ready = {
         you: youMember?.ready === true,
-        mate: mateMember?.ready === true,
+        mate: mateMember?.approvalRequired === false || mateMember?.ready === true,
+      };
+      surrender = {
+        you: youMember?.surrenderPending === true,
+        mate: mateMember?.surrenderPending === true,
       };
       readyRevision = {
         you: youMember?.readyRevision ?? null,
@@ -139,10 +178,11 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
       };
       if (mateMember) {
         mateView = {
-          name: mateMember.userId ? (mateMember.userId.length > 8 ? mateMember.userId.slice(0, 8) : mateMember.userId) : "Teammate",
-          status: mateMember.ready ? "ready" : (myTeam.activity ?? "coding"),
+          name: mateMember.departed ? "Left" : mateMember.userId ? (mateMember.userId.length > 8 ? mateMember.userId.slice(0, 8) : mateMember.userId) : "Teammate",
+          status: mateMember.departed ? "left" : mateMember.ready ? "ready" : (myTeam.activity ?? "coding"),
           presence: mateMember.presence ?? "online",
           submissions: myTeam.submissions ?? 0,
+          departed: mateMember.departed,
         };
       }
     }
@@ -195,6 +235,7 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
     ready,
     docRevision,
     readyRevision,
+    surrender,
     reveal: adaptReveal(server.reveal, server.mySide, otherId),
     notice: null,
     revision: server.revision,
@@ -205,12 +246,23 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
 export class SocketArenaTransport implements ArenaTransport {
   private socket: Socket | null = null;
   private syncTimer: NodeJS.Timeout | null = null;
+  private refreshTimer: NodeJS.Timeout | null = null;
   private currentSnapshot: ArenaSnapshot;
   private language = "C++";
   private appliedRevision = -1;
   private appliedRound = -1;
   private lastDocRevision: number | null = null;
   private pendingSubmit: { key: string; submissionId: string; evaluationId: string } | null = null;
+  /** Snapshot requests queued or running: never more than one on the wire. */
+  private snapshotRequests = 0;
+  /** Serializes snapshot requests: the next one starts after the previous one. */
+  private snapshotLane: Promise<void> = Promise.resolve();
+  /** A refresh was asked for while another was running: it runs once, trailing. */
+  private snapshotRefreshPending = false;
+  /** Earliest moment the next snapshot request may start (ms). */
+  private nextSnapshotAllowedAt = 0;
+  /** A rate limit is reported once per episode, not once per request. */
+  private rateLimitReported = false;
   private readonly session = new TransportSession("connecting");
 
   constructor(private readonly options: SocketTransportOptions) {
@@ -230,6 +282,7 @@ export class SocketArenaTransport implements ArenaTransport {
       ready: { you: false, mate: false },
       docRevision: null,
       readyRevision: null,
+      surrender: { you: false, mate: false },
       reveal: null,
       notice: null,
       revision: -1,
@@ -283,6 +336,9 @@ export class SocketArenaTransport implements ArenaTransport {
   disconnect(): void {
     if (this.syncTimer) clearInterval(this.syncTimer);
     this.syncTimer = null;
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = null;
+    this.snapshotRefreshPending = false;
     this.socket?.disconnect();
     this.socket = null;
     this.session.setConnection("offline");
@@ -309,7 +365,7 @@ export class SocketArenaTransport implements ArenaTransport {
 
     sock.on("connect", () => {
       if (this.session.setConnection("connected")) this.emit();
-      void this.refresh();
+      void this.refreshNow().catch((error) => this.reportRefreshError(error));
     });
 
     sock.on("disconnect", () => {
@@ -322,17 +378,16 @@ export class SocketArenaTransport implements ArenaTransport {
       this.emit();
     });
 
+    // onAny already receives every server packet ("readiness.changed",
+    // "phase.changed", ...). A dedicated "match:event" listener on top of it
+    // only doubled the refreshes for the same event.
     sock.onAny((_event: string, payload: unknown) => {
-      void this.refresh(payload as { revision?: number; round?: number });
-    });
-
-    sock.on("match:event", (event: { revision?: number; round?: number }) => {
-      void this.refresh(event);
+      this.scheduleRefresh(payload as SnapshotTrigger);
     });
 
     if (!this.syncTimer) {
       this.syncTimer = setInterval(() => {
-        void this.refresh().catch(() => {});
+        this.scheduleRefresh();
       }, 2000);
     }
   }
@@ -355,30 +410,30 @@ export class SocketArenaTransport implements ArenaTransport {
   async startRound(): Promise<void> {
     this.requireConnected("startRound");
     await this.post("/start-round", {});
-    await this.refresh();
+    await this.refreshNow();
   }
 
   async beginCoding(): Promise<void> {
     this.requireConnected("beginCoding");
     await this.post("/begin-coding", {});
-    await this.refresh();
+    await this.refreshNow();
   }
 
   async setLanguage(language: string): Promise<void> {
     if (this.currentSnapshot.mode === "2v2") {
       this.requireConnected("language");
       await this.post("/language", { language });
-      await this.refresh();
+      await this.refreshNow();
       return;
     }
     this.language = language;
-    void this.refresh();
+    void this.refreshNow().catch((error) => this.reportRefreshError(error));
   }
 
   async run(input: { code: string; language: string }): Promise<RunReceipt> {
     this.requireConnected("run");
     await this.post("/run", input);
-    await this.refresh();
+    await this.refreshNow();
     return { ok: true };
   }
 
@@ -392,7 +447,7 @@ export class SocketArenaTransport implements ArenaTransport {
       submissionId: request.submissionId,
       evaluationId: request.evaluationId,
     })) as SubmitReceipt;
-    await this.refresh();
+    await this.refreshNow();
     this.pendingSubmit = null;
     return receipt;
   }
@@ -414,13 +469,19 @@ export class SocketArenaTransport implements ArenaTransport {
   async advance(): Promise<void> {
     this.requireConnected("advance");
     await this.post("/advance", {});
-    await this.refresh();
+    await this.refreshNow();
   }
 
   async leave(): Promise<void> {
     this.requireConnected("leave");
     await this.post("/leave", {});
-    await this.refresh();
+    await this.refreshNow();
+  }
+
+  async surrender(approve: boolean): Promise<void> {
+    this.requireConnected("surrender");
+    await this.post("/surrender", { approve });
+    await this.refreshNow();
   }
 
   private requireConnected(action: string): void {
@@ -428,7 +489,16 @@ export class SocketArenaTransport implements ArenaTransport {
     if (connection !== "connected") throw new Error(`${action} unavailable while ${connection}`);
   }
 
-  private async refresh(trigger?: { revision?: number; round?: number }): Promise<void> {
+  /**
+   * Ask for a snapshot refresh because the server announced a change.
+   *
+   * Bursts are coalesced: one request runs at a time, a burst collapses into a
+   * single trailing request, and requests stay
+   * SNAPSHOT_REFRESH_MIN_INTERVAL_MS apart. Without this, an accepted
+   * keystroke (one "readiness.changed" per edit) becomes one snapshot request
+   * per keystroke and the gateway answers 429.
+   */
+  private scheduleRefresh(trigger?: SnapshotTrigger): void {
     if (
       trigger &&
       !shouldApplyUpdate(
@@ -438,8 +508,66 @@ export class SocketArenaTransport implements ArenaTransport {
     ) {
       return;
     }
-    const snap = (await this.get("/snapshot")) as ServerSnapshot;
-    if (this.applySnapshot(snap)) this.emit();
+    this.snapshotRefreshPending = true;
+    this.pumpSnapshotRefresh();
+  }
+
+  /** Run the pending refresh as soon as the spacing window allows it. */
+  private pumpSnapshotRefresh(): void {
+    if (this.snapshotRequests > 0) return;
+    if (!this.snapshotRefreshPending) return;
+    const wait = this.nextSnapshotAllowedAt - Date.now();
+    if (wait > 0) {
+      if (!this.refreshTimer) {
+        this.refreshTimer = setTimeout(() => {
+          this.refreshTimer = null;
+          this.pumpSnapshotRefresh();
+        }, wait);
+      }
+      return;
+    }
+    this.snapshotRefreshPending = false;
+    void this.enqueueSnapshotRequest().catch((error) => this.reportRefreshError(error));
+  }
+
+  /** Read server truth. Requests are serialized, so two never overlap. */
+  private enqueueSnapshotRequest(): Promise<void> {
+    this.snapshotRequests += 1;
+    const start = () => {
+      this.nextSnapshotAllowedAt = Date.now() + SNAPSHOT_REFRESH_MIN_INTERVAL_MS;
+      return this.get("/snapshot");
+    };
+    const run = this.snapshotLane.then(start).then((raw) => {
+      const snap = raw as ServerSnapshot;
+      if (this.applySnapshot(snap)) this.emit();
+      this.rateLimitReported = false;
+    });
+    const tracked = run.finally(() => {
+      this.snapshotRequests -= 1;
+      this.pumpSnapshotRefresh();
+    });
+    this.snapshotLane = tracked.catch(() => {});
+    return tracked;
+  }
+
+  /**
+   * Read server truth now (command paths): the caller has to see the effect of
+   * the command it just sent, so it reads after whatever is already queued.
+   */
+  private async refreshNow(): Promise<void> {
+    await this.snapshotLane;
+    await this.enqueueSnapshotRequest();
+  }
+
+  /** Surface a failed background refresh instead of hiding it or rejecting late. */
+  private reportRefreshError(error: unknown): void {
+    if (error instanceof RateLimitError) {
+      if (this.rateLimitReported) return;
+      this.rateLimitReported = true;
+      console.warn("[arena] snapshot refresh rate limited (429); retrying on the next sync tick");
+      return;
+    }
+    console.error("[arena] snapshot refresh failed", error);
   }
 
   private submitRequest(input: { code: string; language: string; documentRevision?: number }, documentRevision: number | undefined): {
@@ -470,7 +598,10 @@ export class SocketArenaTransport implements ArenaTransport {
     const headers: Record<string, string> = { "x-dev-user-id": this.options.userId };
     if (this.options.token) headers.authorization = `Bearer ${this.options.token}`;
     const res = await fetch(`${this.options.baseUrl}/matches/${this.options.matchId}${path}`, { headers });
-    if (!res.ok) throw new Error(`${path} failed with ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 429) throw new RateLimitError(`${path} failed with 429`);
+      throw new Error(`${path} failed with ${res.status}`);
+    }
     return res.json();
   }
 
@@ -490,7 +621,7 @@ export class SocketArenaTransport implements ArenaTransport {
       const payload = (await res.json().catch(() => null)) as { error?: string } | null;
       if (res.status === 409) {
         const conflict = new StaleCommandError(payload?.error ?? `${path} rejected against a newer Match revision`);
-        await this.refresh().catch(() => {});
+        await this.refreshNow().catch(() => {});
         throw conflict;
       }
       throw new Error(payload?.error ?? `${path} failed with ${res.status}`);

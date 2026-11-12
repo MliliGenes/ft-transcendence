@@ -1,0 +1,126 @@
+# Code Arena gameplay review
+
+Status: agreed gameplay implemented and reviewed. The full `npm run check` suite passed on 2026-11-12 against the current worktree; this included unit, build, lint, and disposable PostgreSQL/RabbitMQ integration checks. A local four-client 2v2 browser run was performed on 2026-11-12 with one Game service instance: it confirmed shared editing and team isolation but did not complete a match, so no 2v2 result is claimed. A separate-computer evaluator demonstration and production deployment check remain outstanding.
+
+## Progress
+
+1. Confirm intended gameplay — decisions 1–8 agreed; round closure explained and acknowledged.
+2. Review the integration — scoped source review and targeted existing tests completed; findings below.
+3. Fix confirmed issues — implementation and focused regressions added.
+4. Reconcile the gameplay specification and cross-service contracts — complete; the specification and ADR now agree on implemented behavior.
+5. Run final checks and record environment limits — complete at that stage and not rerun for the current changeset; environment limits are listed below.
+
+## Agreed rules
+
+Confirmed by the user on 2026-11-12:
+
+- A match has three rounds sharing a 30-minute match budget.
+- The latest completed scored submission counts, even if its score is lower than the previous submission. The interface must explain that Submit replaces the counted answer.
+- Decide the winner by total score, then lower total counted-submission time, then fewer submissions, then a draw. Correctness takes priority over speed.
+- In 2v2, an individual leaving must allow their teammate to continue. When the entire team is offline, start a 90-second forfeit window. Explicit team surrender is separate from an individual leaving.
+- A remaining teammate may submit alone immediately after an explicit teammate leave, or after that teammate has been disconnected for 90 seconds. Before that timeout, both approvals remain required. Restore both-player approval if the teammate returns. The user specifically requires careful conflict handling.
+- Team surrender requires agreement from both participating teammates; once solo continuation applies, the remaining teammate may decide alone.
+- Keep automatic round closure once both sides have a scored submission. The user requested a fuller explanation of how this affects replacement submissions.
+- Keep the existing problem pool for this review. A larger pool is deferred; the user intends to add problems from the 42 Network later.
+
+## Conflict behavior and regression coverage
+
+- Engine match locks order readiness, edits, submissions, reconnects, leaves and surrender votes. The reconnect regression proves a solo submission accepted before a return remains valid while the returning teammate must approve again before a later submission.
+- A teammate's earlier approval remains valid during the reconnect grace; after the member returns beyond grace, their readiness is removed. Shared document revision checks remain in the submission gate.
+- Whole-team grace is enforced before a returning socket can clear expired offline state. Individual disconnection does not forfeit while the partner remains available; the 90-second timer begins when the whole side is unavailable.
+- Duplicate and late socket closes remain idempotent; a gateway regression covers disconnect while the baseline snapshot is pending.
+- Surrender votes are invalidated by presence changes and departure. Snapshot readiness and vote details are private to the viewer's team; the realtime surrender event carries only match ID and revision to trigger a safe refresh.
+- A completed match rejects further surrender mutations. Votes and individual presence/leave changes are scoped to the affected team.
+- A Run accepted before an individual leaves can finish and restore the shared team activity; new actions by the departed member remain rejected.
+- Automatic reveal now checks the counted-score condition inside the engine and does not depend on the submitting user's later membership.
+- Account erasure removes the original ID from departure and surrender-vote state, retaining departed status only under the new anonymous ID.
+
+Focused regressions cover these rules. PostgreSQL-backed integration tests and a local four-client browser run are recorded in the follow-up verification below; the browser run did not complete a match. Multi-instance concurrency and separate-computer evaluation remain unverified.
+
+## Implementation rulings
+
+- **Both teammates explicitly leave:** do not forfeit immediately; record both as departed and apply the same 90-second whole-team unavailability window. This follows the confirmed rule that the whole team must be unavailable for 90 seconds, while a separate explicit surrender flow requires consent. Cost if wrong: a team that intends an immediate exit waits up to 90 seconds for its result.
+- **Both team grace windows have expired before a sweep:** the side that became fully unavailable first forfeits. This keeps tie handling deterministic and follows the existing 1v1 earliest-offline rule. Cost if wrong: when both teams miss the timeout together, the other side may receive the win.
+- **Surrender notification visibility:** send a match refresh signal without voter identity or vote details; snapshots expose votes only to that team. This preserves the snapshot privacy boundary. Cost if wrong: clients cannot build a public opponent-facing surrender notification from the realtime payload.
+
+## Open decisions
+
+- No deadline-policy change has been approved. Current default: new submissions stop at the deadline; an earlier accepted submission counts only if it completes within two seconds after the match deadline. Worker queueing and execution can take longer. Review this fairness policy separately; do not silently change it during the team-continuity repairs.
+
+## Scoped review findings
+
+### Existing reconnect defect — resolved
+
+`services/game/src/game/match-socket-presence.ts:46` deletes the socket-count entry, awaits match information, then writes offline presence. A replacement socket can finish its online update during that await, only to be overwritten by the older close operation. A read-only in-memory execution of the existing module reproduced `online, online, offline` while the replacement socket remained open. In 1v1 this can start an incorrect forfeit countdown. Serialize presence transitions per match/user and verify the current connection generation before committing presence.
+
+Related source-trace concern: the gateway now attaches the verified principal before awaited snapshot/presence work, checks `connected` around presence registration, and cleans up an open registration if the connection drops. `game.gateway.test.ts` covers disconnect during the baseline snapshot.
+
+### Gaps against the newly agreed team rules — resolved
+
+- `packages/arena-game/src/engine.ts:1212`: individual leave records a whole-side forfeit. Separate member departure from explicit team surrender; require current team consent for surrender.
+- `packages/arena-game/src/engine.ts:1185`: all 2v2 matches bypass grace forfeits. Compute the team-offline window from authoritative member state.
+- `packages/arena-game/src/team-collaboration.ts:118` and `packages/arena-game/src/engine.ts:565`: every original teammate must approve the current revision. Add the agreed solo-approval policy without weakening revision checks. Align the frontend gate in `client/components/arena/ArenaWorkspace.tsx`.
+
+The old tests encoded the prior policy. New regressions cover the agreed rules, including 2v2 leave/continue, whole-team grace, solo readiness, return-to-team approval, surrender consent and cancellation on presence change.
+
+### Documentation drift — resolved
+
+ADR-0015 now reflects implemented account erasure and progression and records the deliberately small current problem pool. The integration specification records the agreed timer, scoring, reveal and 2v2 continuity rules.
+
+### Whole-branch review — repairs complete
+
+A fresh-context review found five important issues: post-terminal surrender mutation, an in-flight Run stranded by caller departure, auto reveal tied to the departing submitter, cross-team vote loss, and identifiers retained in the new erasure fields. Failing regressions reproduced each issue; the focused engine/account-erasure tests passed at that verification stage and were not rerun for the current changeset.
+
+The earlier ADR/spec mismatch about invitation availability is resolved: ADR-0015 now states that the Chat invitation card shows a live status badge and that Game checks joinability again when a participant opens or joins the room.
+
+### Conditional risks outside the first repair
+
+- Ordinary reveal waits for pending evaluations held by the current Game process, unlike deadline closure, which queries durable pending rows. A second Game service instance could close a round before an accepted replacement on another instance finishes within reveal grace. ADR-0016 chooses one Game service instance for the initial release; adding instances requires a separate coordination design and tests.
+- Socket authentication checks JWTs on connection, while subsequent actions use the stored principal and account-deletion guard. Active-socket token expiration needs an explicit session policy; this review does not classify handshake-only authentication as an independently proven exploit.
+
+## Verification evidence
+
+**The test totals in this section are historical.** They were recorded before the current changeset added its engine, service, gateway and client regressions. They are not the current counts; the full verification of the current worktree is recorded below.
+
+Historical baseline, 2026-11-12: 143 existing tests passed across 20 files:
+
+- Engine: deadline closure, team rules/collaboration, reconnects, concurrency, scoring/reveal, and cross-side isolation — 84 tests across 7 files.
+- Service: presence counting, judge factory, socket authentication, development fixture gate, and problem selection — 15 tests across 5 files.
+- Engine: trusted container verdict handling, submissions, sealing, and account erasure — 28 tests across 4 files.
+- Service: progression, statistics erasure, and active-account guard — 5 tests across 3 files.
+- Real Docker judge security/isolation matrix — 11 tests in 1 file. The initial sandbox run could not reach Docker; the same suite passed after Docker access was granted.
+
+At the initial scoped review stage, the PostgreSQL integration suite and live four-player browser demonstration had not run. The original results below record that stage. The follow-up section records later checks. No production deployment check has been run.
+
+Usage-limit tooling was unavailable: the offline `ccusage` attempt reported no cached package. The review was bounded to two focused read-only agents and targeted checks.
+
+## Implementation pass
+
+1. Serialize presence transitions; attach the gateway principal early; add reconnect and early-disconnect regressions — complete.
+2. Implement departures, whole-team offline expiry, solo readiness, return-to-team approval, and consent-based surrender — complete with targeted engine tests.
+3. Align controls and explanatory copy for replacement submissions, automatic reveal, reconnect approval and surrender — complete.
+4. Update the Game-to-Chat surrender event contract and reconcile the gameplay spec/ADR — complete.
+5. Run root arena checks, Chat tests/build/lint, typechecks, and the disposable database integration suite; record final review — complete at that stage. The database suite passed. The earlier totals above are historical; the full verification was rerun against the current worktree and is recorded below. A local four-player run was performed later; the separate-computer evaluator and production deployment checks remain outstanding.
+
+Earlier detailed verification record on 2026-11-12 (historical baseline; the later full check is recorded below):
+
+- `npm test`: 387 passed, 41 skipped. Arena engine 214 passed / 30 skipped; harness 19 passed; model 68 passed; Game service 72 passed / 11 skipped; judge worker 14 passed. The repository intentionally removes database URLs for this general test command.
+- `npm run test:integration`: passed with a temporary PostgreSQL and RabbitMQ setup bound to localhost; the runner removed both containers after completion. Arena engine database group 60 passed; Game Postgres/reconnect group 15 passed; Chat Postgres group 20 passed; User Postgres group 17 passed. This exercised the 41 database-dependent cases skipped by `npm test`.
+- `npm run typecheck`: passed, including package builds and workspace TypeScript checks.
+- Root lint, Chat lint, Chat build, Chat tests (24/24), client TypeScript check, and `git diff --check`: passed.
+- Docker-backed arena security and execution cases ran successfully in the root suite. At that verification point, no production deployment check or live four-player browser demonstration was available.
+
+Completion condition met for the implementation and database verification pass at that stage: agreed rules are enforced in the engine and HTTP/socket boundary, the client and Chat notification reflect server authority, and the unit and database-backed regressions passed at that stage. See the follow-up below for later live-run evidence and current limits.
+
+## Follow-up verification — 2026-11-12
+
+- The earlier root test report counted 395 passed and 41 skipped. That report predates the current changeset; the full verification below supersedes it. The integration runner then ran 112 database/socket tests using disposable PostgreSQL and RabbitMQ containers. Two initial RabbitMQ readiness attempts failed; a retry passed.
+- `npm run typecheck` and `npm run lint` passed. The focused client socket test passed 3/3.
+- Four isolated browser contexts joined one local 2v2 match on the single Game service instance. Alpha2's edit appeared in Alpha1; the Beta clients retained their own shared document; Alpha's two visible tests passed with output `10`. The run did not complete the match: no scored round, final result or final draw was recorded, and the four saved screenshots show round 1 of 3 with both sides at 0. The rebuilt client kept snapshot reads near the expected two-second sync cadence, without bursts or 429 responses, and showed no browser console warnings or errors during the check.
+- The browser run happened before the final boot-recovery reveal change. That change has unit and PostgreSQL-backed integration coverage; it was not repeated in a browser session.
+- Four dark screenshots are saved at 3456×1992 pixels in `docs/book/assets/code-arena-live-2v2-*.png` and included in the rebuilt Nook Book. The local test containers and network were stopped after the run; their database volumes were preserved.
+- This run used four browser contexts on one computer. It does not prove play across separate computers or production behavior. Multiple Game service instances remain out of scope under ADR-0016; active-socket JWT expiry still needs a separate session-policy decision.
+
+## Current full verification — 2026-11-12
+
+`npm run check` passed all 21 verification stages on the current worktree, including secret scanning, lint, builds and type checks, Arena, client, Chat and User tests, and disposable PostgreSQL/RabbitMQ integration suites. Some unit suites skip database-dependent cases; the matching database suites ran and passed in the integration stage. The check ran with HEAD at `348a844` and a dirty worktree, so it verifies the changes present at that time rather than a committed revision. It does not establish separate-computer play or production deployment.

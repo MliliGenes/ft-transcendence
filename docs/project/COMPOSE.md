@@ -10,7 +10,7 @@ envs/
   user-db.env.example      # User database credentials
   chat-db.env.example      # Chat database credentials
   game-db.env.example      # Game database credentials
-  rabbitmq.env.example     # broker credentials shared with both backends
+  rabbitmq.env.example     # broker credentials shared with User, Chat and Game
   minio.env.example        # storage admin credentials and browser origins
   user-service.env.example # internal addresses, SMTP, initial app admin
   user-auth.env.example    # JWT keys, frontend origin, OAuth settings
@@ -20,6 +20,7 @@ envs/
   *.env                    # configured local copies, ignored by Git
 volumes/
   user-db/                # persistent Postgres data, ignored by Git
+  chat-db/                # persistent Postgres data, ignored by Git
   game-db/                # persistent Postgres data, ignored by Git
   nginx/certs/            # local TLS certificate/key, ignored by Git
 nginx/
@@ -37,7 +38,7 @@ client/                   # Next.js frontend
 
 ## First startup
 
-Each container receives only its own settings and the shared configuration files it needs. `backend.env` holds runtime settings such as `NODE_ENV` for User, Chat and Game services. Database credentials are defined in the matching `*-db.env` file; the Game credentials must also match the Game service's `DATABASE_URL`. RabbitMQ credentials are shared by RabbitMQ and the User and Chat services. User-service signing keys and OAuth settings live in `user-auth.env`; required SMTP settings live in `user-service.env`. Game and judge-worker settings live in separate files, and the shared judge token must match in both. Internal service hostnames and ports refer to Compose service names.
+Each container receives only its own settings and the shared configuration files it needs. `backend.env` holds runtime settings such as `NODE_ENV` for User, Chat and Game services. Database credentials are defined in the matching `*-db.env` file; the Game credentials must also match the Game service's `DATABASE_URL`. RabbitMQ credentials are shared by RabbitMQ and the User, Chat and Game services. User-service signing keys and OAuth settings live in `user-auth.env`; required SMTP settings live in `user-service.env`. Game and judge-worker settings live in separate files, and the shared judge token must match in both. Internal service hostnames and ports refer to Compose service names.
 
 On a fresh clone, copy each `envs/*.env.example` to the same name without `.example`, preserving existing local files. Every assignment uses `VAR_NAME=<EXAMPLE_VALUE>`: remove the brackets around concrete examples and replace descriptive placeholders with your own values. Do not run with unresolved placeholders or source templates as shell scripts. See [envs/README.md](../../envs/README.md) for setup order, file ownership, and quoting rules.
 
@@ -77,13 +78,13 @@ The monitoring stack (Grafana, Prometheus, Loki, Alloy, cAdvisor) starts with th
 4. Copy the service/database pair in `compose.yaml`, updating names, build context, env paths, and storage path. Set its database host to its own Compose database service name.
 5. Keep migrations in the owning service's startup command and wait for its database health check. Publish no backend/database ports.
 
-The existing RabbitMQ service carries User events to Chat. A separate notification service can be added under `services:` when ready. For another browser-facing API, add its upstream and a distinct location to `nginx/default.conf`, then rebuild Nginx. Keep existing paths stable so OAuth callback registrations do not change again.
+RabbitMQ carries User account events to Chat, account-deletion events to Game, and Code Arena match and challenge lifecycle events to Chat. Those notices are written into the conversation that carries the challenge; delivery from Game is best effort because it has no transactional outbox. A separate notification service is not required for this existing flow. For another browser-facing API, add its upstream and a distinct location to `nginx/default.conf`, then rebuild Nginx. Keep existing paths stable so OAuth callback registrations do not change again.
 
 ## Frontend
 
 The `client` container builds and serves the Next.js app; Nginx routes non-API paths to it. Browser code calls User through `/api/`, Chat through `/api/chat/`, and Game through `/api/game/` plus `/api/game/socket.io/` on the same HTTPS origin, never through internal Docker hostnames. It needs no project-specific env file; the old `VITE_API_URL` and `API_PROXY_TARGET` settings are unused. Source changes require `docker compose up --build -d client`. Never put secrets in `NEXT_PUBLIC_` variables; they are exposed to the browser.
 
-The previous Vite test frontend (`auth-profile-web`) was removed; its notes are in [docs/archive/auth-profile-web.md](../services/client.md).
+The previous Vite test frontend (`auth-profile-web`) was removed. See the current [Web client guide](../services/client.md) for the Next.js implementation.
 
 ## Local HTTPS and OAuth
 

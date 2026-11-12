@@ -35,6 +35,8 @@ describe("account deletion erasure", () => {
 
     match.memberPresence = { "deleted-user": "offline", "left-mate": "online" };
     match.memberOfflineSinceMs = { "deleted-user": 123 };
+    match.departedMembers = ["deleted-user"];
+    match.surrenderVotes = ["deleted-user"];
     match.rounds[0]!.readiness = {
       "deleted-user": { userId: "deleted-user", ready: true, documentRevision: 1, updatedAt: 123 },
     };
@@ -92,6 +94,10 @@ describe("account deletion erasure", () => {
     expect(erased.participants).toContainEqual(expect.objectContaining({ sideId: "left", anonymized: true }));
     expect(erased.memberPresence).not.toHaveProperty("deleted-user");
     expect(erased.memberOfflineSinceMs).not.toHaveProperty("deleted-user");
+    expect(erased.departedMembers).not.toContain("deleted-user");
+    expect(erased.surrenderVotes).not.toContain("deleted-user");
+    const anonymousId = erased.participants.find((participant) => participant.anonymized)?.userId;
+    expect(erased.departedMembers).toContain(anonymousId);
     expect(erased.rounds[0]!.readiness).not.toHaveProperty("deleted-user");
     expect(JSON.stringify(erased)).not.toContain("deleted-user");
 

@@ -81,6 +81,41 @@ describe("MatchSocketPresence", () => {
     ]);
   });
 
+  it("does not let a delayed close mark a replacement socket offline", async () => {
+    const target = new RecordingPresenceTarget();
+    const presence = new MatchSocketPresence(target);
+    target.modes.set("match-1", "1v1");
+    addParticipant(target, "match-1", "alice", "left");
+
+    await presence.noteSocketOpen("alice", "match-1", "old-socket");
+
+    let releaseOfflineWrite!: () => void;
+    const offlineWriteBlocked = new Promise<void>((resolve) => { releaseOfflineWrite = resolve; });
+    let signalOfflineWriteStarted!: () => void;
+    const offlineWriteStarted = new Promise<void>((resolve) => { signalOfflineWriteStarted = resolve; });
+    let onlineWriteStarted = false;
+    const originalSetPresence = target.setPresence.bind(target);
+    target.setPresence = async (matchId, side, state) => {
+      if (state === "offline") {
+        signalOfflineWriteStarted();
+        await offlineWriteBlocked;
+      } else {
+        onlineWriteStarted = true;
+      }
+      await originalSetPresence(matchId, side, state);
+    };
+
+    const closing = presence.noteSocketClosed("alice", "match-1", "old-socket");
+    await offlineWriteStarted;
+    const replacing = presence.noteSocketOpen("alice", "match-1", "replacement-socket");
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    releaseOfflineWrite();
+    await closing;
+    await replacing;
+
+    expect(target.calls.at(-1)).toEqual({ kind: "side", matchId: "match-1", side: "left", presence: "online" });
+  });
+
   it("tracks 2v2 presence independently for members sharing one side", async () => {
     const target = new RecordingPresenceTarget();
     const presence = new MatchSocketPresence(target);

@@ -4,12 +4,25 @@ import { FileBank } from "../src/file-bank.js";
 import { InMemoryCollabPersist } from "../src/collab.js";
 import { StoreBackedMatchPersistence } from "../src/persistence.js";
 import { testPrincipal } from "../src/principal.js";
-import type { SubmissionRecord } from "../src/records.js";
+import type { RevealSnapshot, SubmissionRecord } from "../src/records.js";
 import { InMemoryMatchStore, InMemoryRevealStore, InMemorySubmissionStore } from "../src/store.js";
 import { ScriptedJudge } from "./scripted-judge.js";
 import { P100, P40, SOLVED_PY, STARTER_PY, setup, tick } from "./setup.js";
 
 const HIDDEN_MARKERS = ["1000000000", '"b1"', '"n1"', '"e1"'];
+
+/** Reveal store that fails its first publish, to prove a retry still lands. */
+class FlakyRevealStore extends InMemoryRevealStore {
+  private failNext = true;
+
+  override async record(matchId: string, roundId: string, snapshot: RevealSnapshot): Promise<void> {
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error("reveal store unavailable");
+    }
+    await super.record(matchId, roundId, snapshot);
+  }
+}
 
 describe("presence owns connectivity, never activity (ticket 11 §1)", () => {
   it("fresh sides read offline; socket attach flips online without touching activity", async () => {
@@ -524,12 +537,15 @@ describe("boot recovery across a simulated process death (ticket 11 §10)", () =
     expect(protectedCommitDone).toBe(true);
   });
 
-  async function twoEngines(plans: Parameters<typeof setup>[0], options: Record<string, unknown> = {}) {
+  async function twoEngines(
+    plans: Parameters<typeof setup>[0],
+    options: Record<string, unknown> = {},
+    reveals: InMemoryRevealStore = new InMemoryRevealStore(),
+  ) {
     let now = 1_000_000;
     const judge = new ScriptedJudge(plans);
     const matches = new InMemoryMatchStore();
     const submissions = new InMemorySubmissionStore();
-    const reveals = new InMemoryRevealStore();
     const stores = { matches, submissions, reveals };
     const left = testPrincipal("user-left");
     const right = testPrincipal("user-right");
@@ -600,6 +616,92 @@ describe("boot recovery across a simulated process death (ticket 11 §10)", () =
     expect(snap.sides.left?.status).toBe("coding");
     expect(snap.sides.left?.submissions).toBe(1);
     expect(snap.sides.right?.submissions).toBe(0);
+  });
+
+  it("boot recovery publishes the automatic reveal when both sides' accepted scores are recovered", async () => {
+    const { engine1, engine2, judge, left, right, matchId, stores } = await twoEngines([{ score: 100 }, { score: 100 }]);
+    const match = await stores.matches.load(matchId);
+    const round = match!.rounds[0]!;
+    // The process died with one accepted (pending) evaluation per side. No live
+    // submit request exists any more, so nothing can ask for the reveal.
+    for (const side of ["left", "right"] as const) {
+      await stores.submissions.append({
+        submissionId: `recovery-reveal-${side}-submission`,
+        evaluationId: `recovery-reveal-${side}-evaluation`,
+        matchId,
+        roundId: round.roundId,
+        sideId: side,
+        problemVersionId: round.problemVersionId,
+        language: "Python",
+        source: SOLVED_PY,
+        sourceHash: `recovery-reveal-${side}-hash`,
+        documentRevision: null,
+        submittedAt: match!.startedAt,
+        elapsedMatchMs: 0,
+        status: "pending",
+        score: null,
+        scoreBp: null,
+        groups: null,
+        testStatuses: null,
+        failureCode: null,
+      });
+    }
+    await engine1.setPresence(matchId, "left", "online");
+    await engine1.setPresence(matchId, "right", "online");
+
+    const report = await engine2.recover();
+
+    expect(report.retried).toBe(2);
+    // The recovered scores satisfy the automatic reveal condition, so the
+    // game-owned reveal has to be published by the recovery itself.
+    expect((await engine2.snapshot(left, matchId)).roundPhase).toBe("SCORE_REVEAL");
+    const published = await stores.reveals.get(matchId, round.roundId);
+    expect(published?.scores).toEqual({ left: 100, right: 100 });
+    // Published exactly once: a repeated trigger returns the same reveal
+    // instead of publishing a second row for the round.
+    const repeated = await engine2.autoRevealIfAllSidesCounted(matchId, { graceMs: 0 });
+    expect(repeated?.scores).toEqual({ left: 100, right: 100 });
+    expect(await stores.reveals.get(matchId, round.roundId)).toEqual(published);
+  });
+
+  it("a failed recovery reveal does not abort the boot and is published by the next recovery", async () => {
+    const reveals = new FlakyRevealStore();
+    const { engine2, judge, left, right, matchId, stores } = await twoEngines([{ score: 100 }, { score: 100 }], {}, reveals);
+    const match = await stores.matches.load(matchId);
+    const round = match!.rounds[0]!;
+    for (const side of ["left", "right"] as const) {
+      await stores.submissions.append({
+        submissionId: `recovery-reveal-retry-${side}-submission`,
+        evaluationId: `recovery-reveal-retry-${side}-evaluation`,
+        matchId,
+        roundId: round.roundId,
+        sideId: side,
+        problemVersionId: round.problemVersionId,
+        language: "Python",
+        source: SOLVED_PY,
+        sourceHash: `recovery-reveal-retry-${side}-hash`,
+        documentRevision: null,
+        submittedAt: match!.startedAt,
+        elapsedMatchMs: 0,
+        status: "pending",
+        score: null,
+        scoreBp: null,
+        groups: null,
+        testStatuses: null,
+        failureCode: null,
+      });
+    }
+
+    const report = await engine2.recover();
+
+    // The reveal publish failed, but the boot completed and the scores count.
+    expect(report.retried).toBe(2);
+    expect((await engine2.snapshot(left, matchId)).roundPhase).not.toBe("SCORE_REVEAL");
+
+    // The next recovery retries the reveal and publishes it.
+    await engine2.recover();
+    expect((await engine2.snapshot(left, matchId)).roundPhase).toBe("SCORE_REVEAL");
+    expect((await stores.reveals.get(matchId, round.roundId))?.scores).toEqual({ left: 100, right: 100 });
   });
 
   it("starts reconnect grace after boot finishes re-driving pending evaluations", async () => {

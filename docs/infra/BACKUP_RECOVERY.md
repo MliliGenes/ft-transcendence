@@ -46,7 +46,7 @@ Without `ALLOW_LIVE_RESTORE=1`, the command refuses before accessing Docker. It 
 
 ## Non-destructive verification
 
-The [infrastructure guide](../services/infrastructure.md#restore-into-a-new-database) shows restoring a SQL dump into a newly named database without overwriting the source. Validate all three databases, matching attachment data, schema/migrations and application flows in an isolated deployment before claiming a full disaster-recovery demonstration. This integration does not perform a destructive live restore.
+The [infrastructure guide](../services/infrastructure.md#restore-into-a-new-database) shows how to restore User, Chat and Game SQL dumps into newly named databases without overwriting the source. Validate all three databases, matching attachment data, schema/migrations and application flows in an isolated deployment before claiming a full disaster-recovery demonstration. This integration does not perform a destructive live restore.
 
 The mocked script regression checks runtime database-name handling, complete snapshot file coverage, checksum validation, SQL error handling and the live-restore opt-in gate:
 

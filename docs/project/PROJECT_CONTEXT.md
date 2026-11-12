@@ -30,7 +30,7 @@ This document consolidates product context. It does not replace the authoritativ
 | Rich messaging | File attachments and audio/voice notes are part of the desired experience |
 | Group identity | Nicknames and titles alongside channels |
 | Personal expression | Customizable profiles with avatar, banner, gradients, display-name fonts, and optional gaming interests |
-| Game direction | **Multiple games over time**; the first title and first-release game count remain open |
+| Game direction | **Code Arena is the first playable game** in this repository. The current release has one playable game; adding more games is a future product decision. |
 | Reuse | Chat capabilities should later support multiple interfaces, including embedded in-game chat |
 | Team planning | Separate backlog cards for the major areas, with comments and proposals from teammates |
 

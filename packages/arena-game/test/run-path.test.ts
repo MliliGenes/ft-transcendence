@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { P100, SOLVED_PY, setup } from "./setup.js";
+import { P100, SOLVED_PY, setup, tick } from "./setup.js";
 
 describe("07 run path (visible tests only, independent sides)", () => {
   it("1. A Run succeeds while B remains coding", async () => {
@@ -86,5 +86,35 @@ describe("07 run path (visible tests only, independent sides)", () => {
     await expect(engine.run(left, matchId, { code: SOLVED_PY, language: "Python" })).rejects.toThrow();
     const receipt = await engine.submit(right, matchId, { code: SOLVED_PY, language: "Python" });
     expect(receipt.ok).toBe(true);
+  });
+
+  it("10. a Run that completes after its round advanced leaves the new round's activity alone", async () => {
+    const { engine, judge, left, right, matchId } = await setup([P100]);
+    // The left side is counted first, then starts a Run that stays in flight.
+    await engine.submit(left, matchId, { code: SOLVED_PY, language: "Python" });
+    judge.deferNextRun();
+    const stale = engine.run(left, matchId, { code: SOLVED_PY, language: "Python" });
+    await tick();
+    await engine.submit(right, matchId, { code: SOLVED_PY, language: "Python" });
+    await engine.publishReveal(left, matchId, { graceMs: 0 });
+    await engine.nextRound(left, matchId);
+    await engine.beginCoding(left, matchId);
+
+    // The same side starts a new Run in the new round while the old one is
+    // still in flight: the activity gate is per round.
+    judge.deferNextRun();
+    const current = engine.run(left, matchId, { code: SOLVED_PY, language: "Python" });
+    await tick();
+    expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe("running");
+
+    // The older Run completes now: it may only ever touch its own round, so
+    // the newer Run's running state survives.
+    judge.releaseRun();
+    await stale;
+    expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe("running");
+
+    judge.releaseRun();
+    await current;
+    expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe("coding");
   });
 });

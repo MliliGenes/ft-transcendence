@@ -49,7 +49,7 @@ export interface MatchEndedData {
   forfeit: {
     winnerSideId: string;
     loserSideId: string;
-    reason: 'leave' | 'grace-expired';
+    reason: 'leave' | 'grace-expired' | 'surrender';
   } | null;
   endedBecause: 'completed' | 'deadline' | 'forfeit';
 }
@@ -119,7 +119,7 @@ function parseMatchEnded(data: Record<string, unknown>): MatchEndedData | null {
     if (!isPlainObject(data.forfeit)) return null;
     const { winnerSideId, loserSideId, reason } = data.forfeit;
     if (!isIdentifier(winnerSideId) || !isIdentifier(loserSideId)) return null;
-    if (reason !== 'leave' && reason !== 'grace-expired') return null;
+    if (reason !== 'leave' && reason !== 'grace-expired' && reason !== 'surrender') return null;
     forfeit = { winnerSideId, loserSideId, reason };
   }
 
