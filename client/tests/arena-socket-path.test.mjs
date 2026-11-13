@@ -306,3 +306,34 @@ test("an expired match token is refreshed and reused for the command snapshot", 
     transport.disconnect();
   }
 });
+
+
+test("the public match snapshot preserves the authoritative winner when totals are equal", async () => {
+  for (const [mySide, winner, outcome] of [
+    ["left", "left", "You win the match."],
+    ["right", "left", "Opponent wins the match."],
+    ["left", null, "The match is a draw."],
+  ]) {
+    let socket;
+    const snapshot = {
+      ...matchSnapshot(1),
+      roundPhase: "MATCH_COMPLETE",
+      mySide,
+      final: { scores: { left: 125, right: 125 }, outcome: winner ?? "draw", winner, forfeit: null },
+    };
+    const { SocketArenaTransport } = loadTypeScriptModule("../lib/arena/socket.ts", {
+      "socket.io-client": { io() { socket = new FakeSocket(); return socket; } },
+      "./transport": loadTypeScriptModule("../lib/arena/transport.ts"),
+    }, { fetch: async () => ({ ok: true, json: async () => snapshot }) });
+    const transport = new SocketArenaTransport({ baseUrl: "http://game.test", userId: "player-1", matchId: "match-1" });
+    try {
+      socket.fire("connect");
+      assert.ok(await waitUntil(() => transport.snapshot().revision === 1));
+      assert.equal(transport.snapshot().matchFinal.outcome, outcome);
+      assert.equal(transport.snapshot().matchFinal.you, 125);
+      assert.equal(transport.snapshot().matchFinal.opponent, 125);
+    } finally {
+      transport.disconnect();
+    }
+  }
+});

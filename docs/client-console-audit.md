@@ -52,15 +52,15 @@ pages, plus client configuration and the original 19 test files.
 | Dependency restore | The original audit used `npm ci` with the existing lockfile. The combined integration candidate reused local dependencies; its lockfile is unchanged. |
 | Lint | `npm run lint` passed; an isolated lint probe also confirmed application console calls fail and test output remains exempt. |
 | Types | `node node_modules/typescript/bin/tsc --noEmit --incremental false` passed. |
-| Tests | `npm test`: 94 passed, zero failed. The action tests were rerun after the final overlay adjustment; the lobby pending-state, arena pending-label and arena pending-action progress regression tests were added during review. Four Feed carousel checks also cover native video keys, motion preferences, and persistent endpoint controls. |
+| Tests | `npm test`: 95 passed, zero failed. The action tests were rerun after the final overlay adjustment; the lobby pending-state, arena pending-label and arena pending-action progress regression tests were added during review. Four Feed carousel checks also cover native video keys, motion preferences, and persistent endpoint controls. A public snapshot regression covers authoritative tie-break winners. |
 | Production build | `npm run build` passed after granting network access for the existing Google Fonts. |
 | Production HTTP rendering | 14 routes returned HTML with status 200; a missing route returned the custom 404. OAuth renders as a native link. |
 | Development HTTP rendering | The same 14 routes and custom 404 passed against `next dev`. Both temporary local servers were stopped afterward. |
 | Browser UI with fabricated APIs (2026-11-13) | Lobby readiness and Match Run show pending feedback, retain labels, show failure feedback, and restore controls. Captured console empty. After the layout repair, all Match buttons and selectors fit a 1,076-pixel viewport and progress text remains visible. |
-| Live browser checks through Nginx (2026-11-13) | A real two-player 1v1 completed all three rounds with complementary final results (300–225). Reload during round-two reveal restored phase and totals. C++ snippets failed with HTTP 500 before the follow-up fix below; Python passed. Feed attachment upload was blocked by the browser before reaching storage. The post-fix browser replay remains pending. |
+| Live browser checks through Nginx (2026-11-13) | A real two-player 1v1 completed all three rounds with complementary final results (300–225). Reload during round-two reveal restored phase and totals. C++ snippets failed with HTTP 500 before the follow-up fix below; Python passed. Feed attachment upload was blocked by the browser before reaching storage. A fresh completed-match view selects Python after the fix; a full post-fix gameplay run used real HTTP. Chrome Feed upload, next/previous navigation and reload persistence passed with two synthetic images. |
 
 HTTP rendering checks do not execute browser JavaScript. Authenticated flows,
-uploads, hydration, post-fix 1v1 replay, actual 2v2 sessions, and offline/denied/conflict/rate-limit
+manual video uploads, assistive-technology behavior, full post-fix browser gameplay, actual 2v2 sessions, and offline/denied/conflict/rate-limit
 behavior through Nginx still need live browser verification. Unit checks cover
 action rejections, retained drafts/state, pending-control recovery, pending label
 stability and progress announcement, clipboard availability/denial, blocked
@@ -114,5 +114,24 @@ This is real service evidence, not a browser replay.
 Chrome/Orca control connections stalled during the post-fix browser attempt. The
 user observed ERR_BLOCKED_BY_CLIENT for the upload. Direct trusted storage TLS and
 CORS checks pass; the exact client blocking rule is not established, and no CORS or
-certificate controls have been weakened. Real Feed upload/carousel verification
-and a post-fix browser language replay remain open until observed.
+certificate controls have been weakened. Real two-image Feed upload/carousel verification later passed in Chrome Guest,
+including next/previous navigation and reload persistence; see
+[original-size evidence](evidence/feed-carousel-live/README.md). A fresh completed
+match view also selected Python. This is not a full browser replay of the post-fix
+gameplay, which was covered through authenticated HTTP.
+
+## Follow-up: authoritative tie-break winner
+
+That fresh match view exposed a second confirmed issue: real HTTP reported left
+as winner at125–125, but the Beta view displayed a draw. `adaptFinal` had compared
+totals instead of using the authoritative winner. The repair preserves the server
+winner for both viewers and treats null winner as a genuine draw; existing forfeit
+handling is unchanged. The public snapshot regression was observed failing before
+the fix. All95client tests, client lint, production build/TypeScript and both
+scoped reviews pass. See [before/after evidence](evidence/arena-tiebreak-live/README.md).
+
+The rebuilt frontend was then checked against the same real match in Chrome: the
+Beta view now says Opponent wins the match at125–125, matching serverwinnerleft.
+The corrected image and the earlier wrong draw image are saved at original
+3456×2166 resolution. The user-selected Feed upload and persisted carousel were
+also visually verified in this session; both scoped live follow-ups are complete.

@@ -97,7 +97,7 @@ interface ServerSnapshot {
   } | null;
 }
 
-/** Server terminal result -> viewer-relative final view (score sums + forfeit override). */
+/** Server terminal result -> viewer-relative scores and authoritative winner (including tie-breaks). */
 export function adaptFinal(
   final: ServerSnapshot["final"],
   mySide: string,
@@ -119,7 +119,7 @@ export function adaptFinal(
     you,
     opponent,
     outcome:
-      you > opponent ? "You win the match." : you < opponent ? "Opponent wins the match." : "The match is a draw.",
+      f.winner === mySide ? "You win the match." : f.winner === otherId ? "Opponent wins the match." : "The match is a draw.",
   };
 }
 
