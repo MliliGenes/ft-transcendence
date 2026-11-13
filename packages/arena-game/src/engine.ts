@@ -502,11 +502,19 @@ export class ArenaEngine {
         roundId: round.roundId,
         visible: problem.visible.map((t) => ({ id: t.id, input: t.input, expected: t.expected })),
         driver: problem.driver ?? driverFor(input.language as SupportedLanguage),
+        entrypoint: problem.entrypoint,
       };
     });
     try {
       // Visible tests only. Runs outside the match lock: the other side stays free.
-      const verdicts = await this.judge.runVisible(input.language as SupportedLanguage, setup.driver, input.code, setup.visible, this.limits);
+      const verdicts = await this.judge.runVisible(
+        input.language as SupportedLanguage,
+        setup.driver,
+        input.code,
+        setup.visible,
+        this.limits,
+        setup.entrypoint,
+      );
       await this.withMatchLock(matchId, async () => {
         const match = await this.requireMember(principal, matchId, true);
         const round = match.rounds.find((r) => r.roundId === setup.roundId) ?? this.currentRound(match);

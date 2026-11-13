@@ -176,10 +176,11 @@ test("a burst of match events coalesces into one snapshot request that applies t
   }
 });
 
-test("a rate-limited snapshot refresh is reported once instead of rejecting unhandled", async () => {
+test("failed snapshot refreshes retain the match, publish a notice without logging, and recover", async () => {
   let socket;
   const warnings = [];
   const errors = [];
+  let status = 200;
 
   const socketModule = loadTypeScriptModule(
     "../lib/arena/socket.ts",
@@ -193,7 +194,7 @@ test("a rate-limited snapshot refresh is reported once instead of rejecting unha
       "./transport": loadTypeScriptModule("../lib/arena/transport.ts"),
     },
     {
-      fetch: async () => ({ ok: false, status: 429, json: async () => ({ error: "too many requests" }) }),
+      fetch: async () => ({ ok: status === 200, status, json: async () => matchSnapshot(1) }),
       console: {
         warn: (...args) => warnings.push(args),
         error: (...args) => errors.push(args),
@@ -210,9 +211,97 @@ test("a rate-limited snapshot refresh is reported once instead of rejecting unha
   try {
     socket.fire("connect");
     await wait(20);
-    assert.equal(warnings.length, 1, "the rate limit is reported");
-    assert.equal(errors.length, 0, "a rate limit is not an unexpected failure");
-    assert.equal(transport.snapshot().revision, -1, "no snapshot is applied when the request is rejected");
+    const baseline = transport.snapshot();
+    const notices = [];
+    transport.subscribe(() => notices.push(transport.snapshot().notice));
+    for (const failureStatus of [429, 503]) {
+      status = failureStatus;
+      socket.fire("connect");
+      assert.ok(await waitUntil(() => transport.snapshot().notice !== null));
+      assert.match(transport.snapshot().notice, /Retrying automatically/);
+      assert.deepEqual(transport.snapshot().problem, baseline.problem, "the last synchronized match is retained");
+      assert.equal(transport.snapshot().revision, baseline.revision);
+      assert.ok(notices.includes(transport.snapshot().notice), "subscribers receive the notice");
+
+      status = 200;
+      socket.fire("connect");
+      assert.ok(await waitUntil(() => transport.snapshot().notice === null), "successful synchronization clears the notice");
+    }
+    assert.equal(warnings.length, 0);
+    assert.equal(errors.length, 0);
+  } finally {
+    transport.disconnect();
+  }
+});
+
+test("an expired match token is refreshed and reused for the command snapshot", async () => {
+  let socket;
+  let currentToken = "old-token";
+  const requests = [];
+
+  const socketModule = loadTypeScriptModule(
+    "../lib/arena/socket.ts",
+    {
+      "socket.io-client": {
+        io() {
+          socket = new FakeSocket();
+          socket.auth = {};
+          return socket;
+        },
+      },
+      "./transport": loadTypeScriptModule("../lib/arena/transport.ts"),
+    },
+    {
+      fetch: async (url, init = {}) => {
+        const path = new URL(url).pathname.split("/matches/match-1")[1];
+        const token = init.headers?.authorization?.replace("Bearer ", "") ?? null;
+        requests.push({ path, token });
+        if (path === "/start-round" && token === "old-token") {
+          return { ok: false, status: 401, json: async () => ({ error: "expired" }) };
+        }
+        if (path === "/snapshot") {
+          return { ok: true, json: async () => matchSnapshot(1) };
+        }
+        return { ok: true, json: async () => ({ ok: true }) };
+      },
+    },
+  );
+
+  const requestWithSession = async (send) => {
+    try {
+      return await send(currentToken);
+    } catch (error) {
+      if (error.status !== 401) throw error;
+      currentToken = "fresh-token";
+      return send(currentToken);
+    }
+  };
+  const transport = new socketModule.SocketArenaTransport({
+    baseUrl: "http://game.test",
+    userId: "player-1",
+    matchId: "match-1",
+    token: "old-token",
+    requestWithSession,
+  });
+
+  try {
+    socket.fire("connect");
+    assert.ok(await waitUntil(() => requests.some((request) => request.path === "/snapshot")));
+    await wait(0);
+
+    await transport.startRound();
+
+    assert.deepEqual(
+      requests.filter((request) => request.path === "/start-round").map((request) => request.token),
+      ["old-token", "fresh-token"],
+      "the rejected command is retried once with the renewed token",
+    );
+    assert.equal(socket.auth.token, "fresh-token", "future game socket connections use the renewed token");
+    assert.equal(
+      requests.filter((request) => request.path === "/snapshot").at(-1)?.token,
+      "fresh-token",
+      "the command's follow-up snapshot also uses the renewed token",
+    );
   } finally {
     transport.disconnect();
   }

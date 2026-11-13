@@ -124,12 +124,13 @@ export class Judge0Adapter implements GameJudge {
     source: string,
     tests: VisibleTest[],
     limits: JudgeLimits,
+    entrypoint?: string,
   ): Promise<CaseResult[]> {
     const results = await this.runCases(
       language,
       driver,
       source,
-      undefined,
+      entrypoint,
       tests.map((test) => ({ id: test.id, input: test.input, expected: test.expected })),
       limits,
     );

@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { IconBrandDiscord, IconBrandGithub, IconCheck, IconUnlink } from "@tabler/icons-react";
 import { useAuth } from "@/components/auth/auth-provider";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { authApi } from "@/lib/auth/client";
 import { currentAccountQueryKey, useCurrentAccount } from "@/hooks/use-current-account";
 import { oauthNoticeMessage, rememberOAuthProvider, takeOAuthNotice, type OAuthNotice, type OAuthProvider } from "@/lib/auth/oauth";
@@ -83,7 +84,7 @@ export function ConnectedAccounts({ showHeader = true }: { showHeader?: boolean 
       ) : !session ? (
         <div className="border border-border bg-card p-6">
           <p className="text-sm text-muted-foreground">Log in to manage connected accounts.</p>
-          <Button render={<Link href="/login" />} className="mt-5 min-h-11 px-5">Log in</Button>
+          <Link href="/login" className={cn(buttonVariants(), "mt-5 min-h-11 px-5")}>Log in</Link>
         </div>
       ) : account.isPending ? (
         <p role="status" className="py-8 text-sm text-muted-foreground">Loading connected accounts…</p>

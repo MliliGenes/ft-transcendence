@@ -98,8 +98,9 @@ export class WorkerJudgeAdapter implements GameJudge {
     source: string,
     tests: VisibleTest[],
     limits: JudgeLimits,
+    entrypoint?: string,
   ): Promise<CaseResult[]> {
-    const result = await this.post("/v1/run-visible", { language, driver, source, tests, limits });
+    const result = await this.post("/v1/run-visible", { language, driver, source, tests, limits, entrypoint });
     if (!Array.isArray(result) || result.length !== tests.length) {
       throw new JudgeInfraError("judge worker returned an invalid visible result");
     }

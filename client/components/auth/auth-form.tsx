@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconArrowRight, IconBrandDiscord, IconBrandGithub, IconEye, IconEyeOff, IconLock, IconMail, IconUser } from "@tabler/icons-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { validateAuth, type AuthErrors, type AuthMode } from "@/lib/auth/validation";
 import { authApi, AuthRequestError } from "@/lib/auth/client";
@@ -27,9 +28,13 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   useEffect(() => {
     const notice = takeOAuthNotice("login");
     if (notice) queueMicrotask(() => setFormError(oauthNoticeMessage(notice)));
-    if (sessionStorage.getItem("nook:password-reset-success")) {
-      sessionStorage.removeItem("nook:password-reset-success");
-      queueMicrotask(() => setFormNotice("Your password has been reset. Sign in with your new password."));
+    try {
+      if (sessionStorage.getItem("nook:password-reset-success")) {
+        sessionStorage.removeItem("nook:password-reset-success");
+        queueMicrotask(() => setFormNotice("Your password has been reset. Sign in with your new password."));
+      }
+    } catch {
+      // The login form remains usable when optional storage is blocked.
     }
   }, []);
 
@@ -82,10 +87,10 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           { provider: "github", label: "GitHub", Icon: IconBrandGithub },
           { provider: "discord", label: "Discord", Icon: IconBrandDiscord },
         ] satisfies { provider: OAuthProvider; label: string; Icon: typeof IconBrandGithub }[]).map(({ provider, label, Icon }) => (
-          <Button key={provider} type="button" variant="outline" render={<a href={`/api/auth/${provider}`} onClick={() => rememberOAuthProvider(provider)} />} className="h-12 w-full gap-2 border-nook-border-subtle bg-nook-surface-raised text-sm text-foreground">
+          <a href={`/api/auth/${provider}`} onClick={() => rememberOAuthProvider(provider)} key={provider} className={cn(buttonVariants({ variant: "outline" }), "h-12 w-full gap-2 border-nook-border-subtle bg-nook-surface-raised text-sm text-foreground")}>
             <Icon size={18} stroke={1.75} aria-hidden="true" />
             Continue with {label}
-          </Button>
+          </a>
         ))}
         <p className="text-center text-xs leading-5 text-nook-text-muted [&_a]:text-nook-accent-text [&_a]:underline [&_a]:underline-offset-4">
           By continuing with GitHub or Discord, you agree to our <Link href="/terms" target="_blank" rel="noreferrer">Terms of Service</Link> and <Link href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</Link>.

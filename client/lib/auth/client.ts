@@ -5,6 +5,8 @@ export type AuthSession = {
   expiresIn: number;
 };
 
+export type AuthenticatedRequest = <T>(send: (accessToken: string) => Promise<T>) => Promise<T>;
+
 type ApiErrorBody = { message?: string | string[]; error?: string };
 
 export class AuthRequestError extends Error {

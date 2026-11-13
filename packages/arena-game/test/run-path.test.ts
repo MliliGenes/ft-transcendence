@@ -28,6 +28,7 @@ describe("07 run path (visible tests only, independent sides)", () => {
     await engine.run(left, matchId, { code: SOLVED_PY, language: "Python" });
     const ids = judge.lastRunTests.map((t) => t.id);
     expect(ids).toEqual(["ex1", "ex2", "ex3"]);
+    expect(judge.lastRunEntrypoint).toBe("ledger_sum");
     expect(ids).not.toContain("b1");
     const snap = await engine.snapshot(left, matchId);
     expect(JSON.stringify(snap)).not.toContain("1000000000");

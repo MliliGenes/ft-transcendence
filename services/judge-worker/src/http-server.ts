@@ -72,9 +72,11 @@ function parseVisibleRequest(value: unknown): {
   source: string;
   tests: VisibleTest[];
   limits: JudgeLimits;
+  entrypoint?: string;
 } {
   if (!isRecord(value) || !isLanguage(value.language) || !isDriver(value.driver)
-    || !isStringField(value, "source") || !isLimits(value.limits) || !Array.isArray(value.tests)) {
+    || !isStringField(value, "source") || !isLimits(value.limits) || !Array.isArray(value.tests)
+    || (value.entrypoint !== undefined && typeof value.entrypoint !== "string")) {
     throw new InvalidRequestError();
   }
   const tests = value.tests.map((test) => {
@@ -89,6 +91,7 @@ function parseVisibleRequest(value: unknown): {
     source: value.source as string,
     tests,
     limits: value.limits,
+    ...(typeof value.entrypoint === "string" ? { entrypoint: value.entrypoint } : {}),
   };
 }
 
@@ -238,7 +241,7 @@ export function createJudgeWorkerServer(options: JudgeWorkerServerOptions): Serv
     if (visible) {
       const input = parseVisibleRequest(body);
       const result = await options.queue.run(() => options.judge.runVisible(
-        input.language, input.driver, input.source, input.tests, input.limits,
+        input.language, input.driver, input.source, input.tests, input.limits, input.entrypoint,
       ));
       respond(response, 200, result);
       return;

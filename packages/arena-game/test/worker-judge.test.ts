@@ -37,12 +37,16 @@ describe("WorkerJudgeAdapter", () => {
 
     const result = await judge.runVisible("Python", "snippet", "def solve(value): return value", [
       { id: "visible-1", input: "value=1", expected: "1" },
-    ], limits);
+    ], limits, "solve");
 
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe(`${baseUrl}/v1/run-visible`);
     expect(new Headers(calls[0]?.init?.headers).get("authorization")).toBe(`Bearer ${token}`);
-    expect(JSON.parse(String(calls[0]?.init?.body))).toMatchObject({ language: "Python", tests: [{ expected: "1" }] });
+    expect(JSON.parse(String(calls[0]?.init?.body))).toMatchObject({
+      language: "Python",
+      entrypoint: "solve",
+      tests: [{ expected: "1" }],
+    });
     expect(result).toEqual([{ id: "visible-1", passed: true, status: "accepted", output: "1", runtimeMs: 2 }]);
   });
 
