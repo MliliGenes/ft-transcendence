@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkPlatformHealth } from "../app/api/status/route.ts";
+import { checkPlatformHealth } from "../lib/platform-status.ts";
 
 test("status endpoint returns operational status and all service categories", async () => {
   // Mock global fetch for health checks

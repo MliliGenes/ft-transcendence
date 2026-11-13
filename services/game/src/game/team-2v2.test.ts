@@ -76,7 +76,7 @@ async function newTeamMatch(): Promise<string> {
       { userId: B1, sideId: "right" },
       { userId: B2, sideId: "right" },
     ],
-    problemVersionIds: ["even-ledger", "even-ledger"],
+    problemVersionIds: ["even-ledger-v2", "even-ledger-v2"],
   });
   expect(res.status).toBe(201);
   return res.json.matchId as string;

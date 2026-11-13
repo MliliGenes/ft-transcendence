@@ -32,7 +32,7 @@ import { createGameJudge } from "./judge-factory.js";
 import { buildLeaderboard, statisticsForUser, summarizeCompletedMatch } from "./match-statistics.js";
 import { GameEventsPublisher } from "./game-events.publisher.js";
 
-const LOBBY_PROBLEM_POOL = ["even-ledger", "double-it", "sum-array"];
+const LOBBY_PROBLEM_POOL = ["even-ledger-v2", "double-it", "sum-array"];
 const DELETED_ACCOUNT_TOKEN_BLOCK_MS = 20 * 60 * 1000;
 /** How often an unconfirmed lifecycle event is republished before it is dropped. */
 const PUBLISH_ATTEMPTS = 3;

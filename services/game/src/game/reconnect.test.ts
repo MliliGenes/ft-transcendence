@@ -80,7 +80,7 @@ async function newMatch(users = ["user-a", "user-b"]): Promise<string> {
       { userId: users[0], sideId: "left" },
       { userId: users[1], sideId: "right" },
     ],
-    problemVersionIds: ["even-ledger", "even-ledger", "even-ledger"],
+    problemVersionIds: ["even-ledger-v2", "even-ledger-v2", "even-ledger-v2"],
   });
   expect(res.status).toBe(201);
   return (res.json as { matchId: string }).matchId;

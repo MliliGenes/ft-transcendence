@@ -24,7 +24,7 @@ interface TeamFixture {
   advance: (ms: number) => void;
 }
 
-async function setup2v2(plans: ScriptPlan[] = [{ score: 100 }], options: Partial<EngineOptions> = {}, problemVersionIds = ["even-ledger", "even-ledger"]): Promise<TeamFixture> {
+async function setup2v2(plans: ScriptPlan[] = [{ score: 100 }], options: Partial<EngineOptions> = {}): Promise<TeamFixture> {
   let now = 1_000_000;
   const judge = new ScriptedJudge(plans);
   const engine = new ArenaEngine({ judge, bank: new FileBank(), clock: () => now, revealGraceMs: 0, ...options });
@@ -41,7 +41,7 @@ async function setup2v2(plans: ScriptPlan[] = [{ score: 100 }], options: Partial
       { userId: "user-b1", sideId: "right" },
       { userId: "user-b2", sideId: "right" },
     ],
-    problemVersionIds,
+    problemVersionIds: ["even-ledger-v2", "even-ledger-v2"],
   });
   await engine.startRound(a1, matchId);
   await engine.beginCoding(a1, matchId);
@@ -89,7 +89,7 @@ describe("2v2 match creation validates team shape", () => {
           { userId: "u2", sideId: "left" },
           { userId: "u3", sideId: "right" },
         ],
-        problemVersionIds: ["even-ledger"],
+        problemVersionIds: ["even-ledger-v2"],
       }),
     ).rejects.toThrow();
     await expect(
@@ -99,7 +99,7 @@ describe("2v2 match creation validates team shape", () => {
           { userId: "u1", sideId: "left" },
           { userId: "u2", sideId: "right" },
         ],
-        problemVersionIds: ["even-ledger"],
+        problemVersionIds: ["even-ledger-v2"],
       }),
     ).rejects.toThrow();
   });
@@ -115,7 +115,7 @@ describe("2v2 match creation validates team shape", () => {
           { userId: "u1", sideId: "right" },
           { userId: "u3", sideId: "right" },
         ],
-        problemVersionIds: ["even-ledger"],
+        problemVersionIds: ["even-ledger-v2"],
       }),
     ).rejects.toThrow();
   });
@@ -666,7 +666,7 @@ describe("readiness binds to the current document revision (strict rule)", () =>
   });
 
   it("17. team language change advances revision and invalidates both", async () => {
-    const fx = await setup2v2(undefined, {}, ["double-it", "even-ledger"]);
+    const fx = await setup2v2();
     await readyBoth(fx, 1);
     await fx.engine.setTeamLanguage(fx.a1, fx.matchId, "C++");
     const snap = await fx.engine.snapshot(fx.a1, fx.matchId);
@@ -683,7 +683,7 @@ describe("readiness binds to the current document revision (strict rule)", () =>
   });
 
   it("language stays team-owned: Beta keeps its own language", async () => {
-    const fx = await setup2v2(undefined, {}, ["double-it", "even-ledger"]);
+    const fx = await setup2v2();
     await fx.engine.setTeamLanguage(fx.a1, fx.matchId, "C");
     const snap = await fx.engine.snapshot(fx.b1, fx.matchId);
     expect(snap.teams?.find((t) => t.side === "right")?.language).toBe("Python");
@@ -774,7 +774,7 @@ describe("2v2 reveal is team scores only; 1v1 unchanged", () => {
   it("1v1 createMatch validation unchanged", async () => {
     const one = await setup();
     await expect(
-      one.engine.createMatch({ mode: "1v1", participants: [{ userId: "solo", sideId: "left" }], problemVersionIds: ["even-ledger"] }),
+      one.engine.createMatch({ mode: "1v1", participants: [{ userId: "solo", sideId: "left" }], problemVersionIds: ["even-ledger-v2"] }),
     ).rejects.toThrow();
   });
 });

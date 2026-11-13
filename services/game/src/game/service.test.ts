@@ -91,7 +91,7 @@ describe("game service integration (real HTTP + sockets + containers)", () => {
         { userId: "user-a", sideId: "left" },
         { userId: "user-b", sideId: "right" },
       ],
-      problemVersionIds: ["even-ledger", "even-ledger", "even-ledger"],
+      problemVersionIds: ["even-ledger-v2", "even-ledger-v2", "even-ledger-v2"],
     });
     expect(res.status).toBe(201);
     return (res.json as { matchId: string }).matchId;

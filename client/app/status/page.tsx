@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { IconCheck, IconAlertTriangle, IconX, IconRefresh, IconArrowLeft } from "@tabler/icons-react";
-import type { PlatformStatus } from "@/app/api/status/route";
+import type { PlatformStatus } from "@/lib/platform-status";
 import { Button } from "@/components/ui/button";
 
 export default function StatusPage() {
