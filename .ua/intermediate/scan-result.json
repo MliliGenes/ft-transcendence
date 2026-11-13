@@ -1,6 +1,6 @@
 {
-  "name": "nook-code-arena",
-  "description": "Code Arena, the first-game implementation baseline for Nook's ft_transcendence project. Note: this project has over 100 source files; consider scoping analysis to a subdirectory for faster results.",
+  "name": "Nook",
+  "description": "Nook is a community platform for the 1337 / 42 student community. This monorepo contains the Next.js client, User, Chat, and Game services, Code Arena and its judge worker, databases, object storage, gateway, and monitoring. The current playable game supports authenticated 1v1 and 2v2 programming matches.",
   "languages": [
     "alloy",
     "conf",
@@ -76,6 +76,12 @@
       "fileCategory": "code"
     },
     {
+      "path": "2026-11-12_DRIFT_REPORT.md",
+      "language": "markdown",
+      "sizeLines": 119,
+      "fileCategory": "docs"
+    },
+    {
       "path": "CONTEXT.md",
       "language": "markdown",
       "sizeLines": 42,
@@ -84,7 +90,7 @@
     {
       "path": "README.md",
       "language": "markdown",
-      "sizeLines": 215,
+      "sizeLines": 218,
       "fileCategory": "docs"
     },
     {
@@ -270,7 +276,7 @@
     {
       "path": "chat-service/src/chat/game-notifications.service.ts",
       "language": "typescript",
-      "sizeLines": 389,
+      "sizeLines": 391,
       "fileCategory": "code"
     },
     {
@@ -486,7 +492,7 @@
     {
       "path": "chat-service/test/game-notifications.spec.ts",
       "language": "typescript",
-      "sizeLines": 348,
+      "sizeLines": 376,
       "fileCategory": "code"
     },
     {
@@ -924,13 +930,13 @@
     {
       "path": "client/components/arena/ArenaHeader.tsx",
       "language": "typescript",
-      "sizeLines": 101,
+      "sizeLines": 104,
       "fileCategory": "code"
     },
     {
       "path": "client/components/arena/ArenaWorkspace.tsx",
       "language": "typescript",
-      "sizeLines": 252,
+      "sizeLines": 302,
       "fileCategory": "code"
     },
     {
@@ -942,7 +948,7 @@
     {
       "path": "client/components/arena/EditorAdapter.tsx",
       "language": "typescript",
-      "sizeLines": 240,
+      "sizeLines": 373,
       "fileCategory": "code"
     },
     {
@@ -1230,7 +1236,7 @@
     {
       "path": "client/lib/arena/socket.ts",
       "language": "typescript",
-      "sizeLines": 500,
+      "sizeLines": 631,
       "fileCategory": "code"
     },
     {
@@ -1242,13 +1248,13 @@
     {
       "path": "client/lib/arena/transport.ts",
       "language": "typescript",
-      "sizeLines": 95,
+      "sizeLines": 97,
       "fileCategory": "code"
     },
     {
       "path": "client/lib/arena/types.ts",
       "language": "typescript",
-      "sizeLines": 117,
+      "sizeLines": 121,
       "fileCategory": "code"
     },
     {
@@ -1324,6 +1330,12 @@
       "fileCategory": "config"
     },
     {
+      "path": "client/tests/arena-editor-collab-lifecycle.test.mjs",
+      "language": "javascript",
+      "sizeLines": 610,
+      "fileCategory": "code"
+    },
+    {
       "path": "client/tests/arena-game-notifications.test.mjs",
       "language": "javascript",
       "sizeLines": 99,
@@ -1356,7 +1368,7 @@
     {
       "path": "client/tests/arena-socket-path.test.mjs",
       "language": "javascript",
-      "sizeLines": 29,
+      "sizeLines": 219,
       "fileCategory": "code"
     },
     {
@@ -1452,19 +1464,25 @@
     {
       "path": "docs/README.md",
       "language": "markdown",
-      "sizeLines": 55,
+      "sizeLines": 59,
       "fileCategory": "docs"
     },
     {
       "path": "docs/adr/0015-code-arena-nook-integration.md",
       "language": "markdown",
-      "sizeLines": 36,
+      "sizeLines": 37,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/adr/0016-one-game-service-instance.md",
+      "language": "markdown",
+      "sizeLines": 3,
       "fileCategory": "docs"
     },
     {
       "path": "docs/api/chat-service.openapi.json",
       "language": "json",
-      "sizeLines": 2541,
+      "sizeLines": 2663,
       "fileCategory": "config"
     },
     {
@@ -1482,7 +1500,7 @@
     {
       "path": "docs/book/build.mjs",
       "language": "javascript",
-      "sizeLines": 682,
+      "sizeLines": 840,
       "fileCategory": "code"
     },
     {
@@ -1494,7 +1512,7 @@
     {
       "path": "docs/evidence/g06-live-demo/README.md",
       "language": "markdown",
-      "sizeLines": 180,
+      "sizeLines": 178,
       "fileCategory": "docs"
     },
     {
@@ -1524,7 +1542,7 @@
     {
       "path": "docs/integrations/client-backend.md",
       "language": "markdown",
-      "sizeLines": 54,
+      "sizeLines": 56,
       "fileCategory": "docs"
     },
     {
@@ -1542,7 +1560,7 @@
     {
       "path": "docs/project/COMPOSE.md",
       "language": "markdown",
-      "sizeLines": 109,
+      "sizeLines": 110,
       "fileCategory": "docs"
     },
     {
@@ -1578,7 +1596,7 @@
     {
       "path": "docs/services/chat-service.md",
       "language": "markdown",
-      "sizeLines": 273,
+      "sizeLines": 275,
       "fileCategory": "docs"
     },
     {
@@ -1590,7 +1608,7 @@
     {
       "path": "docs/services/infrastructure.md",
       "language": "markdown",
-      "sizeLines": 294,
+      "sizeLines": 300,
       "fileCategory": "docs"
     },
     {
@@ -1600,9 +1618,15 @@
       "fileCategory": "docs"
     },
     {
+      "path": "docs/spec/code-arena-gameplay-review.md",
+      "language": "markdown",
+      "sizeLines": 126,
+      "fileCategory": "docs"
+    },
+    {
       "path": "docs/spec/code-arena-integration-spec.md",
       "language": "markdown",
-      "sizeLines": 66,
+      "sizeLines": 72,
       "fileCategory": "docs"
     },
     {
@@ -1896,7 +1920,7 @@
     {
       "path": "packages/arena-game/src/engine.ts",
       "language": "typescript",
-      "sizeLines": 1505,
+      "sizeLines": 1668,
       "fileCategory": "code"
     },
     {
@@ -1968,7 +1992,7 @@
     {
       "path": "packages/arena-game/src/records.ts",
       "language": "typescript",
-      "sizeLines": 149,
+      "sizeLines": 153,
       "fileCategory": "code"
     },
     {
@@ -1986,7 +2010,7 @@
     {
       "path": "packages/arena-game/src/team-collaboration.ts",
       "language": "typescript",
-      "sizeLines": 395,
+      "sizeLines": 418,
       "fileCategory": "code"
     },
     {
@@ -2004,7 +2028,7 @@
     {
       "path": "packages/arena-game/test/account-erasure.test.ts",
       "language": "typescript",
-      "sizeLines": 150,
+      "sizeLines": 156,
       "fileCategory": "code"
     },
     {
@@ -2118,7 +2142,7 @@
     {
       "path": "packages/arena-game/test/reconnect.test.ts",
       "language": "typescript",
-      "sizeLines": 714,
+      "sizeLines": 816,
       "fileCategory": "code"
     },
     {
@@ -2130,7 +2154,7 @@
     {
       "path": "packages/arena-game/test/run-path.test.ts",
       "language": "typescript",
-      "sizeLines": 90,
+      "sizeLines": 120,
       "fileCategory": "code"
     },
     {
@@ -2142,7 +2166,7 @@
     {
       "path": "packages/arena-game/test/scripted-judge.ts",
       "language": "typescript",
-      "sizeLines": 146,
+      "sizeLines": 156,
       "fileCategory": "code"
     },
     {
@@ -2166,7 +2190,7 @@
     {
       "path": "packages/arena-game/test/team-2v2.test.ts",
       "language": "typescript",
-      "sizeLines": 488,
+      "sizeLines": 918,
       "fileCategory": "code"
     },
     {
@@ -2256,7 +2280,7 @@
     {
       "path": "packages/arena-model/src/events.ts",
       "language": "typescript",
-      "sizeLines": 42,
+      "sizeLines": 45,
       "fileCategory": "code"
     },
     {
@@ -2526,13 +2550,19 @@
     {
       "path": "services/game/src/game/game.controller.ts",
       "language": "typescript",
-      "sizeLines": 134,
+      "sizeLines": 141,
+      "fileCategory": "code"
+    },
+    {
+      "path": "services/game/src/game/game.gateway.test.ts",
+      "language": "typescript",
+      "sizeLines": 56,
       "fileCategory": "code"
     },
     {
       "path": "services/game/src/game/game.gateway.ts",
       "language": "typescript",
-      "sizeLines": 153,
+      "sizeLines": 159,
       "fileCategory": "code"
     },
     {
@@ -2550,7 +2580,7 @@
     {
       "path": "services/game/src/game/game.service.ts",
       "language": "typescript",
-      "sizeLines": 681,
+      "sizeLines": 673,
       "fileCategory": "code"
     },
     {
@@ -2604,13 +2634,13 @@
     {
       "path": "services/game/src/game/match-socket-presence.test.ts",
       "language": "typescript",
-      "sizeLines": 101,
+      "sizeLines": 136,
       "fileCategory": "code"
     },
     {
       "path": "services/game/src/game/match-socket-presence.ts",
       "language": "typescript",
-      "sizeLines": 63,
+      "sizeLines": 80,
       "fileCategory": "code"
     },
     {
@@ -3322,8 +3352,8 @@
       "fileCategory": "code"
     }
   ],
-  "totalFiles": 548,
-  "filteredByIgnore": 24,
+  "totalFiles": 553,
+  "filteredByIgnore": 19,
   "estimatedComplexity": "very-large",
   "importMap": {
     ".gitattributes": [],
@@ -3333,6 +3363,7 @@
     ".gitleaks.toml": [],
     ".graphifyignore": [],
     ".mailmap": [],
+    "2026-11-12_DRIFT_REPORT.md": [],
     "CONTEXT.md": [],
     "README.md": [],
     "chat-service/Dockerfile": [],
@@ -4095,6 +4126,7 @@
     "client/lib/utils.ts": [],
     "client/next.config.ts": [],
     "client/package.json": [],
+    "client/tests/arena-editor-collab-lifecycle.test.mjs": [],
     "client/tests/arena-game-notifications.test.mjs": [],
     "client/tests/arena-invitations.test.mjs": [],
     "client/tests/arena-lobby-identities.test.mjs": [],
@@ -4120,6 +4152,7 @@
     "compose.yaml": [],
     "docs/README.md": [],
     "docs/adr/0015-code-arena-nook-integration.md": [],
+    "docs/adr/0016-one-game-service-instance.md": [],
     "docs/api/chat-service.openapi.json": [],
     "docs/api/user-service.openapi.json": [],
     "docs/archive/client-plan.md": [],
@@ -4143,6 +4176,7 @@
     "docs/services/client.md": [],
     "docs/services/infrastructure.md": [],
     "docs/services/user-service.md": [],
+    "docs/spec/code-arena-gameplay-review.md": [],
     "docs/spec/code-arena-integration-spec.md": [],
     "docs/superpowers/plans/2026-11-11-nook-arena-platform-integration.md": [],
     "docs/superpowers/plans/2026-11-11-verification-guardrails.md": [],
@@ -4572,6 +4606,10 @@
       "services/game/src/game/game.service.ts",
       "services/game/src/game/principal.ts"
     ],
+    "services/game/src/game/game.gateway.test.ts": [
+      "services/game/src/game/game.gateway.ts",
+      "services/game/src/game/socket-auth.ts"
+    ],
     "services/game/src/game/game.gateway.ts": [
       "services/game/src/game/game.service.ts",
       "services/game/src/game/socket-auth.ts"
@@ -4909,5 +4947,6 @@
     "user-service/tsconfig.json": [],
     "user-service/vitest.config.e2e.ts": [],
     "user-service/vitest.config.ts": []
-  }
+  },
+  "contentDigest": "837e009801a1883f7065fe84569bd1a311ff0ba164b87f6f615507447d2158c9"
 }

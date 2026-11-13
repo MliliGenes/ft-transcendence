@@ -1,6 +1,6 @@
 # EGM Drift Report — 2026-11-12
 
-> This report records the findings at the start of the 2026-11-12 audit. The source-document findings were corrected during the same work session. Evidence review also corrected the earlier claim that the four-client 2v2 run completed a match. The full project check then passed. The code maps and handbook are still scheduled for refresh after the source changes are committed; read the findings below as an audit snapshot, not as a list of current open defects.
+> This report records the findings at the start of the 2026-11-12 audit. The source-document findings were corrected during the same work session. Evidence review also corrected the earlier claim that the four-client 2v2 run completed a match. The full project check then passed. Follow-up: source changes were committed as `1b8ad5f`; Graphify and Understand were refreshed from that commit, and the handbook was rebuilt from those current maps on 2026-11-13. The findings below preserve the audit's initial observations and are not a list of current open defects.
 
 ## README.md
 - The architecture diagram and summary describe User events travelling through RabbitMQ to Chat and Game, but omit the current Game-to-Chat `game.events` path used for Code Arena invitation and match lifecycle notifications. Add that link so the overview matches the G06 implementation described later in the README.

@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "gitCommitHash": "3fe061a14fbc136f4bcf791b9386be478756d351",
-  "generatedAt": "2026-11-11T14:58:08.588Z",
+  "gitCommitHash": "1b8ad5fbe3b41a78835bf2f9741c8e8d2b12d346",
+  "generatedAt": "2026-11-12T22:09:10.896Z",
   "files": {
     ".gitattributes": {
       "filePath": ".gitattributes",
@@ -73,9 +73,19 @@
       "totalLines": 4,
       "hasStructuralAnalysis": false
     },
+    "2026-11-12_DRIFT_REPORT.md": {
+      "filePath": "2026-11-12_DRIFT_REPORT.md",
+      "contentHash": "b6a502edc7d0f5e19eb800b8318b3b236a39eddd8f58b7531fb1adc587d65f5c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 120,
+      "hasStructuralAnalysis": false
+    },
     "CONTEXT.md": {
       "filePath": "CONTEXT.md",
-      "contentHash": "aaf6ddec2a2633b796eb0a4c6cf61f319af77bf56ce483f07583d0ddff285809",
+      "contentHash": "de4f62b6453400025b1ee5d3f9f2db644e255c87edd7f20b590c8ad3e2afe577",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -85,12 +95,12 @@
     },
     "README.md": {
       "filePath": "README.md",
-      "contentHash": "dbfba725406e9906f0100e5c5fa5c8c9bfcf00545b46f915ddffbe7b42977543",
+      "contentHash": "eaebb04779b361e0e7d64f12419976d5c30391b93f4a9db603624effe095c20f",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 216,
+      "totalLines": 219,
       "hasStructuralAnalysis": false
     },
     "chat-service/Dockerfile": {
@@ -1208,7 +1218,7 @@
     },
     "chat-service/src/chat/game-notifications.service.ts": {
       "filePath": "chat-service/src/chat/game-notifications.service.ts",
-      "contentHash": "d38aefd4529995d18f8830e3beb3fe11f768098b98220f0f23d5494ab0927169",
+      "contentHash": "3c314bff33ab52154b48803f112d90d708a36251b27f85e9f23ee5a7b66f064b",
       "functions": [
         {
           "name": "deterministicUuid",
@@ -1259,7 +1269,7 @@
             "logger"
           ],
           "exported": true,
-          "lineCount": 322
+          "lineCount": 324
         }
       ],
       "imports": [
@@ -1318,7 +1328,7 @@
         "GameNotificationsService",
         "deterministicUuid"
       ],
-      "totalLines": 390,
+      "totalLines": 392,
       "hasStructuralAnalysis": true
     },
     "chat-service/src/chat/game-rooms.client.ts": {
@@ -2172,7 +2182,7 @@
     },
     "chat-service/src/events/game-event.ts": {
       "filePath": "chat-service/src/events/game-event.ts",
-      "contentHash": "ab169009502676550673594f4297967c6e39b4cb7649d0a8850cc9cf59e0e350",
+      "contentHash": "1a360789f69841808c84ebc51002a6161e2485178067ab35f105060cd0b61dd6",
       "functions": [
         {
           "name": "isPlainObject",
@@ -3509,7 +3519,7 @@
     },
     "chat-service/test/game-notifications.spec.ts": {
       "filePath": "chat-service/test/game-notifications.spec.ts",
-      "contentHash": "3fdb8fe6382b73f53e07e72ad44b7033185ea33bf24b6c357ce50aca7060950e",
+      "contentHash": "34ed282e1695b61f854d990e8b1cdc81f8c89c4f090280d2280bdc8cee98edc1",
       "functions": [
         {
           "name": "fakePrisma",
@@ -3578,7 +3588,7 @@
         }
       ],
       "exports": [],
-      "totalLines": 349,
+      "totalLines": 377,
       "hasStructuralAnalysis": true
     },
     "chat-service/test/presence.service.spec.ts": {
@@ -3670,7 +3680,7 @@
     },
     "client/README.md": {
       "filePath": "client/README.md",
-      "contentHash": "da066ba46f88386c2fcf7bb171ee200bc44f484ae155188a0368bc42a09f11fd",
+      "contentHash": "f564622cac455b87f6f16194367c6b4bade91295e2a54ab7f2ceb452c71f2cd2",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -8024,7 +8034,7 @@
     },
     "client/components/arena/ArenaHeader.tsx": {
       "filePath": "client/components/arena/ArenaHeader.tsx",
-      "contentHash": "7e4e4ddfdc7e43bf7c824a5518ed85b9364e9e79b45c04880d5de104728be400",
+      "contentHash": "f5c33977a82f1bc3e7f1b78fa2e327066740e304d2e37c5fad1afd1787654276",
       "functions": [
         {
           "name": "formatClock",
@@ -8041,7 +8051,7 @@
             "{ snapshot, connection, onLeave }"
           ],
           "exported": true,
-          "lineCount": 81
+          "lineCount": 84
         }
       ],
       "classes": [],
@@ -8084,12 +8094,12 @@
       "exports": [
         "ArenaHeader"
       ],
-      "totalLines": 102,
+      "totalLines": 105,
       "hasStructuralAnalysis": true
     },
     "client/components/arena/ArenaWorkspace.tsx": {
       "filePath": "client/components/arena/ArenaWorkspace.tsx",
-      "contentHash": "29ac86a12a5069c3cef10ce294cc5dd535d774646b9a532f51af11552f6992f7",
+      "contentHash": "9886f178cf9c9d65712cd3595108c2055648779783d90502beb0e2a8dfafdbf6",
       "functions": [
         {
           "name": "ArenaWorkspace",
@@ -8097,7 +8107,7 @@
             "{ transport }"
           ],
           "exported": true,
-          "lineCount": 225
+          "lineCount": 275
         }
       ],
       "classes": [],
@@ -8121,6 +8131,7 @@
           "specifiers": [
             "IconCheck",
             "IconCode",
+            "IconFlag",
             "IconPlayerPlay",
             "IconSend"
           ]
@@ -8196,7 +8207,7 @@
       "exports": [
         "ArenaWorkspace"
       ],
-      "totalLines": 253,
+      "totalLines": 303,
       "hasStructuralAnalysis": true
     },
     "client/components/arena/DuelPanel.tsx": {
@@ -8238,7 +8249,7 @@
     },
     "client/components/arena/EditorAdapter.tsx": {
       "filePath": "client/components/arena/EditorAdapter.tsx",
-      "contentHash": "3554b0c76de9fe43ec3761e12cd6906fd5c06bb72083de7a793db85ab10d0ced",
+      "contentHash": "98cf90a37ba2ab137ee1077e0dc04110a93b920158801b1a5230dfff2f5ca370",
       "functions": [
         {
           "name": "resolveEditorLanguage",
@@ -8250,12 +8261,47 @@
           "lineCount": 5
         },
         {
+          "name": "localEdit",
+          "params": [
+            "base",
+            "local"
+          ],
+          "returnType": "LocalEdit | null",
+          "exported": false,
+          "lineCount": 19
+        },
+        {
+          "name": "applyLocalEdit",
+          "params": [
+            "authoritative",
+            "local",
+            "edit"
+          ],
+          "returnType": "AppliedEdit | null",
+          "exported": false,
+          "lineCount": 19
+        },
+        {
           "name": "languageExtension",
           "params": [
             "language"
           ],
           "exported": false,
           "lineCount": 10
+        },
+        {
+          "name": "localEditingExtensions",
+          "params": [],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "collaborativeExtensions",
+          "params": [
+            "client"
+          ],
+          "exported": false,
+          "lineCount": 3
         }
       ],
       "classes": [],
@@ -8329,7 +8375,7 @@
         "resolveEditorLanguage",
         "EditorAdapter"
       ],
-      "totalLines": 241,
+      "totalLines": 374,
       "hasStructuralAnalysis": true
     },
     "client/components/arena/LeaderboardView.tsx": {
@@ -11366,7 +11412,7 @@
     },
     "client/lib/arena/socket.ts": {
       "filePath": "client/lib/arena/socket.ts",
-      "contentHash": "b107020ff13d63aaf2bab23b7f59389fcefb02725915b549b7d0c4d94c3f852c",
+      "contentHash": "5f03d8e83bd411d2bf8400772e1ad2fbe8478d1dd10d64801ae6841ca18fa09a",
       "functions": [
         {
           "name": "adaptFinal",
@@ -11377,7 +11423,7 @@
           ],
           "returnType": "MatchFinalView | null",
           "exported": true,
-          "lineCount": 23
+          "lineCount": 24
         },
         {
           "name": "shouldApplyUpdate",
@@ -11409,12 +11455,23 @@
           ],
           "returnType": "ArenaSnapshot",
           "exported": false,
-          "lineCount": 92
+          "lineCount": 99
         }
       ],
       "classes": [
         {
           "name": "StaleCommandError",
+          "methods": [
+            "constructor"
+          ],
+          "properties": [
+            "code"
+          ],
+          "exported": true,
+          "lineCount": 8
+        },
+        {
+          "name": "RateLimitError",
           "methods": [
             "constructor"
           ],
@@ -11446,8 +11503,13 @@
             "setReady",
             "advance",
             "leave",
+            "surrender",
             "requireConnected",
-            "refresh",
+            "scheduleRefresh",
+            "pumpSnapshotRefresh",
+            "enqueueSnapshotRequest",
+            "refreshNow",
+            "reportRefreshError",
             "submitRequest",
             "requestId",
             "emit",
@@ -11457,16 +11519,22 @@
           "properties": [
             "socket",
             "syncTimer",
+            "refreshTimer",
             "currentSnapshot",
             "language",
             "appliedRevision",
             "appliedRound",
             "lastDocRevision",
             "pendingSubmit",
+            "snapshotRequests",
+            "snapshotLane",
+            "snapshotRefreshPending",
+            "nextSnapshotAllowedAt",
+            "rateLimitReported",
             "session"
           ],
           "exported": true,
-          "lineCount": 296
+          "lineCount": 386
         }
       ],
       "imports": [
@@ -11502,12 +11570,13 @@
       ],
       "exports": [
         "StaleCommandError",
+        "RateLimitError",
         "adaptFinal",
         "shouldApplyUpdate",
         "adaptReveal",
         "SocketArenaTransport"
       ],
-      "totalLines": 501,
+      "totalLines": 632,
       "hasStructuralAnalysis": true
     },
     "client/lib/arena/stats.ts": {
@@ -11579,7 +11648,7 @@
     },
     "client/lib/arena/transport.ts": {
       "filePath": "client/lib/arena/transport.ts",
-      "contentHash": "5163adb1dd2c8e32a0886575d9f693204aecbd5f531764f0686daac99b5fca29",
+      "contentHash": "eb88874f2f0d4f8a742ba789d40ac089ec3666b71ede96934970450b56e2e023",
       "functions": [],
       "classes": [
         {
@@ -11610,17 +11679,17 @@
       "exports": [
         "TransportSession"
       ],
-      "totalLines": 96,
+      "totalLines": 98,
       "hasStructuralAnalysis": true
     },
     "client/lib/arena/types.ts": {
       "filePath": "client/lib/arena/types.ts",
-      "contentHash": "9fc8b916d9da18d3e6a4aecfea471fe816bed39c27fb541f5721fbd0f3f2ab30",
+      "contentHash": "4f8f42833dc61d31255bc166ac3324b4691f269bf9baeb15dd47b15f9c8559bf",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 118,
+      "totalLines": 122,
       "hasStructuralAnalysis": true
     },
     "client/lib/auth/client.ts": {
@@ -12049,6 +12118,203 @@
       "totalLines": 49,
       "hasStructuralAnalysis": false
     },
+    "client/tests/arena-editor-collab-lifecycle.test.mjs": {
+      "filePath": "client/tests/arena-editor-collab-lifecycle.test.mjs",
+      "contentHash": "ff19bc002fb24612990017ed32c6cf78d6d8d2303965bd40a448b654f7a4a361",
+      "functions": [
+        {
+          "name": "createStubElement",
+          "params": [],
+          "exported": false,
+          "lineCount": 36
+        },
+        {
+          "name": "installFakeDocument",
+          "params": [],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "restoreDocument",
+          "params": [],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "test",
+          "params": [
+            "name",
+            "fn"
+          ],
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "viewPluginValues",
+          "params": [
+            "state"
+          ],
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "sameSpecs",
+          "params": [
+            "left",
+            "right"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "createViewModule",
+          "params": [],
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "sameDeps",
+          "params": [
+            "left",
+            "right"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "createHarness",
+          "params": [],
+          "exported": false,
+          "lineCount": 71
+        },
+        {
+          "name": "transpile",
+          "params": [
+            "relativePath"
+          ],
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "loadModule",
+          "params": [
+            "relativePath",
+            "requires"
+          ],
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "createEditorModule",
+          "params": [],
+          "exported": false,
+          "lineCount": 21
+        },
+        {
+          "name": "createCollabModule",
+          "params": [],
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "createCollabClient",
+          "params": [
+            "userId"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "relay",
+          "params": [
+            "left",
+            "right"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "mountEditor",
+          "params": [
+            "editor",
+            "props"
+          ],
+          "exported": false,
+          "lineCount": 9
+        }
+      ],
+      "classes": [
+        {
+          "name": "HeadlessPluginInstance",
+          "methods": [
+            "constructor",
+            "update",
+            "destroy"
+          ],
+          "properties": [],
+          "exported": false,
+          "lineCount": 34
+        },
+        {
+          "name": "HeadlessEditorView",
+          "methods": [
+            "constructor",
+            "dispatch",
+            "applyUpdate",
+            "viewport",
+            "visibleRanges",
+            "updatePlugins",
+            "focus",
+            "destroy"
+          ],
+          "properties": [],
+          "exported": false,
+          "lineCount": 74
+        }
+      ],
+      "imports": [
+        {
+          "source": "node:assert/strict",
+          "specifiers": [
+            "assert"
+          ]
+        },
+        {
+          "source": "node:fs",
+          "specifiers": [
+            "readFileSync"
+          ]
+        },
+        {
+          "source": "node:module",
+          "specifiers": [
+            "createRequire"
+          ]
+        },
+        {
+          "source": "node:test",
+          "specifiers": [
+            "after",
+            "nodeTest"
+          ]
+        },
+        {
+          "source": "node:vm",
+          "specifiers": [
+            "runInNewContext"
+          ]
+        },
+        {
+          "source": "typescript",
+          "specifiers": [
+            "ts"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 611,
+      "hasStructuralAnalysis": true
+    },
     "client/tests/arena-game-notifications.test.mjs": {
       "filePath": "client/tests/arena-game-notifications.test.mjs",
       "contentHash": "9275bca72524e3233fc001b9a0aa0254ff487a3a1a93b08c2be20912908afd76",
@@ -12324,9 +12590,57 @@
     },
     "client/tests/arena-socket-path.test.mjs": {
       "filePath": "client/tests/arena-socket-path.test.mjs",
-      "contentHash": "8b618fec4405bd1082f1ba8409c8f4e386850fd5025e27a5cc9e1eaeb9b0d507",
-      "functions": [],
-      "classes": [],
+      "contentHash": "c33b142b77371c06c5757440f17786887d5ffe2eca82965b9ec4caaedc358ff0",
+      "functions": [
+        {
+          "name": "loadTypeScriptModule",
+          "params": [
+            "relativePath"
+          ],
+          "exported": false,
+          "lineCount": 22
+        },
+        {
+          "name": "matchSnapshot",
+          "params": [
+            "revision"
+          ],
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "wait",
+          "params": [
+            "ms"
+          ],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "waitUntil",
+          "params": [
+            "predicate"
+          ],
+          "exported": false,
+          "lineCount": 8
+        }
+      ],
+      "classes": [
+        {
+          "name": "FakeSocket",
+          "methods": [
+            "constructor",
+            "on",
+            "onAny",
+            "disconnect",
+            "fire",
+            "emitFromServer"
+          ],
+          "properties": [],
+          "exported": false,
+          "lineCount": 31
+        }
+      ],
       "imports": [
         {
           "source": "node:assert/strict",
@@ -12360,7 +12674,7 @@
         }
       ],
       "exports": [],
-      "totalLines": 30,
+      "totalLines": 220,
       "hasStructuralAnalysis": true
     },
     "client/tests/arena-stats-api.test.mjs": {
@@ -12934,37 +13248,47 @@
     },
     "docs/README.md": {
       "filePath": "docs/README.md",
-      "contentHash": "6b67cb0e3aad1e1928a1b562e23a61a1186edbda237b3057db7469df30f89ff0",
+      "contentHash": "66249acc74af4e765a0a4271bc787441794a6aaeead22026667974aa28cdf9d4",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 56,
+      "totalLines": 60,
       "hasStructuralAnalysis": false
     },
     "docs/adr/0015-code-arena-nook-integration.md": {
       "filePath": "docs/adr/0015-code-arena-nook-integration.md",
-      "contentHash": "03c85b39e94f181928b3a35a446f9c8063e643967cda0b83ff27462f7d7f82f9",
+      "contentHash": "e75bf27b63e27ec3ce0ca24597b78590fd5ef4bbfb8d74265088390f8d7abac7",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 37,
+      "totalLines": 38,
+      "hasStructuralAnalysis": false
+    },
+    "docs/adr/0016-one-game-service-instance.md": {
+      "filePath": "docs/adr/0016-one-game-service-instance.md",
+      "contentHash": "136e7ee76eeb313d4f14dd9bf2d597534bd7661a17cac8e8d82e55102b663d61",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 4,
       "hasStructuralAnalysis": false
     },
     "docs/api/chat-service.openapi.json": {
       "filePath": "docs/api/chat-service.openapi.json",
-      "contentHash": "fe07892e15802f95ad9bbd9d7a3ae752d3f9c352416c167eb30f3a84c372e0f1",
+      "contentHash": "446b242096de4f6ed7a976263a400172ea55551f8e49c62408afaa00cee5aec5",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 2542,
+      "totalLines": 2664,
       "hasStructuralAnalysis": false
     },
     "docs/api/user-service.openapi.json": {
       "filePath": "docs/api/user-service.openapi.json",
-      "contentHash": "c4e2fd8d805fe1440d7eda3ddb7a555e88164c2ab13f74c2f014f44b856f1ce6",
+      "contentHash": "8ab85eb21a4a22242e06840cf293219b2e91b3fb9c27ab39299ea18ff64141cb",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -12974,7 +13298,7 @@
     },
     "docs/archive/client-plan.md": {
       "filePath": "docs/archive/client-plan.md",
-      "contentHash": "019a3045257ec5bfdadb7e688cae9a6fc36b0207a50b685a8a847fafb6364d5e",
+      "contentHash": "b32d200a7629e5f37fa71e3f1ef174df10dda706785a380479c2e19a7de034a6",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -12984,7 +13308,7 @@
     },
     "docs/book/build.mjs": {
       "filePath": "docs/book/build.mjs",
-      "contentHash": "117751f7e166cd5933664c4477b437bb8bf61cc647871daa0422ec55f72d73e3",
+      "contentHash": "a63796b88546e3e40f4ad7725a3da0b1aabc2357e9452ff996efa420cfab88a3",
       "functions": [
         {
           "name": "rd",
@@ -13222,6 +13546,12 @@
           ]
         },
         {
+          "source": "node:crypto",
+          "specifiers": [
+            "createHash"
+          ]
+        },
+        {
           "source": "marked",
           "specifiers": [
             "marked"
@@ -13235,7 +13565,7 @@
         }
       ],
       "exports": [],
-      "totalLines": 683,
+      "totalLines": 841,
       "hasStructuralAnalysis": true
     },
     "docs/book/package.json": {
@@ -13250,12 +13580,12 @@
     },
     "docs/evidence/g06-live-demo/README.md": {
       "filePath": "docs/evidence/g06-live-demo/README.md",
-      "contentHash": "0b3e346df60273f86bf85faa2253ad207e3b7aef8ee00499429309484366bdc1",
+      "contentHash": "e29569ad0710866b87c233f4fe6ee95c8ae8d16fd9f3290159d4424152327699",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 181,
+      "totalLines": 179,
       "hasStructuralAnalysis": false
     },
     "docs/evidence/g06-live-demo/chat-messages.txt": {
@@ -13280,7 +13610,7 @@
     },
     "docs/infra/BACKUP_RECOVERY.md": {
       "filePath": "docs/infra/BACKUP_RECOVERY.md",
-      "contentHash": "5e612f805696317891cfd9324ea6db874f44a6206af1165f4cc5ebe21778aaf3",
+      "contentHash": "3392b03791220f085f4649672b7ab80eab55dba64bd08246804ded442bcc7059",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -13290,7 +13620,7 @@
     },
     "docs/integrations/chat-storage.md": {
       "filePath": "docs/integrations/chat-storage.md",
-      "contentHash": "b2a1f1e7c19dbf06ff41d30bbaae894ebaf0c957b423169025b1a1456dd0ac50",
+      "contentHash": "85b32f47e2dc7e194f74fae2a3c5c8d780696ed69d4ea772590bbb30c4c3ea5e",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -13300,12 +13630,12 @@
     },
     "docs/integrations/client-backend.md": {
       "filePath": "docs/integrations/client-backend.md",
-      "contentHash": "024fb63352cde0ec9e093a21ca389a3166eb89a9080b7497b3f492cd44848ca3",
+      "contentHash": "7051434116700f94910e94e600d1e1f804f4099855fcd12c00d6b6bf1448bdbc",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 55,
+      "totalLines": 57,
       "hasStructuralAnalysis": false
     },
     "docs/integrations/feed.md": {
@@ -13320,7 +13650,7 @@
     },
     "docs/integrations/user-chat.md": {
       "filePath": "docs/integrations/user-chat.md",
-      "contentHash": "dafd07761ad370a463cb083422daa21c4f299f596598b0c279c570e9c7a9653e",
+      "contentHash": "080c7446ffb6d4225961a71dfa7d45d5d327a9701a0506e78cd45a4a4a3bc7bc",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -13330,17 +13660,17 @@
     },
     "docs/project/COMPOSE.md": {
       "filePath": "docs/project/COMPOSE.md",
-      "contentHash": "7258013e75e874666cae5ac342e7e8a9666c150b62adb4bff47bdde61c030b29",
+      "contentHash": "c8aa4fe6d64ebd84a117a18e82fa0ed170adcfe9758b97c098759a8c1aab1cb1",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 110,
+      "totalLines": 111,
       "hasStructuralAnalysis": false
     },
     "docs/project/INTEGRATION_STATUS.md": {
       "filePath": "docs/project/INTEGRATION_STATUS.md",
-      "contentHash": "369e4fa53bb7f076cddbc975e80c6818b7714b2a51fa50104a3cef97e8f37bc9",
+      "contentHash": "734db75a1e37f8126d66b0e1094fa6d3e4f6d00d0f2b56187f4847e9761ba060",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -13350,7 +13680,7 @@
     },
     "docs/project/POINTS_ROADMAP.md": {
       "filePath": "docs/project/POINTS_ROADMAP.md",
-      "contentHash": "d3922970805cb4dc0528bb3df4ca7bbb6b0dd066e2b4ecf19d5089fd8c8c045c",
+      "contentHash": "ebcbaa03c0d050f7302b32f36fc53d61efd6095245e2594bb2853642b8785279",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -13360,7 +13690,7 @@
     },
     "docs/project/PROJECT_CONTEXT.md": {
       "filePath": "docs/project/PROJECT_CONTEXT.md",
-      "contentHash": "3116c641cda42ecd0ce8afa8756542581f1d44266aa67e129195527cf2e2c64c",
+      "contentHash": "f09f8fe82a7c9c0c86892f448a0a5be41de4ee94125a2d97a692de6a7fe5c5de",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -13390,17 +13720,17 @@
     },
     "docs/services/chat-service.md": {
       "filePath": "docs/services/chat-service.md",
-      "contentHash": "6fae5aac73afe6f22c48d8114679691abd8c6630dde4176ab637a6f04f0f99e2",
+      "contentHash": "9b8d3c664d34d49704003ce4595de0c59283fea84a3c3627b9be4b86b90a5910",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 274,
+      "totalLines": 276,
       "hasStructuralAnalysis": false
     },
     "docs/services/client.md": {
       "filePath": "docs/services/client.md",
-      "contentHash": "fb5d7cf4365a01988652fe2337b042039303ed57d2773dafd04987ff8e3fd886",
+      "contentHash": "de30d6cca7fdfdb275a76e43561fde87fe17e6f13f80830a502014efb2f44bbf",
       "functions": [],
       "classes": [],
       "imports": [],
@@ -13410,12 +13740,12 @@
     },
     "docs/services/infrastructure.md": {
       "filePath": "docs/services/infrastructure.md",
-      "contentHash": "31779c1378d839c039cc1c98fae758ecbf01587b2fd7c11931540b4acf2a841a",
+      "contentHash": "e8430f2cfdacf0ff5a7cb004276a31ddd36166deddb04fd3d42c8f17be2d71f8",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 295,
+      "totalLines": 301,
       "hasStructuralAnalysis": false
     },
     "docs/services/user-service.md": {
@@ -13428,14 +13758,24 @@
       "totalLines": 158,
       "hasStructuralAnalysis": false
     },
-    "docs/spec/code-arena-integration-spec.md": {
-      "filePath": "docs/spec/code-arena-integration-spec.md",
-      "contentHash": "08ed43dbbab83ca4bced5aa815d1a3ea4fbbba113b32dd225cb603100223fa73",
+    "docs/spec/code-arena-gameplay-review.md": {
+      "filePath": "docs/spec/code-arena-gameplay-review.md",
+      "contentHash": "4440c8b5c5e820102116b5d65bdd0fe0221080e236271b947a07944242d20ec0",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 67,
+      "totalLines": 127,
+      "hasStructuralAnalysis": false
+    },
+    "docs/spec/code-arena-integration-spec.md": {
+      "filePath": "docs/spec/code-arena-integration-spec.md",
+      "contentHash": "60352d667cc0a2fb55be347f8a2e9f3b04e33e23c0fba4dff3cb5e3152d1bd05",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 73,
       "hasStructuralAnalysis": false
     },
     "docs/superpowers/plans/2026-11-11-nook-arena-platform-integration.md": {
@@ -14326,7 +14666,7 @@
     },
     "packages/arena-game/src/engine.ts": {
       "filePath": "packages/arena-game/src/engine.ts",
-      "contentHash": "151510a754cdae1e664c0b382bc897ba956f40e5cb2a579dbed3fc94fc2c99f7",
+      "contentHash": "2d3e88e61ec7c6a34a95a35c4f1fc4e6cd6c58b7af915e4cf0636a3acbb9b919",
       "functions": [
         {
           "name": "teamChatRoomId",
@@ -14391,10 +14731,10 @@
             "run",
             "submit",
             "publishReveal",
+            "autoRevealIfAllSidesCounted",
+            "publishRevealInternal",
             "nextRound",
             "finalResult",
-            "roundCountedSides",
-            "roundSides",
             "snapshot",
             "participantSide",
             "modeOf",
@@ -14410,12 +14750,15 @@
             "createRevealSnapshot",
             "applyGraceToMatch",
             "leaveMatch",
+            "setSurrenderVote",
             "blockAccount",
             "eraseAccount",
             "uniqueAnonymousId",
+            "clearSurrenderVotesForSide",
             "recordForfeit",
             "recover",
             "requireMember",
+            "requireActiveMember",
             "loadMatchOrThrow",
             "rememberDeadline",
             "deadlineHasElapsedOrUnknown",
@@ -14453,7 +14796,7 @@
             "blockedAccounts"
           ],
           "exported": true,
-          "lineCount": 1321
+          "lineCount": 1484
         }
       ],
       "imports": [
@@ -14597,7 +14940,7 @@
         "ExpiredError",
         "ArenaEngine"
       ],
-      "totalLines": 1506,
+      "totalLines": 1669,
       "hasStructuralAnalysis": true
     },
     "packages/arena-game/src/evaluation-orchestration.ts": {
@@ -15475,7 +15818,7 @@
     },
     "packages/arena-game/src/records.ts": {
       "filePath": "packages/arena-game/src/records.ts",
-      "contentHash": "d337ce864941eb7a452ce258a6428d1a36da4baa8792f6368ae070460ba1fc6d",
+      "contentHash": "77668a9003bf8faec029bd139af674bb4d09f9f9b95fa1a8643722861c5245f4",
       "functions": [],
       "classes": [],
       "imports": [
@@ -15496,7 +15839,7 @@
         }
       ],
       "exports": [],
-      "totalLines": 150,
+      "totalLines": 154,
       "hasStructuralAnalysis": true
     },
     "packages/arena-game/src/round-lifecycle.ts": {
@@ -15665,7 +16008,7 @@
     },
     "packages/arena-game/src/team-collaboration.ts": {
       "filePath": "packages/arena-game/src/team-collaboration.ts",
-      "contentHash": "628d73aaf1342c0ea3d6c38b914a447796d916788530e008569a66792078ac43",
+      "contentHash": "38c86e07682f07ec35572d129f403da9cb8afa15a8329f9e3e4056083b65ebab",
       "functions": [],
       "classes": [
         {
@@ -15686,6 +16029,7 @@
             "requireTeamMode",
             "memberOf",
             "teamMembers",
+            "approvalRequired",
             "teamDocOf",
             "currentRound",
             "activityOf",
@@ -15703,7 +16047,7 @@
             "collab"
           ],
           "exported": true,
-          "lineCount": 305
+          "lineCount": 325
         }
       ],
       "imports": [
@@ -15752,7 +16096,7 @@
       "exports": [
         "TeamCollaboration"
       ],
-      "totalLines": 396,
+      "totalLines": 419,
       "hasStructuralAnalysis": true
     },
     "packages/arena-game/src/worker-judge.ts": {
@@ -15856,7 +16200,7 @@
     },
     "packages/arena-game/test/account-erasure.test.ts": {
       "filePath": "packages/arena-game/test/account-erasure.test.ts",
-      "contentHash": "84ddb56c7dac2038cd8f9c6c0d7f21fb5f42cb7f65a590aadf47debb6ce7fa15",
+      "contentHash": "79d10f24db458bc7bac555067a3eb56f4a1e16faab63e6030324f81eae3cc4fb",
       "functions": [],
       "classes": [],
       "imports": [
@@ -15920,7 +16264,7 @@
         }
       ],
       "exports": [],
-      "totalLines": 151,
+      "totalLines": 157,
       "hasStructuralAnalysis": true
     },
     "packages/arena-game/test/collab.test.ts": {
@@ -17052,9 +17396,21 @@
     },
     "packages/arena-game/test/reconnect.test.ts": {
       "filePath": "packages/arena-game/test/reconnect.test.ts",
-      "contentHash": "b1ae28f1dc8ae1e5b7c13ee4a6d6462012b3bb63a5c838992dab7dd66a052f47",
+      "contentHash": "ce3e0f22ea14944f4ce8be0c0354a948a1e19c825d7955a75da1325d47b57be2",
       "functions": [],
-      "classes": [],
+      "classes": [
+        {
+          "name": "FlakyRevealStore",
+          "methods": [
+            "record"
+          ],
+          "properties": [
+            "failNext"
+          ],
+          "exported": false,
+          "lineCount": 11
+        }
+      ],
       "imports": [
         {
           "source": "vitest",
@@ -17097,6 +17453,7 @@
         {
           "source": "../src/records.js",
           "specifiers": [
+            "RevealSnapshot",
             "SubmissionRecord"
           ]
         },
@@ -17127,7 +17484,7 @@
         }
       ],
       "exports": [],
-      "totalLines": 715,
+      "totalLines": 817,
       "hasStructuralAnalysis": true
     },
     "packages/arena-game/test/round-lifecycle.test.ts": {
@@ -17181,7 +17538,7 @@
     },
     "packages/arena-game/test/run-path.test.ts": {
       "filePath": "packages/arena-game/test/run-path.test.ts",
-      "contentHash": "ade5a98decd26479ceb8d2753a3f298afa86ba384cf462f9276d45c4f8aaf2b3",
+      "contentHash": "4bdc4312acd66962fa04cca92311076d5acd940d7a33706212893a97d034b808",
       "functions": [],
       "classes": [],
       "imports": [
@@ -17198,12 +17555,13 @@
           "specifiers": [
             "P100",
             "SOLVED_PY",
-            "setup"
+            "setup",
+            "tick"
           ]
         }
       ],
       "exports": [],
-      "totalLines": 91,
+      "totalLines": 121,
       "hasStructuralAnalysis": true
     },
     "packages/arena-game/test/scoring-reveal.test.ts": {
@@ -17261,7 +17619,7 @@
     },
     "packages/arena-game/test/scripted-judge.ts": {
       "filePath": "packages/arena-game/test/scripted-judge.ts",
-      "contentHash": "ad19d65a9d5dc4de96098c0f40b1af69fab1fc208f6440a77f732d5c3e66305a",
+      "contentHash": "af28968923eb2185e5034a9f810c084a1cd50f7e104737aa662c521e25737f13",
       "functions": [],
       "classes": [
         {
@@ -17269,6 +17627,7 @@
           "methods": [
             "constructor",
             "failNextRun",
+            "failNextDeferredRun",
             "queueRunStatus",
             "deferNextRun",
             "releaseRun",
@@ -17282,6 +17641,7 @@
             "plan",
             "parked",
             "failRun",
+            "failAfterRunGate",
             "queuedRunStatus",
             "runArmed",
             "runGate",
@@ -17291,7 +17651,7 @@
             "lastSealedGroups"
           ],
           "exported": true,
-          "lineCount": 121
+          "lineCount": 131
         }
       ],
       "imports": [
@@ -17314,7 +17674,7 @@
       "exports": [
         "ScriptedJudge"
       ],
-      "totalLines": 147,
+      "totalLines": 157,
       "hasStructuralAnalysis": true
     },
     "packages/arena-game/test/sealing.test.ts": {
@@ -17459,7 +17819,7 @@
     },
     "packages/arena-game/test/team-2v2.test.ts": {
       "filePath": "packages/arena-game/test/team-2v2.test.ts",
-      "contentHash": "e243432f440ca9cce0d5d23363b111ee3934af79d82795abdae1ca75cc0bf3c2",
+      "contentHash": "17f23931e51afc902d2a72f1785449c3ac74cd43ce33959b2784b5a058b58bbc",
       "functions": [
         {
           "name": "setup2v2",
@@ -17558,7 +17918,7 @@
         }
       ],
       "exports": [],
-      "totalLines": 489,
+      "totalLines": 919,
       "hasStructuralAnalysis": true
     },
     "packages/arena-game/test/team-collaboration.test.ts": {
@@ -18071,14 +18431,14 @@
     },
     "packages/arena-model/src/events.ts": {
       "filePath": "packages/arena-model/src/events.ts",
-      "contentHash": "fbd7e290ab8f0f43a2134e28c913691cd1a2eaa3f52999a30e0db849902ce08b",
+      "contentHash": "3186659f350a420c473310524bb457a80f51e9a0e8b131e4db0c41c8db58528e",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [
         "ARENA_EVENTS"
       ],
-      "totalLines": 43,
+      "totalLines": 46,
       "hasStructuralAnalysis": true
     },
     "packages/arena-model/src/index.ts": {
@@ -19885,7 +20245,7 @@
     },
     "services/game/src/game/game-event.ts": {
       "filePath": "services/game/src/game/game-event.ts",
-      "contentHash": "d573788e23fb84b8aacf22849505d8763e8010511b1b2945cf7b65947e48513a",
+      "contentHash": "f8380c536a4d4a03d122e2b84a81fdded79641ea0e8a7edd5c6f6300b44687d8",
       "functions": [
         {
           "name": "isGameEventType",
@@ -20082,7 +20442,7 @@
     },
     "services/game/src/game/game.controller.ts": {
       "filePath": "services/game/src/game/game.controller.ts",
-      "contentHash": "368fa7303d601d2c4547a8c6a3f65f5fb158d4a1e163cc33a75035ebb85ccd44",
+      "contentHash": "082980e8a113c46b2c5bf9c344956edf0167fe9f008d2ef4b40af19ef03028a0",
       "functions": [],
       "classes": [
         {
@@ -20101,12 +20461,13 @@
             "submit",
             "advance",
             "leave",
+            "surrender",
             "final",
             "teamChatAuth"
           ],
           "properties": [],
           "exported": true,
-          "lineCount": 121
+          "lineCount": 128
         }
       ],
       "imports": [
@@ -20152,12 +20513,51 @@
       "exports": [
         "GameController"
       ],
-      "totalLines": 135,
+      "totalLines": 142,
+      "hasStructuralAnalysis": true
+    },
+    "services/game/src/game/game.gateway.test.ts": {
+      "filePath": "services/game/src/game/game.gateway.test.ts",
+      "contentHash": "e887778bd592bde0772795f07c68c05bd664758edbfd82f6d76554a3e5ac9714",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "vitest",
+          "specifiers": [
+            "afterEach",
+            "describe",
+            "expect",
+            "it",
+            "vi"
+          ]
+        },
+        {
+          "source": "socket.io",
+          "specifiers": [
+            "Socket"
+          ]
+        },
+        {
+          "source": "./game.gateway.js",
+          "specifiers": [
+            "GameGateway"
+          ]
+        },
+        {
+          "source": "./socket-auth.js",
+          "specifiers": [
+            "socketPrincipal"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 57,
       "hasStructuralAnalysis": true
     },
     "services/game/src/game/game.gateway.ts": {
       "filePath": "services/game/src/game/game.gateway.ts",
-      "contentHash": "dac438c8bee587b5aa054cd8ae5eae7267803c7953e21da99bac26a9669b3347",
+      "contentHash": "d94722125b9ff6f822ca0e2fc4910f5b772ab128b91bd0ac665b111f12fe9c15",
       "functions": [
         {
           "name": "roomFor",
@@ -20186,7 +20586,7 @@
             "server"
           ],
           "exported": true,
-          "lineCount": 122
+          "lineCount": 128
         }
       ],
       "imports": [
@@ -20229,7 +20629,7 @@
       "exports": [
         "GameGateway"
       ],
-      "totalLines": 154,
+      "totalLines": 160,
       "hasStructuralAnalysis": true
     },
     "services/game/src/game/game.module.ts": {
@@ -20369,7 +20769,7 @@
     },
     "services/game/src/game/game.service.ts": {
       "filePath": "services/game/src/game/game.service.ts",
-      "contentHash": "39ce9488c75ee7dac7273423619087ba09020ef38ebd59310321442e7beb0e9b",
+      "contentHash": "0bd0467c5629fcbe44f60f13f063d0e647e95f1ec1fb0be0acffff2114ebadb6",
       "functions": [
         {
           "name": "userTokenHash",
@@ -20412,6 +20812,7 @@
             "noteSocketOpen",
             "noteSocketClosed",
             "leave",
+            "setSurrenderVote",
             "createMatch",
             "snapshot",
             "startRound",
@@ -20442,7 +20843,6 @@
             "getRoomWithMembers",
             "lookupRoomByCode",
             "userActiveRoom",
-            "maybeAutoReveal",
             "queuePublish",
             "publishWithRetry",
             "publishMatchStarted",
@@ -20473,7 +20873,7 @@
             "publishChain"
           ],
           "exported": true,
-          "lineCount": 626
+          "lineCount": 618
         }
       ],
       "imports": [
@@ -20564,7 +20964,7 @@
         "selectLobbyProblems",
         "GameService"
       ],
-      "totalLines": 682,
+      "totalLines": 674,
       "hasStructuralAnalysis": true
     },
     "services/game/src/game/judge-factory.test.ts": {
@@ -20978,7 +21378,7 @@
     },
     "services/game/src/game/match-socket-presence.test.ts": {
       "filePath": "services/game/src/game/match-socket-presence.test.ts",
-      "contentHash": "9b87d9070591dd2e78d3ef6d90aac7a6c507f46cc07cc21978f42a2285317517",
+      "contentHash": "ada8abf4cf3c2c1882d0c3d82fe5ff50417a4f53e460945c8a398d0bb60e259c",
       "functions": [
         {
           "name": "addParticipant",
@@ -21029,12 +21429,12 @@
         }
       ],
       "exports": [],
-      "totalLines": 102,
+      "totalLines": 137,
       "hasStructuralAnalysis": true
     },
     "services/game/src/game/match-socket-presence.ts": {
       "filePath": "services/game/src/game/match-socket-presence.ts",
-      "contentHash": "c486906d41eabec99fb10ac3b469a288b6b9fe8cbff14e33fc7620432baae75a",
+      "contentHash": "0e03cdda3c08a35ecd849a8b8ab1a0045e3bca53315897daf3a323b6118c3ba4",
       "functions": [],
       "classes": [
         {
@@ -21042,21 +21442,23 @@
           "methods": [
             "constructor",
             "socketKey",
+            "serialize",
             "noteSocketOpen",
             "noteSocketClosed"
           ],
           "properties": [
-            "sockets"
+            "sockets",
+            "transitions"
           ],
           "exported": true,
-          "lineCount": 48
+          "lineCount": 65
         }
       ],
       "imports": [],
       "exports": [
         "MatchSocketPresence"
       ],
-      "totalLines": 64,
+      "totalLines": 81,
       "hasStructuralAnalysis": true
     },
     "services/game/src/game/match-statistics-erasure.test.ts": {
@@ -22702,7 +23104,7 @@
     },
     "user-service/README.md": {
       "filePath": "user-service/README.md",
-      "contentHash": "1508d8186aa4a15ebcf47858e3ae18b344950896d4c0fb31d8b151af0a941045",
+      "contentHash": "ac2beb736468d823e11e06e04c5c09fb547b5ee8310c4320525f40ef9d6da484",
       "functions": [],
       "classes": [],
       "imports": [],

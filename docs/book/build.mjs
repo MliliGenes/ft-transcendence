@@ -323,9 +323,28 @@ ${table(['Edge type', 'Count'], Object.entries(byEdge).sort((a, b) => b[1] - a[1
   });
   const top = [...commSizes.values()].sort((a, b) => b.size - a.size).slice(0, 30);
 
+  // The report title carries the date of the graph run this chapter describes.
+  const graphDate = (ggReport.match(/^#\s+Graph Report[^\n]*\((\d{4}-\d{2}-\d{2})\)/m) || [])[1] || '';
+  const refreshWhen = graphDate ? `on <b>${esc(graphDate)}</b>` : 'in the most recent local run';
+  // Community names live in the saved label store; a community missing from it is
+  // listed under its hub's name instead of a saved label.
+  const labelStore = existsSync(join(ROOT, 'graphify-out/.graphify_labels.json'))
+    ? rdJson('graphify-out/.graphify_labels.json')
+    : null;
+  const hubNamed = labelStore
+    ? [...commSizes.keys()].filter((id) => !Object.hasOwn(labelStore, String(id))).length
+    : null;
+  // Missing labels say nothing about how the graph was produced, so this only
+  // reports what the saved label store covers for the current snapshot.
+  const labelCoverage = hubNamed === null
+    ? ' This build had no saved label store to compare against, so the community names below are shown exactly as graphify left them.'
+    : hubNamed
+      ? ` In this build, ${hubNamed} of the ${commSizes.size} communities have no saved label and are listed under their hub's name.`
+      : ` In this build, all ${commSizes.size} communities carry a saved label.`;
+
   const summary = section(ggReport, 'Summary');
   const html = `
-<p>graphify builds the code graph deterministically from local AST parsing (functions, classes, imports, calls) and links documentation to the code it describes. This run named 161 previously unlabeled communities with local Ollama <code>qwen3.5:4b</code>; the 47 saved labels were preserved, and two duplicate Docker labels were clarified during review. The extraction and naming pass used no hosted model. This build contains <b>${nodes.length} nodes</b> and <b>${links.length} edges</b> grouped into <b>${commSizes.size} communities</b>, built at commit <code>${esc((gg.built_at_commit || '').slice(0, 8))}</code>.</p>
+<p>graphify builds the code graph deterministically from local AST parsing (functions, classes, imports, calls) and links documentation to the code it describes. The graph in this book was refreshed ${refreshWhen} by that deterministic local extraction — AST parsing only, no model involved. Community labeling is a separate step from the extraction, and <code>graphify label</code> is the command that runs it.${labelCoverage} For context, an earlier local labeling pass on <b>2026-11-11</b> used local Ollama <code>qwen3.5:4b</code> to name 161 previously unlabeled communities, preserved the 47 labels saved before it, and clarified two duplicate Docker labels during review; that pass ran locally and used no hosted model. This build contains <b>${nodes.length} nodes</b> and <b>${links.length} edges</b> grouped into <b>${commSizes.size} communities</b>, built at commit <code>${esc((gg.built_at_commit || '').slice(0, 8))}</code>.</p>
 <h3>Graph summary</h3>
 ${mdToHtml(summary)}
 <h3>Footprint per top-level folder</h3>
