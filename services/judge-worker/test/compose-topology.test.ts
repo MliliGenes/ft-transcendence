@@ -1,22 +1,42 @@
 import { execFileSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { beforeAll, describe, expect, it } from "vitest";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const nginxConfig = readFileSync(resolve(repositoryRoot, "nginx/default.conf"), "utf8");
 
 function composeConfig(): any {
   try {
-    const rendered = execFileSync(
-      "docker",
-      ["compose", "config", "--format", "json"],
-      { cwd: repositoryRoot, encoding: "utf8", maxBuffer: 4 * 1024 * 1024 },
-    );
-    return JSON.parse(rendered);
+    execFileSync("docker", ["compose", "version", "--short"], { timeout: 5000, stdio: "pipe" });
   } catch {
-    throw new Error("Docker Compose configuration could not be rendered");
+    throw new Error("Docker Compose is required for topology checks. Install Docker Compose and make docker available on PATH.");
+  }
+  const fixture = mkdtempSync(join(tmpdir(), "nook-compose-topology-"));
+  try {
+    for (const name of ["compose.yaml", "compose.monitoring.yaml"]) {
+      copyFileSync(resolve(repositoryRoot, name), join(fixture, name));
+    }
+    mkdirSync(join(fixture, "envs"));
+    for (const name of readdirSync(resolve(repositoryRoot, "envs"))) {
+      if (!name.endsWith(".env.example")) continue;
+      copyFileSync(resolve(repositoryRoot, "envs", name), join(fixture, "envs", name.slice(0, -".example".length)));
+    }
+    writeFileSync(join(fixture, ".env"), "");
+    const env = { ...process.env };
+    for (const name of Object.keys(env)) if (name.startsWith("COMPOSE_")) delete env[name];
+    const rendered = execFileSync("docker", [
+      "compose", "--env-file", join(fixture, ".env"),
+      "--project-directory", fixture, "-f", join(fixture, "compose.yaml"),
+      "config", "--format", "json",
+    ], { cwd: fixture, env, encoding: "utf8", timeout: 10000, maxBuffer: 4 * 1024 * 1024 });
+    return JSON.parse(rendered);
+  } catch (cause) {
+    throw new Error("Cannot render the topology with the checked-in Compose files and example settings.", { cause });
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
   }
 }
 
@@ -25,8 +45,9 @@ function volumeTargets(service: any): string[] {
 }
 
 describe("single-host judge Compose boundary", () => {
+  let config: any;
+  beforeAll(() => { config = composeConfig(); });
   it("gives the socket to judge-worker and keeps Game/Nginx off its network path", () => {
-    const config = composeConfig();
     const worker = config.services["judge-worker"];
     const game = config.services["game-service"];
     const nginx = config.services.nginx;
@@ -48,7 +69,6 @@ describe("single-host judge Compose boundary", () => {
   });
 
   it("selects the worker explicitly and waits for its readiness before Game serves", () => {
-    const config = composeConfig();
     const worker = config.services["judge-worker"];
     const game = config.services["game-service"];
 
@@ -59,7 +79,6 @@ describe("single-host judge Compose boundary", () => {
   });
 
   it("keeps credentials scoped and passes worker token", () => {
-    const config = composeConfig();
     const game = config.services["game-service"];
     const worker = config.services["judge-worker"];
 

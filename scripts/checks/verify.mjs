@@ -10,6 +10,7 @@ const testFiles = (directory, filter) => readdirSync(join(root, directory)).filt
 export function verificationSteps() {
   const step = (id, cwd, args, command = npm) => ({ id, cwd, command, args });
   return [
+    step('compose-topology', 'services/judge-worker', ['test', '--', 'test/compose-topology.test.ts']),
     step('tool-tests', '.', ['--test', ...testFiles('scripts/checks/test', (f) => f.endsWith('.test.mjs')), 'infra/backup/backup.test.mjs'], process.execPath),
     step('user-generate', 'user-service', ['node_modules/prisma/build/index.js', 'generate'], process.execPath),
     step('chat-generate', 'chat-service', ['node_modules/prisma/build/index.js', 'generate'], process.execPath),
