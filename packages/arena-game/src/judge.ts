@@ -133,6 +133,7 @@ export class JudgeInfraError extends Error {
 
 /** Thrown when game-side input validation rejects a request before judging. */
 export class ValidationError extends Error {
+  readonly code = 400;
   constructor(message: string) {
     super(message);
     this.name = "ValidationError";

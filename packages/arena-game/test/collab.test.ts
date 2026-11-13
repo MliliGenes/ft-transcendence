@@ -46,7 +46,7 @@ async function setupCollab(plans: ScriptPlan[] = [{ score: 100 }], options: Part
       { userId: "user-b1", sideId: "right" },
       { userId: "user-b2", sideId: "right" },
     ],
-    problemVersionIds: ["even-ledger", "even-ledger"],
+    problemVersionIds: ["even-ledger-v2", "even-ledger-v2"],
   });
   await engine.startRound(a1, matchId);
   await engine.beginCoding(a1, matchId);
@@ -177,7 +177,7 @@ describe("authorization: rooms derive from the principal", () => {
         { userId: "user-left", sideId: "left" },
         { userId: "user-right", sideId: "right" },
       ],
-      problemVersionIds: ["even-ledger"],
+      problemVersionIds: ["even-ledger-v2"],
     });
     await solo.startRound(left, soloId);
     await solo.beginCoding(left, soloId);
@@ -421,7 +421,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
         { userId: "user-b1", sideId: "right" },
         { userId: "user-b2", sideId: "right" },
       ],
-      problemVersionIds: ["even-ledger"],
+      problemVersionIds: ["even-ledger-v2"],
     });
     await engine.startRound(a1, matchId);
     await engine.beginCoding(a1, matchId);
@@ -499,7 +499,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
         { userId: "user-b1", sideId: "right" },
         { userId: "user-b2", sideId: "right" },
       ],
-      problemVersionIds: ["even-ledger"],
+      problemVersionIds: ["even-ledger-v2"],
     });
     await engine.startRound(a1, matchId);
     await engine.beginCoding(a1, matchId);
@@ -580,7 +580,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
         { userId: "user-b1", sideId: "right" },
         { userId: "user-b2", sideId: "right" },
       ],
-      problemVersionIds: ["even-ledger"],
+      problemVersionIds: ["even-ledger-v2"],
     });
     await engine.startRound(a1, matchId);
     await engine.beginCoding(a1, matchId);
@@ -598,7 +598,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
     const sync = await engine.collabSync(a1, matchId);
     expect(sync.language).toBe("Python");
     expect(sync.revision).toBe(1);
-    expect(sync.source).toContain("def ledger_sum"); // Python starter
+    expect(sync.source).toBe(new FileBank().loadProblem("even-ledger-v2").starters.Python);
 
     const snap = await engine.snapshot(a1, matchId);
     const leftTeam = snap.teams?.find((t) => t.side === "left");
@@ -640,7 +640,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
         { userId: "user-b1", sideId: "right" },
         { userId: "user-b2", sideId: "right" },
       ],
-      problemVersionIds: ["even-ledger"],
+      problemVersionIds: ["even-ledger-v2"],
     });
     await engine.startRound(a1, matchId);
     await engine.beginCoding(a1, matchId);

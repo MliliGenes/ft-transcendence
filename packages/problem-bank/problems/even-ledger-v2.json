@@ -1,0 +1,123 @@
+{
+  "id": "even-ledger-v2",
+  "title": "Even Ledger",
+  "difficulty": "Easy",
+  "tags": [
+    "Array",
+    "Math"
+  ],
+  "description": "Read an integer n, followed by n space-separated integers. Compute the alternating sum: add the elements at even indices and subtract the elements at odd indices (S = nums[0] - nums[1] + nums[2] - nums[3] + ...). An empty array (n = 0) scores 0. Use 64-bit integers; inputs fit so the exact result fits in a signed 64-bit integer.",
+  "examples": [
+    {
+      "label": "Example 1",
+      "input": "4\n1 2 3 4",
+      "output": "-2",
+      "explanation": "1 - 2 + 3 - 4 = -2."
+    },
+    {
+      "label": "Example 2",
+      "input": "1\n5",
+      "output": "5",
+      "explanation": "A single element at an even index is added."
+    },
+    {
+      "label": "Example 3",
+      "input": "0",
+      "output": "0",
+      "explanation": "The empty array scores 0."
+    }
+  ],
+  "constraints": [
+    "0 <= n <= 100000",
+    "-10^9 <= nums[i] <= 10^9",
+    "The exact alternating sum fits in a signed 64-bit integer."
+  ],
+  "timeLimitMs": 2000,
+  "memoryLimitMb": 256,
+  "driver": "stdio",
+  "entrypoint": null,
+  "starters": {
+    "C++": "#include <iostream>\n\nint main() {\n    int n;\n    if (!(std::cin >> n)) return 0;\n    long long sum = 0;\n    for (int i = 0; i < n; ++i) {\n        long long val;\n        std::cin >> val;\n        // Add your alternating sum calculation here\n    }\n    std::cout << 0 << \"\\n\";\n    return 0;\n}\n",
+    "Python": "import sys\n\ndef main():\n    tokens = sys.stdin.read().split()\n    if not tokens:\n        return\n    n = int(tokens[0])\n    # Calculate alternating sum of tokens[1:n+1]\n    print(0)\n\nmain()\n",
+    "C": "#include <stdio.h>\n\nint main(void) {\n    int n;\n    if (scanf(\"%d\", &n) != 1) return 0;\n    long long sum = 0;\n    for (int i = 0; i < n; ++i) {\n        long long val;\n        scanf(\"%lld\", &val);\n        // Add your alternating sum calculation here\n    }\n    printf(\"0\\n\");\n    return 0;\n}\n"
+  },
+  "visibleTests": [
+    {
+      "id": "ex1",
+      "label": "Example 1",
+      "input": "4\n1 2 3 4",
+      "expected": "-2"
+    },
+    {
+      "id": "ex2",
+      "label": "Example 2",
+      "input": "1\n5",
+      "expected": "5"
+    },
+    {
+      "id": "ex3",
+      "label": "Example 3",
+      "input": "0",
+      "expected": "0"
+    }
+  ],
+  "hiddenGroups": [
+    {
+      "name": "Basic",
+      "weight": 40,
+      "tests": [
+        {
+          "id": "b1",
+          "input": "3\n0 0 0",
+          "expected": "0"
+        },
+        {
+          "id": "b2",
+          "input": "2\n10 -3",
+          "expected": "13"
+        },
+        {
+          "id": "b3",
+          "input": "3\n-1 -2 -3",
+          "expected": "-2"
+        }
+      ]
+    },
+    {
+      "name": "Negatives and zeros",
+      "weight": 30,
+      "tests": [
+        {
+          "id": "n1",
+          "input": "5\n-5 0 5 0 -5",
+          "expected": "-5"
+        },
+        {
+          "id": "n2",
+          "input": "1\n0",
+          "expected": "0"
+        }
+      ]
+    },
+    {
+      "name": "Bounds",
+      "weight": 30,
+      "tests": [
+        {
+          "id": "e1",
+          "input": "2\n1000000000 -1000000000",
+          "expected": "2000000000"
+        },
+        {
+          "id": "e2",
+          "input": "3\n1000000000 1000000000 1000000000",
+          "expected": "1000000000"
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "origin": "original",
+    "created": "2026-09-23"
+  }
+}

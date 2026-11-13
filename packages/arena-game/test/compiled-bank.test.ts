@@ -81,4 +81,60 @@ describe("real compiled bank execution (double-it, isolated containers)", () => 
     const reveal = await engine.publishReveal(left, matchId);
     expect(reveal.scores.left).toBe(100);
   }, 120000);
+
+  it("C++ solution scores 100 on even-ledger-v2 via stdio", async () => {
+    const { engine, matchId } = await realEngine(["even-ledger-v2"]);
+    const left = testPrincipal("user-left");
+    const CPP_EVEN_LEDGER = `#include <iostream>
+int main() {
+    int n;
+    if (!(std::cin >> n)) { std::cout << 0 << "\\n"; return 0; }
+    long long sum = 0;
+    for (int i = 0; i < n; ++i) {
+        long long val;
+        std::cin >> val;
+        sum += (i % 2 == 0) ? val : -val;
+    }
+    std::cout << sum << "\\n";
+    return 0;
+}
+`;
+    await engine.submit(left, matchId, { code: CPP_EVEN_LEDGER, language: "C++" });
+    const reveal = await engine.publishReveal(left, matchId);
+    expect(reveal.scores.left).toBe(100);
+  }, 120000);
+
+  it.each([
+    {
+      language: "C" as const,
+      code: `#include <stdio.h>
+int main(void) {
+    int n;
+    if (scanf("%d", &n) != 1) return 1;
+    long long sum = 0;
+    for (int i = 0; i < n; ++i) {
+        long long value;
+        if (scanf("%lld", &value) != 1) return 1;
+        sum += i % 2 == 0 ? value : -value;
+    }
+    printf("%lld\\n", sum);
+    return 0;
+}
+`,
+    },
+    {
+      language: "Python" as const,
+      code: `import sys
+tokens = list(map(int, sys.stdin.read().split()))
+n = tokens[0]
+print(sum(value if i % 2 == 0 else -value for i, value in enumerate(tokens[1:n + 1])))
+`,
+    },
+  ])("$language solution scores 100 on even-ledger-v2 via stdio", async ({ language, code }) => {
+    const { engine, matchId } = await realEngine(["even-ledger-v2"]);
+    const left = testPrincipal("user-left");
+    await engine.submit(left, matchId, { code, language });
+    const reveal = await engine.publishReveal(left, matchId);
+    expect(reveal.scores.left).toBe(100);
+  }, 120000);
 });

@@ -464,6 +464,10 @@ export class ArenaEngine {
     return this.withMatchLock(matchId, async () => {
       const match = await this.requireMember(principal, matchId);
       this.requireUnexpired(match);
+      if (match.mode === "2v2") {
+        assertSupportedLanguage(language);
+        this.requireProblemLanguage(this.loadPlayableProblem(this.currentRound(match).problemVersionId), language);
+      }
       const result = await this.teamCollaboration.setLanguage(match, principal.userId, language);
       if (!result) return null;
       this.emit("readiness.changed", {
@@ -491,11 +495,12 @@ export class ArenaEngine {
         throw new IllegalStateError(`run rejected for side while ${this.activityOf(round, side)}`);
       }
       assertSupportedLanguage(input.language);
+      const problem = this.loadPlayableProblem(round.problemVersionId);
+      this.requireProblemLanguage(problem, input.language);
       this.validateSource(input.code);
       this.checkRate(matchId, side);
       const runId = this.uuid();
       await this.setActivity(match, round, side, "running");
-      const problem = this.bank.loadProblem(round.problemVersionId);
       return {
         runId,
         side,
@@ -571,6 +576,8 @@ export class ArenaEngine {
       }
       if (round.closing) throw new IllegalStateError("submit rejected while reveal is closing the round");
       assertSupportedLanguage(input.language);
+      const problem = this.loadPlayableProblem(round.problemVersionId);
+      this.requireProblemLanguage(problem, input.language);
       // 2v2 frozen source (ticket 15 §11): the judge receives the immutable
       // authoritative Y.Text snapshot, never the client payload. The client
       // language must equal the team language (no split-language document).
@@ -592,7 +599,6 @@ export class ArenaEngine {
       const submissionId = input.submissionId ?? this.uuid();
       const evaluationId = input.evaluationId ?? this.uuid();
       const sourceHash = createHash("sha256").update(submitCode, "utf8").digest("hex");
-      const problem = this.bank.loadProblem(round.problemVersionId);
       const dup = this.evaluation.get(evaluationId);
       if (dup) {
         if (
@@ -888,6 +894,23 @@ export class ArenaEngine {
     return this.roundLifecycle.computeFinal(match);
   }
 
+  private requireProblemLanguage(problem: BankProblem, language: SupportedLanguage): void {
+    if (typeof problem.starters[language] !== "string") {
+      throw new ValidationError(`${language} is not available for this problem; choose ${Object.keys(problem.starters).join(", ")}`);
+    }
+  }
+
+  private loadPlayableProblem(problemVersionId: string): BankProblem {
+    const problem = this.bank.loadProblem(problemVersionId);
+    // All current judge adapters execute bank snippets through the Python harness.
+    // The bank may retain starters for future adapters without advertising them.
+    if (problem.driver !== "snippet") return problem;
+    return {
+      ...problem,
+      starters: typeof problem.starters.Python === "string" ? { Python: problem.starters.Python } : {},
+    };
+  }
+
   async snapshot(principal: AuthenticatedPrincipal, matchId: string): Promise<SealedSnapshot> {
     if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredMatch(matchId);
     return this.withRevisionRetry(matchId, async () => {
@@ -896,7 +919,7 @@ export class ArenaEngine {
       await this.authority.saveMatch(match);
       const side = this.sideOf(match, principal);
       const round = this.currentRound(match);
-      const problem = this.bank.loadProblem(round.problemVersionId);
+      const problem = this.loadPlayableProblem(round.problemVersionId);
       const now = this.clock();
       const remainingMs = Math.max(0, match.durationMs - (now - match.startedAt));
       const sides: Record<SideId, { status: PlayerStatus; submissions: number; presence: "online" | "offline" }> = {};

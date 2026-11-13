@@ -41,7 +41,7 @@ async function setup2v2(plans: ScriptPlan[] = [{ score: 100 }], options: Partial
       { userId: "user-b1", sideId: "right" },
       { userId: "user-b2", sideId: "right" },
     ],
-    problemVersionIds: ["even-ledger", "even-ledger"],
+    problemVersionIds: ["even-ledger-v2", "even-ledger-v2"],
   });
   await engine.startRound(a1, matchId);
   await engine.beginCoding(a1, matchId);
@@ -89,7 +89,7 @@ describe("2v2 match creation validates team shape", () => {
           { userId: "u2", sideId: "left" },
           { userId: "u3", sideId: "right" },
         ],
-        problemVersionIds: ["even-ledger"],
+        problemVersionIds: ["even-ledger-v2"],
       }),
     ).rejects.toThrow();
     await expect(
@@ -99,7 +99,7 @@ describe("2v2 match creation validates team shape", () => {
           { userId: "u1", sideId: "left" },
           { userId: "u2", sideId: "right" },
         ],
-        problemVersionIds: ["even-ledger"],
+        problemVersionIds: ["even-ledger-v2"],
       }),
     ).rejects.toThrow();
   });
@@ -115,7 +115,7 @@ describe("2v2 match creation validates team shape", () => {
           { userId: "u1", sideId: "right" },
           { userId: "u3", sideId: "right" },
         ],
-        problemVersionIds: ["even-ledger"],
+        problemVersionIds: ["even-ledger-v2"],
       }),
     ).rejects.toThrow();
   });
@@ -774,7 +774,7 @@ describe("2v2 reveal is team scores only; 1v1 unchanged", () => {
   it("1v1 createMatch validation unchanged", async () => {
     const one = await setup();
     await expect(
-      one.engine.createMatch({ mode: "1v1", participants: [{ userId: "solo", sideId: "left" }], problemVersionIds: ["even-ledger"] }),
+      one.engine.createMatch({ mode: "1v1", participants: [{ userId: "solo", sideId: "left" }], problemVersionIds: ["even-ledger-v2"] }),
     ).rejects.toThrow();
   });
 });

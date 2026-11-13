@@ -9,14 +9,31 @@ const PG_URL = process.env.TEST_PG_URL ?? "";
 const HAS_PG = Boolean(process.env.TEST_PG_URL);
 if (!HAS_PG) console.warn(`[service.test] skipping Postgres restart test: no TEST_PG_URL set in environment`);
 
-const SOLVED_PY = `def ledger_sum(nums):
+const SOLVED_PY = `import sys
+
+def main():
+    tokens = sys.stdin.read().split()
+    if not tokens:
+        print(0)
+        return
+    n = int(tokens[0])
     total = 0
-    for i, v in enumerate(nums):
-        total += v if i % 2 == 0 else -v
-    return total
+    for i in range(n):
+        val = int(tokens[1 + i])
+        total += val if i % 2 == 0 else -val
+    print(total)
+
+if __name__ == "__main__":
+    main()
 `;
-const STARTER_PY = `def ledger_sum(nums):
-    return 0
+const STARTER_PY = `import sys
+
+def main():
+    tokens = sys.stdin.read().split()
+    print(0)
+
+if __name__ == "__main__":
+    main()
 `;
 
 function headers(user?: string): Record<string, string> {
@@ -74,7 +91,7 @@ describe("game service integration (real HTTP + sockets + containers)", () => {
         { userId: "user-a", sideId: "left" },
         { userId: "user-b", sideId: "right" },
       ],
-      problemVersionIds: ["even-ledger", "even-ledger", "even-ledger"],
+      problemVersionIds: ["even-ledger-v2", "even-ledger-v2", "even-ledger-v2"],
     });
     expect(res.status).toBe(201);
     return (res.json as { matchId: string }).matchId;

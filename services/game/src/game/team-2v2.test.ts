@@ -12,11 +12,22 @@ const A2 = "t14-a2";
 const B1 = "t14-b1";
 const B2 = "t14-b2";
 
-const SOLVED_PY = `def ledger_sum(nums):
+const SOLVED_PY = `import sys
+
+def main():
+    tokens = sys.stdin.read().split()
+    if not tokens:
+        print(0)
+        return
+    n = int(tokens[0])
     total = 0
-    for i, v in enumerate(nums):
-        total += v if i % 2 == 0 else -v
-    return total
+    for i in range(n):
+        val = int(tokens[1 + i])
+        total += val if i % 2 == 0 else -val
+    print(total)
+
+if __name__ == "__main__":
+    main()
 `;
 
 function headers(user?: string): Record<string, string> {
@@ -65,7 +76,7 @@ async function newTeamMatch(): Promise<string> {
       { userId: B1, sideId: "right" },
       { userId: B2, sideId: "right" },
     ],
-    problemVersionIds: ["even-ledger", "even-ledger"],
+    problemVersionIds: ["even-ledger-v2", "even-ledger-v2"],
   });
   expect(res.status).toBe(201);
   return res.json.matchId as string;

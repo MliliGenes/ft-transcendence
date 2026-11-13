@@ -15,7 +15,7 @@ export const STARTER_PY = `def ledger_sum(nums):
 `;
 
 /**
- * Pass pattern over even-ledger's 7 hidden tests (Basic×3, Neg×2, Bounds×2).
+ * Pass pattern over even-ledger-v2's 7 hidden tests (Basic×3, Neg×2, Bounds×2).
  * Attainable totals: 100, 85, 70, 60, 55, 45, 40, 30, 15, 13, 0.
  */
 export function passes(s: string): ScriptPlan {
@@ -49,7 +49,11 @@ export interface Fixture {
   advance: (ms: number) => void;
 }
 
-export async function setup(plan: ScriptPlan[] = [{ score: 100 }], options: Partial<EngineOptions> = {}): Promise<Fixture> {
+export async function setup(
+  plan: ScriptPlan[] = [{ score: 100 }],
+  options: Partial<EngineOptions> = {},
+  problemVersionIds: string[] = ["even-ledger-v2", "even-ledger-v2", "even-ledger-v2"],
+): Promise<Fixture> {
   let now = 1_000_000;
   const judge = new ScriptedJudge(plan);
   const engine = new ArenaEngine({
@@ -68,7 +72,7 @@ export async function setup(plan: ScriptPlan[] = [{ score: 100 }], options: Part
       { userId: "user-left", sideId: "left" },
       { userId: "user-right", sideId: "right" },
     ],
-    problemVersionIds: ["even-ledger", "even-ledger", "even-ledger"],
+    problemVersionIds,
   });
   await engine.startRound(left, matchId);
   await engine.beginCoding(left, matchId);
