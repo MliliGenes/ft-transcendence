@@ -29,7 +29,7 @@ interface CollabFixture {
   matchId: string;
 }
 
-async function setupCollab(plans: ScriptPlan[] = [{ score: 100 }], options: Partial<EngineOptions> = {}): Promise<CollabFixture> {
+async function setupCollab(plans: ScriptPlan[] = [{ score: 100 }], options: Partial<EngineOptions> = {}, problemVersionIds = ["even-ledger", "even-ledger"]): Promise<CollabFixture> {
   let now = 1_000_000;
   const judge = new ScriptedJudge(plans);
   const engine = new ArenaEngine({ judge, bank: new FileBank(), clock: () => now, revealGraceMs: 0, ...options });
@@ -46,7 +46,7 @@ async function setupCollab(plans: ScriptPlan[] = [{ score: 100 }], options: Part
       { userId: "user-b1", sideId: "right" },
       { userId: "user-b2", sideId: "right" },
     ],
-    problemVersionIds: ["even-ledger", "even-ledger"],
+    problemVersionIds,
   });
   await engine.startRound(a1, matchId);
   await engine.beginCoding(a1, matchId);
@@ -229,7 +229,7 @@ describe("round isolation", () => {
 
 describe("team language owns the document", () => {
   it("10. language switch resets to starter, bumps, invalidates; concurrent switches serialize", async () => {
-    const fx = await setupCollab();
+    const fx = await setupCollab(undefined, {}, ["double-it", "even-ledger"]);
     const before = await clientFromSync(fx, fx.a1);
     await readyBoth(fx, 1);
     const r2 = await fx.engine.setTeamLanguage(fx.a1, fx.matchId, "C++");
@@ -257,7 +257,7 @@ describe("team language owns the document", () => {
   });
 
   it("11. submit with a split language is rejected", async () => {
-    const fx = await setupCollab();
+    const fx = await setupCollab(undefined, {}, ["double-it", "even-ledger"]);
     const { doc, sync } = await clientFromSync(fx, fx.a1);
     await fx.engine.applyCollabUpdate(fx.a1, fx.matchId, {
       roundId: sync.roundId,
@@ -580,7 +580,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
         { userId: "user-b1", sideId: "right" },
         { userId: "user-b2", sideId: "right" },
       ],
-      problemVersionIds: ["even-ledger"],
+      problemVersionIds: ["double-it"],
     });
     await engine.startRound(a1, matchId);
     await engine.beginCoding(a1, matchId);
@@ -598,7 +598,7 @@ describe.runIf(HAS_PG)("postgres collab persistence (real database)", () => {
     const sync = await engine.collabSync(a1, matchId);
     expect(sync.language).toBe("Python");
     expect(sync.revision).toBe(1);
-    expect(sync.source).toContain("def ledger_sum"); // Python starter
+    expect(sync.source).toBe(new FileBank().loadProblem("double-it").starters.Python);
 
     const snap = await engine.snapshot(a1, matchId);
     const leftTeam = snap.teams?.find((t) => t.side === "left");

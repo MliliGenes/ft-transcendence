@@ -57,10 +57,10 @@ pages, plus client configuration and the original 19 test files.
 | Production HTTP rendering | 14 routes returned HTML with status 200; a missing route returned the custom 404. OAuth renders as a native link. |
 | Development HTTP rendering | The same 14 routes and custom 404 passed against `next dev`. Both temporary local servers were stopped afterward. |
 | Browser UI with fabricated APIs (2026-11-13) | Lobby readiness and Match Run show pending feedback, retain labels, show failure feedback, and restore controls. Captured console empty. After the layout repair, all Match buttons and selectors fit a 1,076-pixel viewport and progress text remains visible. |
-| Live browser checks through Nginx | Pending for the combined candidate. The browser check above used fabricated auth, Lobby, and Match responses. |
+| Live browser checks through Nginx (2026-11-13) | A real two-player 1v1 completed all three rounds with complementary final results (300–225). Reload during round-two reveal restored phase and totals. C++ snippets failed with HTTP 500 before the follow-up fix below; Python passed. Feed attachment upload was blocked by the browser before reaching storage. The post-fix browser replay remains pending. |
 
 HTTP rendering checks do not execute browser JavaScript. Authenticated flows,
-uploads, hydration, actual 1v1/2v2 sessions, and offline/denied/conflict/rate-limit
+uploads, hydration, post-fix 1v1 replay, actual 2v2 sessions, and offline/denied/conflict/rate-limit
 behavior through Nginx still need live browser verification. Unit checks cover
 action rejections, retained drafts/state, pending-control recovery, pending label
 stability and progress announcement, clipboard availability/denial, blocked
@@ -80,3 +80,39 @@ These are follow-up findings from static analysis, not reproduced browser failur
 | [Sidebar skeleton](../client/components/ui/sidebar.tsx) | Random initial width can cause hydration mismatch if used with server rendering; currently no callers. |
 | [Match transport](../client/components/arena/MatchView.tsx) | Transport creation during render needs a separate lifecycle review; abandoned connections may keep reconnecting. |
 | Browser/framework | Failed HTTP requests (including expected unauthenticated responses), WebSockets, images, CORS/TLS checks, and genuine React/Next crashes can still produce diagnostics even when promises are caught. |
+
+## Follow-up: executable language choices
+
+The live run reproduced a separate game error: Even Ledger advertises C/C++
+starters, but all current judge adapters execute snippet problems through a Python
+harness. The Match page defaulted to C++, and submitting it produced an internal
+judge failure. The fix filters the public snippet starters to Python, renders the
+selector from that list, and selects an available language when a 1v1 round changes.
+Complete-program (stdio) problems retain C++, Python and C. Run, Submit and team
+language changes reject unsupported problem/language pairs before judge dispatch.
+Input validation now carries the HTTP filter's 400 classification, so it produces
+a useful client response instead of falling through to 500. This follow-up changes
+validation status handling; the earlier console-only audit's no-status-change claim
+does not describe this later repair.
+
+Four public engine regressions cover advertised starters, unsupported Run/Submit
+without competitive side effects, stdio choices, and team round/language behavior.
+Existing collaboration language-switch and transaction-rollback tests now use a
+valid stdio fixture, preserving their original assertions. The 94 client tests,
+root type checks, root lint, frontend production build and both review axes pass.
+All 112 disposable database/service integration checks pass (60 engine, 15 Game
+and reconnect, 20 Chat, 17 User). Root workspace tests passed apart from missing
+local example env fixtures in Compose topology tests; after supplying ignored
+example-only files, all 15 judge-worker tests passed, including those three checks.
+
+A real authenticated HTTP match on the rebuilt disposable stack also completed
+all three rounds. Its snippet snapshot advertised only Python; unsupported C++
+Run and Submit each returned HTTP 400 with the availability message and no
+competitive attempt. Python hidden submissions passed and the match finalized.
+This is real service evidence, not a browser replay.
+
+Chrome/Orca control connections stalled during the post-fix browser attempt. The
+user observed ERR_BLOCKED_BY_CLIENT for the upload. Direct trusted storage TLS and
+CORS checks pass; the exact client blocking rule is not established, and no CORS or
+certificate controls have been weakened. Real Feed upload/carousel verification
+and a post-fix browser language replay remain open until observed.

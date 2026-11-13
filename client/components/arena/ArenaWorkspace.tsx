@@ -190,17 +190,18 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
           {/* Editor Toolbar */}
           <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2 text-xs">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
-              <span className="font-semibold text-muted-foreground">Language:</span>
+              <label htmlFor="arena-language" className="font-semibold text-muted-foreground">Language:</label>
               <select
+                id="arena-language"
                 value={snapshot.language}
                 onChange={(e) => performAction("language", () => transport.setLanguage(e.target.value), "Unable to change language. Please try again.")}
                 disabled={!isCoding || Boolean(pendingAction)}
                 aria-busy={pendingAction === "language"}
                 className="rounded-none border border-border bg-background px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-mono text-xs"
               >
-                <option value="C++">C++</option>
-                <option value="Python">Python</option>
-                <option value="C">C</option>
+                {Object.keys(snapshot.problem.starters).map((language) => (
+                  <option key={language} value={language}>{language}</option>
+                ))}
               </select>
 
               <span className="ml-2 text-muted-foreground">Font:</span>
