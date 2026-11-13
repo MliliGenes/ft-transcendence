@@ -52,7 +52,7 @@ pages, plus client configuration and the original 19 test files.
 | Dependency restore | The original audit used `npm ci` with the existing lockfile. The combined integration candidate reused local dependencies; its lockfile is unchanged. |
 | Lint | `npm run lint` passed; an isolated lint probe also confirmed application console calls fail and test output remains exempt. |
 | Types | `node node_modules/typescript/bin/tsc --noEmit --incremental false` passed. |
-| Tests | `npm test`: 90 passed, zero failed. The action tests were rerun after the final overlay adjustment; the lobby pending-state, arena pending-label and arena pending-action progress regression tests were added during review. |
+| Tests | `npm test`: 94 passed, zero failed. The action tests were rerun after the final overlay adjustment; the lobby pending-state, arena pending-label and arena pending-action progress regression tests were added during review. Four Feed carousel checks also cover native video keys, motion preferences, and persistent endpoint controls. |
 | Production build | `npm run build` passed after granting network access for the existing Google Fonts. |
 | Production HTTP rendering | 14 routes returned HTML with status 200; a missing route returned the custom 404. OAuth renders as a native link. |
 | Development HTTP rendering | The same 14 routes and custom 404 passed against `next dev`. Both temporary local servers were stopped afterward. |

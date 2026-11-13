@@ -17,6 +17,7 @@ export function componentHarness(file, name, dependencies = {}, globals = {}) {
       return [slots[index], next => { slots[index] = typeof next === "function" ? next(slots[index]) : next; }];
     },
     useRef(initial) { return react.useState(() => ({ current: initial }))[0]; },
+    useCallback(callback) { return callback; },
     useEffect(effect) { if (!mounted) effects.push(effect); },
   };
   const jsx = (type, props) => ({ type, props });
