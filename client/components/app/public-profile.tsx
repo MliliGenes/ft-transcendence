@@ -11,7 +11,8 @@ import ReactMarkdown from "react-markdown";
 import { AccountAvatar } from "@/components/app/account-avatar";
 import { ConfirmDialog } from "@/components/app/confirm-dialog";
 import { ProfilePosts } from "@/components/app/feed/profile-posts";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -132,11 +133,11 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
   });
 
   if (isRestoring) return <LoadingProfile />;
-  if (ownerRoute && !session) return <ProfileMessage title="Your profile" body="Log in to view your profile." action={<Button render={<Link href="/login" />} className="min-h-11 px-5">Log in</Button>} />;
+  if (ownerRoute && !session) return <ProfileMessage title="Your profile" body="Log in to view your profile." action={<Link href="/login" className={cn(buttonVariants(), "min-h-11 px-5")}>Log in</Link>} />;
   if (isOwner && currentAccount.isPending) return <LoadingProfile />;
   if (isOwner && (!currentAccount.data || currentAccount.error)) return <ProfileMessage title="Unable to load your profile" action={<Button variant="outline" className="min-h-11" onClick={() => currentAccount.refetch()}>Try again</Button>} />;
   if (!isOwner && publicProfile.isPending) return <LoadingProfile />;
-  if (!isOwner && (publicProfile.error || !publicProfile.data)) return <ProfileMessage title="Profile not found" body="This profile may have been removed or the link may be incorrect." action={<Button render={<Link href="/search" />} variant="outline" className="min-h-11">Back to search</Button>} />;
+  if (!isOwner && (publicProfile.error || !publicProfile.data)) return <ProfileMessage title="Profile not found" body="This profile may have been removed or the link may be incorrect." action={<Link href="/search" className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}>Back to search</Link>} />;
 
   const profile = isOwner ? publicFields(currentAccount.data!) : publicProfile.data!;
   const displayName = accountDisplayName(profile);
@@ -151,8 +152,8 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
   const actionError = friendshipAction.error ?? blockAction.error ?? messageAction.error ?? challengeAction.error;
 
   let primaryAction: React.ReactNode = null;
-  if (isOwner) primaryAction = <Button render={<Link href="/profile/edit" />} variant="outline" className="min-h-11 px-4"><IconPencil size={16} aria-hidden="true" />Edit profile</Button>;
-  else if (!session) primaryAction = <Button render={<Link href="/login" />} className="min-h-11 px-4">Log in to connect</Button>;
+  if (isOwner) primaryAction = <Link href="/profile/edit" className={cn(buttonVariants({ variant: "outline" }), "min-h-11 px-4")}><IconPencil size={16} aria-hidden="true" />Edit profile</Link>;
+  else if (!session) primaryAction = <Link href="/login" className={cn(buttonVariants(), "min-h-11 px-4")}>Log in to connect</Link>;
   else if (blocks.isPending || friendships.isPending) primaryAction = <Button disabled variant="outline" className="min-h-11 px-4">Checking connection…</Button>;
   else if (blocks.error || friendships.error) primaryAction = <Button variant="outline" className="min-h-11 px-4" onClick={() => { void blocks.refetch(); void friendships.refetch(); }}>Retry connection</Button>;
   else if (blocked) primaryAction = <Button disabled={busy} variant="outline" className="min-h-11 px-4" onClick={() => blockAction.mutate(true)}>{blockAction.isPending ? "Unblocking…" : "Unblock"}</Button>;
@@ -166,7 +167,7 @@ export function PublicProfile({ id, ownerRoute = false }: { id?: string; ownerRo
     <section className="mx-auto w-full max-w-6xl px-4 pb-10 pt-5 sm:px-6 md:px-8 md:pt-8" aria-labelledby="public-profile-name">
       <div className="relative h-44 overflow-hidden bg-muted sm:h-56 md:h-64">
         {banner && <Image src={banner} alt={`${displayName}'s profile banner`} fill sizes="(max-width: 768px) 100vw, 1152px" unoptimized className="object-cover" />}
-        {isOwner && <Button render={<Link href="/profile/edit" />} variant="outline" className="absolute right-3 top-3 min-h-11 bg-background/90 px-4">{banner ? "Edit banner" : "Add banner"}</Button>}
+        {isOwner && <Link href="/profile/edit" className={cn(buttonVariants({ variant: "outline" }), "absolute right-3 top-3 min-h-11 bg-background/90 px-4")}>{banner ? "Edit banner" : "Add banner"}</Link>}
       </div>
 
       <header className="relative border-b border-border px-4 pb-6 sm:px-7">
@@ -244,7 +245,7 @@ function FriendsCard({ state, isPending, isError, onRetry }: { state: Friendship
     {pending > 0 && <Link href="/search" className="mx-5 mb-3 flex items-center justify-between gap-2 bg-nook-accent-subtle px-3 py-2 text-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring"><span><span className="font-semibold tabular-nums">{pending}</span> pending {pending === 1 ? "request" : "requests"}</span><span className="text-xs text-nook-accent-text">Review</span></Link>}
     {isPending && <div role="status" aria-label="Loading friends" className="grid gap-3 px-5 pb-5">{[0, 1, 2].map(item => <div key={item} className="flex items-center gap-3"><Skeleton className="size-10" /><Skeleton className="h-4 flex-1" /></div>)}</div>}
     {isError && <div className="px-5 pb-5"><p role="alert" className="text-sm text-destructive">Could not load friends.</p><Button variant="outline" className="mt-2 min-h-10" onClick={onRetry}>Try again</Button></div>}
-    {state && friends.length === 0 && <div className="px-5 pb-5"><p className="text-sm text-muted-foreground">No friends yet. Find people you know and send a request.</p><Button render={<Link href="/search" />} variant="outline" className="mt-3 min-h-10 w-full">Find people</Button></div>}
+    {state && friends.length === 0 && <div className="px-5 pb-5"><p className="text-sm text-muted-foreground">No friends yet. Find people you know and send a request.</p><Link href="/search" className={cn(buttonVariants({ variant: "outline" }), "mt-3 min-h-10 w-full")}>Find people</Link></div>}
     {visible.length > 0 && <ul className="pb-2">{visible.map(friend => {
       const name = accountDisplayName(friend);
       return <li key={friend.id}><Link href={`/profile/${encodeURIComponent(friend.id)}`} className="flex min-h-14 items-center gap-3 px-5 py-2 hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">

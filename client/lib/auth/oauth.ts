@@ -48,15 +48,18 @@ function isOAuthError(value: string | null): value is OAuthError {
 }
 
 export function saveOAuthNotice(notice: OAuthNotice) {
-  sessionStorage.setItem(noticeKey, JSON.stringify(notice));
+  try {
+    sessionStorage.setItem(noticeKey, JSON.stringify(notice));
+  } catch {
+    // Optional feedback must not interrupt the OAuth return.
+  }
 }
 
 export function takeOAuthNotice(flow: OAuthFlow): OAuthNotice | null {
-  const value = sessionStorage.getItem(noticeKey);
-  if (!value) return null;
-  sessionStorage.removeItem(noticeKey);
-
   try {
+    const value = sessionStorage.getItem(noticeKey);
+    if (!value) return null;
+    sessionStorage.removeItem(noticeKey);
     const parsed: unknown = JSON.parse(value);
     if (typeof parsed !== "object" || parsed === null || !("flow" in parsed) || parsed.flow !== flow
       || !("result" in parsed) || (parsed.result !== "linked" && parsed.result !== "error")
@@ -72,13 +75,21 @@ export function takeOAuthNotice(flow: OAuthFlow): OAuthNotice | null {
 }
 
 export function rememberOAuthProvider(provider: OAuthProvider) {
-  sessionStorage.setItem(pendingProviderKey, provider);
+  try {
+    sessionStorage.setItem(pendingProviderKey, provider);
+  } catch {
+    // Sign-in still works without a remembered provider label.
+  }
 }
 
 export function takePendingOAuthProvider() {
-  const provider = sessionStorage.getItem(pendingProviderKey);
-  sessionStorage.removeItem(pendingProviderKey);
-  return provider;
+  try {
+    const provider = sessionStorage.getItem(pendingProviderKey);
+    sessionStorage.removeItem(pendingProviderKey);
+    return provider;
+  } catch {
+    return null;
+  }
 }
 
 export function oauthNoticeMessage(notice: OAuthNotice) {

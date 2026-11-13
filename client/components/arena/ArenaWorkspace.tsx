@@ -35,8 +35,11 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
   const code = codeState.value;
   const setCode = (value: string) => setCodeState({ key: codeKey, value });
   const [fontSize, setFontSize] = useState(14);
-  const [isRunning, setIsRunning] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const isRunning = pendingAction === "run";
+  const isSubmitting = pendingAction === "submit";
+  const feedback = actionError ?? snapshot.notice;
 
   const sidecarLifecycleRef = useRef(createArenaSidecarLifecycle());
 
@@ -59,49 +62,60 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
     };
   }, [transport, snapshot.round, snapshot.mode]);
 
-  async function handleRun() {
-    setIsRunning(true);
+  async function performAction(name: string, action: () => Promise<void>, message: string) {
+    if (pendingAction) return;
+    setPendingAction(name);
+    setActionError(null);
     try {
-      const currentCode = sidecars.collab ? sidecars.collab.getSource() : code;
-      await transport.run({ code: currentCode, language: snapshot.language });
+      await action();
+    } catch {
+      setActionError(message);
     } finally {
-      setIsRunning(false);
+      setPendingAction(null);
     }
   }
 
+  async function handleRun() {
+    await performAction("run", async () => {
+      const currentCode = sidecars.collab ? sidecars.collab.getSource() : code;
+      await transport.run({ code: currentCode, language: snapshot.language });
+    }, "Unable to run tests. Please try again.");
+  }
+
   async function handleSubmit() {
-    setIsSubmitting(true);
-    try {
+    await performAction("submit", async () => {
       const currentCode = sidecars.collab ? sidecars.collab.getSource() : code;
       await transport.submit({
         code: currentCode,
         language: snapshot.language,
         documentRevision: snapshot.docRevision ?? undefined,
       });
-    } finally {
-      setIsSubmitting(false);
-    }
+    }, "Unable to submit your code. Please try again.");
   }
 
   async function handleToggleReady() {
-    await transport.setReady(!snapshot.ready.you);
+    await performAction("ready", () => transport.setReady(!snapshot.ready.you), "Unable to update readiness. Please try again.");
   }
 
   async function handleSurrender() {
-    await transport.surrender(!snapshot.surrender.you);
+    await performAction("surrender", () => transport.surrender(!snapshot.surrender.you), "Unable to update surrender approval. Please try again.");
   }
 
   const isCoding = snapshot.roundPhase === "CODING";
   const canSubmit2v2 = snapshot.mode === "2v2" ? (snapshot.ready.you && snapshot.ready.mate) : true;
-  const isSubmitDisabled = !isCoding || isSubmitting || !canSubmit2v2;
+  const isSubmitDisabled = !isCoding || Boolean(pendingAction) || !canSubmit2v2;
 
   return (
     <div className="flex h-screen w-full flex-col bg-background text-foreground overflow-hidden">
       <ArenaHeader
         snapshot={snapshot}
         connection={transport.connection()}
-        onLeave={() => transport.leave()}
+        pending={Boolean(pendingAction)}
+        onLeave={() => performAction("leave", () => transport.leave(), "Unable to leave the match. Please try again.")}
       />
+      {feedback && snapshot.roundPhase !== "SCORE_REVEAL" && (
+        <p role="alert" className="border-b border-border bg-card px-4 py-2 text-sm text-destructive">{feedback}</p>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left Side: Problem & Match Panels */}
@@ -129,8 +143,8 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
               <span className="font-semibold text-muted-foreground">Language:</span>
               <select
                 value={snapshot.language}
-                onChange={(e) => transport.setLanguage(e.target.value)}
-                disabled={!isCoding}
+                onChange={(e) => performAction("language", () => transport.setLanguage(e.target.value), "Unable to change language. Please try again.")}
+                disabled={!isCoding || Boolean(pendingAction)}
                 className="rounded-none border border-border bg-background px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-mono text-xs"
               >
                 <option value="C++">C++</option>
@@ -155,7 +169,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                 variant="outline"
                 size="sm"
                 onClick={handleRun}
-                disabled={!isCoding || isRunning}
+                disabled={!isCoding || Boolean(pendingAction)}
                 className="h-7 text-xs font-medium"
               >
                 <IconPlayerPlay className="size-3.5 mr-1" />
@@ -167,7 +181,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                   variant={snapshot.ready.you ? "secondary" : "outline"}
                   size="sm"
                   onClick={handleToggleReady}
-                  disabled={!isCoding}
+                  disabled={!isCoding || Boolean(pendingAction)}
                   className="h-7 text-xs font-medium"
                 >
                   <IconCheck className={`size-3.5 mr-1 ${snapshot.ready.you ? "text-success" : ""}`} />
@@ -180,7 +194,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                   variant={snapshot.surrender.you ? "secondary" : "outline"}
                   size="sm"
                   onClick={handleSurrender}
-                  disabled={snapshot.roundPhase === "MATCH_COMPLETE"}
+                  disabled={snapshot.roundPhase === "MATCH_COMPLETE" || Boolean(pendingAction)}
                   className="h-7 text-xs font-medium"
                   title="Both active teammates must approve. After a teammate leaves or is disconnected for 90 seconds, you may decide alone."
                 >
@@ -257,22 +271,20 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                   Read the problem description and examples on the left. Click below to begin coding!
                 </p>
                 <Button
-                  onClick={async () => {
-                    try {
-                      if (snapshot.roundPhase === "MATCH_FOUND") {
-                        await transport.startRound();
-                      }
-                      await transport.beginCoding();
-                    } catch (e) {
-                      console.error("Failed to begin coding:", e);
+                  onClick={() => performAction("begin", async () => {
+                    if (snapshot.roundPhase === "MATCH_FOUND") {
+                      await transport.startRound();
                     }
-                  }}
+                    await transport.beginCoding();
+                  }, "Unable to begin coding. Please try again.")}
+                  disabled={Boolean(pendingAction)}
                   className="mt-6 font-semibold"
                   size="lg"
                 >
                   <IconCode className="size-4 mr-2" />
                   <span>Begin Coding</span>
                 </Button>
+                {feedback && <p role="alert" className="mt-3 text-sm text-destructive">{feedback}</p>}
               </div>
             )}
           </div>
@@ -290,7 +302,9 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
           reveal={snapshot.reveal}
           round={snapshot.round}
           totalRounds={snapshot.totalRounds}
-          onAdvance={() => transport.advance()}
+          onAdvance={() => performAction("advance", () => transport.advance(), "Unable to advance the match. Please try again.")}
+          pending={Boolean(pendingAction)}
+          error={feedback}
         />
       )}
 

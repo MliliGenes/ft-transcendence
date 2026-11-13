@@ -9,9 +9,11 @@ export interface RoundScoreRevealProps {
   round: number;
   totalRounds: number;
   onAdvance: () => Promise<void>;
+  pending: boolean;
+  error: string | null;
 }
 
-export function RoundScoreReveal({ reveal, round, totalRounds, onAdvance }: RoundScoreRevealProps) {
+export function RoundScoreReveal({ reveal, round, totalRounds, onAdvance, pending, error }: RoundScoreRevealProps) {
   if (!reveal) return null;
 
   const isFinalRound = round >= totalRounds;
@@ -48,11 +50,12 @@ export function RoundScoreReveal({ reveal, round, totalRounds, onAdvance }: Roun
         </div>
 
         <div className="mt-6 flex justify-end">
-          <Button onClick={onAdvance} className="w-full">
+          <Button onClick={onAdvance} disabled={pending} className="w-full">
             <IconPlayerPlay className="size-4 mr-2" />
             <span>{isFinalRound ? "View Match Results" : "Next Round"}</span>
           </Button>
         </div>
+        {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
       </div>
     </div>
   );

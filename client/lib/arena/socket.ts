@@ -261,8 +261,6 @@ export class SocketArenaTransport implements ArenaTransport {
   private snapshotRefreshPending = false;
   /** Earliest moment the next snapshot request may start (ms). */
   private nextSnapshotAllowedAt = 0;
-  /** A rate limit is reported once per episode, not once per request. */
-  private rateLimitReported = false;
   private readonly session = new TransportSession("connecting");
 
   constructor(private readonly options: SocketTransportOptions) {
@@ -540,7 +538,6 @@ export class SocketArenaTransport implements ArenaTransport {
     const run = this.snapshotLane.then(start).then((raw) => {
       const snap = raw as ServerSnapshot;
       if (this.applySnapshot(snap)) this.emit();
-      this.rateLimitReported = false;
     });
     const tracked = run.finally(() => {
       this.snapshotRequests -= 1;
@@ -561,13 +558,12 @@ export class SocketArenaTransport implements ArenaTransport {
 
   /** Surface a failed background refresh instead of hiding it or rejecting late. */
   private reportRefreshError(error: unknown): void {
-    if (error instanceof RateLimitError) {
-      if (this.rateLimitReported) return;
-      this.rateLimitReported = true;
-      console.warn("[arena] snapshot refresh rate limited (429); retrying on the next sync tick");
-      return;
-    }
-    console.error("[arena] snapshot refresh failed", error);
+    const notice = error instanceof RateLimitError
+      ? "Match updates are temporarily limited. Retrying automatically."
+      : "Unable to sync the match. Retrying automatically.";
+    if (this.currentSnapshot.notice === notice) return;
+    this.currentSnapshot = { ...this.currentSnapshot, notice };
+    this.emit();
   }
 
   private submitRequest(input: { code: string; language: string; documentRevision?: number }, documentRevision: number | undefined): {

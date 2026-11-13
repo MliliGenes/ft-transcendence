@@ -6,7 +6,8 @@ import Link from "next/link";
 import { IconCode, IconDeviceGamepad2, IconPlus, IconUserPlus, IconUsers } from "@tabler/icons-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { LobbyClient, type PrivateRoom } from "@/lib/arena/lobby";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function PlayLandingView() {
   const router = useRouter();
@@ -91,7 +92,7 @@ export function PlayLandingView() {
             </p>
           </div>
         </div>
-        <Button render={<Link href="/play/leaderboard" />} variant="outline" className="min-h-11">Leaderboard</Button>
+        <Link href="/play/leaderboard" className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}>Leaderboard</Link>
       </div>
 
       {activeRoom && (

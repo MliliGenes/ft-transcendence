@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { AccountAvatar } from "@/components/app/account-avatar";
 import { useAuth } from "@/components/auth/auth-provider";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { accountApi, type PublicAccount } from "@/lib/accounts/client";
 import { accountDisplayName } from "@/lib/accounts/status-icons";
 import { accountImageSource } from "@/lib/accounts/images";
@@ -38,19 +39,19 @@ export function LeaderboardView() {
     return <div role="status" className="mx-auto max-w-4xl px-4 py-10"><span className="sr-only">Loading leaderboard…</span><div className="h-12 animate-pulse bg-muted" /><div className="mt-5 h-96 animate-pulse bg-muted" /></div>;
   }
   if (!session) {
-    return <main className="mx-auto max-w-4xl px-4 py-16 text-center"><h1 className="text-2xl font-semibold">Code Arena leaderboard</h1><p className="mt-2 text-sm text-muted-foreground">Log in to see player standings.</p><Button render={<Link href="/login" />} className="mt-5 min-h-11">Log in</Button></main>;
+    return <main className="mx-auto max-w-4xl px-4 py-16 text-center"><h1 className="text-2xl font-semibold">Code Arena leaderboard</h1><p className="mt-2 text-sm text-muted-foreground">Log in to see player standings.</p><Link href="/login" className={cn(buttonVariants(), "mt-5 min-h-11")}>Log in</Link></main>;
   }
 
   return <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
       <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-nook-accent-text">Code Arena</p><h1 className="mt-1 text-2xl font-bold tracking-tight">Leaderboard</h1><p className="mt-2 text-sm text-muted-foreground">Ranked by wins, then win rate, then matches played.</p></div>
-      <Button render={<Link href="/play" />} variant="outline" className="min-h-11">Back to Play</Button>
+      <Link href="/play" className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}>Back to Play</Link>
     </header>
 
     {leaderboard.isError
       ? <section className="bg-card p-6 text-center"><p role="alert" className="text-sm text-destructive">Could not load the leaderboard.</p><Button variant="outline" className="mt-3 min-h-10" onClick={() => void leaderboard.refetch()}>Try again</Button></section>
       : players.length === 0
-        ? <section className="bg-card px-5 py-14 text-center"><h2 className="font-semibold">No ranked matches yet</h2><p className="mt-2 text-sm text-muted-foreground">Completed Code Arena matches will appear here.</p><Button render={<Link href="/play" />} className="mt-4 min-h-10">Start a match</Button></section>
+        ? <section className="bg-card px-5 py-14 text-center"><h2 className="font-semibold">No ranked matches yet</h2><p className="mt-2 text-sm text-muted-foreground">Completed Code Arena matches will appear here.</p><Link href="/play" className={cn(buttonVariants(), "mt-4 min-h-10")}>Start a match</Link></section>
         : <section className="overflow-hidden bg-card" aria-labelledby="leaderboard-table-title">
           <h2 id="leaderboard-table-title" className="sr-only">Code Arena standings</h2>
           <div className="overflow-x-auto">

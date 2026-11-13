@@ -8,7 +8,8 @@ import { io } from "socket.io-client";
 import { useAuth } from "@/components/auth/auth-provider";
 import { FeedComposer } from "@/components/app/feed/feed-composer";
 import { PostCard } from "@/components/app/feed/post-card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { chatApi, type ChatMessage } from "@/lib/chat/client";
 
@@ -118,7 +119,7 @@ export function FeedView() {
           <IconMessageCircle className="mx-auto size-8 text-primary" aria-hidden="true" />
           <h1 className="mt-4 text-xl font-semibold">See what everyone is sharing</h1>
           <p className="mt-2 text-sm text-muted-foreground">Log in to read and post to the Nook feed.</p>
-          <Button render={<Link href="/login" />} className="mt-5 min-h-11 px-5">Log in</Button>
+          <Link href="/login" className={cn(buttonVariants(), "mt-5 min-h-11 px-5")}>Log in</Link>
         </div>
       </section>
     );

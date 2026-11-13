@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth/auth-provider";
 import { PostCard } from "@/components/app/feed/post-card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { chatApi } from "@/lib/chat/client";
 
@@ -30,7 +31,7 @@ export function ProfilePosts({ userId, name, isOwner }: { userId: string; name: 
     return (
       <div className="px-5 py-14 text-center">
         <h2 className="text-lg font-medium">Log in to see {name}’s posts</h2>
-        <Button render={<Link href="/login" />} className="mt-4 min-h-11 px-5">Log in</Button>
+        <Link href="/login" className={cn(buttonVariants(), "mt-4 min-h-11 px-5")}>Log in</Link>
       </div>
     );
   }
@@ -59,7 +60,7 @@ export function ProfilePosts({ userId, name, isOwner }: { userId: string; name: 
       <div className="px-5 py-14 text-center">
         <h2 className="text-lg font-medium">No posts yet</h2>
         <p className="mt-2 text-sm text-muted-foreground">{isOwner ? "Share something on the feed and it will show up here." : `${name} hasn’t posted anything yet.`}</p>
-        {isOwner && <Button render={<Link href="/feed" />} variant="outline" className="mt-4 min-h-11 px-5">Go to the feed</Button>}
+        {isOwner && <Link href="/feed" className={cn(buttonVariants({ variant: "outline" }), "mt-4 min-h-11 px-5")}>Go to the feed</Link>}
       </div>
     );
   }

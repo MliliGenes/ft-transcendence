@@ -75,6 +75,8 @@ export function LobbyView({ code }: { code: string }) {
   const [lobbyData, setLobbyData] = useState<RoomWithMembers | null>(null);
   const [resolvedLobbyKey, setResolvedLobbyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const [copied, setCopied] = useState(false);
   const loading = resolvedLobbyKey !== lobbyKey;
   const lobbyMembers = lobbyData?.members ?? [];
@@ -166,42 +168,71 @@ export function LobbyView({ code }: { code: string }) {
     };
   }, [normalizedCode, userId, token, isRestoring, router, lobbyKey]);
 
+  async function performAction(action: () => Promise<void>, message: string) {
+    if (pending) return;
+    setPending(true);
+    setActionError(null);
+    try {
+      await action();
+    } catch {
+      setActionError(message);
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function handleToggleReady() {
     if (!lobbyData) return;
-    const currentMember = lobbyData.members.find((m) => m.userId === userId);
-    const client = new LobbyClient("", userId, token);
-    const updated = await client.setReady(lobbyData.room.id, !currentMember?.ready);
-    setLobbyData(updated);
+    await performAction(async () => {
+      const currentMember = lobbyData.members.find((m) => m.userId === userId);
+      const client = new LobbyClient("", userId, token);
+      const updated = await client.setReady(lobbyData.room.id, !currentMember?.ready);
+      setLobbyData(updated);
+    }, "Unable to update readiness. Please try again.");
   }
 
   async function handleSwitchSide() {
     if (!lobbyData) return;
-    const currentMember = lobbyData.members.find((m) => m.userId === userId);
-    const nextSide = currentMember?.sideId === "left" ? "right" : "left";
-    const client = new LobbyClient("", userId, token);
-    const updated = await client.setSide(lobbyData.room.id, nextSide);
-    setLobbyData(updated);
+    await performAction(async () => {
+      const currentMember = lobbyData.members.find((m) => m.userId === userId);
+      const nextSide = currentMember?.sideId === "left" ? "right" : "left";
+      const client = new LobbyClient("", userId, token);
+      const updated = await client.setSide(lobbyData.room.id, nextSide);
+      setLobbyData(updated);
+    }, "Unable to switch teams. Please try again.");
   }
 
   async function handleStart() {
     if (!lobbyData) return;
-    const client = new LobbyClient("", userId, token);
-    const { matchId } = await client.startRoom(lobbyData.room.id);
-    router.push(`/play/match/${matchId}`);
+    await performAction(async () => {
+      const client = new LobbyClient("", userId, token);
+      const { matchId } = await client.startRoom(lobbyData.room.id);
+      router.push(`/play/match/${matchId}`);
+    }, "Unable to start the match. Please try again.");
   }
 
   async function handleLeave() {
-    if (lobbyData) {
-      const client = new LobbyClient("", userId, token);
-      await client.leaveRoom(lobbyData.room.id).catch(() => {});
-    }
-    router.push("/play");
+    await performAction(async () => {
+      if (lobbyData) {
+        const client = new LobbyClient("", userId, token);
+        await client.leaveRoom(lobbyData.room.id);
+      }
+      router.push("/play");
+    }, "Unable to leave the lobby. Please try again.");
   }
 
-  function handleCopy() {
-    navigator.clipboard.writeText(normalizedCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  async function handleCopy() {
+    const message = "Unable to copy automatically. Select and copy the invite code above.";
+    setCopied(false);
+    await performAction(async () => {
+      if (!navigator.clipboard?.writeText) {
+        setActionError(message);
+        return;
+      }
+      await navigator.clipboard.writeText(normalizedCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }, message);
   }
 
   if (isRestoring || loading && token) {
@@ -250,6 +281,7 @@ export function LobbyView({ code }: { code: string }) {
             <button
               type="button"
               onClick={handleCopy}
+              disabled={pending}
               className="inline-flex items-center gap-1 rounded-none bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
             >
               <IconCopy className="size-3" />
@@ -258,11 +290,13 @@ export function LobbyView({ code }: { code: string }) {
           </div>
         </div>
 
-        <Button variant="ghost" size="sm" onClick={handleLeave} className="text-muted-foreground hover:text-destructive">
+        <Button variant="ghost" size="sm" onClick={handleLeave} disabled={pending} className="text-muted-foreground hover:text-destructive">
           <IconArrowLeft className="size-4 mr-1" />
           <span>Leave Lobby</span>
         </Button>
       </div>
+
+      {actionError && <p role="alert" className="mb-4 text-sm text-destructive">{actionError}</p>}
 
       <div className="grid gap-6 md:grid-cols-2 mb-8">
         <TeamSlotCard
@@ -283,7 +317,7 @@ export function LobbyView({ code }: { code: string }) {
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-none border border-border bg-card p-4">
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={handleSwitchSide}>
+          <Button variant="outline" size="sm" onClick={handleSwitchSide} disabled={pending}>
             <IconSwitchHorizontal className="size-4 mr-1.5" />
             <span>Switch Team</span>
           </Button>
@@ -292,6 +326,7 @@ export function LobbyView({ code }: { code: string }) {
             variant={currentMember?.ready ? "secondary" : "default"}
             size="sm"
             onClick={handleToggleReady}
+            disabled={pending}
           >
             <IconCheck className={`size-4 mr-1.5 ${currentMember?.ready ? "text-success" : ""}`} />
             <span>{currentMember?.ready ? "Ready (Click to Cancel)" : "Mark Ready"}</span>
@@ -302,7 +337,7 @@ export function LobbyView({ code }: { code: string }) {
           <Button
             size="sm"
             onClick={handleStart}
-            disabled={!allReady}
+            disabled={!allReady || pending}
             className="bg-primary text-primary-foreground font-semibold"
           >
             <IconPlayerPlay className="size-4 mr-1.5" />

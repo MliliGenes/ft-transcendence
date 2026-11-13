@@ -5,7 +5,8 @@ import type { ReactNode } from "react";
 import { IconArrowLeft, IconRefresh } from "@tabler/icons-react";
 import { NookLogo } from "@/components/nook-logo";
 import { ThemeSelector } from "@/components/theme-selector";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type ErrorPageProps = {
   /** Large display text, such as "404" or "500". */
@@ -41,7 +42,7 @@ export function ErrorPage({ code, eyebrow, title, description, onRetry, homeHref
       <p className="mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
         {onRetry && <Button type="button" onClick={onRetry} className="min-h-11 gap-2 px-5"><IconRefresh size={17} aria-hidden="true" />Try again</Button>}
-        <Button render={<Link href={homeHref} />} variant={onRetry ? "outline" : "default"} className="min-h-11 gap-2 px-5"><IconArrowLeft size={17} aria-hidden="true" />{homeLabel}</Button>
+        <Link href={homeHref} className={cn(buttonVariants({ variant: onRetry ? "outline" : "default" }), "min-h-11 gap-2 px-5")}><IconArrowLeft size={17} aria-hidden="true" />{homeLabel}</Link>
       </div>
       {children}
       {reference && <p className="mt-8 text-xs text-nook-text-muted">Reference: <code className="font-mono">{reference}</code></p>}

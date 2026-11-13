@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { IconTrophy, IconArrowLeft } from "@tabler/icons-react";
 import type { MatchFinalView } from "@/lib/arena/types";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export interface MatchResultProps {
   final: MatchFinalView;
@@ -40,10 +41,10 @@ export function MatchResult({ final }: MatchResultProps) {
         </div>
 
         <div className="mt-8 flex justify-center">
-          <Button render={<Link href="/play" />} size="lg" className="w-full sm:w-auto">
+          <Link href="/play" className={cn(buttonVariants({ size: "lg" }), "w-full sm:w-auto")}>
             <IconArrowLeft className="size-4 mr-2" />
             <span>Return to Play Lobby</span>
-          </Button>
+          </Link>
         </div>
       </div>
     </div>

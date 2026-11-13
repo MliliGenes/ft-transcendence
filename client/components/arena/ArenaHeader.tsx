@@ -10,6 +10,7 @@ export interface ArenaHeaderProps {
   snapshot: ArenaSnapshot;
   connection: ConnectionState;
   onLeave: () => Promise<void>;
+  pending: boolean;
 }
 
 function formatClock(seconds: number): string {
@@ -18,7 +19,7 @@ function formatClock(seconds: number): string {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
-export function ArenaHeader({ snapshot, connection, onLeave }: ArenaHeaderProps) {
+export function ArenaHeader({ snapshot, connection, onLeave, pending }: ArenaHeaderProps) {
   const [leaving, setLeaving] = useState(false);
   const { round, totalRounds, remainingSeconds, mode, roundPhase, you, opponent } = snapshot;
 
@@ -90,7 +91,7 @@ export function ArenaHeader({ snapshot, connection, onLeave }: ArenaHeaderProps)
             variant="ghost"
             size="sm"
             onClick={handleLeave}
-            disabled={leaving}
+            disabled={leaving || pending}
             aria-label={mode === "2v2" ? "Leave match" : "Forfeit and leave match"}
             className="text-muted-foreground hover:text-destructive"
           >
