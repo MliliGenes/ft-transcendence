@@ -73,6 +73,7 @@ export const authApi = {
   refresh: () => post<AuthSession>("refresh"),
   logout: () => post<void>("logout"),
   requestPasswordReset: (email: string) => post<{ requested: boolean }>("password-reset/request", { email }),
+  requestEmailVerification: (email: string) => post<{ requested: boolean }>("email-verification/request", { email }),
   confirmPasswordReset: (token: string, newPassword: string) =>
     post<{ confirmed: boolean }>("password-reset/confirm", { token, newPassword }),
   verifyEmail: (token: string) =>

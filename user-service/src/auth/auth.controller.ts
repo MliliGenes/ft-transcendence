@@ -18,6 +18,7 @@ import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto.js';
 import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto.js';
+import { RequestEmailVerificationDto } from './dto/request-email-verification.dto.js';
 import { assertTrustedBrowserOrigin } from './browser-origin.js';
 import {
   clearRefreshCookie,
@@ -103,6 +104,16 @@ export class AuthController {
   async verifyEmail(@Param('token') token: string): Promise<{ verified: boolean }> {
     await this.authService.verifyEmail(token);
     return { verified: true };
+  }
+
+  @Post('email-verification/request')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  async requestEmailVerification(
+    @Body() dto: RequestEmailVerificationDto,
+  ): Promise<{ requested: boolean }> {
+    await this.authService.requestEmailVerification(dto.email);
+    return { requested: true };
   }
 
   @Post('password-reset/request')

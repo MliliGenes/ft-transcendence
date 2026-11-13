@@ -15,6 +15,7 @@ test('password reset endpoints validate input before calling the service', async
     controllers: [AuthController],
     providers: [{ provide: ConfigService, useValue: new ConfigService({}) }, { provide: AuthService, useValue: {
       requestPasswordReset: async (...args) => { calls.push(args); },
+      requestEmailVerification: async (...args) => { calls.push(args); },
       confirmPasswordReset: async (...args) => { calls.push(args); },
     } }],
   }).compile();
@@ -39,9 +40,15 @@ test('password reset endpoints validate input before calling the service', async
     await request(server).post('/auth/password-reset/confirm').send(body).expect(400);
   }
   assert.equal(calls.length, 0);
+  for (const body of [{}, { email: 'invalid' }, { email: 42 }, { email: 'test@example.com', extra: true }]) {
+    await request(server).post('/auth/email-verification/request').send(body).expect(400);
+  }
+  assert.equal(calls.length, 0);
+  await request(server).post('/auth/email-verification/request')
+    .send({ email: 'test@example.com' }).expect(200, { requested: true });
   await request(server).post('/auth/password-reset/request')
     .send({ email: 'test@example.com' }).expect(200);
   await request(server).post('/auth/password-reset/confirm')
     .send({ token, newPassword: 'validpass' }).expect(200);
-  assert.deepEqual(calls, [['test@example.com'], [token, 'validpass']]);
+  assert.deepEqual(calls, [['test@example.com'], ['test@example.com'], [token, 'validpass']]);
 });

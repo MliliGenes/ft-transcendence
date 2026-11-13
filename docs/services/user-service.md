@@ -43,7 +43,7 @@ Register, login and OAuth login return `user`, `accessToken`, `tokenType` and `e
 
 Both use hashed single-use `AuthToken` rows that expire after 2 hours. Registration sends a link to `${AUTH_FRONTEND_URL}/verify-email?token=...`, and the client's `/verify-email` page calls `GET /auth/verify-email/:token`. Changing your email clears `emailVerifiedAt`.
 
-Accounts can log in before verifying, because login does not check `emailVerifiedAt`. There is no endpoint to resend a verification email.
+Accounts can log in before verifying, because login does not check `emailVerifiedAt`. `POST /auth/email-verification/request` accepts an email and returns a generic `{ requested: true }` response; for eligible unverified accounts it sends a replacement link, with a 10-minute per-account cooldown. Each replacement invalidates prior unused verification links.
 
 ### OAuth
 
@@ -92,7 +92,7 @@ Paths are as the service sees them. Through the gateway, add the `/api` prefix.
 | Area | Routes |
 | --- | --- |
 | Root | `GET /` (static message, not a readiness check) |
-| Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/password-reset/request`, `/auth/password-reset/confirm`; `GET /auth/verify-email/:token` |
+| Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/password-reset/request`, `/auth/password-reset/confirm`, `/auth/email-verification/request`; `GET /auth/verify-email/:token` |
 | Discord, GitHub | `GET /auth/{provider}`, `GET /auth/{provider}/callback`, `POST` and `DELETE /auth/{provider}/link`, `GET /auth/{provider}/link/callback` |
 | Own account | `GET`, `PATCH`, `DELETE /accounts/me`; `POST`, `PATCH /accounts/me/password`; `PUT`, `DELETE /accounts/me/avatar` and `/accounts/me/banner` |
 | Public accounts | `GET /accounts`, `/accounts/search`, `/accounts/:id`, `/accounts/:id/avatar`, `/accounts/:id/banner` |
@@ -150,7 +150,7 @@ Under Compose, settings come from the split files in `envs/`. See [infrastructur
 
 ## Current limitations
 
-- Accounts are usable before email verification, and there is no resend.
+- Accounts are usable before email verification; users can request a replacement verification link after the resend cooldown.
 - Two-factor models exist with no routes.
 - Rate limiting is applied by Nginx, not by the service.
 - There is no transactional outbox, so a crash between the database write and the publish loses that event.
