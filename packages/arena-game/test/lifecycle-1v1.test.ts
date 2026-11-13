@@ -9,7 +9,7 @@ describe("09 engine-level 1v1 integration (bank + judge + clock + events)", () =
     const seen: ArenaEvent[] = [];
     engine.on((event) => seen.push(event));
     expect(await ((await engine.snapshot(left, matchId))).problem.title).toBe("Even Ledger");
-    expect(Object.keys((await engine.snapshot(left, matchId)).problem.starters)).toEqual(["Python"]);
+    expect(Object.keys((await engine.snapshot(left, matchId)).problem.starters)).toEqual(["C++", "Python", "C"]);
 
     const remaining: number[] = [];
     const scores = [[P100, P85], [P70, P45], [P55, P30]];

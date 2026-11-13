@@ -49,7 +49,11 @@ export interface Fixture {
   advance: (ms: number) => void;
 }
 
-export async function setup(plan: ScriptPlan[] = [{ score: 100 }], options: Partial<EngineOptions> = {}): Promise<Fixture> {
+export async function setup(
+  plan: ScriptPlan[] = [{ score: 100 }],
+  options: Partial<EngineOptions> = {},
+  problemVersionIds: string[] = ["even-ledger", "even-ledger", "even-ledger"],
+): Promise<Fixture> {
   let now = 1_000_000;
   const judge = new ScriptedJudge(plan);
   const engine = new ArenaEngine({
@@ -68,7 +72,7 @@ export async function setup(plan: ScriptPlan[] = [{ score: 100 }], options: Part
       { userId: "user-left", sideId: "left" },
       { userId: "user-right", sideId: "right" },
     ],
-    problemVersionIds: ["even-ledger", "even-ledger", "even-ledger"],
+    problemVersionIds,
   });
   await engine.startRound(left, matchId);
   await engine.beginCoding(left, matchId);

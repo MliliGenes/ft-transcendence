@@ -75,9 +75,31 @@ describe("real compiled bank execution (double-it, isolated containers)", () => 
   }, 120000);
 
   it("Python bank solution scores 100 via snippet entrypoint", async () => {
-    const { engine, matchId } = await realEngine(["even-ledger"]);
+    const { engine, matchId } = await realEngine(["snippet-sample"]);
     const left = testPrincipal("user-left");
     await engine.submit(left, matchId, { code: PY_SOLVE, language: "Python" });
+    const reveal = await engine.publishReveal(left, matchId);
+    expect(reveal.scores.left).toBe(100);
+  }, 120000);
+
+  it("C++ solution scores 100 on even-ledger via stdio", async () => {
+    const { engine, matchId } = await realEngine(["even-ledger"]);
+    const left = testPrincipal("user-left");
+    const CPP_EVEN_LEDGER = `#include <iostream>
+int main() {
+    int n;
+    if (!(std::cin >> n)) { std::cout << 0 << "\\n"; return 0; }
+    long long sum = 0;
+    for (int i = 0; i < n; ++i) {
+        long long val;
+        std::cin >> val;
+        sum += (i % 2 == 0) ? val : -val;
+    }
+    std::cout << sum << "\\n";
+    return 0;
+}
+`;
+    await engine.submit(left, matchId, { code: CPP_EVEN_LEDGER, language: "C++" });
     const reveal = await engine.publishReveal(left, matchId);
     expect(reveal.scores.left).toBe(100);
   }, 120000);

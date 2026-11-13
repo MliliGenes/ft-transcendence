@@ -4,13 +4,13 @@ import { setup } from "./setup.js";
 
 describe("playable problem languages", () => {
   it("advertises only executable starters for a snippet round", async () => {
-    const { engine, left, matchId } = await setup();
+    const { engine, left, matchId } = await setup(undefined, undefined, ["snippet-sample"]);
     const snapshot = await engine.snapshot(left, matchId);
     expect(Object.keys(snapshot.problem.starters)).toEqual(["Python"]);
     expect(snapshot.problem.starters.Python).toContain("ledger_sum");
   });
   it("rejects unavailable snippet submissions before creating a competitive attempt", async () => {
-    const { engine, left, matchId } = await setup();
+    const { engine, left, matchId } = await setup(undefined, undefined, ["snippet-sample"]);
     await expect(engine.submit(left, matchId, { code: "int main() {}", language: "C++" }))
       .rejects.toMatchObject({ code: 400, message: expect.stringContaining("not available for this problem") });
     const snapshot = await engine.snapshot(left, matchId);
@@ -20,10 +20,18 @@ describe("playable problem languages", () => {
   });
 
   it("rejects unavailable visible runs without leaving the side running", async () => {
-    const { engine, left, matchId } = await setup();
+    const { engine, left, matchId } = await setup(undefined, undefined, ["snippet-sample"]);
     await expect(engine.run(left, matchId, { code: "int main() {}", language: "C" }))
       .rejects.toMatchObject({ code: 400, message: expect.stringContaining("not available for this problem") });
     expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe("coding");
+  });
+
+  it("advertises C++, Python, and C for even-ledger and allows C++ submissions", async () => {
+    const { engine, left, matchId } = await setup(undefined, undefined, ["even-ledger"]);
+    const snapshot = await engine.snapshot(left, matchId);
+    expect(Object.keys(snapshot.problem.starters)).toEqual(["C++", "Python", "C"]);
+    await expect(engine.submit(left, matchId, { code: "int main() { return 0; }", language: "C++" }))
+      .resolves.toBeDefined();
   });
 
   it("keeps compiled stdio choices and resets a team to Python when advancing to snippets", async () => {
@@ -38,7 +46,7 @@ describe("playable problem languages", () => {
         { userId: right.userId, sideId: "right" },
         { userId: rightMate.userId, sideId: "right" },
       ],
-      problemVersionIds: ["double-it", "even-ledger"],
+      problemVersionIds: ["double-it", "snippet-sample"],
     });
     await engine.startRound(left, matchId);
     await engine.beginCoding(left, matchId);
