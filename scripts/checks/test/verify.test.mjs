@@ -64,3 +64,9 @@ test('preliminary engine suites cannot fall back to an existing local PostgreSQL
   assert.equal(game.env.TEST_PG_URL, undefined);
   assert.equal(game.env.DATABASE_URL, undefined);
 });
+
+
+test('Compose setup is checked before lengthy verification and workspace suites', () => {
+  assert.equal(verificationSteps()[0].id, 'compose-topology');
+  assert.equal(workspaceTestSteps()[0].workspace, 'arena-judge-worker');
+});

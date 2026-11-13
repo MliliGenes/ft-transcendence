@@ -8,7 +8,8 @@ import { IconCheck, IconUserPlus } from "@tabler/icons-react";
 import ReactMarkdown from "react-markdown";
 import { AccountAvatar } from "@/components/app/account-avatar";
 import { useAuth } from "@/components/auth/auth-provider";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useCurrentAccount } from "@/hooks/use-current-account";
 import { accountApi, type PeopleSearchOptions } from "@/lib/accounts/client";
@@ -182,7 +183,7 @@ export function SearchView() {
                     {user.bio && <div className="mt-1 line-clamp-2 text-sm text-muted-foreground"><ReactMarkdown>{user.bio}</ReactMarkdown></div>}
                   </div>
                   <div className="flex w-full shrink-0 gap-2 sm:w-auto">
-                    {!session ? <Button render={<Link href="/login" />} variant="outline" className="min-h-11 w-full sm:w-auto">Log in to connect</Button>
+                    {!session ? <Link href="/login" className={cn(buttonVariants({ variant: "outline" }), "min-h-11 w-full sm:w-auto")}>Log in to connect</Link>
                       : relation === "friends" ? <span className="inline-flex min-h-11 items-center gap-2 px-3 text-sm text-muted-foreground"><IconCheck size={17} aria-hidden="true" /> Friends</span>
                         : relation === "sent" ? <Button variant="outline" className="min-h-11 w-full sm:w-auto" onClick={() => sentRequest && friendshipAction.mutate({ action: "cancel", friendshipId: sentRequest.id })} disabled={friendshipAction.isPending || !sentRequest}>Cancel request</Button>
                           : relation === "incoming" && request ? <Button variant="outline" className="min-h-11 w-full sm:w-auto" onClick={() => respondToRequest("accept", request)} disabled={friendshipAction.isPending}>Accept request</Button>
@@ -200,7 +201,7 @@ export function SearchView() {
         </Tabs.Panel>
 
         <Tabs.Panel value="requests" className="outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          {!session && !isRestoring && <div className="mt-8 border border-border px-5 py-10 text-center"><h2 className="text-lg font-medium">Log in to see requests</h2><p className="mt-2 text-sm text-muted-foreground">Sign in to manage friend requests sent to you.</p><Button render={<Link href="/login" />} className="mt-4 min-h-11">Log in</Button></div>}
+          {!session && !isRestoring && <div className="mt-8 border border-border px-5 py-10 text-center"><h2 className="text-lg font-medium">Log in to see requests</h2><p className="mt-2 text-sm text-muted-foreground">Sign in to manage friend requests sent to you.</p><Link href="/login" className={cn(buttonVariants(), "mt-4 min-h-11")}>Log in</Link></div>}
           {session && friendships.isPending && <p role="status" className="mt-8 text-sm text-muted-foreground">Loading requests…</p>}
           {session && friendships.error && <div className="mt-8 border border-border p-5"><p role="alert" className="text-sm text-destructive">Unable to load friend requests. Please try again.</p><Button variant="outline" className="mt-3 min-h-11" onClick={() => friendships.refetch()}>Try again</Button></div>}
           {session && friendships.isSuccess && <div className="mt-8 grid gap-10 lg:grid-cols-2">

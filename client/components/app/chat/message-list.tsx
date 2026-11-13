@@ -9,7 +9,8 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { ChatMarkdown } from "@/components/app/chat/chat-markdown";
 import { DeleteMessageDialog, MessageEditor, MessageOwnerActions } from "@/components/app/chat/message-actions";
 import { AccountAvatar } from "@/components/app/account-avatar";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { accountImageSource } from "@/lib/accounts/images";
 import { accountDisplayName } from "@/lib/accounts/status-icons";
 import { chatApi, type AttachmentPreview, type ChatMessage } from "@/lib/chat/client";
@@ -160,9 +161,9 @@ function GameNotificationCard({ notification }: { notification: GameNotification
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{notification.summary}</p>
       {notification.matchId && (
-        <Button render={<Link href={`/play/match/${notification.matchId}`} />} size="sm" variant="outline" className="mt-3 min-h-10">
+        <Link href={`/play/match/${notification.matchId}`} className={cn(buttonVariants({ size: "sm", variant: "outline" }), "mt-3 min-h-10")}>
           View Match
-        </Button>
+        </Link>
       )}
     </section>
   );
@@ -208,17 +209,17 @@ function DuelInviteCard({ code, own, authorName }: { code: string; own: boolean;
               : `${authorName} challenged you to a duel.`}
       </p>
       {isMatched && query.data?.room?.matchId ? (
-        <Button render={<Link href={`/play/match/${query.data.room.matchId}`} />} size="sm" variant="outline" className="mt-3 min-h-10">
+        <Link href={`/play/match/${query.data.room.matchId}`} className={cn(buttonVariants({ size: "sm", variant: "outline" }), "mt-3 min-h-10")}>
           View Match
-        </Button>
+        </Link>
       ) : isExpired ? (
         <Button disabled size="sm" variant="outline" className="mt-3 min-h-10 opacity-50">
           Room Expired
         </Button>
       ) : (
-        <Button render={<Link href={`/play/lobby/${code}`} />} size="sm" className="mt-3 min-h-10">
+        <Link href={`/play/lobby/${code}`} className={cn(buttonVariants({ size: "sm" }), "mt-3 min-h-10")}>
           {own ? "Open Lobby" : "Accept & Join"}
-        </Button>
+        </Link>
       )}
     </section>
   );

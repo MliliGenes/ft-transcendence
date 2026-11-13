@@ -16,7 +16,8 @@ import { GroupHome } from "@/components/app/chat/group-home";
 import { ChatMarkdown } from "@/components/app/chat/chat-markdown";
 import { MarkdownToolbar, applyMarkdownFormat, shortcutFormat, type MarkdownFormat } from "@/components/app/chat/markdown-toolbar";
 import { StatusDot, presenceLabel } from "@/components/app/status-dot";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -465,7 +466,7 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
   }, [selectedId, readStates.data, liveReadStatesByConversation]);
 
   if (isRestoring) return <div role="status" className="grid flex-1 place-items-center text-sm text-muted-foreground">Restoring your session…</div>;
-  if (!session) return <section className="grid flex-1 place-items-center p-6"><div className="max-w-sm bg-card p-8 text-center"><IconMessageCircle className="mx-auto size-8 text-primary" aria-hidden="true" /><h1 className="mt-4 text-xl font-semibold">Chat with your people</h1><p className="mt-2 text-sm text-muted-foreground">Sign in to open conversations and join groups.</p><Button render={<Link href="/login" />} className="mt-5 min-h-11 px-5">Log in</Button></div></section>;
+  if (!session) return <section className="grid flex-1 place-items-center p-6"><div className="max-w-sm bg-card p-8 text-center"><IconMessageCircle className="mx-auto size-8 text-primary" aria-hidden="true" /><h1 className="mt-4 text-xl font-semibold">Chat with your people</h1><p className="mt-2 text-sm text-muted-foreground">Sign in to open conversations and join groups.</p><Link href="/login" className={cn(buttonVariants(), "mt-5 min-h-11 px-5")}>Log in</Link></div></section>;
 
   const sortedConversations = [...(conversations.data ?? [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const readReceipt = readReceiptForLastOwnMessage(messages, session.user.id, Object.values(currentReadStates));

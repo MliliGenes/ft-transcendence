@@ -24,6 +24,21 @@ describe("container judge (real isolated execution)", () => {
     expect(bad[0].status).toBe("accepted");
   });
 
+  it("python snippet: bank entrypoint resolves a class-based starter", async () => {
+    const judge = new ContainerJudge();
+    const classSolution = `class Solution:\n    def ledger_sum(self, nums):\n        return sum(value if index % 2 == 0 else -value for index, value in enumerate(nums))\n`;
+    const result = await judge.runVisible(
+      "Python",
+      "snippet",
+      classSolution,
+      [{ id: "ex1", input: "nums = [1,2,3,4]", expected: "-2" }],
+      LIMITS,
+      "ledger_sum",
+    );
+
+    expect(result[0]).toMatchObject({ passed: true, status: "accepted" });
+  });
+
   it("python malformed maps to compile_error without hanging", async () => {
     const judge = new ContainerJudge();
     const res = await judge.runVisible("Python", "snippet", "def broken(:\n", [{ id: "ex1", input: "nums = []", expected: "0" }], LIMITS);

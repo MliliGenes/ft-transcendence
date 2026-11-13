@@ -6,11 +6,12 @@ import Link from "next/link";
 import { IconCode, IconDeviceGamepad2, IconPlus, IconUserPlus, IconUsers } from "@tabler/icons-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { LobbyClient, type PrivateRoom } from "@/lib/arena/lobby";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function PlayLandingView() {
   const router = useRouter();
-  const { session } = useAuth();
+  const { session, requestWithSession } = useAuth();
   const [joinCode, setJoinCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export function PlayLandingView() {
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    const client = new LobbyClient("", userId, token);
+    const client = new LobbyClient("", userId, token, undefined, requestWithSession);
     client
       .getActive()
       .then(({ room }) => {
@@ -34,12 +35,12 @@ export function PlayLandingView() {
     return () => {
       cancelled = true;
     };
-  }, [userId, token]);
+  }, [userId, token, requestWithSession]);
 
   async function handleLeaveActiveRoom() {
     if (!activeRoom || !token) return;
     try {
-      const client = new LobbyClient("", userId, token);
+      const client = new LobbyClient("", userId, token, undefined, requestWithSession);
       await client.leaveRoom(activeRoom.id);
       setActiveRoom(null);
     } catch {
@@ -51,7 +52,7 @@ export function PlayLandingView() {
     setLoading(true);
     setError(null);
     try {
-      const client = new LobbyClient("", userId, token);
+      const client = new LobbyClient("", userId, token, undefined, requestWithSession);
       const { room } = await client.createRoom(mode);
       router.push(`/play/lobby/${room.code}`);
     } catch (err) {
@@ -67,7 +68,7 @@ export function PlayLandingView() {
     setLoading(true);
     setError(null);
     try {
-      const client = new LobbyClient("", userId, token);
+      const client = new LobbyClient("", userId, token, undefined, requestWithSession);
       const { room } = await client.joinRoom(joinCode.trim().toUpperCase());
       router.push(`/play/lobby/${room.code}`);
     } catch (err) {
@@ -91,7 +92,7 @@ export function PlayLandingView() {
             </p>
           </div>
         </div>
-        <Button render={<Link href="/play/leaderboard" />} variant="outline" className="min-h-11">Leaderboard</Button>
+        <Link href="/play/leaderboard" className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}>Leaderboard</Link>
       </div>
 
       {activeRoom && (

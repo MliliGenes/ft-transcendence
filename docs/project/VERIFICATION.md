@@ -28,6 +28,19 @@ npm run secrets:ci         # Scan the index and new history after the rollout ba
 
 The full gate explicitly calls the commands defined by each component, including Node-based User tests, backup regressions, workspace typechecks/tests, service builds and the client production build. Root `npm test` remains the Arena workspace suite with application database variables removed and legacy engine database probes pointed at an unavailable test target; use `npm run check` for the whole product. A failure stops the run and produces a nonzero exit. Full and lint-only runs write separate ignored `.verification/latest-full.json` and `.verification/latest-lint.json` reports. Each report records its mode, start and finish times, checked commit, whether the worktree was dirty, and per-stage results.
 
+The full gate validates the Compose topology before builds and the longer test suites.
+The topology check renders the checked-in Compose files with example settings copied
+into an owned temporary directory, then removes that directory. It does not need,
+read or create `envs/*.env` in the checkout. Inherited `COMPOSE_*` overrides and a
+checkout `.env` do not select its model. This is configuration validation only;
+it does not start the application stack or prove the example credentials are
+suitable for a deployment.
+
+The Arena runner checks that Docker is available and running, then runs the
+judge-worker suite first so a missing Compose command or invalid topology fails
+early. The full gate also checks Docker before its stages. Install dependencies
+as above; no private application settings are required for these checks.
+
 Default Arena tests can report skips for database suites and optional external judge providers. The full gate then exercises the required database/reconnect cases separately using its own services; optional third-party judge-provider checks still require their own environment. A successful full gate does not claim those optional providers were exercised.
 
 ## Disposable service boundary

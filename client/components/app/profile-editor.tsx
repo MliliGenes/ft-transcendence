@@ -7,7 +7,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { IconCamera, IconCheck, IconPhoto } from "@tabler/icons-react";
 import { AccountAvatar } from "@/components/app/account-avatar";
 import { StatusComposer } from "@/components/app/status-composer";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -87,7 +88,7 @@ export function ProfileEditor() {
   });
 
   if (isRestoring) return <div role="status" className="mx-auto w-full max-w-4xl p-6 text-sm text-muted-foreground">Loading your profile…</div>;
-  if (!session) return <div className="mx-auto w-full max-w-4xl p-6 text-sm text-muted-foreground">Log in to edit your profile. <Button render={<a href="/login" />} className="ml-3 min-h-11">Log in</Button></div>;
+  if (!session) return <div className="mx-auto w-full max-w-4xl p-6 text-sm text-muted-foreground">Log in to edit your profile. <a href="/login" className={cn(buttonVariants(), "ml-3 min-h-11")}>Log in</a></div>;
   if (account.isPending) return <div role="status" className="mx-auto w-full max-w-4xl p-6 text-sm text-muted-foreground">Loading your profile…</div>;
   if (account.error || !account.data) return <div role="alert" className="mx-auto w-full max-w-4xl p-6 text-sm text-destructive">Unable to load your profile. <Button variant="outline" onClick={() => account.refetch()} className="ml-3">Try again</Button></div>;
 
@@ -158,7 +159,7 @@ export function ProfileEditor() {
   return (
     <section className="mx-auto w-full max-w-4xl px-5 py-8 md:px-8 md:py-12" aria-labelledby="profile-title">
       <header className="mb-8">
-        <Button render={<Link href="/profile" />} variant="outline" className="mb-5 min-h-11">View profile</Button>
+        <Link href="/profile" className={cn(buttonVariants({ variant: "outline" }), "mb-5 min-h-11")}>View profile</Link>
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">Make it yours</p>
         <h1 id="profile-title" className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">Edit profile</h1>
         <p className="mt-2 text-sm text-muted-foreground">Update the details people see around Nook.</p>

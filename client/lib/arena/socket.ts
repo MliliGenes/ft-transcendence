@@ -1,8 +1,11 @@
 import { io, type Socket } from "socket.io-client";
+import type { AuthenticatedRequest } from "../auth/client";
 import { TransportSession, type ArenaTransport, type ConnectionState, type RunReceipt, type SubmitReceipt } from "./transport";
 import type { ArenaConnectionOptions, ArenaSnapshot, MatchFinalView, PlayerStatus, RevealView, SideView, TeamView } from "./types";
 
-export type SocketTransportOptions = ArenaConnectionOptions;
+export type SocketTransportOptions = ArenaConnectionOptions & {
+  requestWithSession?: AuthenticatedRequest;
+};
 
 /**
  * Minimum spacing between snapshot requests (ms).
@@ -36,6 +39,14 @@ export class RateLimitError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "RateLimitError";
+  }
+}
+
+/** An HTTP response error whose status can drive one session-refresh retry. */
+class ArenaHttpError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ArenaHttpError";
   }
 }
 
@@ -86,7 +97,7 @@ interface ServerSnapshot {
   } | null;
 }
 
-/** Server terminal result -> viewer-relative final view (score sums + forfeit override). */
+/** Server terminal result -> viewer-relative scores and authoritative winner (including tie-breaks). */
 export function adaptFinal(
   final: ServerSnapshot["final"],
   mySide: string,
@@ -108,7 +119,7 @@ export function adaptFinal(
     you,
     opponent,
     outcome:
-      you > opponent ? "You win the match." : you < opponent ? "Opponent wins the match." : "The match is a draw.",
+      f.winner === mySide ? "You win the match." : f.winner === otherId ? "Opponent wins the match." : "The match is a draw.",
   };
 }
 
@@ -261,11 +272,11 @@ export class SocketArenaTransport implements ArenaTransport {
   private snapshotRefreshPending = false;
   /** Earliest moment the next snapshot request may start (ms). */
   private nextSnapshotAllowedAt = 0;
-  /** A rate limit is reported once per episode, not once per request. */
-  private rateLimitReported = false;
+  private accessToken: string | undefined;
   private readonly session = new TransportSession("connecting");
 
   constructor(private readonly options: SocketTransportOptions) {
+    this.accessToken = options.token;
     this.currentSnapshot = {
       mode: "1v1",
       roundPhase: "ROUND_INTRO",
@@ -305,7 +316,7 @@ export class SocketArenaTransport implements ArenaTransport {
       baseUrl: this.options.baseUrl,
       userId: this.options.userId,
       matchId: this.options.matchId,
-      token: this.options.token,
+      token: this.accessToken,
       socketPath: this.options.socketPath,
     };
   }
@@ -316,7 +327,7 @@ export class SocketArenaTransport implements ArenaTransport {
       baseUrl: this.options.baseUrl,
       userId: this.options.userId,
       matchId: this.options.matchId,
-      token: this.options.token,
+      token: this.accessToken,
       socketPath: this.options.socketPath,
     };
   }
@@ -333,6 +344,13 @@ export class SocketArenaTransport implements ArenaTransport {
     return this.session.subscribe(listener);
   }
 
+  setAccessToken(token: string | undefined): void {
+    if (this.accessToken === token) return;
+    this.accessToken = token;
+    if (this.socket) this.socket.auth = this.socketAuth();
+    this.emit();
+  }
+
   disconnect(): void {
     if (this.syncTimer) clearInterval(this.syncTimer);
     this.syncTimer = null;
@@ -346,17 +364,10 @@ export class SocketArenaTransport implements ArenaTransport {
 
   private connect(): void {
     const socketPath = this.options.socketPath ?? (this.options.baseUrl.includes("/api/game") ? "/api/game/socket.io" : "/socket.io");
-    const auth: Record<string, unknown> = {
-      userId: this.options.userId,
-      matchId: this.options.matchId,
-    };
-    if (this.options.token) {
-      auth.token = this.options.token;
-    }
 
     const sock = io(this.options.baseUrl, {
       path: socketPath,
-      auth,
+      auth: this.socketAuth(),
       query: { userId: this.options.userId, matchId: this.options.matchId },
       transports: ["websocket", "polling"],
     });
@@ -392,6 +403,14 @@ export class SocketArenaTransport implements ArenaTransport {
     }
   }
 
+  private socketAuth(): Record<string, unknown> {
+    return {
+      userId: this.options.userId,
+      matchId: this.options.matchId,
+      ...(this.accessToken ? { token: this.accessToken } : {}),
+    };
+  }
+
   private applySnapshot(snap: ServerSnapshot): boolean {
     if (!shouldApplyUpdate({ revision: this.appliedRevision, round: this.appliedRound }, snap)) {
       return false;
@@ -402,6 +421,9 @@ export class SocketArenaTransport implements ArenaTransport {
       const myTeam = snap.teams.find((t) => t.side === snap.mySide);
       if (myTeam?.language) this.language = myTeam.language;
       this.lastDocRevision = myTeam?.documentRevision ?? null;
+    }
+    if (snap.mode === "1v1" && !Object.hasOwn(snap.problem.starters, this.language)) {
+      this.language = Object.keys(snap.problem.starters)[0] ?? this.language;
     }
     this.currentSnapshot = adapt(snap, this.language, this.options.userId);
     return true;
@@ -540,7 +562,6 @@ export class SocketArenaTransport implements ArenaTransport {
     const run = this.snapshotLane.then(start).then((raw) => {
       const snap = raw as ServerSnapshot;
       if (this.applySnapshot(snap)) this.emit();
-      this.rateLimitReported = false;
     });
     const tracked = run.finally(() => {
       this.snapshotRequests -= 1;
@@ -561,13 +582,12 @@ export class SocketArenaTransport implements ArenaTransport {
 
   /** Surface a failed background refresh instead of hiding it or rejecting late. */
   private reportRefreshError(error: unknown): void {
-    if (error instanceof RateLimitError) {
-      if (this.rateLimitReported) return;
-      this.rateLimitReported = true;
-      console.warn("[arena] snapshot refresh rate limited (429); retrying on the next sync tick");
-      return;
-    }
-    console.error("[arena] snapshot refresh failed", error);
+    const notice = error instanceof RateLimitError
+      ? "Match updates are temporarily limited. Retrying automatically."
+      : "Unable to sync the match. Retrying automatically.";
+    if (this.currentSnapshot.notice === notice) return;
+    this.currentSnapshot = { ...this.currentSnapshot, notice };
+    this.emit();
   }
 
   private submitRequest(input: { code: string; language: string; documentRevision?: number }, documentRevision: number | undefined): {
@@ -595,37 +615,51 @@ export class SocketArenaTransport implements ArenaTransport {
   }
 
   private async get(path: string): Promise<unknown> {
-    const headers: Record<string, string> = { "x-dev-user-id": this.options.userId };
-    if (this.options.token) headers.authorization = `Bearer ${this.options.token}`;
-    const res = await fetch(`${this.options.baseUrl}/matches/${this.options.matchId}${path}`, { headers });
-    if (!res.ok) {
-      if (res.status === 429) throw new RateLimitError(`${path} failed with 429`);
-      throw new Error(`${path} failed with ${res.status}`);
-    }
-    return res.json();
+    return this.withSession(async (token) => {
+      const headers: Record<string, string> = { "x-dev-user-id": this.options.userId };
+      if (token) headers.authorization = `Bearer ${token}`;
+      const res = await fetch(`${this.options.baseUrl}/matches/${this.options.matchId}${path}`, { headers });
+      if (!res.ok) {
+        if (res.status === 429) throw new RateLimitError(`${path} failed with 429`);
+        throw new ArenaHttpError(`${path} failed with ${res.status}`, res.status);
+      }
+      return res.json();
+    });
   }
 
   private async post(path: string, body: unknown): Promise<unknown> {
-    const headers: Record<string, string> = {
-      "content-type": "application/json",
-      "x-dev-user-id": this.options.userId,
-    };
-    if (this.options.token) headers.authorization = `Bearer ${this.options.token}`;
+    return this.withSession(async (token) => {
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        "x-dev-user-id": this.options.userId,
+      };
+      if (token) headers.authorization = `Bearer ${token}`;
 
-    const res = await fetch(`${this.options.baseUrl}/matches/${this.options.matchId}${path}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-      if (res.status === 409) {
-        const conflict = new StaleCommandError(payload?.error ?? `${path} rejected against a newer Match revision`);
-        await this.refreshNow().catch(() => {});
-        throw conflict;
+      const res = await fetch(`${this.options.baseUrl}/matches/${this.options.matchId}${path}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        if (res.status === 409) {
+          const conflict = new StaleCommandError(payload?.error ?? `${path} rejected against a newer Match revision`);
+          await this.refreshNow().catch(() => {});
+          throw conflict;
+        }
+        throw new ArenaHttpError(payload?.error ?? `${path} failed with ${res.status}`, res.status);
       }
-      throw new Error(payload?.error ?? `${path} failed with ${res.status}`);
-    }
-    return res.json();
+      return res.json();
+    });
+  }
+
+  private withSession<T>(send: (token: string | undefined) => Promise<T>): Promise<T> {
+    const authenticatedSend = (token: string) => {
+      this.setAccessToken(token);
+      return send(token);
+    };
+    return this.options.requestWithSession
+      ? this.options.requestWithSession(authenticatedSend)
+      : send(this.accessToken);
   }
 }
