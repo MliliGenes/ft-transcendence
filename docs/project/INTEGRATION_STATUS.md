@@ -21,25 +21,25 @@ The branch can be reviewed independently of the credential-rotation operation, b
 
 ## Verification (2026-11-11)
 
-| Check | Result |
-| --- | --- |
-| Root `npm test` | 352 passed, 40 environment-dependent skips; real Docker judge tests included |
-| Additional disposable PostgreSQL engine suite | 12 passed |
-| Additional disposable PostgreSQL atomic-lobby suite | 10 passed |
-| Additional disposable PostgreSQL/RabbitMQ Game HTTP/socket/restart/reconnect suites | 15 passed |
-| Client `npm test` / lint / production build | 43 passed; lint and build passed |
-| Chat unit tests / build / lint | 12 passed; build and lint passed |
-| Chat real HTTP/JWT/PostgreSQL suite | 8 passed in a disposable database |
-| User account/auth/image/superadmin regressions / build / lint | 68 passed; build and lint passed |
-| Root typecheck / build | Passed |
-| Backup-script regressions | 4 passed; shell syntax checks passed |
-| Compose configuration | Default and `database-only-backups` profile validated |
-| Running stack | Final Client/Chat rebuild healthy; public `/api/status` operational |
-| Nginx HTTP/content checks | Landing, Privacy, Terms and Status passed |
-| Real complete snapshot | Three SQL dumps, MinIO archive and SHA-256 checks passed in a private temporary directory; temporary copies removed; no live restore |
-| Current documentation links / conflict markers / manifest-lock consistency | Passed for current documentation; archived plans are historical |
-| Limited current-tree credential scan | No tracked local env archive/files or PEM private-key payloads; this is not an exhaustive secret audit |
-| Visual browser check | Blocked by `ERR_CERT_AUTHORITY_INVALID` for the self-signed localhost certificate; HTTP checks used explicit development-certificate bypass |
+| Check                                                                               | Result                                                                                                                                      |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Root `npm test`                                                                     | 352 passed, 40 environment-dependent skips; real Docker judge tests included                                                                |
+| Additional disposable PostgreSQL engine suite                                       | 12 passed                                                                                                                                   |
+| Additional disposable PostgreSQL atomic-lobby suite                                 | 10 passed                                                                                                                                   |
+| Additional disposable PostgreSQL/RabbitMQ Game HTTP/socket/restart/reconnect suites | 15 passed                                                                                                                                   |
+| Client `npm test` / lint / production build                                         | 43 passed; lint and build passed                                                                                                            |
+| Chat unit tests / build / lint                                                      | 12 passed; build and lint passed                                                                                                            |
+| Chat real HTTP/JWT/PostgreSQL suite                                                 | 8 passed in a disposable database                                                                                                           |
+| User account/auth/image/superadmin regressions / build / lint                       | 68 passed; build and lint passed                                                                                                            |
+| Root typecheck / build                                                              | Passed                                                                                                                                      |
+| Backup-script regressions                                                           | 4 passed; shell syntax checks passed                                                                                                        |
+| Compose configuration                                                               | Default and `database-only-backups` profile validated                                                                                       |
+| Running stack                                                                       | Final Client/Chat rebuild healthy; public `/api/status` operational                                                                         |
+| Nginx HTTP/content checks                                                           | Landing, Privacy, Terms and Status passed                                                                                                   |
+| Real complete snapshot                                                              | Three SQL dumps, MinIO archive and SHA-256 checks passed in a private temporary directory; temporary copies removed; no live restore        |
+| Current documentation links / conflict markers / manifest-lock consistency          | Passed for current documentation; archived plans are historical                                                                             |
+| Limited current-tree credential scan                                                | No tracked local env archive/files or PEM private-key payloads; this is not an exhaustive secret audit                                      |
+| Visual browser check                                                                | Blocked by `ERR_CERT_AUTHORITY_INVALID` for the self-signed localhost certificate; HTTP checks used explicit development-certificate bypass |
 
 The default root suite's skipped database cases were exercised separately as listed above where applicable. External judge-provider cases remain conditional on their own environment; do not read these results as all optional providers being tested.
 

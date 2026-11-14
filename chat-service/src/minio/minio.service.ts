@@ -70,7 +70,8 @@ export class MinioService implements OnModuleInit {
     policy.setContentType(contentType);
     policy.setContentLengthRange(1, maxBytes);
     policy.setExpires(new Date(Date.now() + UPLOAD_URL_TTL_SECONDS * 1000));
-    const { postURL, formData } = await this.presignClient.presignedPostPolicy(policy);
+    const { postURL, formData } =
+      await this.presignClient.presignedPostPolicy(policy);
 
     return {
       objectKey,
@@ -114,7 +115,11 @@ export class MinioService implements OnModuleInit {
     const objectId = objectKey.startsWith(prefix)
       ? objectKey.slice(prefix.length)
       : '';
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(objectId)) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+        objectId,
+      )
+    ) {
       throw new BadRequestException('Invalid attachment reference');
     }
 
@@ -123,9 +128,7 @@ export class MinioService implements OnModuleInit {
       ([key]) => key.toLowerCase() === 'content-type',
     )?.[1];
     const limit = maxBytesFor(
-      typeof declaredType === 'string'
-        ? declaredType.split(';')[0].trim()
-        : '',
+      typeof declaredType === 'string' ? declaredType.split(';')[0].trim() : '',
     );
     if (object.size < 1 || object.size > limit) {
       throw new BadRequestException('Attachment size is invalid');

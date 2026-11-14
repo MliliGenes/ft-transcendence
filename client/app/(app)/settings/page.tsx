@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
-import { SettingsView } from "@/components/app/settings-view";
+import type { Metadata } from 'next';
+import { SettingsView } from '@/components/app/settings-view';
 
-export const metadata: Metadata = { title: "Settings — Nook" };
+export const metadata: Metadata = { title: 'Settings — Nook' };
 
 export default function SettingsPage() {
   return <SettingsView />;

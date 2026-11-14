@@ -23,8 +23,7 @@ export type UserEvent =
   | {
       eventId: string;
       eventType:
-        | typeof USER_EVENT_TYPES.CREATED
-        | typeof USER_EVENT_TYPES.UPDATED;
+        typeof USER_EVENT_TYPES.CREATED | typeof USER_EVENT_TYPES.UPDATED;
       version: string;
       occurredAt: string;
       data: UserProfileData;

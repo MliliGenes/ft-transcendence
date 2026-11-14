@@ -20,7 +20,9 @@ function hasReadMessage(
   if (!state.lastReadMessageId) return false;
   if (state.lastReadMessageId === message.id) return true;
 
-  const readIndex = messages.findIndex((item) => item.id === state.lastReadMessageId);
+  const readIndex = messages.findIndex(
+    (item) => item.id === state.lastReadMessageId,
+  );
   if (readIndex >= 0) return readIndex >= messageIndex;
 
   // The read marker can point at a newer message outside the loaded page.
@@ -39,7 +41,10 @@ export function readReceiptForLastOwnMessage(
 ) {
   let lastOwnIndex = -1;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index].authorId === currentUserId && !messages[index].deletedAt) {
+    if (
+      messages[index].authorId === currentUserId &&
+      !messages[index].deletedAt
+    ) {
       lastOwnIndex = index;
       break;
     }

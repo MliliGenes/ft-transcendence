@@ -102,9 +102,11 @@ export class FriendshipsService {
           });
         }
         if (existingFriendship.status === 'ACCEPTED')
-          throw new ConflictException('A friendship already exists between these users');
+          throw new ConflictException(
+            'A friendship already exists between these users',
+          );
         if (existingFriendship.status === 'PENDING')
-          throw new ConflictException('A request is still pending')
+          throw new ConflictException('A request is still pending');
       }
 
       return tx.friendship.create({

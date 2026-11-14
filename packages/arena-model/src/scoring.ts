@@ -12,7 +12,8 @@ export interface TestGroupScore {
 /** Weighted groups to a 0-100 round score (reference: earned/weight over groups). */
 export function roundScoreFromGroups(groups: TestGroupScore[]): number {
   const weight = groups.reduce((s, g) => s + g.weight, 0);
-  if (!(weight > 0)) throw new RangeError("groups must carry positive total weight");
+  if (!(weight > 0))
+    throw new RangeError('groups must carry positive total weight');
   const earned = groups.reduce((s, g) => s + g.earned, 0);
   return assertRoundScore(Math.round((earned / weight) * 100));
 }
@@ -39,15 +40,25 @@ export interface GroupCounts {
   total: number;
 }
 
-export function groupEarnedBp(weight: number, passed: number, total: number): number {
+export function groupEarnedBp(
+  weight: number,
+  passed: number,
+  total: number,
+): number {
   if (!Number.isInteger(weight) || weight < 0) {
-    throw new RangeError(`group weight must be a non-negative integer, got ${weight}`);
+    throw new RangeError(
+      `group weight must be a non-negative integer, got ${weight}`,
+    );
   }
   if (!Number.isInteger(total) || total <= 0) {
-    throw new RangeError(`group must declare a positive test count, got ${total}`);
+    throw new RangeError(
+      `group must declare a positive test count, got ${total}`,
+    );
   }
   if (!Number.isInteger(passed) || passed < 0 || passed > total) {
-    throw new RangeError(`passed count ${passed} out of range for ${total} tests`);
+    throw new RangeError(
+      `passed count ${passed} out of range for ${total} tests`,
+    );
   }
   return Math.floor((weight * passed * 100) / total);
 }
@@ -55,8 +66,14 @@ export function groupEarnedBp(weight: number, passed: number, total: number): nu
 /** Sum of group basis points. Group weights must total exactly 100. */
 export function roundScoreBp(groups: GroupCounts[]): number {
   const weight = groups.reduce((s, g) => s + g.weight, 0);
-  if (weight !== 100) throw new RangeError(`group weights must sum to exactly 100, got ${weight}`);
-  const bp = groups.reduce((s, g) => s + groupEarnedBp(g.weight, g.passed, g.total), 0);
+  if (weight !== 100)
+    throw new RangeError(
+      `group weights must sum to exactly 100, got ${weight}`,
+    );
+  const bp = groups.reduce(
+    (s, g) => s + groupEarnedBp(g.weight, g.passed, g.total),
+    0,
+  );
   if (!Number.isInteger(bp) || bp < 0 || bp > 10000) {
     throw new RangeError(`basis-point total out of range: ${bp}`);
   }
@@ -93,17 +110,20 @@ export interface RoundContribution {
   submissions: number;
 }
 
-export type SideOutcome = "left" | "right" | "draw";
+export type SideOutcome = 'left' | 'right' | 'draw';
 
-export function compareSides(left: RoundContribution[], right: RoundContribution[]): SideOutcome {
+export function compareSides(
+  left: RoundContribution[],
+  right: RoundContribution[],
+): SideOutcome {
   const sumL = matchSum(left.map((r) => r.score));
   const sumR = matchSum(right.map((r) => r.score));
-  if (sumL !== sumR) return sumL > sumR ? "left" : "right";
+  if (sumL !== sumR) return sumL > sumR ? 'left' : 'right';
   const timeL = left.reduce((s, r) => s + r.scoringTimeMs, 0);
   const timeR = right.reduce((s, r) => s + r.scoringTimeMs, 0);
-  if (timeL !== timeR) return timeL < timeR ? "left" : "right";
+  if (timeL !== timeR) return timeL < timeR ? 'left' : 'right';
   const subL = left.reduce((s, r) => s + r.submissions, 0);
   const subR = right.reduce((s, r) => s + r.submissions, 0);
-  if (subL !== subR) return subL < subR ? "left" : "right";
-  return "draw";
+  if (subL !== subR) return subL < subR ? 'left' : 'right';
+  return 'draw';
 }

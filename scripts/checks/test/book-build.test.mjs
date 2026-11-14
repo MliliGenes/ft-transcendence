@@ -11,14 +11,20 @@ test('book says no saved labels were available when the label file is missing', 
 
 test('book reports how many communities still use their hub name', () => {
   assert.equal(
-    graphifyLabelCoverageSentence([1, 2, 3], { 1: 'Authentication', 3: 'Profiles' }),
+    graphifyLabelCoverageSentence([1, 2, 3], {
+      1: 'Authentication',
+      3: 'Profiles',
+    }),
     "In this build, 1 of the 3 communities have no saved label and are listed under their hub's name.",
   );
 });
 
 test('book reports complete saved-label coverage', () => {
   assert.equal(
-    graphifyLabelCoverageSentence([1, 2], { 1: 'Authentication', 2: 'Profiles' }),
+    graphifyLabelCoverageSentence([1, 2], {
+      1: 'Authentication',
+      2: 'Profiles',
+    }),
     'In this build, all 2 communities carry a saved label.',
   );
 });

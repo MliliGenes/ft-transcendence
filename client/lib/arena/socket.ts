@@ -1,7 +1,21 @@
-import { io, type Socket } from "socket.io-client";
-import type { AuthenticatedRequest } from "../auth/client";
-import { TransportSession, type ArenaTransport, type ConnectionState, type RunReceipt, type SubmitReceipt } from "./transport";
-import type { ArenaConnectionOptions, ArenaSnapshot, MatchFinalView, PlayerStatus, RevealView, SideView, TeamView } from "./types";
+import { io, type Socket } from 'socket.io-client';
+import type { AuthenticatedRequest } from '../auth/client';
+import {
+  TransportSession,
+  type ArenaTransport,
+  type ConnectionState,
+  type RunReceipt,
+  type SubmitReceipt,
+} from './transport';
+import type {
+  ArenaConnectionOptions,
+  ArenaSnapshot,
+  MatchFinalView,
+  PlayerStatus,
+  RevealView,
+  SideView,
+  TeamView,
+} from './types';
 
 export type SocketTransportOptions = ArenaConnectionOptions & {
   requestWithSession?: AuthenticatedRequest;
@@ -28,7 +42,7 @@ export class StaleCommandError extends Error {
 
   constructor(message: string) {
     super(message);
-    this.name = "StaleCommandError";
+    this.name = 'StaleCommandError';
   }
 }
 
@@ -38,15 +52,18 @@ export class RateLimitError extends Error {
 
   constructor(message: string) {
     super(message);
-    this.name = "RateLimitError";
+    this.name = 'RateLimitError';
   }
 }
 
 /** An HTTP response error whose status can drive one session-refresh retry. */
 class ArenaHttpError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
     super(message);
-    this.name = "ArenaHttpError";
+    this.name = 'ArenaHttpError';
   }
 }
 
@@ -55,28 +72,41 @@ export interface ServerReveal {
   round: number;
   roundId: string;
   scores: Record<string, number>;
-  groups: Record<string, Array<{ name: string; weight: number; earned: number }>>;
+  groups: Record<
+    string,
+    Array<{ name: string; weight: number; earned: number }>
+  >;
   totals: Record<string, number>;
   publishedAt: number;
 }
 
 interface ServerSnapshot {
-  mode: "1v1" | "2v2";
-  roundPhase: ArenaSnapshot["roundPhase"];
+  mode: '1v1' | '2v2';
+  roundPhase: ArenaSnapshot['roundPhase'];
   round: number;
   totalRounds: number;
   remainingMs: number;
-  problem: Omit<ArenaSnapshot["problem"], "id"> & { id?: string; problemVersionId?: string };
-  tests: ArenaSnapshot["tests"];
+  problem: Omit<ArenaSnapshot['problem'], 'id'> & {
+    id?: string;
+    problemVersionId?: string;
+  };
+  tests: ArenaSnapshot['tests'];
   mySide: string;
-  sides: Record<string, { status: PlayerStatus; submissions: number; presence: SideView["presence"] }>;
+  sides: Record<
+    string,
+    {
+      status: PlayerStatus;
+      submissions: number;
+      presence: SideView['presence'];
+    }
+  >;
   teams?: Array<{
     side: string;
     activity: PlayerStatus;
     submissions: number;
     members: Array<{
       userId: string | null;
-      presence: SideView["presence"];
+      presence: SideView['presence'];
       ready: boolean;
       readyRevision: number | null;
       departed?: boolean;
@@ -91,7 +121,7 @@ interface ServerSnapshot {
   pendingEvaluation: boolean;
   final: {
     scores: Record<string, number>;
-    outcome: "left" | "right" | "draw";
+    outcome: 'left' | 'right' | 'draw';
     winner: string | null;
     forfeit: { winner: string; loser: string; reason: string } | null;
   } | null;
@@ -99,7 +129,7 @@ interface ServerSnapshot {
 
 /** Server terminal result -> viewer-relative scores and authoritative winner (including tie-breaks). */
 export function adaptFinal(
-  final: ServerSnapshot["final"],
+  final: ServerSnapshot['final'],
   mySide: string,
   otherId: string,
 ): MatchFinalView | null {
@@ -108,18 +138,26 @@ export function adaptFinal(
   const you = f.scores?.[mySide] ?? 0;
   const opponent = f.scores?.[otherId] ?? 0;
   if (f.forfeit) {
-    const loserText = f.forfeit.reason === "surrender" ? "surrendered" : "forfeited";
+    const loserText =
+      f.forfeit.reason === 'surrender' ? 'surrendered' : 'forfeited';
     return {
       you,
       opponent,
-      outcome: f.forfeit.winner === mySide ? `You win: opponent ${loserText}.` : `You ${loserText}.`,
+      outcome:
+        f.forfeit.winner === mySide
+          ? `You win: opponent ${loserText}.`
+          : `You ${loserText}.`,
     };
   }
   return {
     you,
     opponent,
     outcome:
-      f.winner === mySide ? "You win the match." : f.winner === otherId ? "Opponent wins the match." : "The match is a draw.",
+      f.winner === mySide
+        ? 'You win the match.'
+        : f.winner === otherId
+          ? 'Opponent wins the match.'
+          : 'The match is a draw.',
   };
 }
 
@@ -131,7 +169,8 @@ export function shouldApplyUpdate(
   applied: { revision: number; round: number },
   incoming: { revision?: number; round?: number },
 ): boolean {
-  if (incoming.revision !== undefined && incoming.revision < applied.revision) return false;
+  if (incoming.revision !== undefined && incoming.revision < applied.revision)
+    return false;
   if (
     incoming.round !== undefined &&
     incoming.revision !== undefined &&
@@ -143,33 +182,75 @@ export function shouldApplyUpdate(
 }
 
 /** Server RevealSnapshot -> client RevealView */
-export function adaptReveal(server: ServerReveal | null, mySide: string, otherId: string): RevealView | null {
+export function adaptReveal(
+  server: ServerReveal | null,
+  mySide: string,
+  otherId: string,
+): RevealView | null {
   if (!server) return null;
-  const mine = Array.isArray(server.groups?.[mySide]) ? server.groups[mySide] : [];
+  const mine = Array.isArray(server.groups?.[mySide])
+    ? server.groups[mySide]
+    : [];
   return {
     roundScore: server.scores?.[mySide] ?? 0,
-    groups: mine.map((g) => ({ name: g.name, weight: g.weight, earned: g.earned })),
-    totals: { you: server.totals?.[mySide] ?? 0, opponent: server.totals?.[otherId] ?? 0 },
+    groups: mine.map((g) => ({
+      name: g.name,
+      weight: g.weight,
+      earned: g.earned,
+    })),
+    totals: {
+      you: server.totals?.[mySide] ?? 0,
+      opponent: server.totals?.[otherId] ?? 0,
+    },
   };
 }
 
 /** Server SealedSnapshot -> client ArenaSnapshot */
-function adapt(server: ServerSnapshot, language: string, userId: string): ArenaSnapshot {
-  const mine = server.sides[server.mySide] ?? { status: "coding" as const, submissions: 0, presence: "online" as const };
-  const otherId = Object.keys(server.sides).find((k) => k !== server.mySide) ?? "right";
+function adapt(
+  server: ServerSnapshot,
+  language: string,
+  userId: string,
+): ArenaSnapshot {
+  const mine = server.sides[server.mySide] ?? {
+    status: 'coding' as const,
+    submissions: 0,
+    presence: 'online' as const,
+  };
+  const otherId =
+    Object.keys(server.sides).find((k) => k !== server.mySide) ?? 'right';
   const other = server.sides[otherId] ?? mine;
-  const you: SideView = { name: "You", status: mine.status, presence: mine.presence, submissions: mine.submissions };
-  const opponent: SideView = { name: "Opponent", status: other.status, presence: other.presence, submissions: other.submissions };
+  const you: SideView = {
+    name: 'You',
+    status: mine.status,
+    presence: mine.presence,
+    submissions: mine.submissions,
+  };
+  const opponent: SideView = {
+    name: 'Opponent',
+    status: other.status,
+    presence: other.presence,
+    submissions: other.submissions,
+  };
 
-  let ready: ArenaSnapshot["ready"] = { you: false, mate: false };
+  let ready: ArenaSnapshot['ready'] = { you: false, mate: false };
   let docRevision: number | null = null;
-  let readyRevision: ArenaSnapshot["readyRevision"] = null;
-  let surrender: ArenaSnapshot["surrender"] = { you: false, mate: false };
+  let readyRevision: ArenaSnapshot['readyRevision'] = null;
+  let surrender: ArenaSnapshot['surrender'] = { you: false, mate: false };
 
-  let mateView: SideView = { name: "Teammate", status: "coding", presence: "online", submissions: 0 };
-  let opponent2View: SideView = { name: "Opponent 2", status: "coding", presence: "online", submissions: 0 };
+  let mateView: SideView = {
+    name: 'Teammate',
+    status: 'coding',
+    presence: 'online',
+    submissions: 0,
+  };
+  let opponent2View: SideView = {
+    name: 'Opponent 2',
+    status: 'coding',
+    presence: 'online',
+    submissions: 0,
+  };
 
-  if (server.mode === "2v2" && server.teams) {
+  if (server.mode === '2v2' && server.teams) {
     const myTeam = server.teams.find((t) => t.side === server.mySide);
     if (myTeam) {
       docRevision = myTeam.documentRevision;
@@ -177,7 +258,8 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
       const mateMember = myTeam.members.find((m) => m.userId !== userId);
       ready = {
         you: youMember?.ready === true,
-        mate: mateMember?.approvalRequired === false || mateMember?.ready === true,
+        mate:
+          mateMember?.approvalRequired === false || mateMember?.ready === true,
       };
       surrender = {
         you: youMember?.surrenderPending === true,
@@ -189,9 +271,19 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
       };
       if (mateMember) {
         mateView = {
-          name: mateMember.departed ? "Left" : mateMember.userId ? (mateMember.userId.length > 8 ? mateMember.userId.slice(0, 8) : mateMember.userId) : "Teammate",
-          status: mateMember.departed ? "left" : mateMember.ready ? "ready" : (myTeam.activity ?? "coding"),
-          presence: mateMember.presence ?? "online",
+          name: mateMember.departed
+            ? 'Left'
+            : mateMember.userId
+              ? mateMember.userId.length > 8
+                ? mateMember.userId.slice(0, 8)
+                : mateMember.userId
+              : 'Teammate',
+          status: mateMember.departed
+            ? 'left'
+            : mateMember.ready
+              ? 'ready'
+              : (myTeam.activity ?? 'coding'),
+          presence: mateMember.presence ?? 'online',
           submissions: myTeam.submissions ?? 0,
           departed: mateMember.departed,
         };
@@ -201,29 +293,33 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
     if (otherTeam && otherTeam.members.length > 1) {
       const opp2 = otherTeam.members[1];
       opponent2View = {
-        name: opp2.userId ? (opp2.userId.length > 8 ? opp2.userId.slice(0, 8) : opp2.userId) : "Opponent 2",
-        status: opp2.ready ? "ready" : (otherTeam.activity ?? "coding"),
-        presence: opp2.presence ?? "online",
+        name: opp2.userId
+          ? opp2.userId.length > 8
+            ? opp2.userId.slice(0, 8)
+            : opp2.userId
+          : 'Opponent 2',
+        status: opp2.ready ? 'ready' : (otherTeam.activity ?? 'coding'),
+        presence: opp2.presence ?? 'online',
         submissions: otherTeam.submissions ?? 0,
       };
     }
   }
 
   const alpha: TeamView = {
-    id: "alpha",
+    id: 'alpha',
     members: [you, mateView],
     score: server.reveal?.totals[server.mySide] ?? null,
     submissions: mine.submissions,
   };
   const beta: TeamView = {
-    id: "beta",
+    id: 'beta',
     members: [opponent, opponent2View],
     score: server.reveal?.totals[otherId] ?? null,
     submissions: other.submissions,
   };
 
   const problem = {
-    id: server.problem.id ?? server.problem.problemVersionId ?? "unknown",
+    id: server.problem.id ?? server.problem.problemVersionId ?? 'unknown',
     title: server.problem.title,
     description: server.problem.description,
     examples: server.problem.examples,
@@ -259,11 +355,15 @@ export class SocketArenaTransport implements ArenaTransport {
   private syncTimer: NodeJS.Timeout | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
   private currentSnapshot: ArenaSnapshot;
-  private language = "C++";
+  private language = 'C++';
   private appliedRevision = -1;
   private appliedRound = -1;
   private lastDocRevision: number | null = null;
-  private pendingSubmit: { key: string; submissionId: string; evaluationId: string } | null = null;
+  private pendingSubmit: {
+    key: string;
+    submissionId: string;
+    evaluationId: string;
+  } | null = null;
   /** Snapshot requests queued or running: never more than one on the wire. */
   private snapshotRequests = 0;
   /** Serializes snapshot requests: the next one starts after the previous one. */
@@ -273,23 +373,70 @@ export class SocketArenaTransport implements ArenaTransport {
   /** Earliest moment the next snapshot request may start (ms). */
   private nextSnapshotAllowedAt = 0;
   private accessToken: string | undefined;
-  private readonly session = new TransportSession("connecting");
+  private readonly session = new TransportSession('connecting');
 
   constructor(private readonly options: SocketTransportOptions) {
     this.accessToken = options.token;
     this.currentSnapshot = {
-      mode: "1v1",
-      roundPhase: "ROUND_INTRO",
+      mode: '1v1',
+      roundPhase: 'ROUND_INTRO',
       round: 1,
       totalRounds: 3,
       remainingSeconds: 0,
-      problem: { id: "loading", title: "Loading…", description: "", examples: [], starters: {} },
+      problem: {
+        id: 'loading',
+        title: 'Loading…',
+        description: '',
+        examples: [],
+        starters: {},
+      },
       language: this.language,
       tests: [],
-      you: { name: "You", status: "coding", presence: "online", submissions: 0 },
-      opponent: { name: "Opponent", status: "coding", presence: "online", submissions: 0 },
-      alpha: { id: "alpha", members: [{ name: "You", status: "coding", presence: "online", submissions: 0 }, { name: "Teammate", status: "coding", presence: "online", submissions: 0 }], score: null, submissions: 0 },
-      beta: { id: "beta", members: [{ name: "Opponent", status: "coding", presence: "online", submissions: 0 }, { name: "Opponent 2", status: "coding", presence: "online", submissions: 0 }], score: null, submissions: 0 },
+      you: {
+        name: 'You',
+        status: 'coding',
+        presence: 'online',
+        submissions: 0,
+      },
+      opponent: {
+        name: 'Opponent',
+        status: 'coding',
+        presence: 'online',
+        submissions: 0,
+      },
+      alpha: {
+        id: 'alpha',
+        members: [
+          { name: 'You', status: 'coding', presence: 'online', submissions: 0 },
+          {
+            name: 'Teammate',
+            status: 'coding',
+            presence: 'online',
+            submissions: 0,
+          },
+        ],
+        score: null,
+        submissions: 0,
+      },
+      beta: {
+        id: 'beta',
+        members: [
+          {
+            name: 'Opponent',
+            status: 'coding',
+            presence: 'online',
+            submissions: 0,
+          },
+          {
+            name: 'Opponent 2',
+            status: 'coding',
+            presence: 'online',
+            submissions: 0,
+          },
+        ],
+        score: null,
+        submissions: 0,
+      },
       ready: { you: false, mate: false },
       docRevision: null,
       readyRevision: null,
@@ -310,8 +457,14 @@ export class SocketArenaTransport implements ArenaTransport {
     return this.options.matchId;
   }
 
-  collabConfig(): { baseUrl: string; userId: string; matchId: string; token?: string; socketPath?: string } | null {
-    if (this.currentSnapshot.mode !== "2v2") return null;
+  collabConfig(): {
+    baseUrl: string;
+    userId: string;
+    matchId: string;
+    token?: string;
+    socketPath?: string;
+  } | null {
+    if (this.currentSnapshot.mode !== '2v2') return null;
     return {
       baseUrl: this.options.baseUrl,
       userId: this.options.userId,
@@ -321,8 +474,14 @@ export class SocketArenaTransport implements ArenaTransport {
     };
   }
 
-  chatConfig(): { baseUrl: string; userId: string; matchId: string; token?: string; socketPath?: string } | null {
-    if (this.currentSnapshot.mode !== "2v2") return null;
+  chatConfig(): {
+    baseUrl: string;
+    userId: string;
+    matchId: string;
+    token?: string;
+    socketPath?: string;
+  } | null {
+    if (this.currentSnapshot.mode !== '2v2') return null;
     return {
       baseUrl: this.options.baseUrl,
       userId: this.options.userId,
@@ -359,33 +518,37 @@ export class SocketArenaTransport implements ArenaTransport {
     this.snapshotRefreshPending = false;
     this.socket?.disconnect();
     this.socket = null;
-    this.session.setConnection("offline");
+    this.session.setConnection('offline');
   }
 
   private connect(): void {
-    const socketPath = this.options.socketPath ?? (this.options.baseUrl.includes("/api/game") ? "/api/game/socket.io" : "/socket.io");
+    const socketPath =
+      this.options.socketPath ??
+      (this.options.baseUrl.includes('/api/game')
+        ? '/api/game/socket.io'
+        : '/socket.io');
 
     const sock = io(this.options.baseUrl, {
       path: socketPath,
       auth: this.socketAuth(),
       query: { userId: this.options.userId, matchId: this.options.matchId },
-      transports: ["websocket", "polling"],
+      transports: ['websocket', 'polling'],
     });
 
     this.socket = sock;
 
-    sock.on("connect", () => {
-      if (this.session.setConnection("connected")) this.emit();
+    sock.on('connect', () => {
+      if (this.session.setConnection('connected')) this.emit();
       void this.refreshNow().catch((error) => this.reportRefreshError(error));
     });
 
-    sock.on("disconnect", () => {
-      this.session.setConnection("reconnecting");
+    sock.on('disconnect', () => {
+      this.session.setConnection('reconnecting');
       this.emit();
     });
 
-    sock.on("connect_error", () => {
-      this.session.setConnection("offline");
+    sock.on('connect_error', () => {
+      this.session.setConnection('offline');
       this.emit();
     });
 
@@ -412,17 +575,25 @@ export class SocketArenaTransport implements ArenaTransport {
   }
 
   private applySnapshot(snap: ServerSnapshot): boolean {
-    if (!shouldApplyUpdate({ revision: this.appliedRevision, round: this.appliedRound }, snap)) {
+    if (
+      !shouldApplyUpdate(
+        { revision: this.appliedRevision, round: this.appliedRound },
+        snap,
+      )
+    ) {
       return false;
     }
     this.appliedRevision = snap.revision;
     this.appliedRound = snap.round;
-    if (snap.mode === "2v2" && snap.teams) {
+    if (snap.mode === '2v2' && snap.teams) {
       const myTeam = snap.teams.find((t) => t.side === snap.mySide);
       if (myTeam?.language) this.language = myTeam.language;
       this.lastDocRevision = myTeam?.documentRevision ?? null;
     }
-    if (snap.mode === "1v1" && !Object.hasOwn(snap.problem.starters, this.language)) {
+    if (
+      snap.mode === '1v1' &&
+      !Object.hasOwn(snap.problem.starters, this.language)
+    ) {
       this.language = Object.keys(snap.problem.starters)[0] ?? this.language;
     }
     this.currentSnapshot = adapt(snap, this.language, this.options.userId);
@@ -430,21 +601,21 @@ export class SocketArenaTransport implements ArenaTransport {
   }
 
   async startRound(): Promise<void> {
-    this.requireConnected("startRound");
-    await this.post("/start-round", {});
+    this.requireConnected('startRound');
+    await this.post('/start-round', {});
     await this.refreshNow();
   }
 
   async beginCoding(): Promise<void> {
-    this.requireConnected("beginCoding");
-    await this.post("/begin-coding", {});
+    this.requireConnected('beginCoding');
+    await this.post('/begin-coding', {});
     await this.refreshNow();
   }
 
   async setLanguage(language: string): Promise<void> {
-    if (this.currentSnapshot.mode === "2v2") {
-      this.requireConnected("language");
-      await this.post("/language", { language });
+    if (this.currentSnapshot.mode === '2v2') {
+      this.requireConnected('language');
+      await this.post('/language', { language });
       await this.refreshNow();
       return;
     }
@@ -453,17 +624,22 @@ export class SocketArenaTransport implements ArenaTransport {
   }
 
   async run(input: { code: string; language: string }): Promise<RunReceipt> {
-    this.requireConnected("run");
-    await this.post("/run", input);
+    this.requireConnected('run');
+    await this.post('/run', input);
     await this.refreshNow();
     return { ok: true };
   }
 
-  async submit(input: { code: string; language: string; documentRevision?: number }): Promise<SubmitReceipt> {
-    this.requireConnected("submit");
-    const documentRevision = input.documentRevision ?? this.lastDocRevision ?? undefined;
+  async submit(input: {
+    code: string;
+    language: string;
+    documentRevision?: number;
+  }): Promise<SubmitReceipt> {
+    this.requireConnected('submit');
+    const documentRevision =
+      input.documentRevision ?? this.lastDocRevision ?? undefined;
     const request = this.submitRequest(input, documentRevision);
-    const receipt = (await this.post("/submit", {
+    const receipt = (await this.post('/submit', {
       ...input,
       documentRevision,
       submissionId: request.submissionId,
@@ -477,38 +653,49 @@ export class SocketArenaTransport implements ArenaTransport {
   async setReady(value: boolean): Promise<void> {
     const sock = this.socket;
     if (!sock) return;
-    const payload = { value, documentRevision: this.lastDocRevision ?? undefined };
+    const payload = {
+      value,
+      documentRevision: this.lastDocRevision ?? undefined,
+    };
     await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("setReady timed out")), 5000);
-      sock.emit("setReady", payload, (res: { ok: boolean; error?: string } | undefined) => {
-        clearTimeout(timer);
-        if (res?.ok) resolve();
-        else reject(new Error(res?.error ?? "setReady rejected"));
-      });
+      const timer = setTimeout(
+        () => reject(new Error('setReady timed out')),
+        5000,
+      );
+      sock.emit(
+        'setReady',
+        payload,
+        (res: { ok: boolean; error?: string } | undefined) => {
+          clearTimeout(timer);
+          if (res?.ok) resolve();
+          else reject(new Error(res?.error ?? 'setReady rejected'));
+        },
+      );
     });
   }
 
   async advance(): Promise<void> {
-    this.requireConnected("advance");
-    await this.post("/advance", {});
+    this.requireConnected('advance');
+    await this.post('/advance', {});
     await this.refreshNow();
   }
 
   async leave(): Promise<void> {
-    this.requireConnected("leave");
-    await this.post("/leave", {});
+    this.requireConnected('leave');
+    await this.post('/leave', {});
     await this.refreshNow();
   }
 
   async surrender(approve: boolean): Promise<void> {
-    this.requireConnected("surrender");
-    await this.post("/surrender", { approve });
+    this.requireConnected('surrender');
+    await this.post('/surrender', { approve });
     await this.refreshNow();
   }
 
   private requireConnected(action: string): void {
     const connection = this.session.connection();
-    if (connection !== "connected") throw new Error(`${action} unavailable while ${connection}`);
+    if (connection !== 'connected')
+      throw new Error(`${action} unavailable while ${connection}`);
   }
 
   /**
@@ -549,15 +736,18 @@ export class SocketArenaTransport implements ArenaTransport {
       return;
     }
     this.snapshotRefreshPending = false;
-    void this.enqueueSnapshotRequest().catch((error) => this.reportRefreshError(error));
+    void this.enqueueSnapshotRequest().catch((error) =>
+      this.reportRefreshError(error),
+    );
   }
 
   /** Read server truth. Requests are serialized, so two never overlap. */
   private enqueueSnapshotRequest(): Promise<void> {
     this.snapshotRequests += 1;
     const start = () => {
-      this.nextSnapshotAllowedAt = Date.now() + SNAPSHOT_REFRESH_MIN_INTERVAL_MS;
-      return this.get("/snapshot");
+      this.nextSnapshotAllowedAt =
+        Date.now() + SNAPSHOT_REFRESH_MIN_INTERVAL_MS;
+      return this.get('/snapshot');
     };
     const run = this.snapshotLane.then(start).then((raw) => {
       const snap = raw as ServerSnapshot;
@@ -582,31 +772,43 @@ export class SocketArenaTransport implements ArenaTransport {
 
   /** Surface a failed background refresh instead of hiding it or rejecting late. */
   private reportRefreshError(error: unknown): void {
-    const notice = error instanceof RateLimitError
-      ? "Match updates are temporarily limited. Retrying automatically."
-      : "Unable to sync the match. Retrying automatically.";
+    const notice =
+      error instanceof RateLimitError
+        ? 'Match updates are temporarily limited. Retrying automatically.'
+        : 'Unable to sync the match. Retrying automatically.';
     if (this.currentSnapshot.notice === notice) return;
     this.currentSnapshot = { ...this.currentSnapshot, notice };
     this.emit();
   }
 
-  private submitRequest(input: { code: string; language: string; documentRevision?: number }, documentRevision: number | undefined): {
+  private submitRequest(
+    input: { code: string; language: string; documentRevision?: number },
+    documentRevision: number | undefined,
+  ): {
     submissionId: string;
     evaluationId: string;
   } {
-    const key = JSON.stringify([this.appliedRound, input.code, input.language, documentRevision ?? null]);
+    const key = JSON.stringify([
+      this.appliedRound,
+      input.code,
+      input.language,
+      documentRevision ?? null,
+    ]);
     if (this.pendingSubmit?.key === key) return this.pendingSubmit;
 
     this.pendingSubmit = {
       key,
-      submissionId: this.requestId("submission"),
-      evaluationId: this.requestId("evaluation"),
+      submissionId: this.requestId('submission'),
+      evaluationId: this.requestId('evaluation'),
     };
     return this.pendingSubmit;
   }
 
   private requestId(prefix: string): string {
-    const randomUuid = typeof globalThis.crypto?.randomUUID === "function" ? globalThis.crypto.randomUUID() : null;
+    const randomUuid =
+      typeof globalThis.crypto?.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID()
+        : null;
     return `${prefix}-${randomUuid ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
   }
 
@@ -616,12 +818,21 @@ export class SocketArenaTransport implements ArenaTransport {
 
   private async get(path: string): Promise<unknown> {
     return this.withSession(async (token) => {
-      const headers: Record<string, string> = { "x-dev-user-id": this.options.userId };
+      const headers: Record<string, string> = {
+        'x-dev-user-id': this.options.userId,
+      };
       if (token) headers.authorization = `Bearer ${token}`;
-      const res = await fetch(`${this.options.baseUrl}/matches/${this.options.matchId}${path}`, { headers });
+      const res = await fetch(
+        `${this.options.baseUrl}/matches/${this.options.matchId}${path}`,
+        { headers },
+      );
       if (!res.ok) {
-        if (res.status === 429) throw new RateLimitError(`${path} failed with 429`);
-        throw new ArenaHttpError(`${path} failed with ${res.status}`, res.status);
+        if (res.status === 429)
+          throw new RateLimitError(`${path} failed with 429`);
+        throw new ArenaHttpError(
+          `${path} failed with ${res.status}`,
+          res.status,
+        );
       }
       return res.json();
     });
@@ -630,30 +841,42 @@ export class SocketArenaTransport implements ArenaTransport {
   private async post(path: string, body: unknown): Promise<unknown> {
     return this.withSession(async (token) => {
       const headers: Record<string, string> = {
-        "content-type": "application/json",
-        "x-dev-user-id": this.options.userId,
+        'content-type': 'application/json',
+        'x-dev-user-id': this.options.userId,
       };
       if (token) headers.authorization = `Bearer ${token}`;
 
-      const res = await fetch(`${this.options.baseUrl}/matches/${this.options.matchId}${path}`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-      });
+      const res = await fetch(
+        `${this.options.baseUrl}/matches/${this.options.matchId}${path}`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        },
+      );
       if (!res.ok) {
-        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        const payload = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         if (res.status === 409) {
-          const conflict = new StaleCommandError(payload?.error ?? `${path} rejected against a newer Match revision`);
+          const conflict = new StaleCommandError(
+            payload?.error ?? `${path} rejected against a newer Match revision`,
+          );
           await this.refreshNow().catch(() => {});
           throw conflict;
         }
-        throw new ArenaHttpError(payload?.error ?? `${path} failed with ${res.status}`, res.status);
+        throw new ArenaHttpError(
+          payload?.error ?? `${path} failed with ${res.status}`,
+          res.status,
+        );
       }
       return res.json();
     });
   }
 
-  private withSession<T>(send: (token: string | undefined) => Promise<T>): Promise<T> {
+  private withSession<T>(
+    send: (token: string | undefined) => Promise<T>,
+  ): Promise<T> {
     const authenticatedSend = (token: string) => {
       this.setAccessToken(token);
       return send(token);

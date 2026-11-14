@@ -6,10 +6,15 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
-} from "@nestjs/websockets";
-import type { Namespace, Socket } from "socket.io";
-import { GameService } from "./game.service.js";
-import { attachSocketPrincipal, principalFromHandshake, requireSocketPrincipal, socketPrincipal } from "./socket-auth.js";
+} from '@nestjs/websockets';
+import type { Namespace, Socket } from 'socket.io';
+import { GameService } from './game.service.js';
+import {
+  attachSocketPrincipal,
+  principalFromHandshake,
+  requireSocketPrincipal,
+  socketPrincipal,
+} from './socket-auth.js';
 
 function userChannel(userId: string): string {
   return `user:${userId}`;
@@ -19,34 +24,49 @@ function roomChannel(roomId: string): string {
   return `room:${roomId}`;
 }
 
-@WebSocketGateway({ namespace: "/lobby", cors: { origin: true } })
+@WebSocketGateway({ namespace: '/lobby', cors: { origin: true } })
 export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Namespace;
 
   constructor(private readonly game: GameService) {
     this.game.onAccountDeleted((userId) => this.disconnectUser(userId));
-    this.game.registerActiveSocketEnumerator(() => [...(this.server?.sockets.values() ?? [])]
-      .flatMap((socket) => {
+    this.game.registerActiveSocketEnumerator(() =>
+      [...(this.server?.sockets.values() ?? [])].flatMap((socket) => {
         const userId = socketPrincipal(socket)?.userId;
         return userId ? [userId] : [];
-      }));
+      }),
+    );
     this.game.onLobbyEvent((event, payload) => {
-      if (event === "lobby.roomUpdated") {
-        const p = payload as { roomId: string; room: unknown; members: Array<{ userId: string }> };
+      if (event === 'lobby.roomUpdated') {
+        const p = payload as {
+          roomId: string;
+          room: unknown;
+          members: Array<{ userId: string }>;
+        };
         if (p?.roomId) {
-          this.server?.to(p.members.map((member) => userChannel(member.userId))).emit("lobby.roomUpdated", p);
+          this.server
+            ?.to(p.members.map((member) => userChannel(member.userId)))
+            .emit('lobby.roomUpdated', p);
         }
-      } else if (event === "lobby.matchFound") {
-        const p = payload as { roomId: string; matchId: string; userIds: string[] };
+      } else if (event === 'lobby.matchFound') {
+        const p = payload as {
+          roomId: string;
+          matchId: string;
+          userIds: string[];
+        };
         if (p?.roomId) {
-          this.server?.to(p.userIds.map(userChannel)).emit("lobby.matchFound", { roomId: p.roomId, matchId: p.matchId });
+          this.server
+            ?.to(p.userIds.map(userChannel))
+            .emit('lobby.matchFound', { roomId: p.roomId, matchId: p.matchId });
         }
-      } else if (event === "lobby.queueMatched") {
+      } else if (event === 'lobby.queueMatched') {
         const p = payload as { matchId: string; userIds: string[] };
         if (p?.userIds && Array.isArray(p.userIds)) {
           for (const uid of p.userIds) {
-            this.server?.to(userChannel(uid)).emit("lobby.queueMatched", { matchId: p.matchId });
+            this.server
+              ?.to(userChannel(uid))
+              .emit('lobby.queueMatched', { matchId: p.matchId });
           }
         }
       }
@@ -75,23 +95,23 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Rooms are automatically cleaned up by Socket.io on disconnect
   }
 
-  @SubscribeMessage("lobby:join_room")
+  @SubscribeMessage('lobby:join_room')
   async onJoinRoom(
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { roomId: string },
   ): Promise<{ ok: boolean; error?: string }> {
     try {
       const { userId } = requireSocketPrincipal(client);
-      if (!body?.roomId) return { ok: false, error: "roomId is required" };
+      if (!body?.roomId) return { ok: false, error: 'roomId is required' };
       await this.game.roomForMember(userId, body.roomId);
       await client.join(roomChannel(body.roomId));
       return { ok: true };
     } catch (e: any) {
-      return { ok: false, error: e?.message ?? "failed to join room" };
+      return { ok: false, error: e?.message ?? 'failed to join room' };
     }
   }
 
-  @SubscribeMessage("lobby:leave_room")
+  @SubscribeMessage('lobby:leave_room')
   async onLeaveRoom(
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { roomId: string },

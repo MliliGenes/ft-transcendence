@@ -1,19 +1,19 @@
-import type { LobbyClient, LobbySideId, RoomWithMembers } from "./lobby";
-import type { MatchMode } from "./types";
+import type { LobbyClient, LobbySideId, RoomWithMembers } from './lobby';
+import type { MatchMode } from './types';
 
 export type LobbySessionClient = Pick<
   LobbyClient,
-  | "getActive"
-  | "cancelQueue"
-  | "createRoom"
-  | "joinRoom"
-  | "setSide"
-  | "setReady"
-  | "leaveRoom"
-  | "startRoom"
-  | "connectSocket"
-  | "joinRoomChannel"
-  | "leaveRoomChannel"
+  | 'getActive'
+  | 'cancelQueue'
+  | 'createRoom'
+  | 'joinRoom'
+  | 'setSide'
+  | 'setReady'
+  | 'leaveRoom'
+  | 'startRoom'
+  | 'connectSocket'
+  | 'joinRoomChannel'
+  | 'leaveRoomChannel'
 >;
 
 export interface LobbySessionSnapshot {
@@ -39,7 +39,7 @@ export class LobbySession {
   constructor(
     private readonly client: LobbySessionClient,
     private readonly onMatchFound: (matchId: string) => void,
-    initialMode: MatchMode = "1v1",
+    initialMode: MatchMode = '1v1',
   ) {
     this.snapshot = { mode: initialMode, roomData: null, error: null };
   }
@@ -82,19 +82,23 @@ export class LobbySession {
 
   async refresh(): Promise<void> {
     const requestVersion = ++this.requestVersion;
-    const isCurrent = () => this.active && requestVersion === this.requestVersion;
+    const isCurrent = () =>
+      this.active && requestVersion === this.requestVersion;
     this.update({ error: null });
     try {
       let activeState = await this.client.getActive();
       if (!isCurrent()) return;
 
-      if (activeState.queue?.status === "matched" && activeState.queue.matchedMatchId) {
+      if (
+        activeState.queue?.status === 'matched' &&
+        activeState.queue.matchedMatchId
+      ) {
         this.handoff(activeState.queue.matchedMatchId);
         this.applyRoom(null);
         return;
       }
 
-      if (activeState.queue?.status === "waiting") {
+      if (activeState.queue?.status === 'waiting') {
         const cancelled = await this.client.cancelQueue();
         if (!isCurrent()) return;
         if (cancelled.matched && cancelled.matchId) {
@@ -107,16 +111,17 @@ export class LobbySession {
       }
 
       const matchedRoom = activeState.room?.room;
-      if (matchedRoom?.status === "matched" && matchedRoom.matchId) {
+      if (matchedRoom?.status === 'matched' && matchedRoom.matchId) {
         this.handoff(matchedRoom.matchId);
         this.applyRoom(null);
         return;
       }
 
-      const roomData = matchedRoom?.status === "open" ? activeState.room : null;
+      const roomData = matchedRoom?.status === 'open' ? activeState.room : null;
       this.applyRoom(roomData);
     } catch (error) {
-      if (isCurrent()) this.update({ error: this.message(error, "Failed to recover lobby") });
+      if (isCurrent())
+        this.update({ error: this.message(error, 'Failed to recover lobby') });
     }
   }
 
@@ -154,7 +159,7 @@ export class LobbySession {
       const result = await this.client.startRoom(roomId);
       this.handoff(result.matchId);
     } catch (error) {
-      this.update({ error: this.message(error, "Failed to start room") });
+      this.update({ error: this.message(error, 'Failed to start room') });
     }
   }
 
@@ -165,7 +170,7 @@ export class LobbySession {
       await this.refresh();
       return true;
     } catch (error) {
-      this.update({ error: this.message(error, "Failed to update lobby") });
+      this.update({ error: this.message(error, 'Failed to update lobby') });
       return false;
     }
   }
@@ -187,7 +192,8 @@ export class LobbySession {
     });
     if (joinedRoom) {
       queueMicrotask(() => {
-        if (this.active && this.joinedRoomId === nextRoomId) void this.refresh();
+        if (this.active && this.joinedRoomId === nextRoomId)
+          void this.refresh();
       });
     }
   }

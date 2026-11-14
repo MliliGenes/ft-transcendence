@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { IconTrophy, IconArrowLeft } from "@tabler/icons-react";
-import type { MatchFinalView } from "@/lib/arena/types";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import Link from 'next/link';
+import { IconTrophy, IconArrowLeft } from '@tabler/icons-react';
+import type { MatchFinalView } from '@/lib/arena/types';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export interface MatchResultProps {
   final: MatchFinalView;
@@ -26,14 +26,20 @@ export function MatchResult({ final }: MatchResultProps) {
 
         <div className="my-6 flex items-center justify-center gap-8 border-t border-b border-border py-4">
           <div className="text-center">
-            <div className="text-xs text-muted-foreground uppercase tracking-wider">Your Score</div>
-            <div className={`font-mono text-3xl font-bold tabular-nums ${isWinner ? "text-primary" : "text-foreground"}`}>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider">
+              Your Score
+            </div>
+            <div
+              className={`font-mono text-3xl font-bold tabular-nums ${isWinner ? 'text-primary' : 'text-foreground'}`}
+            >
               {final.you}
             </div>
           </div>
           <div className="text-xl font-bold text-muted-foreground">:</div>
           <div className="text-center">
-            <div className="text-xs text-muted-foreground uppercase tracking-wider">Opponent</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider">
+              Opponent
+            </div>
             <div className="font-mono text-3xl font-bold tabular-nums text-muted-foreground">
               {final.opponent}
             </div>
@@ -41,7 +47,10 @@ export function MatchResult({ final }: MatchResultProps) {
         </div>
 
         <div className="mt-8 flex justify-center">
-          <Link href="/play" className={cn(buttonVariants({ size: "lg" }), "w-full sm:w-auto")}>
+          <Link
+            href="/play"
+            className={cn(buttonVariants({ size: 'lg' }), 'w-full sm:w-auto')}
+          >
             <IconArrowLeft className="size-4 mr-2" />
             <span>Return to Play Lobby</span>
           </Link>

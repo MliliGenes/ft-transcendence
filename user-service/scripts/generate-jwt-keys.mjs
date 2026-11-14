@@ -27,4 +27,6 @@ writeFileSync(privatePath, privateKey, { flag: 'wx', mode: 0o600 });
 writeFileSync(publicPath, publicKey, { flag: 'wx', mode: 0o644 });
 
 console.log(`Key pair saved to ${fileURLToPath(directory)}`);
-console.log('Copy the PEM contents into JWT_PRIVATE_KEY and JWT_PUBLIC_KEY in .env.');
+console.log(
+  'Copy the PEM contents into JWT_PRIVATE_KEY and JWT_PUBLIC_KEY in .env.',
+);

@@ -1,13 +1,16 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { io } from "socket.io-client";
+import { spawn, type ChildProcess } from 'node:child_process';
+import path from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { io } from 'socket.io-client';
 
 const PORT = 3217;
 const BASE = `http://localhost:${PORT}`;
-const PG_URL = process.env.TEST_PG_URL ?? "";
+const PG_URL = process.env.TEST_PG_URL ?? '';
 const HAS_PG = Boolean(process.env.TEST_PG_URL);
-if (!HAS_PG) console.warn(`[service.test] skipping Postgres restart test: no TEST_PG_URL set in environment`);
+if (!HAS_PG)
+  console.warn(
+    `[service.test] skipping Postgres restart test: no TEST_PG_URL set in environment`,
+  );
 
 const SOLVED_PY = `def ledger_sum(nums):
     total = 0
@@ -20,12 +23,17 @@ const STARTER_PY = `def ledger_sum(nums):
 `;
 
 function headers(user?: string): Record<string, string> {
-  const h: Record<string, string> = { "content-type": "application/json" };
-  if (user) h["x-dev-user-id"] = user;
+  const h: Record<string, string> = { 'content-type': 'application/json' };
+  if (user) h['x-dev-user-id'] = user;
   return h;
 }
 
-async function api(method: string, path: string, user?: string, body?: unknown): Promise<{ status: number; json: unknown }> {
+async function api(
+  method: string,
+  path: string,
+  user?: string,
+  body?: unknown,
+): Promise<{ status: number; json: unknown }> {
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: headers(user),
@@ -34,11 +42,19 @@ async function api(method: string, path: string, user?: string, body?: unknown):
   return { status: res.status, json: await res.json().catch(() => null) };
 }
 
-async function boot(extraEnv: Record<string, string> = {}, timeoutMs = 20000): Promise<ChildProcess> {
-  const child = spawn("node", ["dist/main.js"], {
-    cwd: path.join(__dirname, "..", ".."),
-    env: { ...process.env, PORT: String(PORT), DEV_PRINCIPAL: "true", ...extraEnv },
-    stdio: "ignore",
+async function boot(
+  extraEnv: Record<string, string> = {},
+  timeoutMs = 20000,
+): Promise<ChildProcess> {
+  const child = spawn('node', ['dist/main.js'], {
+    cwd: path.join(__dirname, '..', '..'),
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      DEV_PRINCIPAL: 'true',
+      ...extraEnv,
+    },
+    stdio: 'ignore',
   });
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -50,13 +66,13 @@ async function boot(extraEnv: Record<string, string> = {}, timeoutMs = 20000): P
     }
     if (Date.now() > deadline) {
       child.kill();
-      throw new Error("service did not boot");
+      throw new Error('service did not boot');
     }
     await new Promise((r) => setTimeout(r, 200));
   }
 }
 
-describe("game service integration (real HTTP + sockets + containers)", () => {
+describe('game service integration (real HTTP + sockets + containers)', () => {
   let server: ChildProcess;
 
   beforeAll(async () => {
@@ -68,118 +84,208 @@ describe("game service integration (real HTTP + sockets + containers)", () => {
   });
 
   async function newMatch(): Promise<string> {
-    const res = await api("POST", "/matches", "user-a", {
-      mode: "1v1",
+    const res = await api('POST', '/matches', 'user-a', {
+      mode: '1v1',
       participants: [
-        { userId: "user-a", sideId: "left" },
-        { userId: "user-b", sideId: "right" },
+        { userId: 'user-a', sideId: 'left' },
+        { userId: 'user-b', sideId: 'right' },
       ],
-      problemVersionIds: ["even-ledger", "even-ledger", "even-ledger"],
+      problemVersionIds: ['even-ledger', 'even-ledger', 'even-ledger'],
     });
     expect(res.status).toBe(201);
     return (res.json as { matchId: string }).matchId;
   }
 
-  it("auth: missing principal 401, stranger 403", async () => {
+  it('auth: missing principal 401, stranger 403', async () => {
     const matchId = await newMatch();
-    expect((await api("GET", `/matches/${matchId}/snapshot`)).status).toBe(401);
-    expect((await api("GET", `/matches/${matchId}/snapshot`, "user-stranger")).status).toBe(403);
-    expect((await api("POST", `/matches/${matchId}/submit`, "user-stranger", { code: "x", language: "Python" })).status).toBe(403);
+    expect((await api('GET', `/matches/${matchId}/snapshot`)).status).toBe(401);
+    expect(
+      (await api('GET', `/matches/${matchId}/snapshot`, 'user-stranger'))
+        .status,
+    ).toBe(403);
+    expect(
+      (
+        await api('POST', `/matches/${matchId}/submit`, 'user-stranger', {
+          code: 'x',
+          language: 'Python',
+        })
+      ).status,
+    ).toBe(403);
   });
 
-  it("serves authenticated, sanitized completed-match history, stats, and leaderboard rows", async () => {
+  it('serves authenticated, sanitized completed-match history, stats, and leaderboard rows', async () => {
     const matchId = await newMatch();
-    expect((await api("POST", `/matches/${matchId}/start`, "user-a")).status).toBe(201);
-    expect((await api("POST", `/matches/${matchId}/leave`, "user-b")).status).toBe(201);
+    expect(
+      (await api('POST', `/matches/${matchId}/start`, 'user-a')).status,
+    ).toBe(201);
+    expect(
+      (await api('POST', `/matches/${matchId}/leave`, 'user-b')).status,
+    ).toBe(201);
 
-    expect((await api("GET", "/users/user-a/matches")).status).toBe(401);
-    const history = await api("GET", "/users/user-a/matches", "viewer");
+    expect((await api('GET', '/users/user-a/matches')).status).toBe(401);
+    const history = await api('GET', '/users/user-a/matches', 'viewer');
     expect(history.status).toBe(200);
-    const matches = (history.json as { matches: Array<Record<string, unknown>> }).matches;
+    const matches = (
+      history.json as { matches: Array<Record<string, unknown>> }
+    ).matches;
     expect(matches).toHaveLength(1);
     expect(matches[0]).toMatchObject({
       matchId,
-      mode: "1v1",
-      outcome: "win",
-      opponentUserIds: ["user-b"],
+      mode: '1v1',
+      outcome: 'win',
+      opponentUserIds: ['user-b'],
       score: { for: 0, against: 0 },
     });
-    expect(matches[0]).toHaveProperty("playedAt");
-    expect(matches[0]).not.toHaveProperty("rounds");
+    expect(matches[0]).toHaveProperty('playedAt');
+    expect(matches[0]).not.toHaveProperty('rounds');
 
-    const stats = await api("GET", "/users/user-a/stats", "viewer");
+    const stats = await api('GET', '/users/user-a/stats', 'viewer');
     expect(stats.status).toBe(200);
-    expect(stats.json).toMatchObject({ userId: "user-a", matchesPlayed: 1, wins: 1, losses: 0, draws: 0, winRate: 1 });
+    expect(stats.json).toMatchObject({
+      userId: 'user-a',
+      matchesPlayed: 1,
+      wins: 1,
+      losses: 0,
+      draws: 0,
+      winRate: 1,
+    });
 
-    const leaderboard = await api("GET", "/leaderboard", "viewer");
+    const leaderboard = await api('GET', '/leaderboard', 'viewer');
     expect(leaderboard.status).toBe(200);
-    expect((leaderboard.json as { players: Array<Record<string, unknown>> }).players).toContainEqual(
-      expect.objectContaining({ userId: "user-a", matchesPlayed: 1, wins: 1 }),
+    expect(
+      (leaderboard.json as { players: Array<Record<string, unknown>> }).players,
+    ).toContainEqual(
+      expect.objectContaining({ userId: 'user-a', matchesPlayed: 1, wins: 1 }),
     );
   });
 
-  it("HTTP 1v1 real E2E: run, submit, auto-reveal x3, final", async () => {
+  it('HTTP 1v1 real E2E: run, submit, auto-reveal x3, final', async () => {
     const matchId = await newMatch();
-    await api("POST", `/matches/${matchId}/start`, "user-a", {});
-    await api("POST", `/matches/${matchId}/begin`, "user-a", {});
-        for (let round = 0; round < 3; round++) {
-      const run = await api("POST", `/matches/${matchId}/run`, "user-a", { code: SOLVED_PY, language: "Python" });
+    await api('POST', `/matches/${matchId}/start`, 'user-a', {});
+    await api('POST', `/matches/${matchId}/begin`, 'user-a', {});
+    for (let round = 0; round < 3; round++) {
+      const run = await api('POST', `/matches/${matchId}/run`, 'user-a', {
+        code: SOLVED_PY,
+        language: 'Python',
+      });
       expect(run.status).toBe(201);
-      expect((run.json as { tests: Array<{ passed: boolean }> }).tests.every((t) => t.passed)).toBe(true);
-      expect((await api("POST", `/matches/${matchId}/submit`, "user-a", { code: SOLVED_PY, language: "Python" })).status).toBe(201);
-      expect((await api("POST", `/matches/${matchId}/submit`, "user-b", { code: STARTER_PY, language: "Python" })).status).toBe(201);
+      expect(
+        (run.json as { tests: Array<{ passed: boolean }> }).tests.every(
+          (t) => t.passed,
+        ),
+      ).toBe(true);
+      expect(
+        (
+          await api('POST', `/matches/${matchId}/submit`, 'user-a', {
+            code: SOLVED_PY,
+            language: 'Python',
+          })
+        ).status,
+      ).toBe(201);
+      expect(
+        (
+          await api('POST', `/matches/${matchId}/submit`, 'user-b', {
+            code: STARTER_PY,
+            language: 'Python',
+          })
+        ).status,
+      ).toBe(201);
       let snap: unknown = null;
       for (let i = 0; i < 40; i++) {
-        const s = await api("GET", `/matches/${matchId}/snapshot`, "user-a");
+        const s = await api('GET', `/matches/${matchId}/snapshot`, 'user-a');
         snap = s.json;
-        if ((snap as { roundPhase: string }).roundPhase === "SCORE_REVEAL") break;
+        if ((snap as { roundPhase: string }).roundPhase === 'SCORE_REVEAL')
+          break;
         await new Promise((r) => setTimeout(r, 250));
       }
-      expect((snap as { roundPhase: string }).roundPhase).toBe("SCORE_REVEAL");
-      expect((snap as { reveal: { scores: unknown } }).reveal.scores).toEqual({ left: 100, right: 28 });
-      expect((snap as { reveal: { groups: unknown } }).reveal.groups).toBeDefined();
-      await api("POST", `/matches/${matchId}/advance`, "user-a", {});
-      if (round < 2) await api("POST", `/matches/${matchId}/begin`, "user-a", {});
+      expect((snap as { roundPhase: string }).roundPhase).toBe('SCORE_REVEAL');
+      expect((snap as { reveal: { scores: unknown } }).reveal.scores).toEqual({
+        left: 100,
+        right: 28,
+      });
+      expect(
+        (snap as { reveal: { groups: unknown } }).reveal.groups,
+      ).toBeDefined();
+      await api('POST', `/matches/${matchId}/advance`, 'user-a', {});
+      if (round < 2)
+        await api('POST', `/matches/${matchId}/begin`, 'user-a', {});
     }
-    const fin = await api("GET", `/matches/${matchId}/final`, "user-a");
-    expect((fin.json as { scores: unknown }).scores).toEqual({ left: 300, right: 84 });
-    expect((fin.json as { winner: unknown }).winner).toBe("left");
+    const fin = await api('GET', `/matches/${matchId}/final`, 'user-a');
+    expect((fin.json as { scores: unknown }).scores).toEqual({
+      left: 300,
+      right: 84,
+    });
+    expect((fin.json as { winner: unknown }).winner).toBe('left');
   }, 180000);
 
-  it("sockets: snapshot on connect, actions by ack, shared reveal broadcast", async () => {
+  it('sockets: snapshot on connect, actions by ack, shared reveal broadcast', async () => {
     const matchId = await newMatch();
-    await api("POST", `/matches/${matchId}/start`, "user-a", {});
-    await api("POST", `/matches/${matchId}/begin`, "user-a", {});
-    const sockA = io(BASE, { auth: { userId: "user-a", matchId } });
-    const sockB = io(BASE, { auth: { userId: "user-b", matchId } });
-    const snapA = await new Promise<unknown>((resolve) => sockA.once("snapshot", resolve));
-    expect((snapA as { roundPhase: string }).roundPhase).toBe("CODING");
-    const runAck = await sockA.emitWithAck("run", { code: SOLVED_PY, language: "Python" });
+    await api('POST', `/matches/${matchId}/start`, 'user-a', {});
+    await api('POST', `/matches/${matchId}/begin`, 'user-a', {});
+    const sockA = io(BASE, { auth: { userId: 'user-a', matchId } });
+    const sockB = io(BASE, { auth: { userId: 'user-b', matchId } });
+    const snapA = await new Promise<unknown>((resolve) =>
+      sockA.once('snapshot', resolve),
+    );
+    expect((snapA as { roundPhase: string }).roundPhase).toBe('CODING');
+    const runAck = await sockA.emitWithAck('run', {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
     expect(runAck.ok).toBe(true);
     const reveals: unknown[] = [];
-    sockA.on("reveal.published", (p) => reveals.push(["a", p]));
-    sockB.on("reveal.published", (p) => reveals.push(["b", p]));
-    expect(((await sockA.emitWithAck("submit", { code: SOLVED_PY, language: "Python" })) as { ok: boolean }).ok).toBe(true);
-    expect(((await sockB.emitWithAck("submit", { code: STARTER_PY, language: "Python" })) as { ok: boolean }).ok).toBe(true);
+    sockA.on('reveal.published', (p) => reveals.push(['a', p]));
+    sockB.on('reveal.published', (p) => reveals.push(['b', p]));
+    expect(
+      (
+        (await sockA.emitWithAck('submit', {
+          code: SOLVED_PY,
+          language: 'Python',
+        })) as { ok: boolean }
+      ).ok,
+    ).toBe(true);
+    expect(
+      (
+        (await sockB.emitWithAck('submit', {
+          code: STARTER_PY,
+          language: 'Python',
+        })) as { ok: boolean }
+      ).ok,
+    ).toBe(true);
     const deadline = Date.now() + 15000;
-    while (reveals.length < 2 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 200));
+    while (reveals.length < 2 && Date.now() < deadline)
+      await new Promise((r) => setTimeout(r, 200));
     expect(reveals.length).toBe(2);
     sockA.disconnect();
     sockB.disconnect();
   }, 60000);
 
-  it.skipIf(!HAS_PG)("restart with Postgres keeps counted result and reveal", async () => {
-    server.kill();
-    await new Promise((r) => setTimeout(r, 500));
-    server = await boot({ DATABASE_URL: PG_URL });
-    const matchId = await newMatch();
-    await api("POST", `/matches/${matchId}/start`, "user-a", {});
-    await api("POST", `/matches/${matchId}/begin`, "user-a", {});
-    expect((await api("POST", `/matches/${matchId}/submit`, "user-a", { code: SOLVED_PY, language: "Python" })).status).toBe(201);
-    server.kill();
-    await new Promise((r) => setTimeout(r, 500));
-    server = await boot({ DATABASE_URL: PG_URL }, 60000);
-    const snap = await api("GET", `/matches/${matchId}/snapshot`, "user-a");
-    expect((snap.json as { sides: { left: { submissions: number } } }).sides.left.submissions).toBe(1);
-  }, 120000);
+  it.skipIf(!HAS_PG)(
+    'restart with Postgres keeps counted result and reveal',
+    async () => {
+      server.kill();
+      await new Promise((r) => setTimeout(r, 500));
+      server = await boot({ DATABASE_URL: PG_URL });
+      const matchId = await newMatch();
+      await api('POST', `/matches/${matchId}/start`, 'user-a', {});
+      await api('POST', `/matches/${matchId}/begin`, 'user-a', {});
+      expect(
+        (
+          await api('POST', `/matches/${matchId}/submit`, 'user-a', {
+            code: SOLVED_PY,
+            language: 'Python',
+          })
+        ).status,
+      ).toBe(201);
+      server.kill();
+      await new Promise((r) => setTimeout(r, 500));
+      server = await boot({ DATABASE_URL: PG_URL }, 60000);
+      const snap = await api('GET', `/matches/${matchId}/snapshot`, 'user-a');
+      expect(
+        (snap.json as { sides: { left: { submissions: number } } }).sides.left
+          .submissions,
+      ).toBe(1);
+    },
+    120000,
+  );
 });

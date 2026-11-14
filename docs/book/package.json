@@ -3,6 +3,11 @@
   "private": true,
   "type": "module",
   "description": "Builds the Nook PDF book from docs, OpenAPI specs, graphify and Understand-Anything graphs.",
-  "scripts": { "build": "node build.mjs" },
-  "dependencies": { "marked": "^15.0.0", "puppeteer-core": "^24.0.0" }
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "marked": "^15.0.0",
+    "puppeteer-core": "^24.0.0"
+  }
 }

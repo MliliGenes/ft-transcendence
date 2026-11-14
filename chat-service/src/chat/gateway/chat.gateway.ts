@@ -13,7 +13,10 @@ import type { Namespace, Socket } from 'socket.io';
 import type { Message } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { PresenceAudienceService } from '../presence/presence-audience.service.js';
-import { PresenceService, type PresenceChange } from '../presence/presence.service.js';
+import {
+  PresenceService,
+  type PresenceChange,
+} from '../presence/presence.service.js';
 
 @WebSocketGateway({ namespace: '/chat' })
 export class ChatGateway implements OnGatewayInit, OnModuleDestroy {
@@ -178,7 +181,8 @@ export class ChatGateway implements OnGatewayInit, OnModuleDestroy {
     knownAudience?: string[],
   ) {
     this.namespace.to(`user:${change.userId}`).emit('presence:changed', change);
-    const audience = knownAudience ?? await this.getPresenceAudience(change.userId);
+    const audience =
+      knownAudience ?? (await this.getPresenceAudience(change.userId));
     const rooms = audience
       .filter((userId) => userId !== change.userId)
       .map((userId) => `user:${userId}`);
@@ -190,7 +194,10 @@ export class ChatGateway implements OnGatewayInit, OnModuleDestroy {
     try {
       return await this.presenceAudience.getUserIds(userId);
     } catch (error) {
-      this.logger.warn(`Could not resolve presence audience for ${userId}`, error);
+      this.logger.warn(
+        `Could not resolve presence audience for ${userId}`,
+        error,
+      );
       return [];
     }
   }

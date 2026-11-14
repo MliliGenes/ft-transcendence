@@ -118,7 +118,11 @@ describe('ChatService block enforcement', () => {
       broadcastMessageCreated: vi.fn(),
     } as unknown as ChatGateway;
     const userProfiles = {
-      ensureCanContact: vi.fn().mockRejectedValue(new ForbiddenException('You cannot contact this user')),
+      ensureCanContact: vi
+        .fn()
+        .mockRejectedValue(
+          new ForbiddenException('You cannot contact this user'),
+        ),
     } as unknown as UserProfilesService;
     const service = new ChatService(
       prisma,
@@ -128,15 +132,17 @@ describe('ChatService block enforcement', () => {
       { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 
-    await expect(service.sendMessage(
-      authorId,
-      {
-        content: 'Blocked message',
-        clientRequestId: '0a1b2c3d-5555-4555-8555-555555555555',
-      },
-      conversationId,
-      'Bearer token',
-    )).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      service.sendMessage(
+        authorId,
+        {
+          content: 'Blocked message',
+          clientRequestId: '0a1b2c3d-5555-4555-8555-555555555555',
+        },
+        conversationId,
+        'Bearer token',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(prisma.message.create).not.toHaveBeenCalled();
     expect(gateway.broadcastMessageCreated).not.toHaveBeenCalled();
@@ -152,7 +158,9 @@ describe('ChatService read receipts', () => {
     const readAt = new Date('2026-11-10T04:00:00.000Z');
     const prisma = {
       message: {
-        findFirst: vi.fn().mockResolvedValue({ id: messageId, createdAt: readAt }),
+        findFirst: vi
+          .fn()
+          .mockResolvedValue({ id: messageId, createdAt: readAt }),
       },
       conversation: {
         findFirst: vi.fn().mockResolvedValue({
@@ -174,7 +182,9 @@ describe('ChatService read receipts', () => {
       { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 
-    await expect(service.markRead(readerId, conversationId, messageId)).resolves.toEqual({
+    await expect(
+      service.markRead(readerId, conversationId, messageId),
+    ).resolves.toEqual({
       messageId,
       readAt: readAt.toISOString(),
     });
@@ -182,7 +192,11 @@ describe('ChatService read receipts', () => {
     expect(prisma.conversationReadState.upsert).toHaveBeenCalledWith({
       where: { conversationId_userId: { conversationId, userId: readerId } },
       update: { lastReadMessageId: messageId },
-      create: { conversationId, userId: readerId, lastReadMessageId: messageId },
+      create: {
+        conversationId,
+        userId: readerId,
+        lastReadMessageId: messageId,
+      },
     });
     expect(gateway.broadcastReadState).toHaveBeenCalledWith(
       [readerId, otherUserId],
@@ -202,9 +216,15 @@ describe('ChatService read receipts', () => {
     const updatedAt = new Date('2026-11-10T04:01:00.000Z');
     const createdAt = new Date('2026-11-10T04:00:00.000Z');
     const prisma = {
-      conversation: { findFirst: vi.fn().mockResolvedValue({ id: conversationId }) },
+      conversation: {
+        findFirst: vi.fn().mockResolvedValue({ id: conversationId }),
+      },
       conversationReadState: {
-        findMany: vi.fn().mockResolvedValue([{ userId: readerId, lastReadMessageId: messageId, updatedAt }]),
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { userId: readerId, lastReadMessageId: messageId, updatedAt },
+          ]),
       },
       message: {
         findMany: vi.fn().mockResolvedValue([{ id: messageId, createdAt }]),
@@ -218,7 +238,9 @@ describe('ChatService read receipts', () => {
       { canAnnounce: vi.fn() } as unknown as GameRoomsClient,
     );
 
-    await expect(service.getReadStates(readerId, conversationId)).resolves.toEqual([
+    await expect(
+      service.getReadStates(readerId, conversationId),
+    ).resolves.toEqual([
       {
         userId: readerId,
         lastReadMessageId: messageId,

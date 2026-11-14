@@ -1,5 +1,5 @@
 # User and chat integration
- 
+
 This guide covers the User-to-Chat RabbitMQ flow that keeps account profiles in sync, plus the shared JWT, HTTP fallback and block checks. RabbitMQ also carries account-deletion events to Game and Game lifecycle notices to Chat; see the [Chat service guide](../services/chat-service.md#code-arena-lifecycle-notifications) and [Code Arena integration specification](../spec/code-arena-integration-spec.md). Written from the code as of November 2026.
 
 ---
@@ -13,11 +13,11 @@ Two services need the same fact: **who a user is**.
 
 Options:
 
-| Option | Problem |
-| --- | --- |
-| Chat calls user-service over HTTP on every request | Slow, and chat breaks whenever user-service is down |
-| Chat reads the user database directly | Couples the services; breaks the microservice rule that each service owns its data |
-| **User-service publishes events, chat keeps a local copy** | Chosen. Chat is fast and independent. The price is *eventual consistency*: the copy can lag briefly |
+| Option                                                     | Problem                                                                                             |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Chat calls user-service over HTTP on every request         | Slow, and chat breaks whenever user-service is down                                                 |
+| Chat reads the user database directly                      | Couples the services; breaks the microservice rule that each service owns its data                  |
+| **User-service publishes events, chat keeps a local copy** | Chosen. Chat is fast and independent. The price is _eventual consistency_: the copy can lag briefly |
 
 The local copy is the `ChatUser` table in chat-service. RabbitMQ is the pipe that keeps it up to date.
 
@@ -32,7 +32,7 @@ flowchart LR
 ```
 
 - **Publisher / producer**: sends a message. It never talks to the consumer directly.
-- **Exchange**: the router. Publishers send to an exchange, never to a queue. Ours is `user.events`, type **topic**, so routing uses patterns on the *routing key*.
+- **Exchange**: the router. Publishers send to an exchange, never to a queue. Ours is `user.events`, type **topic**, so routing uses patterns on the _routing key_.
 - **Routing key**: a label on the message, here the event type: `user.created`, `user.updated`, `user.deleted`.
 - **Binding**: a rule connecting an exchange to a queue. Ours: `user.#`. In topic patterns `*` matches exactly one word and `#` matches zero or more words, so `user.#` matches every `user.something`.
 - **Queue**: the buffer that holds messages until a consumer takes them. **Durable** queues survive a broker restart.
@@ -40,10 +40,10 @@ flowchart LR
 
 Two independent reliability mechanisms, which people often confuse:
 
-| Mechanism | Direction | Meaning |
-| --- | --- | --- |
+| Mechanism             | Direction           | Meaning                                               |
+| --------------------- | ------------------- | ----------------------------------------------------- |
 | **Publisher confirm** | broker to publisher | "I received and took responsibility for your message" |
-| **Consumer ack** | consumer to broker | "I finished processing this delivery" |
+| **Consumer ack**      | consumer to broker  | "I finished processing this delivery"                 |
 
 Persistence: a message is only written to disk if it is published as `persistent: true` **and** the queue is durable. We do both.
 
@@ -51,16 +51,16 @@ Delivery guarantee: RabbitMQ with acks gives **at-least-once** delivery. A messa
 
 ## 3. The topology in this project
 
-| Setting | Value |
-| --- | --- |
-| Broker image | `rabbitmq:4-management` |
-| Exchange | `user.events`, type `topic`, durable |
-| Queue | `chat.user-events`, durable |
-| Binding | `user.#` |
-| Routing key used when publishing | the event type (`user.created` etc.) |
-| Publisher options | persistent messages, confirm channel, 5 s publish timeout |
-| Consumer options | manual ack (`noAck: false`), `prefetch(1)` |
-| Connection | heartbeat 30 s, reconnect every 2 s (via `amqp-connection-manager`) |
+| Setting                          | Value                                                               |
+| -------------------------------- | ------------------------------------------------------------------- |
+| Broker image                     | `rabbitmq:4-management`                                             |
+| Exchange                         | `user.events`, type `topic`, durable                                |
+| Queue                            | `chat.user-events`, durable                                         |
+| Binding                          | `user.#`                                                            |
+| Routing key used when publishing | the event type (`user.created` etc.)                                |
+| Publisher options                | persistent messages, confirm channel, 5 s publish timeout           |
+| Consumer options                 | manual ack (`noAck: false`), `prefetch(1)`                          |
+| Connection                       | heartbeat 30 s, reconnect every 2 s (via `amqp-connection-manager`) |
 
 Both services declare the exchange, queue and binding on startup (`assertExchange`, `assertQueue`, `bindQueue`). Declaring is idempotent as long as the arguments match. This is why startup order does not matter: whichever service connects first creates the topology.
 
@@ -82,7 +82,12 @@ Every event is an envelope:
   "eventType": "user.updated",
   "version": "2026-11-03T10:00:00.000Z",
   "occurredAt": "2026-11-03T10:00:00.020Z",
-  "data": { "userId": "uuid", "username": "...", "displayName": null, "avatarUrl": null }
+  "data": {
+    "userId": "uuid",
+    "username": "...",
+    "displayName": null,
+    "avatarUrl": null
+  }
 }
 ```
 
@@ -100,13 +105,13 @@ No email, password or global role ever travels over the broker.
 - `publish()` does `channel.publish(exchange, routingKey = eventType, Buffer(JSON), { persistent: true, contentType, messageId: eventId, timestamp })`. The returned promise resolves once the broker confirms, or rejects after 5 s.
 - The connection-failure log deliberately does not print the URL, because it contains the password.
 
-Who calls it (all `await this.events?.publishX(...)` *after* the DB write):
+Who calls it (all `await this.events?.publishX(...)` _after_ the DB write):
 
-| Event | Call sites |
-| --- | --- |
-| `user.created` | `auth.service.ts` lines ~91, ~194, ~332 (register, OAuth paths); `superadmin.service.ts` ~136 |
+| Event          | Call sites                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `user.created` | `auth.service.ts` lines ~91, ~194, ~332 (register, OAuth paths); `superadmin.service.ts` ~136                       |
 | `user.updated` | `accounts.service.ts` ~267, ~329, ~398 (profile edit, avatar); `superadmin.service.ts` ~165; `auth.service.ts` ~891 |
-| `user.deleted` | `accounts.service.ts` ~298; `superadmin.service.ts` ~191 |
+| `user.deleted` | `accounts.service.ts` ~298; `superadmin.service.ts` ~191                                                            |
 
 Note the `?.`: `events` is optional, so tests can run without a broker. Editing a row by hand in the DB publishes nothing.
 
@@ -120,12 +125,12 @@ Setup (lines ~56-78): same connection options, a channel with `confirm: false` (
 
 Handler `consume()` (lines ~88-112):
 
-| Situation | Action |
-| --- | --- |
-| Body is not valid JSON | log warning, **ack**, discard |
-| Fails `parseUserEvent` | log warning, **ack**, discard |
-| `applyEvent` succeeds (including "ignored as stale") | **ack** |
-| `applyEvent` throws (DB down, etc.) | `nack(message, false, true)` = **requeue** |
+| Situation                                            | Action                                     |
+| ---------------------------------------------------- | ------------------------------------------ |
+| Body is not valid JSON                               | log warning, **ack**, discard              |
+| Fails `parseUserEvent`                               | log warning, **ack**, discard              |
+| `applyEvent` succeeds (including "ignored as stale") | **ack**                                    |
+| `applyEvent` throws (DB down, etc.)                  | `nack(message, false, true)` = **requeue** |
 
 Discarding bad messages with an ack is intentional: a malformed message will never become valid, so requeuing it would loop forever.
 
@@ -140,13 +145,13 @@ Discarding bad messages with an ack is intentional: a malformed message will nev
 
 Because every event carries a full snapshot and a `version`, the rule is "newest version wins":
 
-| Existing local state | Incoming event | Result |
-| --- | --- | --- |
-| no row | created or updated | insert |
-| older version | newer profile event | replace, advance version |
-| same version | duplicate delivery | no-op (**idempotent**) |
-| newer version | older, delayed event | no-op (cannot go backwards) |
-| no row or older | deleted | insert or update a tombstone |
+| Existing local state | Incoming event       | Result                       |
+| -------------------- | -------------------- | ---------------------------- |
+| no row               | created or updated   | insert                       |
+| older version        | newer profile event  | replace, advance version     |
+| same version         | duplicate delivery   | no-op (**idempotent**)       |
+| newer version        | older, delayed event | no-op (cannot go backwards)  |
+| no row or older      | deleted              | insert or update a tombstone |
 
 Consequences:
 
@@ -165,7 +170,7 @@ Consequences:
 3. inserts them (`skipDuplicates`), using `createdAt` as `sourceUpdatedAt`,
 4. checks every requested user has `deletedAt = null`.
 
-Errors: unknown account gives 404; user-service unreachable or invalid response gives 503. It only fills *missing* rows. It never refreshes existing ones and never discovers a deletion whose event was lost.
+Errors: unknown account gives 404; user-service unreachable or invalid response gives 503. It only fills _missing_ rows. It never refreshes existing ones and never discovers a deletion whose event was lost.
 
 ## 7. Known limitations (be honest about these in the defense)
 
@@ -193,10 +198,10 @@ A defensible answer for each: "known, acceptable for the project scope, and here
 
 Alloy scrapes the RabbitMQ Prometheus endpoint (:15692) every 15 s. The "Databases & Broker" Grafana dashboard shows connections, queue depth, unacked messages and message rates. Two alerts live in `infra/monitoring/prometheus/alerts.yml`:
 
-| Alert | Fires when | Usually means |
-| --- | --- | --- |
-| `RabbitMQQueueBacklog` | more than 100 `ready` messages for 5 min | chat-service consumer is down or too slow |
-| `RabbitMQUnackedHigh` | more than 50 `unacked` messages for 5 min | consumer is stuck mid-processing |
+| Alert                  | Fires when                                | Usually means                             |
+| ---------------------- | ----------------------------------------- | ----------------------------------------- |
+| `RabbitMQQueueBacklog` | more than 100 `ready` messages for 5 min  | chat-service consumer is down or too slow |
+| `RabbitMQUnackedHigh`  | more than 50 `unacked` messages for 5 min | consumer is stuck mid-processing          |
 
 Mapping to this design: `ready` = waiting in the queue; `unacked` = delivered but not yet acked. With `prefetch(1)` unacked should normally be 0 or 1.
 
@@ -206,8 +211,8 @@ Open the management UI at `http://127.0.0.1:15672` and log in with the credentia
 
 1. **See the topology.** Exchanges tab: find `user.events` (type topic, durable). Queues tab: find `chat.user-events`. Click the exchange and check the binding `user.#`.
 2. **Watch a message flow.** Register a user in the app. In the Queues tab, watch the message rates graph tick. Check chat-db: `SELECT * FROM "ChatUser" ORDER BY "sourceUpdatedAt" DESC LIMIT 3;`
-3. **Prove durability and buffering.** `docker compose stop chat-service`, then edit your profile or avatar a few times. In the UI the queue shows *Ready* going up. `docker compose start chat-service` and *Ready* drains to 0 and the profile appears. This is the best demo of why we use a broker.
-4. **Prove idempotency.** In the queue's "Publish message" box on the exchange, send a `user.updated` JSON with an *older* `version` for an existing user, then check the row did not change.
+3. **Prove durability and buffering.** `docker compose stop chat-service`, then edit your profile or avatar a few times. In the UI the queue shows _Ready_ going up. `docker compose start chat-service` and _Ready_ drains to 0 and the profile appears. This is the best demo of why we use a broker.
+4. **Prove idempotency.** In the queue's "Publish message" box on the exchange, send a `user.updated` JSON with an _older_ `version` for an existing user, then check the row did not change.
 5. **Prove poison handling.** Publish `{"hello":1}` to the exchange with routing key `user.updated`. The chat logs show "Discarded invalid user event", and the queue stays empty.
 6. **Break the broker.** `docker compose stop rabbitmq`, then try to register. Observe the failure mode (section 7, limitation 1). Start it again and watch the services reconnect (the 2 s reconnect logs).
 
@@ -260,12 +265,12 @@ Remember: at-least-once delivery, idempotent consumer, newest `version` wins, so
 
 ## 13. The other links between the two services
 
-| Link | Direction | Used for | If it fails |
-| --- | --- | --- | --- |
-| RabbitMQ `user.events` | user-service to chat | Profile copies, feed membership | Events buffer while chat is down. Events published while the broker is down are lost. |
-| Shared JWT | user-service signs, chat verifies | Identity on every request and socket | Chat cannot verify without the matching public key |
-| `GET /accounts/:id` | chat to user-service | Fill a missing `ChatUser` | 404 for an unknown user, 503 if unreachable |
-| `GET /social/blocks/check/:userId` | chat to user-service | Block check for DMs | 503 if unreachable, 403 if blocked |
+| Link                               | Direction                         | Used for                             | If it fails                                                                           |
+| ---------------------------------- | --------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------- |
+| RabbitMQ `user.events`             | user-service to chat              | Profile copies, feed membership      | Events buffer while chat is down. Events published while the broker is down are lost. |
+| Shared JWT                         | user-service signs, chat verifies | Identity on every request and socket | Chat cannot verify without the matching public key                                    |
+| `GET /accounts/:id`                | chat to user-service              | Fill a missing `ChatUser`            | 404 for an unknown user, 503 if unreachable                                           |
+| `GET /social/blocks/check/:userId` | chat to user-service              | Block check for DMs                  | 503 if unreachable, 403 if blocked                                                    |
 
 ### Shared JWT
 
@@ -277,11 +282,11 @@ Blocks live in user-service. `UserProfilesService.ensureCanContact` forwards the
 
 ### Ownership
 
-| Data | Owner | Chat's view |
-| --- | --- | --- |
-| Accounts, credentials, global role | user-service | Never copied |
-| Public profile | user-service | `ChatUser`, eventually consistent |
-| Friendships, blocks | user-service | Asked over HTTP when needed |
-| Conversations, messages, group roles, presence | chat-service | Owner |
+| Data                                           | Owner        | Chat's view                       |
+| ---------------------------------------------- | ------------ | --------------------------------- |
+| Accounts, credentials, global role             | user-service | Never copied                      |
+| Public profile                                 | user-service | `ChatUser`, eventually consistent |
+| Friendships, blocks                            | user-service | Asked over HTTP when needed       |
+| Conversations, messages, group roles, presence | chat-service | Owner                             |
 
 `ChatUser.id` equals the user-service UUID. There is no foreign key across the two databases.

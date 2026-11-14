@@ -25,18 +25,28 @@ export async function bootstrapSuperadmin(client, env = process.env) {
     const email = env.SUPERADMIN_EMAIL?.trim();
     const password = env.SUPERADMIN_PASSWORD;
     if (!username || !email || !password) {
-      throw new Error('Set SUPERADMIN_USERNAME, SUPERADMIN_EMAIL, and SUPERADMIN_PASSWORD in envs/user-service.env.');
+      throw new Error(
+        'Set SUPERADMIN_USERNAME, SUPERADMIN_EMAIL, and SUPERADMIN_PASSWORD in envs/user-service.env.',
+      );
     }
-    if (!length(username, 3, 30) || !isEmail(email) ||
-        !length(password, 8, 32) || !isByteLength(password, 0, 72)) {
-      throw new Error('Invalid superadmin settings: username must be 3–30 characters, email must be valid, and password must be 8–32 characters and at most 72 UTF-8 bytes.');
+    if (
+      !length(username, 3, 30) ||
+      !isEmail(email) ||
+      !length(password, 8, 32) ||
+      !isByteLength(password, 0, 72)
+    ) {
+      throw new Error(
+        'Invalid superadmin settings: username must be 3–30 characters, email must be valid, and password must be 8–32 characters and at most 72 UTF-8 bytes.',
+      );
     }
     const conflict = await client.query(
       'SELECT "id" FROM "User" WHERE "username" = $1 OR "email" = $2 LIMIT 1',
       [username, email],
     );
     if (conflict.rows.length) {
-      throw new Error('Superadmin username or email is already in use. Choose unused credentials or explicitly promote the existing account with bootstrap:superadmin.');
+      throw new Error(
+        'Superadmin username or email is already in use. Choose unused credentials or explicitly promote the existing account with bootstrap:superadmin.',
+      );
     }
     const passwordHash = await bcrypt.hash(password, 12);
     await client.query(
@@ -51,7 +61,10 @@ export async function bootstrapSuperadmin(client, env = process.env) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   const client = new pg.Client({
     host: process.env.POSTGRES_HOST,
     port: Number(process.env.POSTGRES_PORT),
@@ -64,9 +77,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(await bootstrapSuperadmin(client));
   } catch (error) {
     // Database error details may contain credentials or account data.
-    console.error(error.code
-      ? `Superadmin bootstrap failed (${error.code}). Check database connectivity, migrations, and unique account settings.`
-      : error.message);
+    console.error(
+      error.code
+        ? `Superadmin bootstrap failed (${error.code}). Check database connectivity, migrations, and unique account settings.`
+        : error.message,
+    );
     process.exitCode = 1;
   } finally {
     await client.end();

@@ -1,14 +1,14 @@
-import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { after, test as nodeTest } from "node:test";
-import { runInNewContext } from "node:vm";
-import ts from "typescript";
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { after, test as nodeTest } from 'node:test';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
 
 const requireCjs = createRequire(import.meta.url);
-const cmState = requireCjs("@codemirror/state");
-const cmView = requireCjs("@codemirror/view");
-const ycodemirror = requireCjs("y-codemirror.next");
+const cmState = requireCjs('@codemirror/state');
+const cmView = requireCjs('@codemirror/view');
+const ycodemirror = requireCjs('y-codemirror.next');
 
 const { ySyncFacet } = ycodemirror;
 
@@ -38,9 +38,9 @@ const { ySyncFacet } = ycodemirror;
 function createStubElement() {
   return {
     nodeType: 1,
-    className: "",
+    className: '',
     style: {},
-    textContent: "",
+    textContent: '',
     childNodes: [],
     setAttribute() {},
     removeAttribute() {},
@@ -78,7 +78,14 @@ const fakeDocument = {
   createRange: () => ({
     setStart() {},
     setEnd() {},
-    getBoundingClientRect: () => ({ top: 0, left: 0, bottom: 0, right: 0, width: 0, height: 0 }),
+    getBoundingClientRect: () => ({
+      top: 0,
+      left: 0,
+      bottom: 0,
+      right: 0,
+      width: 0,
+      height: 0,
+    }),
     getClientRects: () => [],
   }),
   documentElement: createStubElement(),
@@ -94,10 +101,13 @@ const fakeDocument = {
  * `globalThis.document` descriptor is restored afterwards, so no other test
  * file can observe it.
  */
-const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
+const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(
+  globalThis,
+  'document',
+);
 
 function installFakeDocument() {
-  Object.defineProperty(globalThis, "document", {
+  Object.defineProperty(globalThis, 'document', {
     value: fakeDocument,
     configurable: true,
     enumerable: true,
@@ -110,7 +120,7 @@ function restoreDocument() {
     delete globalThis.document;
     return;
   }
-  Object.defineProperty(globalThis, "document", originalDocumentDescriptor);
+  Object.defineProperty(globalThis, 'document', originalDocumentDescriptor);
 }
 
 /**
@@ -139,14 +149,20 @@ function viewPluginValues(state) {
     const providers = facets[id];
     const values = providers.map((provider) => provider.value);
     const isPluginValue = (value) =>
-      value && value.plugin && typeof value.plugin.create === "function" && "baseExtensions" in value.plugin;
+      value &&
+      value.plugin &&
+      typeof value.plugin.create === 'function' &&
+      'baseExtensions' in value.plugin;
     if (values.length > 0 && values.every(isPluginValue)) return values;
   }
   return [];
 }
 
 function sameSpecs(left, right) {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
 class HeadlessPluginInstance {
@@ -190,13 +206,15 @@ class HeadlessEditorView {
     this.parent = config.parent;
     this.destroyed = false;
     this.pluginSpecs = viewPluginValues(this.state);
-    this.plugins = this.pluginSpecs.map((spec) => new HeadlessPluginInstance(spec));
+    this.plugins = this.pluginSpecs.map(
+      (spec) => new HeadlessPluginInstance(spec),
+    );
     for (const plugin of this.plugins) plugin.update(this, null);
   }
 
   dispatch(spec) {
     if (this.destroyed) return;
-    const transaction = typeof spec === "function" ? spec(this) : spec;
+    const transaction = typeof spec === 'function' ? spec(this) : spec;
     this.applyUpdate(transaction.state ? transaction : this.state.update(spec));
   }
 
@@ -215,7 +233,8 @@ class HeadlessEditorView {
     };
     this.state = transaction.state;
     this.updatePlugins(update);
-    for (const listener of this.state.facet(cmView.EditorView.updateListener)) listener(update);
+    for (const listener of this.state.facet(cmView.EditorView.updateListener))
+      listener(update);
   }
 
   get viewport() {
@@ -241,7 +260,8 @@ class HeadlessEditorView {
         plugin.mustUpdate = update;
         next.push(plugin);
       }
-      for (const plugin of this.plugins) if (plugin.mustUpdate !== update) plugin.destroy();
+      for (const plugin of this.plugins)
+        if (plugin.mustUpdate !== update) plugin.destroy();
       this.plugins = next;
     } else {
       for (const plugin of this.plugins) plugin.mustUpdate = update;
@@ -261,8 +281,13 @@ class HeadlessEditorView {
 
 function createViewModule() {
   for (const key of Object.getOwnPropertyNames(cmView.EditorView)) {
-    if (["prototype", "length", "name", "caller", "arguments"].includes(key)) continue;
-    Object.defineProperty(HeadlessEditorView, key, Object.getOwnPropertyDescriptor(cmView.EditorView, key));
+    if (['prototype', 'length', 'name', 'caller', 'arguments'].includes(key))
+      continue;
+    Object.defineProperty(
+      HeadlessEditorView,
+      key,
+      Object.getOwnPropertyDescriptor(cmView.EditorView, key),
+    );
   }
   const views = [];
   class TrackedEditorView extends HeadlessEditorView {
@@ -272,8 +297,13 @@ function createViewModule() {
     }
   }
   for (const key of Object.getOwnPropertyNames(HeadlessEditorView)) {
-    if (["prototype", "length", "name", "caller", "arguments"].includes(key)) continue;
-    Object.defineProperty(TrackedEditorView, key, Object.getOwnPropertyDescriptor(HeadlessEditorView, key));
+    if (['prototype', 'length', 'name', 'caller', 'arguments'].includes(key))
+      continue;
+    Object.defineProperty(
+      TrackedEditorView,
+      key,
+      Object.getOwnPropertyDescriptor(HeadlessEditorView, key),
+    );
   }
   return { module: { ...cmView, EditorView: TrackedEditorView }, views };
 }
@@ -306,7 +336,7 @@ function createHarness() {
   function useEffect(fn, deps) {
     const index = cursor++;
     const slot = slots[index] ?? (slots[index] = {});
-    slot.kind = "effect";
+    slot.kind = 'effect';
     slot.pending = !sameDeps(slot.deps, deps);
     slot.deps = deps;
     slot.fn = fn;
@@ -315,7 +345,7 @@ function createHarness() {
   function useImperativeHandle(ref, create, deps) {
     const index = cursor++;
     const slot = slots[index] ?? (slots[index] = {});
-    slot.kind = "layout";
+    slot.kind = 'layout';
     slot.pending = !sameDeps(slot.deps, deps);
     slot.deps = deps;
     slot.create = create;
@@ -332,25 +362,25 @@ function createHarness() {
       }
     }
     for (const slot of pending) {
-      if (slot.kind === "layout") {
+      if (slot.kind === 'layout') {
         if (slot.ref) slot.ref.current = slot.create();
         continue;
       }
       const cleanup = slot.fn();
-      slot.cleanup = typeof cleanup === "function" ? cleanup : undefined;
+      slot.cleanup = typeof cleanup === 'function' ? cleanup : undefined;
     }
   }
 
   return {
     react: {
       forwardRef(render) {
-        return { $$typeof: Symbol.for("react.forward_ref"), render };
+        return { $$typeof: Symbol.for('react.forward_ref'), render };
       },
       useRef,
       useEffect,
       useImperativeHandle,
       useState(initial) {
-        return [typeof initial === "function" ? initial() : initial, () => {}];
+        return [typeof initial === 'function' ? initial() : initial, () => {}];
       },
     },
     render(Component, props, ref) {
@@ -366,7 +396,7 @@ function createHarness() {
  * ------------------------------------------------------------------ */
 
 function transpile(relativePath) {
-  const source = readFileSync(new URL(relativePath, import.meta.url), "utf8");
+  const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8');
   return ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
@@ -402,16 +432,20 @@ function createEditorModule() {
   const viewModule = createViewModule();
   const requires = {
     react: harness.react,
-    "react/jsx-runtime": { jsx: () => null, jsxs: () => null, Fragment: Symbol("Fragment") },
-    "@codemirror/state": cmState,
-    "@codemirror/view": viewModule.module,
-    "@codemirror/commands": requireCjs("@codemirror/commands"),
-    "@codemirror/language": requireCjs("@codemirror/language"),
-    "@codemirror/lang-cpp": requireCjs("@codemirror/lang-cpp"),
-    "@codemirror/lang-python": requireCjs("@codemirror/lang-python"),
-    "y-codemirror.next": ycodemirror,
+    'react/jsx-runtime': {
+      jsx: () => null,
+      jsxs: () => null,
+      Fragment: Symbol('Fragment'),
+    },
+    '@codemirror/state': cmState,
+    '@codemirror/view': viewModule.module,
+    '@codemirror/commands': requireCjs('@codemirror/commands'),
+    '@codemirror/language': requireCjs('@codemirror/language'),
+    '@codemirror/lang-cpp': requireCjs('@codemirror/lang-cpp'),
+    '@codemirror/lang-python': requireCjs('@codemirror/lang-python'),
+    'y-codemirror.next': ycodemirror,
   };
-  const mod = loadModule("../components/arena/EditorAdapter.tsx", requires);
+  const mod = loadModule('../components/arena/EditorAdapter.tsx', requires);
   return {
     EditorAdapter: mod.EditorAdapter,
     harness,
@@ -420,14 +454,14 @@ function createEditorModule() {
 }
 
 function createCollabModule() {
-  return loadModule("../lib/arena/collab.ts", {
-    "socket.io-client": {
+  return loadModule('../lib/arena/collab.ts', {
+    'socket.io-client': {
       io() {
-        throw new Error("socket.io-client is not used in this test");
+        throw new Error('socket.io-client is not used in this test');
       },
     },
-    yjs: requireCjs("yjs"),
-    "y-protocols/awareness": requireCjs("y-protocols/awareness"),
+    yjs: requireCjs('yjs'),
+    'y-protocols/awareness': requireCjs('y-protocols/awareness'),
   });
 }
 
@@ -440,7 +474,12 @@ const { CollabClient } = createCollabModule();
 const createdClients = [];
 
 function createCollabClient(userId) {
-  const client = new CollabClient({ baseUrl: "", userId, matchId: "match-1", displayName: userId });
+  const client = new CollabClient({
+    baseUrl: '',
+    userId,
+    matchId: 'match-1',
+    displayName: userId,
+  });
   createdClients.push(client);
   return client;
 }
@@ -451,16 +490,23 @@ after(() => {
 });
 
 function relay(left, right) {
-  const encode = (bytes) => Buffer.from(bytes).toString("base64");
-  left.doc.on("update", (update) => right.applyRemoteUpdate(encode(update)));
-  right.doc.on("update", (update) => left.applyRemoteUpdate(encode(update)));
+  const encode = (bytes) => Buffer.from(bytes).toString('base64');
+  left.doc.on('update', (update) => right.applyRemoteUpdate(encode(update)));
+  right.doc.on('update', (update) => left.applyRemoteUpdate(encode(update)));
 }
 
 function mountEditor(editor, props) {
   const ref = { current: null };
   editor.harness.render(
     editor.EditorAdapter,
-    { language: "C++", code: "", readOnly: false, fontSize: 14, onChange: () => {}, ...props },
+    {
+      language: 'C++',
+      code: '',
+      readOnly: false,
+      fontSize: 14,
+      onChange: () => {},
+      ...props,
+    },
     ref,
   );
   return { ref, view: editor.lastView() };
@@ -470,107 +516,201 @@ function mountEditor(editor, props) {
  * Tests.
  * ------------------------------------------------------------------ */
 
-test("the editor binds to the shared document when the collab client connects", () => {
+test('the editor binds to the shared document when the collab client connects', () => {
   const editor = createEditorModule();
-  const client = createCollabClient("alpha1");
-  client.ytext.insert(0, "int main() { return 0; }");
+  const client = createCollabClient('alpha1');
+  client.ytext.insert(0, 'int main() { return 0; }');
 
-  const { ref } = mountEditor(editor, { code: "" });
-  assert.equal(editor.lastView().state.facet(ySyncFacet), undefined, "editor must not be bound before collaboration connects");
+  const { ref } = mountEditor(editor, { code: '' });
+  assert.equal(
+    editor.lastView().state.facet(ySyncFacet),
+    undefined,
+    'editor must not be bound before collaboration connects',
+  );
 
   editor.harness.render(
     editor.EditorAdapter,
-    { language: "C++", code: "", readOnly: false, fontSize: 14, onChange: () => {}, collab: client },
+    {
+      language: 'C++',
+      code: '',
+      readOnly: false,
+      fontSize: 14,
+      onChange: () => {},
+      collab: client,
+    },
     ref,
   );
 
   const view = editor.lastView();
   const bound = view.state.facet(ySyncFacet);
-  assert.ok(bound, "editor must bind the collaborative document once the client connects");
-  assert.equal(bound.ytext, client.ytext, "editor must be bound to the team's document");
-  assert.equal(view.state.doc.toString(), "int main() { return 0; }", "editor must show the authoritative team document");
+  assert.ok(
+    bound,
+    'editor must bind the collaborative document once the client connects',
+  );
+  assert.equal(
+    bound.ytext,
+    client.ytext,
+    "editor must be bound to the team's document",
+  );
+  assert.equal(
+    view.state.doc.toString(),
+    'int main() { return 0; }',
+    'editor must show the authoritative team document',
+  );
 });
 
-test("an edit made by a teammate reaches the other editor", () => {
+test('an edit made by a teammate reaches the other editor', () => {
   const alpha1 = createEditorModule();
   const alpha2 = createEditorModule();
-  const client1 = createCollabClient("alpha1");
-  const client2 = createCollabClient("alpha2");
+  const client1 = createCollabClient('alpha1');
+  const client2 = createCollabClient('alpha2');
   relay(client1, client2);
 
-  const editor1 = mountEditor(alpha1, { code: "" });
-  const editor2 = mountEditor(alpha2, { code: "" });
+  const editor1 = mountEditor(alpha1, { code: '' });
+  const editor2 = mountEditor(alpha2, { code: '' });
 
-  const props = { language: "C++", code: "", readOnly: false, fontSize: 14, onChange: () => {} };
-  alpha1.harness.render(alpha1.EditorAdapter, { ...props, collab: client1 }, editor1.ref);
-  alpha2.harness.render(alpha2.EditorAdapter, { ...props, collab: client2 }, editor2.ref);
+  const props = {
+    language: 'C++',
+    code: '',
+    readOnly: false,
+    fontSize: 14,
+    onChange: () => {},
+  };
+  alpha1.harness.render(
+    alpha1.EditorAdapter,
+    { ...props, collab: client1 },
+    editor1.ref,
+  );
+  alpha2.harness.render(
+    alpha2.EditorAdapter,
+    { ...props, collab: client2 },
+    editor2.ref,
+  );
 
-  assert.equal(alpha1.lastView().state.doc.toString(), "");
-  assert.equal(alpha2.lastView().state.doc.toString(), "");
+  assert.equal(alpha1.lastView().state.doc.toString(), '');
+  assert.equal(alpha2.lastView().state.doc.toString(), '');
 
   alpha2.lastView().dispatch({ changes: { from: 0, insert: "print('hi')" } });
 
-  assert.equal(client2.getSource(), "print('hi')", "a local edit must reach the shared document");
-  assert.equal(alpha1.lastView().state.doc.toString(), "print('hi')", "the teammate's edit must reach the other editor");
+  assert.equal(
+    client2.getSource(),
+    "print('hi')",
+    'a local edit must reach the shared document',
+  );
+  assert.equal(
+    alpha1.lastView().state.doc.toString(),
+    "print('hi')",
+    "the teammate's edit must reach the other editor",
+  );
 });
 
-test("text typed before collaboration connects is preserved, not silently dropped", () => {
+test('text typed before collaboration connects is preserved, not silently dropped', () => {
   const editor = createEditorModule();
-  const client = createCollabClient("alpha1");
-  client.ytext.insert(0, "int main() {}");
+  const client = createCollabClient('alpha1');
+  client.ytext.insert(0, 'int main() {}');
 
   const props = {
-    language: "C++",
-    code: "int main() {}",
+    language: 'C++',
+    code: 'int main() {}',
     readOnly: false,
     fontSize: 14,
     onChange: () => {},
   };
   const { ref } = mountEditor(editor, props);
 
-  editor.lastView().dispatch({ changes: { from: 13, insert: "\n  return 0;" } });
+  editor
+    .lastView()
+    .dispatch({ changes: { from: 13, insert: '\n  return 0;' } });
 
-  editor.harness.render(editor.EditorAdapter, { ...props, collab: client }, ref);
+  editor.harness.render(
+    editor.EditorAdapter,
+    { ...props, collab: client },
+    ref,
+  );
 
-  assert.equal(client.getSource(), "int main() {}\n  return 0;", "pre-connection edits must reach the shared document");
-  assert.equal(editor.lastView().state.doc.toString(), client.getSource(), "editor must show the merged document");
+  assert.equal(
+    client.getSource(),
+    'int main() {}\n  return 0;',
+    'pre-connection edits must reach the shared document',
+  );
+  assert.equal(
+    editor.lastView().state.doc.toString(),
+    client.getSource(),
+    'editor must show the merged document',
+  );
 });
 
-test("an empty team document is seeded with the text typed before collaboration connected", () => {
+test('an empty team document is seeded with the text typed before collaboration connected', () => {
   const editor = createEditorModule();
-  const client = createCollabClient("alpha1");
+  const client = createCollabClient('alpha1');
 
-  const props = { language: "C++", code: "", readOnly: false, fontSize: 14, onChange: () => {} };
+  const props = {
+    language: 'C++',
+    code: '',
+    readOnly: false,
+    fontSize: 14,
+    onChange: () => {},
+  };
   const { ref } = mountEditor(editor, props);
 
   editor.lastView().dispatch({ changes: { from: 0, insert: "print('hi')" } });
-  editor.harness.render(editor.EditorAdapter, { ...props, collab: client }, ref);
+  editor.harness.render(
+    editor.EditorAdapter,
+    { ...props, collab: client },
+    ref,
+  );
 
-  assert.equal(client.getSource(), "print('hi')", "an empty team document must be seeded with the local text");
-  assert.equal(editor.lastView().state.doc.toString(), "print('hi')", "the editor must keep showing the local text");
+  assert.equal(
+    client.getSource(),
+    "print('hi')",
+    'an empty team document must be seeded with the local text',
+  );
+  assert.equal(
+    editor.lastView().state.doc.toString(),
+    "print('hi')",
+    'the editor must keep showing the local text',
+  );
 });
 
-test("the team document wins when the pre-connection edit cannot be located in it", () => {
+test('the team document wins when the pre-connection edit cannot be located in it', () => {
   const editor = createEditorModule();
-  const client = createCollabClient("alpha1");
-  client.ytext.insert(0, "team version");
+  const client = createCollabClient('alpha1');
+  client.ytext.insert(0, 'team version');
 
-  const props = { language: "C++", code: "starter", readOnly: false, fontSize: 14, onChange: () => {} };
+  const props = {
+    language: 'C++',
+    code: 'starter',
+    readOnly: false,
+    fontSize: 14,
+    onChange: () => {},
+  };
   const { ref } = mountEditor(editor, props);
 
-  editor.lastView().dispatch({ changes: { from: 0, to: 7, insert: "mine" } });
-  editor.harness.render(editor.EditorAdapter, { ...props, collab: client }, ref);
+  editor.lastView().dispatch({ changes: { from: 0, to: 7, insert: 'mine' } });
+  editor.harness.render(
+    editor.EditorAdapter,
+    { ...props, collab: client },
+    ref,
+  );
 
-  assert.equal(client.getSource(), "team version", "a teammate's document must not be overwritten");
-  assert.equal(editor.lastView().state.doc.toString(), "team version", "editor must show the authoritative document");
+  assert.equal(
+    client.getSource(),
+    'team version',
+    "a teammate's document must not be overwritten",
+  );
+  assert.equal(
+    editor.lastView().state.doc.toString(),
+    'team version',
+    'editor must show the authoritative document',
+  );
 });
 
-test("a local-only 1v1 editor keeps editing and reporting locally", () => {
+test('a local-only 1v1 editor keeps editing and reporting locally', () => {
   const editor = createEditorModule();
   const changes = [];
   const props = {
-    language: "C++",
-    code: "int main() {}",
+    language: 'C++',
+    code: 'int main() {}',
     readOnly: false,
     fontSize: 14,
     onChange: (code) => changes.push(code),
@@ -578,33 +718,67 @@ test("a local-only 1v1 editor keeps editing and reporting locally", () => {
   mountEditor(editor, props);
 
   const view = editor.lastView();
-  assert.equal(view.state.facet(ySyncFacet), undefined, "a local-only editor must not bind a collaboration document");
+  assert.equal(
+    view.state.facet(ySyncFacet),
+    undefined,
+    'a local-only editor must not bind a collaboration document',
+  );
 
-  view.dispatch({ changes: { from: 13, insert: "x" } });
+  view.dispatch({ changes: { from: 13, insert: 'x' } });
 
-  assert.equal(view.state.doc.toString(), "int main() {}x");
-  assert.deepEqual(changes, ["int main() {}x"], "local edits must still be reported");
+  assert.equal(view.state.doc.toString(), 'int main() {}x');
+  assert.deepEqual(
+    changes,
+    ['int main() {}x'],
+    'local edits must still be reported',
+  );
 });
 
-test("a new round re-binds the editor to the new team document", () => {
+test('a new round re-binds the editor to the new team document', () => {
   const editor = createEditorModule();
-  const first = createCollabClient("alpha1");
-  const second = createCollabClient("alpha1");
-  second.ytext.insert(0, "round two");
+  const first = createCollabClient('alpha1');
+  const second = createCollabClient('alpha1');
+  second.ytext.insert(0, 'round two');
 
-  const props = { language: "C++", code: "", readOnly: false, fontSize: 14, onChange: () => {} };
+  const props = {
+    language: 'C++',
+    code: '',
+    readOnly: false,
+    fontSize: 14,
+    onChange: () => {},
+  };
   const { ref } = mountEditor(editor, props);
   editor.harness.render(editor.EditorAdapter, { ...props, collab: first }, ref);
   assert.equal(editor.lastView().state.facet(ySyncFacet).ytext, first.ytext);
 
-  editor.harness.render(editor.EditorAdapter, { ...props, collab: second }, ref);
+  editor.harness.render(
+    editor.EditorAdapter,
+    { ...props, collab: second },
+    ref,
+  );
 
   const view = editor.lastView();
-  assert.equal(view.state.facet(ySyncFacet).ytext, second.ytext, "the editor must follow the new team document");
-  assert.equal(view.state.doc.toString(), "round two", "the editor must show the new round's document");
+  assert.equal(
+    view.state.facet(ySyncFacet).ytext,
+    second.ytext,
+    'the editor must follow the new team document',
+  );
+  assert.equal(
+    view.state.doc.toString(),
+    'round two',
+    "the editor must show the new round's document",
+  );
 
-  view.dispatch({ changes: { from: 9, insert: " // edited" } });
+  view.dispatch({ changes: { from: 9, insert: ' // edited' } });
 
-  assert.equal(second.getSource(), "round two // edited", "edits must reach the new team document");
-  assert.equal(first.getSource(), "", "edits must not leak into the previous round's document");
+  assert.equal(
+    second.getSource(),
+    'round two // edited',
+    'edits must reach the new team document',
+  );
+  assert.equal(
+    first.getSource(),
+    '',
+    "edits must not leak into the previous round's document",
+  );
 });

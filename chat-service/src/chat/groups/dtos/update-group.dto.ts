@@ -1,5 +1,11 @@
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, Length, MaxLength, ValidateIf } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  Length,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
 
 export class UpdateGroupDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))

@@ -15,15 +15,15 @@ Run date: **2026-11-11**. Branch: `integration/nook-arena-platform`, commit
 Two disposable accounts in **two separate browser contexts** — two
 independent sessions and users — with one direct conversation between them.
 
-| Step | What happened | Owner saw | Second account saw |
-|---|---|---|---|
-| 1 | Owner challenged the other account to a duel from the public profile | `Code Arena · 1v1 Duel` invitation card, status `Open` | the same invitation card with `Accept & Join` |
-| 2 | Second account accepted and joined the room (`/play/lobby/N9ZDV3`) | — | lobby with both players |
-| 3 | Both marked ready, owner started the match | `Code Arena · Match started` | `Code Arena · Match started` |
-| 4 | Second account forfeited from the match arena | `Code Arena · Match result` (`won by forfeit`) | `Code Arena · Match result` (`won by forfeit`) |
-| 5 | Owner withdrew a second challenge from the lobby | `Code Arena · Challenge cancelled` (`withdrawn before it started`) | the same cancellation notice |
-| 6 | Both clients reloaded the conversation | 5 cards, unchanged | 5 cards, unchanged |
-| 7 | A third challenge expired in the Game service's own sweep | `Code Arena · Challenge cancelled` (`expired before it started`) | the same cancellation notice |
+| Step | What happened                                                        | Owner saw                                                          | Second account saw                             |
+| ---- | -------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------- |
+| 1    | Owner challenged the other account to a duel from the public profile | `Code Arena · 1v1 Duel` invitation card, status `Open`             | the same invitation card with `Accept & Join`  |
+| 2    | Second account accepted and joined the room (`/play/lobby/N9ZDV3`)   | —                                                                  | lobby with both players                        |
+| 3    | Both marked ready, owner started the match                           | `Code Arena · Match started`                                       | `Code Arena · Match started`                   |
+| 4    | Second account forfeited from the match arena                        | `Code Arena · Match result` (`won by forfeit`)                     | `Code Arena · Match result` (`won by forfeit`) |
+| 5    | Owner withdrew a second challenge from the lobby                     | `Code Arena · Challenge cancelled` (`withdrawn before it started`) | the same cancellation notice                   |
+| 6    | Both clients reloaded the conversation                               | 5 cards, unchanged                                                 | 5 cards, unchanged                             |
+| 7    | A third challenge expired in the Game service's own sweep            | `Code Arena · Challenge cancelled` (`expired before it started`)   | the same cancellation notice                   |
 
 Every notification reached **both** clients live, over the real Socket.IO
 gateway, and was persisted in the conversation.
@@ -103,29 +103,29 @@ screenshots; those are the record of the live run below.
 
 Screenshots are in this directory, in the order the run took them:
 
-| File | Shows |
-|---|---|
-| `01-owner-registered.png` | the owner's account after registration |
-| `02-owner-profile.png` | the second account's public profile |
-| `03-owner-invitation-sent.png` | the owner after sending the challenge |
-| `04-rival-sees-invitation.png` | the second account receiving the invitation |
-| `05-rival-joined-lobby.png` | the second account in the lobby |
-| `06-owner-in-lobby.png` | the owner in the same lobby |
-| `07-both-ready.png` | both players ready |
-| `08-owner-after-start.png` | the owner right after starting the match |
-| `09-owner-chat-match-started.png` | **owner**: the match-started notice |
-| `10-rival-chat-match-started.png` | **second account**: the match-started notice |
-| `11-rival-in-match.png` | the second account in the match arena |
-| `12-rival-forfeited.png` | the forfeit that ended the match |
-| `13-owner-chat-match-result.png` | **owner**: the match-result notice |
-| `14-rival-chat-match-result.png` | **second account**: the match-result notice |
-| `15-owner-withdrew-challenge.png` | the owner withdrawing the second challenge |
-| `16-owner-chat-cancelled.png` | **owner**: the cancellation notice |
-| `17-rival-chat-cancelled.png` | **second account**: the cancellation notice |
-| `18-owner-after-reload.png` | the owner's transcript after the reload |
-| `19-rival-after-reload.png` | the second account's transcript after the reload |
-| `20-owner-chat-expired.png` | **owner**: the expiry cancellation notice |
-| `21-rival-chat-expired.png` | **second account**: the expiry cancellation notice |
+| File                              | Shows                                              |
+| --------------------------------- | -------------------------------------------------- |
+| `01-owner-registered.png`         | the owner's account after registration             |
+| `02-owner-profile.png`            | the second account's public profile                |
+| `03-owner-invitation-sent.png`    | the owner after sending the challenge              |
+| `04-rival-sees-invitation.png`    | the second account receiving the invitation        |
+| `05-rival-joined-lobby.png`       | the second account in the lobby                    |
+| `06-owner-in-lobby.png`           | the owner in the same lobby                        |
+| `07-both-ready.png`               | both players ready                                 |
+| `08-owner-after-start.png`        | the owner right after starting the match           |
+| `09-owner-chat-match-started.png` | **owner**: the match-started notice                |
+| `10-rival-chat-match-started.png` | **second account**: the match-started notice       |
+| `11-rival-in-match.png`           | the second account in the match arena              |
+| `12-rival-forfeited.png`          | the forfeit that ended the match                   |
+| `13-owner-chat-match-result.png`  | **owner**: the match-result notice                 |
+| `14-rival-chat-match-result.png`  | **second account**: the match-result notice        |
+| `15-owner-withdrew-challenge.png` | the owner withdrawing the second challenge         |
+| `16-owner-chat-cancelled.png`     | **owner**: the cancellation notice                 |
+| `17-rival-chat-cancelled.png`     | **second account**: the cancellation notice        |
+| `18-owner-after-reload.png`       | the owner's transcript after the reload            |
+| `19-rival-after-reload.png`       | the second account's transcript after the reload   |
+| `20-owner-chat-expired.png`       | **owner**: the expiry cancellation notice          |
+| `21-rival-chat-expired.png`       | **second account**: the expiry cancellation notice |
 
 `evidence.json` is the machine-readable record of the run: every step with
 its timestamp, the exact card labels and text each client showed, and the

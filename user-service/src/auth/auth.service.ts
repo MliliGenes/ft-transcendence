@@ -785,13 +785,20 @@ export class AuthService {
       });
       return {
         email: current.email,
-        token: await this.createAuthToken(user.id, AuthTokenPurpose.EMAIL_VERIFICATION, tx),
+        token: await this.createAuthToken(
+          user.id,
+          AuthTokenPurpose.EMAIL_VERIFICATION,
+          tx,
+        ),
       };
     });
     if (!verification) return;
 
     try {
-      await this.mail.sendVerificationEmail(verification.email, verification.token);
+      await this.mail.sendVerificationEmail(
+        verification.email,
+        verification.token,
+      );
     } catch {
       // Keep the generic response and cooldown state even when delivery fails.
     }

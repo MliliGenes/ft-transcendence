@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
-import { ErrorPage } from "@/components/error-page";
+import type { Metadata } from 'next';
+import { ErrorPage } from '@/components/error-page';
 
-export const metadata: Metadata = { title: "Page not found — Nook" };
+export const metadata: Metadata = { title: 'Page not found — Nook' };
 
 export default function NotFound() {
   return (

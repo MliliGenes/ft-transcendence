@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 export function readSession(response) {
   assert.equal(response.body.refreshToken, undefined);
   assert.equal(response.body.refreshExpiresIn, undefined);
-  const cookie = response.headers['set-cookie']?.find((value) => value.startsWith('auth-refresh='));
+  const cookie = response.headers['set-cookie']?.find((value) =>
+    value.startsWith('auth-refresh='),
+  );
   assert.ok(cookie, 'session must set the refresh cookie');
   assert.match(cookie, /; HttpOnly/i);
   assert.match(cookie, /; SameSite=Lax/i);

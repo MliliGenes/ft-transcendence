@@ -25,13 +25,22 @@ import { AuthModule } from '../dist/auth/auth.module.js';
 // Never reset an existing schema: each run owns only this random schema.
 const schema = `chat_dm_test_${randomUUID().replaceAll('-', '')}`;
 const url = process.env.TEST_DATABASE_URL;
-if (!url) throw new Error('Set TEST_DATABASE_URL to a local test PostgreSQL database.');
-const pool = new pg.Pool({ connectionString: url, connectionTimeoutMillis: 5000 });
+if (!url)
+  throw new Error('Set TEST_DATABASE_URL to a local test PostgreSQL database.');
+const pool = new pg.Pool({
+  connectionString: url,
+  connectionTimeoutMillis: 5000,
+});
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool, { schema }) });
 const keys = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const signer = new JwtService({
   privateKey: keys.privateKey.export({ type: 'pkcs8', format: 'pem' }),
-  signOptions: { algorithm: 'RS256', issuer: 'user-service', audience: 'ft-transcendence-api', expiresIn: 900 },
+  signOptions: {
+    algorithm: 'RS256',
+    issuer: 'user-service',
+    audience: 'ft-transcendence-api',
+    expiresIn: 900,
+  },
 });
 const alice = '11111111-1111-4111-8111-111111111111';
 const bob = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -48,17 +57,30 @@ const post = (body, jwt = token()) => {
 describe('POST /chat/conversations/dm (real HTTP, JWT and PostgreSQL)', () => {
   before(async () => {
     // Generate DDL from the actual schema without applying a migration to user data.
-    const ddl = execFileSync(process.execPath, [
-      'node_modules/prisma/build/index.js', 'migrate', 'diff',
-      '--from-empty', '--to-schema', 'prisma/schema.prisma', '--script',
-    ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: {
-      ...process.env,
-      POSTGRES_HOST: new URL(url).hostname,
-      POSTGRES_PORT: new URL(url).port || '5432',
-      POSTGRES_USER: decodeURIComponent(new URL(url).username),
-      POSTGRES_PASSWORD: decodeURIComponent(new URL(url).password),
-      POSTGRES_DB: decodeURIComponent(new URL(url).pathname.slice(1)),
-    } });
+    const ddl = execFileSync(
+      process.execPath,
+      [
+        'node_modules/prisma/build/index.js',
+        'migrate',
+        'diff',
+        '--from-empty',
+        '--to-schema',
+        'prisma/schema.prisma',
+        '--script',
+      ],
+      {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          POSTGRES_HOST: new URL(url).hostname,
+          POSTGRES_PORT: new URL(url).port || '5432',
+          POSTGRES_USER: decodeURIComponent(new URL(url).username),
+          POSTGRES_PASSWORD: decodeURIComponent(new URL(url).password),
+          POSTGRES_DB: decodeURIComponent(new URL(url).pathname.slice(1)),
+        },
+      },
+    );
     await pool.query(`CREATE SCHEMA "${schema}"`);
     ownsSchema = true;
     const connection = await pool.connect();
@@ -71,9 +93,17 @@ describe('POST /chat/conversations/dm (real HTTP, JWT and PostgreSQL)', () => {
     }
     const module = await Test.createTestingModule({
       imports: [
-        ConfigModule.forRoot({ ignoreEnvFile: true, load: [() => ({
-          JWT_PUBLIC_KEY: keys.publicKey.export({ type: 'spki', format: 'pem' }),
-        })] }),
+        ConfigModule.forRoot({
+          ignoreEnvFile: true,
+          load: [
+            () => ({
+              JWT_PUBLIC_KEY: keys.publicKey.export({
+                type: 'spki',
+                format: 'pem',
+              }),
+            }),
+          ],
+        }),
         AuthModule,
       ],
       controllers: [ChatController],
@@ -85,27 +115,43 @@ describe('POST /chat/conversations/dm (real HTTP, JWT and PostgreSQL)', () => {
         { provide: ChatGateway, useValue: {} },
         { provide: MinioService, useValue: {} },
         { provide: FeedService, useValue: {} },
-        { provide: UserProfilesService, useValue: {
-          // This suite owns HTTP/JWT/SQL DM behavior, not the separate User HTTP service.
-          ensureCanContact: async () => {},
-          ensureActiveUsers: async (ids) => {
-            const count = await prisma.chatUser.count({ where: { id: { in: ids }, deletedAt: null } });
-            if (count !== new Set(ids).size) throw new NotFoundException('Unknown user');
+        {
+          provide: UserProfilesService,
+          useValue: {
+            // This suite owns HTTP/JWT/SQL DM behavior, not the separate User HTTP service.
+            ensureCanContact: async () => {},
+            ensureActiveUsers: async (ids) => {
+              const count = await prisma.chatUser.count({
+                where: { id: { in: ids }, deletedAt: null },
+              });
+              if (count !== new Set(ids).size)
+                throw new NotFoundException('Unknown user');
+            },
           },
-        } },
+        },
       ],
     }).compile();
     app = module.createNestApplication({ logger: false });
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     await app.init();
   });
 
   beforeEach(async () => {
     await prisma.conversation.deleteMany();
     await prisma.chatUser.deleteMany();
-    await prisma.chatUser.createMany({ data: [alice, bob, outsider].map(id => ({
-      id, username: `test-${id}`, sourceUpdatedAt: new Date(),
-    })) });
+    await prisma.chatUser.createMany({
+      data: [alice, bob, outsider].map((id) => ({
+        id,
+        username: `test-${id}`,
+        sourceUpdatedAt: new Date(),
+      })),
+    });
   });
 
   after(async () => {
@@ -117,14 +163,23 @@ describe('POST /chat/conversations/dm (real HTTP, JWT and PostgreSQL)', () => {
   });
 
   it('rejects missing, malformed, expired and wrong-audience credentials', async () => {
-    for (const jwt of [null, 'invalid', token(alice, { expiresIn: -1 }), token(alice, { audience: 'other-api' })]) {
+    for (const jwt of [
+      null,
+      'invalid',
+      token(alice, { expiresIn: -1 }),
+      token(alice, { audience: 'other-api' }),
+    ]) {
       await post({ userId: bob }, jwt).expect(401);
     }
     assert.equal(await prisma.conversation.count(), 0);
   });
 
   it('rejects missing/invalid target IDs and attempts to supply the caller ID', async () => {
-    for (const body of [{}, { userId: 'invalid' }, { userId: bob, authorId: outsider }]) {
+    for (const body of [
+      {},
+      { userId: 'invalid' },
+      { userId: bob, authorId: outsider },
+    ]) {
       await post(body).expect(400);
     }
     assert.equal(await prisma.conversation.count(), 0);
@@ -135,7 +190,9 @@ describe('POST /chat/conversations/dm (real HTTP, JWT and PostgreSQL)', () => {
     assert.equal(response.body.kind, 'DM');
     assert.equal(response.body.dmUserAId, alice);
     assert.equal(response.body.dmUserBId, bob);
-    const saved = await prisma.conversation.findUnique({ where: { id: response.body.id } });
+    const saved = await prisma.conversation.findUnique({
+      where: { id: response.body.id },
+    });
     assert.ok(saved);
     assert.equal(await prisma.conversation.count(), 1);
   });
@@ -162,16 +219,24 @@ describe('POST /chat/conversations/dm (real HTTP, JWT and PostgreSQL)', () => {
 
   it('rejects an unknown target with a client error, not an internal server error', async () => {
     const response = await post({ userId: randomUUID() });
-    assert.ok([400, 404].includes(response.status), `Expected 400/404, received ${response.status}`);
+    assert.ok(
+      [400, 404].includes(response.status),
+      `Expected 400/404, received ${response.status}`,
+    );
     assert.equal(await prisma.conversation.count(), 0);
   });
 
   it('returns one conversation when both users create it concurrently', async () => {
-    const responses = await Promise.all(Array.from({ length: 6 }, (_, i) =>
-      i % 2 ? post({ userId: alice }, token(bob)) : post({ userId: bob }),
-    ));
+    const responses = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        i % 2 ? post({ userId: alice }, token(bob)) : post({ userId: bob }),
+      ),
+    );
     for (const response of responses) assert.equal(response.status, 201);
-    assert.equal(new Set(responses.map(response => response.body.id)).size, 1);
+    assert.equal(
+      new Set(responses.map((response) => response.body.id)).size,
+      1,
+    );
     assert.equal(await prisma.conversation.count(), 1);
   });
 });

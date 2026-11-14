@@ -41,8 +41,12 @@ export class GameEventsConsumer implements OnModuleInit, OnModuleDestroy {
       `amqp://${this.config.getOrThrow<string>('RABBITMQ_HOST')}`,
     );
     brokerUrl.port = this.config.get<string>('RABBITMQ_PORT', '5672');
-    brokerUrl.username = this.config.getOrThrow<string>('RABBITMQ_DEFAULT_USER');
-    brokerUrl.password = this.config.getOrThrow<string>('RABBITMQ_DEFAULT_PASS');
+    brokerUrl.username = this.config.getOrThrow<string>(
+      'RABBITMQ_DEFAULT_USER',
+    );
+    brokerUrl.password = this.config.getOrThrow<string>(
+      'RABBITMQ_DEFAULT_PASS',
+    );
 
     this.connection = amqp.connect(brokerUrl.toString(), {
       heartbeatIntervalInSeconds: 30,

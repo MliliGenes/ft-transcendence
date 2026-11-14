@@ -8,36 +8,36 @@ Next.js 16 differs from older versions. Read `node_modules/next/dist/docs/` befo
 
 ## Structure
 
-| Path | Contents |
-| --- | --- |
-| `app/` | Routes, root layout, providers, root error, loading and 404 pages |
-| `app/(auth)/` | Pages using the auth layout |
-| `app/(app)/` | Pages inside `AppShell` |
-| `components/auth/` | `AuthProvider`, forms, verification and OAuth return handling |
-| `components/app/` | Shell, profile, search, settings, group management |
-| `components/app/chat/` | Message list, message actions, markdown, emoji picker, details panels |
-| `components/app/feed/` | Feed view, composer, post card, profile posts |
-| `components/ui/` | Shared primitives |
-| `lib/auth`, `lib/accounts`, `lib/social`, `lib/chat` | Typed API clients and helpers |
-| `hooks/` | `useCurrentAccount`, media queries |
-| `tests/` | Node test suites, including a design-token check |
+| Path                                                 | Contents                                                              |
+| ---------------------------------------------------- | --------------------------------------------------------------------- |
+| `app/`                                               | Routes, root layout, providers, root error, loading and 404 pages     |
+| `app/(auth)/`                                        | Pages using the auth layout                                           |
+| `app/(app)/`                                         | Pages inside `AppShell`                                               |
+| `components/auth/`                                   | `AuthProvider`, forms, verification and OAuth return handling         |
+| `components/app/`                                    | Shell, profile, search, settings, group management                    |
+| `components/app/chat/`                               | Message list, message actions, markdown, emoji picker, details panels |
+| `components/app/feed/`                               | Feed view, composer, post card, profile posts                         |
+| `components/ui/`                                     | Shared primitives                                                     |
+| `lib/auth`, `lib/accounts`, `lib/social`, `lib/chat` | Typed API clients and helpers                                         |
+| `hooks/`                                             | `useCurrentAccount`, media queries                                    |
+| `tests/`                                             | Node test suites, including a design-token check                      |
 
 ## Routes
 
-| Route | State |
-| --- | --- |
-| `/` | Landing page |
-| `/login`, `/register` | Connected to user-service, with Discord and GitHub buttons |
-| `/forgot-password`, `/reset-password` | Connected |
-| `/verify-email` | Consumes the single-use token from the email link |
-| `/privacy`, `/terms` | Static legal pages in the `(legal)` layout, linked from the landing footer and auth forms |
-| `/feed` | Global feed with composer and post cards |
-| `/search` | People search with filters and friend actions |
-| `/chat` | DMs, groups, channels, presence, attachments, edit and delete |
-| `/profile`, `/profile/[id]` | Profile, friends, blocks, status, Posts tab |
-| `/profile/edit`, `/settings` | Profile fields, image cropping, status composer, account settings |
-| `/play`, `/play/lobby`, `/play/match/[id]`, `/play/leaderboard` | Code Arena catalog, rooms, matches and leaderboard |
-| `/play/chess` | Coming soon |
+| Route                                                           | State                                                                                     |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `/`                                                             | Landing page                                                                              |
+| `/login`, `/register`                                           | Connected to user-service, with Discord and GitHub buttons                                |
+| `/forgot-password`, `/reset-password`                           | Connected                                                                                 |
+| `/verify-email`                                                 | Consumes the single-use token from the email link                                         |
+| `/privacy`, `/terms`                                            | Static legal pages in the `(legal)` layout, linked from the landing footer and auth forms |
+| `/feed`                                                         | Global feed with composer and post cards                                                  |
+| `/search`                                                       | People search with filters and friend actions                                             |
+| `/chat`                                                         | DMs, groups, channels, presence, attachments, edit and delete                             |
+| `/profile`, `/profile/[id]`                                     | Profile, friends, blocks, status, Posts tab                                               |
+| `/profile/edit`, `/settings`                                    | Profile fields, image cropping, status composer, account settings                         |
+| `/play`, `/play/lobby`, `/play/match/[id]`, `/play/leaderboard` | Code Arena catalog, rooms, matches and leaderboard                                        |
+| `/play/chess`                                                   | Coming soon                                                                               |
 
 ## How data flows
 
@@ -62,12 +62,12 @@ Attachments: up to 5 per message, images and PDFs up to 10 MB, MP4, WebM and MOV
 
 ## Error and loading pages
 
-| File | Purpose |
-| --- | --- |
-| `app/not-found.tsx`, `app/(app)/not-found.tsx` | 404, standalone or inside the shell |
-| `app/error.tsx`, `app/(app)/error.tsx` | Route errors with retry |
-| `app/global-error.tsx` | Root layout failure, with its own document |
-| `app/loading.tsx`, `app/(app)/loading.tsx` | Route loading with the Nook logo |
+| File                                           | Purpose                                    |
+| ---------------------------------------------- | ------------------------------------------ |
+| `app/not-found.tsx`, `app/(app)/not-found.tsx` | 404, standalone or inside the shell        |
+| `app/error.tsx`, `app/(app)/error.tsx`         | Route errors with retry                    |
+| `app/global-error.tsx`                         | Root layout failure, with its own document |
+| `app/loading.tsx`, `app/(app)/loading.tsx`     | Route loading with the Nook logo           |
 
 `loading.tsx` covers route loading only. Client-side data fetching and session restore use each page's own skeletons.
 

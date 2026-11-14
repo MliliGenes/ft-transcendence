@@ -1,8 +1,17 @@
-import type { CollabPersist, CollabRow } from "./collab.js";
-import type { MatchRecord, RevealSnapshot, SubmissionRecord } from "./records.js";
-import { DuplicateError, type MatchStore, type RevealStore, type SubmissionStore } from "./store.js";
+import type { CollabPersist, CollabRow } from './collab.js';
+import type {
+  MatchRecord,
+  RevealSnapshot,
+  SubmissionRecord,
+} from './records.js';
+import {
+  DuplicateError,
+  type MatchStore,
+  type RevealStore,
+  type SubmissionStore,
+} from './store.js';
 
-export { MatchRevisionConflictError } from "./store.js";
+export { MatchRevisionConflictError } from './store.js';
 
 /** Exclusive ownership of one pending evaluation until judge/commit finishes. */
 export interface EvaluationClaim {
@@ -13,9 +22,12 @@ export interface EvaluationClaim {
 }
 
 export class EvaluationClaimLostError extends Error {
-  constructor(readonly evaluationId: string, readonly cause?: unknown) {
+  constructor(
+    readonly evaluationId: string,
+    readonly cause?: unknown,
+  ) {
     super(`evaluation claim lost for ${evaluationId}`);
-    this.name = "EvaluationClaimLostError";
+    this.name = 'EvaluationClaimLostError';
   }
 }
 
@@ -34,23 +46,45 @@ export interface MatchPersistence {
 
   recordSubmission(record: SubmissionRecord): Promise<SubmissionRecord>;
   updateSubmission(record: SubmissionRecord): Promise<void>;
-  findSubmissionById(submissionId: string): Promise<SubmissionRecord | undefined>;
-  findSubmissionByEvaluationId(evaluationId: string): Promise<SubmissionRecord | undefined>;
-  listRoundSubmissions(matchId: string, roundId: string): Promise<SubmissionRecord[]>;
+  findSubmissionById(
+    submissionId: string,
+  ): Promise<SubmissionRecord | undefined>;
+  findSubmissionByEvaluationId(
+    evaluationId: string,
+  ): Promise<SubmissionRecord | undefined>;
+  listRoundSubmissions(
+    matchId: string,
+    roundId: string,
+  ): Promise<SubmissionRecord[]>;
   listPendingSubmissions(): Promise<SubmissionRecord[]>;
   /** Claim a pending evaluation before invoking the judge; terminal rows return no claim. */
-  claimPendingEvaluation(evaluationId: string): Promise<EvaluationClaim | undefined>;
+  claimPendingEvaluation(
+    evaluationId: string,
+  ): Promise<EvaluationClaim | undefined>;
   /** Persist the verdict-side Match and Submission changes on the claim owner. */
-  commitClaimedEvaluation(claim: EvaluationClaim, match: MatchRecord, submission?: SubmissionRecord): Promise<void>;
+  commitClaimedEvaluation(
+    claim: EvaluationClaim,
+    match: MatchRecord,
+    submission?: SubmissionRecord,
+  ): Promise<void>;
 
-  publishReveal(matchId: string, roundId: string, snapshot: RevealSnapshot): Promise<void>;
-  findReveal(matchId: string, roundId: string): Promise<RevealSnapshot | undefined>;
+  publishReveal(
+    matchId: string,
+    roundId: string,
+    snapshot: RevealSnapshot,
+  ): Promise<void>;
+  findReveal(
+    matchId: string,
+    roundId: string,
+  ): Promise<RevealSnapshot | undefined>;
 
   loadTeamDocument(
     matchId: string,
     roundId: string,
     sideId: string,
-  ): Promise<{ appRevision: number; language: string; stateB64: string } | undefined>;
+  ): Promise<
+    { appRevision: number; language: string; stateB64: string } | undefined
+  >;
   saveTeamDocument(
     matchId: string,
     roundId: string,
@@ -60,9 +94,17 @@ export interface MatchPersistence {
     stateB64: string,
   ): Promise<void>;
   /** MatchRecord and shared-document rows commit together when supported. */
-  commitMatchAndTeamDocuments(match: MatchRecord, rows: CollabRow[], expectedRevision?: number): Promise<void>;
+  commitMatchAndTeamDocuments(
+    match: MatchRecord,
+    rows: CollabRow[],
+    expectedRevision?: number,
+  ): Promise<void>;
   /** Atomically persist an anonymized result and remove source/document rows. */
-  eraseMatchSideData(match: MatchRecord, sideIds: string[], expectedRevision?: number): Promise<void>;
+  eraseMatchSideData(
+    match: MatchRecord,
+    sideIds: string[],
+    expectedRevision?: number,
+  ): Promise<void>;
 }
 
 export interface MatchPersistenceAdapters {
@@ -71,13 +113,27 @@ export interface MatchPersistenceAdapters {
   reveals: RevealStore;
   collab: CollabPersist;
   /** Postgres implementation supplies the real transaction. */
-  commitMatchAndTeamDocuments?: (match: MatchRecord, rows: CollabRow[], expectedRevision?: number) => Promise<void>;
+  commitMatchAndTeamDocuments?: (
+    match: MatchRecord,
+    rows: CollabRow[],
+    expectedRevision?: number,
+  ) => Promise<void>;
   /** Postgres implementation supplies cross-process evaluation ownership. */
-  claimPendingEvaluation?: (evaluationId: string) => Promise<EvaluationClaim | undefined>;
+  claimPendingEvaluation?: (
+    evaluationId: string,
+  ) => Promise<EvaluationClaim | undefined>;
   /** Postgres implementation commits the evaluation and Match on the claim session. */
-  commitClaimedEvaluation?: (claim: EvaluationClaim, match: MatchRecord, submission?: SubmissionRecord) => Promise<void>;
+  commitClaimedEvaluation?: (
+    claim: EvaluationClaim,
+    match: MatchRecord,
+    submission?: SubmissionRecord,
+  ) => Promise<void>;
   /** Production implementation uses one transaction for the match and source deletion. */
-  eraseMatchSideData?: (match: MatchRecord, sideIds: string[], expectedRevision?: number) => Promise<void>;
+  eraseMatchSideData?: (
+    match: MatchRecord,
+    sideIds: string[],
+    expectedRevision?: number,
+  ) => Promise<void>;
 }
 
 function immutableSubmissionView(record: SubmissionRecord): string {
@@ -98,7 +154,11 @@ function immutableSubmissionView(record: SubmissionRecord): string {
 }
 
 function isUniqueViolation(error: unknown): boolean {
-  return typeof error === "object" && error !== null && (error as { code?: string }).code === "23505";
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: string }).code === '23505'
+  );
 }
 
 /**
@@ -127,12 +187,18 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
   }
 
   async recordSubmission(record: SubmissionRecord): Promise<SubmissionRecord> {
-    const existingBySubmission = await this.adapters.submissions.getBySubmissionId(record.submissionId);
-    const existingByEvaluation = await this.adapters.submissions.getByEvaluationId(record.evaluationId);
+    const existingBySubmission =
+      await this.adapters.submissions.getBySubmissionId(record.submissionId);
+    const existingByEvaluation =
+      await this.adapters.submissions.getByEvaluationId(record.evaluationId);
     const existing = existingBySubmission ?? existingByEvaluation;
     if (existing) {
-      if (immutableSubmissionView(existing) !== immutableSubmissionView(record)) {
-        throw new DuplicateError("submission or evaluation id is already bound to different data");
+      if (
+        immutableSubmissionView(existing) !== immutableSubmissionView(record)
+      ) {
+        throw new DuplicateError(
+          'submission or evaluation id is already bound to different data',
+        );
       }
       return existing;
     }
@@ -144,20 +210,30 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
       // Re-read the durable row and apply the same idempotency rule.
       if (!isUniqueViolation(error)) throw error;
       const winner =
-        (await this.adapters.submissions.getBySubmissionId(record.submissionId)) ??
-        (await this.adapters.submissions.getByEvaluationId(record.evaluationId));
+        (await this.adapters.submissions.getBySubmissionId(
+          record.submissionId,
+        )) ??
+        (await this.adapters.submissions.getByEvaluationId(
+          record.evaluationId,
+        ));
       if (!winner) throw error;
       if (immutableSubmissionView(winner) !== immutableSubmissionView(record)) {
-        throw new DuplicateError("submission or evaluation id is already bound to different data");
+        throw new DuplicateError(
+          'submission or evaluation id is already bound to different data',
+        );
       }
       return winner;
     }
     const stored =
-      (await this.adapters.submissions.getBySubmissionId(record.submissionId)) ??
+      (await this.adapters.submissions.getBySubmissionId(
+        record.submissionId,
+      )) ??
       (await this.adapters.submissions.getByEvaluationId(record.evaluationId));
     if (!stored) return record;
     if (immutableSubmissionView(stored) !== immutableSubmissionView(record)) {
-      throw new DuplicateError("submission or evaluation id is already bound to different data");
+      throw new DuplicateError(
+        'submission or evaluation id is already bound to different data',
+      );
     }
     return stored;
   }
@@ -166,15 +242,22 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
     return this.adapters.submissions.update(record);
   }
 
-  findSubmissionById(submissionId: string): Promise<SubmissionRecord | undefined> {
+  findSubmissionById(
+    submissionId: string,
+  ): Promise<SubmissionRecord | undefined> {
     return this.adapters.submissions.getBySubmissionId(submissionId);
   }
 
-  findSubmissionByEvaluationId(evaluationId: string): Promise<SubmissionRecord | undefined> {
+  findSubmissionByEvaluationId(
+    evaluationId: string,
+  ): Promise<SubmissionRecord | undefined> {
     return this.adapters.submissions.getByEvaluationId(evaluationId);
   }
 
-  listRoundSubmissions(matchId: string, roundId: string): Promise<SubmissionRecord[]> {
+  listRoundSubmissions(
+    matchId: string,
+    roundId: string,
+  ): Promise<SubmissionRecord[]> {
     return this.adapters.submissions.listRound(matchId, roundId);
   }
 
@@ -182,7 +265,9 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
     return this.adapters.submissions.listPending();
   }
 
-  async claimPendingEvaluation(evaluationId: string): Promise<EvaluationClaim | undefined> {
+  async claimPendingEvaluation(
+    evaluationId: string,
+  ): Promise<EvaluationClaim | undefined> {
     if (this.adapters.claimPendingEvaluation) {
       return this.adapters.claimPendingEvaluation(evaluationId);
     }
@@ -199,15 +284,18 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
     await previous;
 
     try {
-      const stored = await this.adapters.submissions.getByEvaluationId(evaluationId);
-      if (!stored || stored.status !== "pending") {
+      const stored =
+        await this.adapters.submissions.getByEvaluationId(evaluationId);
+      if (!stored || stored.status !== 'pending') {
         releaseQueued();
-        if (this.localClaims.get(evaluationId) === queued) this.localClaims.delete(evaluationId);
+        if (this.localClaims.get(evaluationId) === queued)
+          this.localClaims.delete(evaluationId);
         return undefined;
       }
     } catch (error) {
       releaseQueued();
-      if (this.localClaims.get(evaluationId) === queued) this.localClaims.delete(evaluationId);
+      if (this.localClaims.get(evaluationId) === queued)
+        this.localClaims.delete(evaluationId);
       throw error;
     }
 
@@ -220,12 +308,17 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
         released = true;
         releaseQueued();
         await queued;
-        if (this.localClaims.get(evaluationId) === queued) this.localClaims.delete(evaluationId);
+        if (this.localClaims.get(evaluationId) === queued)
+          this.localClaims.delete(evaluationId);
       },
     };
   }
 
-  async commitClaimedEvaluation(claim: EvaluationClaim, match: MatchRecord, submission?: SubmissionRecord): Promise<void> {
+  async commitClaimedEvaluation(
+    claim: EvaluationClaim,
+    match: MatchRecord,
+    submission?: SubmissionRecord,
+  ): Promise<void> {
     claim.assertActive();
     if (this.adapters.commitClaimedEvaluation) {
       await this.adapters.commitClaimedEvaluation(claim, match, submission);
@@ -235,11 +328,18 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
     await this.saveMatch(match);
   }
 
-  publishReveal(matchId: string, roundId: string, snapshot: RevealSnapshot): Promise<void> {
+  publishReveal(
+    matchId: string,
+    roundId: string,
+    snapshot: RevealSnapshot,
+  ): Promise<void> {
     return this.adapters.reveals.record(matchId, roundId, snapshot);
   }
 
-  findReveal(matchId: string, roundId: string): Promise<RevealSnapshot | undefined> {
+  findReveal(
+    matchId: string,
+    roundId: string,
+  ): Promise<RevealSnapshot | undefined> {
     return this.adapters.reveals.get(matchId, roundId);
   }
 
@@ -247,7 +347,9 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
     matchId: string,
     roundId: string,
     sideId: string,
-  ): Promise<{ appRevision: number; language: string; stateB64: string } | undefined> {
+  ): Promise<
+    { appRevision: number; language: string; stateB64: string } | undefined
+  > {
     return this.adapters.collab.load(matchId, roundId, sideId);
   }
 
@@ -259,23 +361,49 @@ export class StoreBackedMatchPersistence implements MatchPersistence {
     language: string,
     stateB64: string,
   ): Promise<void> {
-    return this.adapters.collab.save(matchId, roundId, sideId, appRevision, language, stateB64);
+    return this.adapters.collab.save(
+      matchId,
+      roundId,
+      sideId,
+      appRevision,
+      language,
+      stateB64,
+    );
   }
 
-  async commitMatchAndTeamDocuments(match: MatchRecord, rows: CollabRow[], expectedRevision?: number): Promise<void> {
+  async commitMatchAndTeamDocuments(
+    match: MatchRecord,
+    rows: CollabRow[],
+    expectedRevision?: number,
+  ): Promise<void> {
     if (this.adapters.commitMatchAndTeamDocuments) {
-      await this.adapters.commitMatchAndTeamDocuments(match, rows, expectedRevision);
+      await this.adapters.commitMatchAndTeamDocuments(
+        match,
+        rows,
+        expectedRevision,
+      );
       return;
     }
     // In-memory implementations are already serialized by ArenaEngine's
     // match lock. Production supplies the one-transaction implementation.
     await this.saveMatch(match, expectedRevision);
     for (const row of rows) {
-      await this.saveTeamDocument(match.id, row.roundId, row.sideId, row.appRevision, row.language, row.stateB64);
+      await this.saveTeamDocument(
+        match.id,
+        row.roundId,
+        row.sideId,
+        row.appRevision,
+        row.language,
+        row.stateB64,
+      );
     }
   }
 
-  async eraseMatchSideData(match: MatchRecord, sideIds: string[], expectedRevision?: number): Promise<void> {
+  async eraseMatchSideData(
+    match: MatchRecord,
+    sideIds: string[],
+    expectedRevision?: number,
+  ): Promise<void> {
     if (this.adapters.eraseMatchSideData) {
       await this.adapters.eraseMatchSideData(match, sideIds, expectedRevision);
       return;

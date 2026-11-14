@@ -4,30 +4,40 @@
  * names and payloads (ticket 09 wires the transport).
  */
 export const ARENA_EVENTS = [
-  "phase.changed",
-  "player.statusChanged",
-  "player.presenceChanged",
-  "readiness.changed",
-  "surrender.changed",
-  "tests.updated",
-  "reveal.published",
-  "round.advanced",
-  "match.clock",
-  "match.ended",
+  'phase.changed',
+  'player.statusChanged',
+  'player.presenceChanged',
+  'readiness.changed',
+  'surrender.changed',
+  'tests.updated',
+  'reveal.published',
+  'round.advanced',
+  'match.clock',
+  'match.ended',
 ] as const;
 
 export type ArenaEvent = (typeof ARENA_EVENTS)[number];
 
 export interface ArenaEventPayloads {
-  "phase.changed": { phase: string; round: number; revision: number };
-  "player.statusChanged": { side: string; player: string; status: string; revision: number };
-  "player.presenceChanged": { side: string; player: string; presence: string; revision: number };
+  'phase.changed': { phase: string; round: number; revision: number };
+  'player.statusChanged': {
+    side: string;
+    player: string;
+    status: string;
+    revision: number;
+  };
+  'player.presenceChanged': {
+    side: string;
+    player: string;
+    presence: string;
+    revision: number;
+  };
   /**
    * Absolute (viewer-independent) readiness: clients refresh their
    * authoritative snapshot on receipt and derive you/mate locally.
    * `invalidated` marks a document-revision bump that cleared approvals.
    */
-  "readiness.changed": {
+  'readiness.changed': {
     side: string;
     userId?: string;
     ready?: boolean;
@@ -36,10 +46,19 @@ export interface ArenaEventPayloads {
     revision: number;
   };
   /** A snapshot refresh signal; vote details stay private to the requesting team. */
-  "surrender.changed": { matchId: string; revision: number };
-  "tests.updated": { tests: Array<{ id: string; status: string }>; revision: number };
-  "reveal.published": { round: number; revision: number };
-  "round.advanced": { round: number; problemId: string; revision: number };
-  "match.clock": { remainingSeconds: number };
-  "match.ended": { result: string; winner?: string; loser?: string; reason?: string; revision: number };
+  'surrender.changed': { matchId: string; revision: number };
+  'tests.updated': {
+    tests: Array<{ id: string; status: string }>;
+    revision: number;
+  };
+  'reveal.published': { round: number; revision: number };
+  'round.advanced': { round: number; problemId: string; revision: number };
+  'match.clock': { remainingSeconds: number };
+  'match.ended': {
+    result: string;
+    winner?: string;
+    loser?: string;
+    reason?: string;
+    revision: number;
+  };
 }

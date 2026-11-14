@@ -10,7 +10,7 @@ import {
   type SupportedLanguage,
   type VisibleTest,
   type GameJudge,
-} from "./judge.js";
+} from './judge.js';
 
 export interface Judge0SubmissionRequest {
   languageId: number;
@@ -59,7 +59,7 @@ export interface Judge0AdapterOptions {
 
 const DEFAULT_LANGUAGE_IDS: Record<SupportedLanguage, number> = {
   C: 50,
-  "C++": 54,
+  'C++': 54,
   Python: 71,
 };
 
@@ -94,7 +94,7 @@ interface SnippetOutput {
  * recovery may create a fresh provider job without changing that identity.
  */
 export class Judge0Adapter implements GameJudge {
-  readonly provider = "judge0";
+  readonly provider = 'judge0';
   private readonly http: Judge0HttpClient;
   private readonly languageIds: Record<SupportedLanguage, number>;
   private readonly pollIntervalMs: number;
@@ -108,7 +108,9 @@ export class Judge0Adapter implements GameJudge {
     this.languageIds = { ...DEFAULT_LANGUAGE_IDS, ...options.languageIds };
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.maxPolls = options.maxPolls ?? DEFAULT_MAX_POLLS;
-    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this.sleep =
+      options.sleep ??
+      ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.clock = options.clock ?? (() => Date.now());
   }
 
@@ -131,7 +133,11 @@ export class Judge0Adapter implements GameJudge {
       driver,
       source,
       entrypoint,
-      tests.map((test) => ({ id: test.id, input: test.input, expected: test.expected })),
+      tests.map((test) => ({
+        id: test.id,
+        input: test.input,
+        expected: test.expected,
+      })),
       limits,
     );
     return results.map((result) => ({
@@ -143,9 +149,15 @@ export class Judge0Adapter implements GameJudge {
     }));
   }
 
-  async evaluateSealed(request: SealedEvaluationRequest): Promise<{ groups: SealedGroupResult[] }> {
+  async evaluateSealed(
+    request: SealedEvaluationRequest,
+  ): Promise<{ groups: SealedGroupResult[] }> {
     const cases = request.groups.flatMap((group) =>
-      group.tests.map((test) => ({ id: test.id, input: test.input, expected: test.expected })),
+      group.tests.map((test) => ({
+        id: test.id,
+        input: test.input,
+        expected: test.expected,
+      })),
     );
     const results = await this.runCases(
       request.language,
@@ -163,12 +175,17 @@ export class Judge0Adapter implements GameJudge {
         results: group.tests.map((test) => {
           const result = byId.get(test.id) ?? {
             id: test.id,
-            status: "internal_error" as const,
+            status: 'internal_error' as const,
             passed: false,
-            output: "",
+            output: '',
             runtimeMs: 0,
           };
-          return { id: result.id, passed: result.passed, status: result.status, runtimeMs: result.runtimeMs };
+          return {
+            id: result.id,
+            passed: result.passed,
+            status: result.status,
+            runtimeMs: result.runtimeMs,
+          };
         }),
       })),
     };
@@ -182,19 +199,33 @@ export class Judge0Adapter implements GameJudge {
     cases: CaseInput[],
     limits: JudgeLimits,
   ): Promise<NormalizedCase[]> {
-    if (driver === "snippet" && language !== "Python") {
-      throw new JudgeInfraError("Judge0 snippet driver is only configured for Python");
+    if (driver === 'snippet' && language !== 'Python') {
+      throw new JudgeInfraError(
+        'Judge0 snippet driver is only configured for Python',
+      );
     }
     const startedAt = this.clock();
     const results: NormalizedCase[] = [];
     try {
       for (const test of cases) {
-        results.push(await this.runCase(language, driver, source, entrypoint, test, limits));
+        results.push(
+          await this.runCase(
+            language,
+            driver,
+            source,
+            entrypoint,
+            test,
+            limits,
+          ),
+        );
       }
       return results;
     } finally {
       const executionMs = Math.max(0, this.clock() - startedAt);
-      const providerRuntimeMs = results.reduce((total, result) => total + result.runtimeMs, 0);
+      const providerRuntimeMs = results.reduce(
+        (total, result) => total + result.runtimeMs,
+        0,
+      );
       this.lastMetrics = {
         provider: this.provider,
         queueWaitMs: Math.max(0, executionMs - providerRuntimeMs),
@@ -212,7 +243,10 @@ export class Judge0Adapter implements GameJudge {
     test: CaseInput,
     limits: JudgeLimits,
   ): Promise<NormalizedCase> {
-    const providerSource = driver === "snippet" ? this.snippetHarness(source, test.input, entrypoint) : source;
+    const providerSource =
+      driver === 'snippet'
+        ? this.snippetHarness(source, test.input, entrypoint)
+        : source;
     let response: Judge0SubmissionResponse;
     try {
       const created = await this.http.createSubmission({
@@ -220,7 +254,10 @@ export class Judge0Adapter implements GameJudge {
         sourceCode: providerSource,
         stdin: test.input,
         cpuTimeLimitSeconds: Math.max(0.001, limits.runWallMs / 1000),
-        wallTimeLimitSeconds: Math.max(0.001, Math.max(limits.compileWallMs, limits.runWallMs) / 1000),
+        wallTimeLimitSeconds: Math.max(
+          0.001,
+          Math.max(limits.compileWallMs, limits.runWallMs) / 1000,
+        ),
         memoryLimitKb: Math.max(1, limits.runMemoryMb * 1024),
         maxOutputSizeKb: Math.max(1, Math.ceil(limits.runOutputBytes / 1024)),
         maxProcessesAndOrThreads: Math.max(1, limits.runPids),
@@ -230,22 +267,27 @@ export class Judge0Adapter implements GameJudge {
         redirectStderrToStdout: false,
         enableNetwork: false,
       });
-      if (!created.token) throw new JudgeInfraError("Judge0 did not return a submission token");
+      if (!created.token)
+        throw new JudgeInfraError('Judge0 did not return a submission token');
       response = await this.poll(created.token);
     } catch (error) {
       if (error instanceof JudgeInfraError) throw error;
-      throw new JudgeInfraError("Judge0 request failed");
+      throw new JudgeInfraError('Judge0 request failed');
     }
 
     const status = this.statusFrom(response.status?.id);
-    if (status === "internal_error") throw new JudgeInfraError("Judge0 returned an internal execution failure");
+    if (status === 'internal_error')
+      throw new JudgeInfraError(
+        'Judge0 returned an internal execution failure',
+      );
     const runtimeMs = this.runtimeMs(response.time);
-    if (status !== "accepted") {
-      return { id: test.id, status, passed: false, output: "", runtimeMs };
+    if (status !== 'accepted') {
+      return { id: test.id, status, passed: false, output: '', runtimeMs };
     }
 
     const output = this.outputFor(response, driver);
-    const comparison = driver === "snippet" ? this.snippetResult(response.stdout) : output;
+    const comparison =
+      driver === 'snippet' ? this.snippetResult(response.stdout) : output;
     return {
       id: test.id,
       status,
@@ -262,37 +304,43 @@ export class Judge0Adapter implements GameJudge {
       if (statusId !== 1 && statusId !== 2) return response;
       if (attempt + 1 < this.maxPolls) await this.sleep(this.pollIntervalMs);
     }
-    throw new JudgeInfraError("Judge0 polling timed out");
+    throw new JudgeInfraError('Judge0 polling timed out');
   }
 
   private statusFrom(statusId: number | undefined): ExecutionStatus {
-    if (statusId === 3 || statusId === 4) return "accepted";
-    if (statusId === 5) return "time_limit_exceeded";
-    if (statusId === 6) return "compile_error";
-    if (statusId !== undefined && statusId >= 7 && statusId <= 12) return "runtime_error";
-    return "internal_error";
+    if (statusId === 3 || statusId === 4) return 'accepted';
+    if (statusId === 5) return 'time_limit_exceeded';
+    if (statusId === 6) return 'compile_error';
+    if (statusId !== undefined && statusId >= 7 && statusId <= 12)
+      return 'runtime_error';
+    return 'internal_error';
   }
 
-  private outputFor(response: Judge0SubmissionResponse, driver: DriverKind): string {
-    if (driver === "snippet") return this.snippetOutput(response.stdout);
-    return response.stdout ?? "";
+  private outputFor(
+    response: Judge0SubmissionResponse,
+    driver: DriverKind,
+  ): string {
+    if (driver === 'snippet') return this.snippetOutput(response.stdout);
+    return response.stdout ?? '';
   }
 
   private snippetResult(stdout: string | undefined): string {
     try {
-      const parsed = JSON.parse(stdout ?? "") as SnippetOutput;
-      return typeof parsed.result === "string" ? parsed.result : String(parsed.result ?? "");
+      const parsed = JSON.parse(stdout ?? '') as SnippetOutput;
+      return typeof parsed.result === 'string'
+        ? parsed.result
+        : String(parsed.result ?? '');
     } catch {
-      return "";
+      return '';
     }
   }
 
   private snippetOutput(stdout: string | undefined): string {
     try {
-      const parsed = JSON.parse(stdout ?? "") as SnippetOutput;
-      return typeof parsed.output === "string" ? parsed.output : "";
+      const parsed = JSON.parse(stdout ?? '') as SnippetOutput;
+      return typeof parsed.output === 'string' ? parsed.output : '';
     } catch {
-      return "";
+      return '';
     }
   }
 
@@ -301,79 +349,98 @@ export class Judge0Adapter implements GameJudge {
   }
 
   private runtimeMs(time: string | number | null | undefined): number {
-    if (typeof time === "number") return Math.max(0, Math.round(time * 1000));
-    if (typeof time === "string") {
+    if (typeof time === 'number') return Math.max(0, Math.round(time * 1000));
+    if (typeof time === 'string') {
       const seconds = Number(time);
-      return Number.isFinite(seconds) ? Math.max(0, Math.round(seconds * 1000)) : 0;
+      return Number.isFinite(seconds)
+        ? Math.max(0, Math.round(seconds * 1000))
+        : 0;
     }
     return 0;
   }
 
-  private snippetHarness(source: string, input: string, entrypoint: string | undefined): string {
+  private snippetHarness(
+    source: string,
+    input: string,
+    entrypoint: string | undefined,
+  ): string {
     return [
-      "import contextlib, inspect, io, json",
+      'import contextlib, inspect, io, json',
       `__source = ${JSON.stringify(source)}`,
-      "exec(__source, globals(), globals())",
-      `__entrypoint = ${JSON.stringify(entrypoint ?? "")}`,
+      'exec(__source, globals(), globals())',
+      `__entrypoint = ${JSON.stringify(entrypoint ?? '')}`,
       "if __entrypoint and inspect.isclass(globals().get('Solution')):",
       "    __target = getattr(globals()['Solution'](), __entrypoint, None)",
-      "elif __entrypoint:",
-      "    __target = globals().get(__entrypoint)",
-      "else:",
+      'elif __entrypoint:',
+      '    __target = globals().get(__entrypoint)',
+      'else:',
       "    __public = [v for k, v in globals().items() if not k.startswith('_') and callable(v) and getattr(v, '__module__', None) == '__main__']",
-      "    __target = __public[0] if len(__public) == 1 else None",
+      '    __target = __public[0] if len(__public) == 1 else None',
       "if not callable(__target): raise RuntimeError('missing or ambiguous entrypoint')",
-      "__case = {}",
+      '__case = {}',
       `exec(${JSON.stringify(input)}, __case, __case)`,
       "__args = [v for k, v in __case.items() if not k.startswith('_')]",
-      "__buffer = io.StringIO()",
-      "with contextlib.redirect_stdout(__buffer):",
-      "    __result = __target(*__args)",
+      '__buffer = io.StringIO()',
+      'with contextlib.redirect_stdout(__buffer):',
+      '    __result = __target(*__args)',
       "print(json.dumps({'result': repr(__result), 'output': __buffer.getvalue()}, separators=(',', ':'))) ",
-    ].join("\n");
+    ].join('\n');
   }
 
   private createHttpClient(options: Judge0AdapterOptions): Judge0HttpClient {
-    if (!options.baseUrl) throw new Error("Judge0Adapter requires an HTTP client or baseUrl");
+    if (!options.baseUrl)
+      throw new Error('Judge0Adapter requires an HTTP client or baseUrl');
     return new FetchJudge0HttpClient(options.baseUrl, options.headers ?? {});
   }
 }
 
 class FetchJudge0HttpClient implements Judge0HttpClient {
-  constructor(private readonly baseUrl: string, private readonly headers: Record<string, string>) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly headers: Record<string, string>,
+  ) {}
 
-  async createSubmission(input: Judge0SubmissionRequest): Promise<{ token: string }> {
-    const response = await fetch(`${this.baseUrl.replace(/\/$/, "")}/submissions?base64_encoded=true&wait=false`, {
-      method: "POST",
-      headers: { "content-type": "application/json", ...this.headers },
-      body: JSON.stringify({
-        language_id: input.languageId,
-        source_code: Buffer.from(input.sourceCode, "utf8").toString("base64"),
-        stdin: Buffer.from(input.stdin, "utf8").toString("base64"),
-        cpu_time_limit: input.cpuTimeLimitSeconds,
-        wall_time_limit: input.wallTimeLimitSeconds,
-        memory_limit: input.memoryLimitKb,
-        max_output_size: input.maxOutputSizeKb,
-        max_processes_and_or_threads: input.maxProcessesAndOrThreads,
-        enable_per_process_and_thread_time_limit: input.enablePerProcessAndThreadTimeLimit,
-        enable_per_process_and_thread_memory_limit: input.enablePerProcessAndThreadMemoryLimit,
-        max_file_size: input.maxFileSizeKb,
-        redirect_stderr_to_stdout: input.redirectStderrToStdout,
-        enable_network: input.enableNetwork,
-      }),
-    });
-    if (!response.ok) throw new JudgeInfraError("Judge0 submission request failed");
+  async createSubmission(
+    input: Judge0SubmissionRequest,
+  ): Promise<{ token: string }> {
+    const response = await fetch(
+      `${this.baseUrl.replace(/\/$/, '')}/submissions?base64_encoded=true&wait=false`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...this.headers },
+        body: JSON.stringify({
+          language_id: input.languageId,
+          source_code: Buffer.from(input.sourceCode, 'utf8').toString('base64'),
+          stdin: Buffer.from(input.stdin, 'utf8').toString('base64'),
+          cpu_time_limit: input.cpuTimeLimitSeconds,
+          wall_time_limit: input.wallTimeLimitSeconds,
+          memory_limit: input.memoryLimitKb,
+          max_output_size: input.maxOutputSizeKb,
+          max_processes_and_or_threads: input.maxProcessesAndOrThreads,
+          enable_per_process_and_thread_time_limit:
+            input.enablePerProcessAndThreadTimeLimit,
+          enable_per_process_and_thread_memory_limit:
+            input.enablePerProcessAndThreadMemoryLimit,
+          max_file_size: input.maxFileSizeKb,
+          redirect_stderr_to_stdout: input.redirectStderrToStdout,
+          enable_network: input.enableNetwork,
+        }),
+      },
+    );
+    if (!response.ok)
+      throw new JudgeInfraError('Judge0 submission request failed');
     const body = (await response.json()) as { token?: unknown };
-    if (typeof body.token !== "string") throw new JudgeInfraError("Judge0 submission token missing");
+    if (typeof body.token !== 'string')
+      throw new JudgeInfraError('Judge0 submission token missing');
     return { token: body.token };
   }
 
   async getSubmission(token: string): Promise<Judge0SubmissionResponse> {
     const response = await fetch(
-      `${this.baseUrl.replace(/\/$/, "")}/submissions/${encodeURIComponent(token)}?base64_encoded=true&fields=status,stdout,stderr,compile_output,message,time,memory`,
+      `${this.baseUrl.replace(/\/$/, '')}/submissions/${encodeURIComponent(token)}?base64_encoded=true&fields=status,stdout,stderr,compile_output,message,time,memory`,
       { headers: this.headers },
     );
-    if (!response.ok) throw new JudgeInfraError("Judge0 result request failed");
+    if (!response.ok) throw new JudgeInfraError('Judge0 result request failed');
     const body = (await response.json()) as {
       status?: { id?: number; description?: string };
       stdout?: string | null;
@@ -397,9 +464,9 @@ class FetchJudge0HttpClient implements Judge0HttpClient {
   private decode(value: string | null | undefined): string | undefined {
     if (value == null) return undefined;
     try {
-      return Buffer.from(value, "base64").toString("utf8");
+      return Buffer.from(value, 'base64').toString('utf8');
     } catch {
-      return "";
+      return '';
     }
   }
 }

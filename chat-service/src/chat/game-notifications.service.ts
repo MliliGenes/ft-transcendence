@@ -70,17 +70,26 @@ export class GameNotificationsService {
       where: { roomCode: data.roomCode },
     });
     if (!link) {
-      return { delivered: false, reason: 'challenge is not linked to a conversation' };
+      return {
+        delivered: false,
+        reason: 'challenge is not linked to a conversation',
+      };
     }
     if (link.matchId && link.matchId !== data.matchId) {
       // A room code can only start one match; a different match id means the
       // event does not belong to the linked conversation.
-      return { delivered: false, reason: 'challenge already started another match' };
+      return {
+        delivered: false,
+        reason: 'challenge already started another match',
+      };
     }
 
     const conversation = await this.conversationMembers(link.conversationId);
     if (!conversation) {
-      return { delivered: false, reason: 'linked conversation no longer exists' };
+      return {
+        delivered: false,
+        reason: 'linked conversation no longer exists',
+      };
     }
     const unexpected = data.participants.filter(
       (participant) => !conversation.memberIds.includes(participant.userId),
@@ -89,7 +98,10 @@ export class GameNotificationsService {
       this.logger.warn(
         `Rejected a match-start notification: ${unexpected.length} participant(s) are not members of the linked conversation`,
       );
-      return { delivered: false, reason: 'participants are not conversation members' };
+      return {
+        delivered: false,
+        reason: 'participants are not conversation members',
+      };
     }
 
     await this.prisma.gameChallenge.update({
@@ -116,12 +128,18 @@ export class GameNotificationsService {
       where: { matchId: data.matchId },
     });
     if (!link) {
-      return { delivered: false, reason: 'match is not linked to a conversation' };
+      return {
+        delivered: false,
+        reason: 'match is not linked to a conversation',
+      };
     }
 
     const conversation = await this.conversationMembers(link.conversationId);
     if (!conversation) {
-      return { delivered: false, reason: 'linked conversation no longer exists' };
+      return {
+        delivered: false,
+        reason: 'linked conversation no longer exists',
+      };
     }
     const unexpected = data.participants.filter(
       (participant) => !conversation.memberIds.includes(participant.userId),
@@ -130,7 +148,10 @@ export class GameNotificationsService {
       this.logger.warn(
         'Rejected a match-result notification: participants are not members of the linked conversation',
       );
-      return { delivered: false, reason: 'participants are not conversation members' };
+      return {
+        delivered: false,
+        reason: 'participants are not conversation members',
+      };
     }
 
     const summary = await this.resultSummary(data);
@@ -151,12 +172,18 @@ export class GameNotificationsService {
       where: { roomCode: data.roomCode },
     });
     if (!link) {
-      return { delivered: false, reason: 'challenge is not linked to a conversation' };
+      return {
+        delivered: false,
+        reason: 'challenge is not linked to a conversation',
+      };
     }
 
     const conversation = await this.conversationMembers(link.conversationId);
     if (!conversation) {
-      return { delivered: false, reason: 'linked conversation no longer exists' };
+      return {
+        delivered: false,
+        reason: 'linked conversation no longer exists',
+      };
     }
     const unexpected = data.participantUserIds.filter(
       (userId) => !conversation.memberIds.includes(userId),
@@ -165,7 +192,10 @@ export class GameNotificationsService {
       this.logger.warn(
         'Rejected a challenge-cancellation notification: participants are not members of the linked conversation',
       );
-      return { delivered: false, reason: 'participants are not conversation members' };
+      return {
+        delivered: false,
+        reason: 'participants are not conversation members',
+      };
     }
 
     const summary =
@@ -194,7 +224,10 @@ export class GameNotificationsService {
       dedupeKey: string;
     },
   ): Promise<{ delivered: boolean; reason: string }> {
-    const clientRequestId = deterministicUuid(conversationId, notification.dedupeKey);
+    const clientRequestId = deterministicUuid(
+      conversationId,
+      notification.dedupeKey,
+    );
     const content = formatGameNotification(
       notification.type,
       notification.summary,
@@ -320,22 +353,28 @@ export class GameNotificationsService {
       sideTotals.set(participant.sideId, participant.score);
     }
     const sides = [...sideTotals.keys()].sort(
-      (left, right) => sideOrder(left) - sideOrder(right) || left.localeCompare(right),
+      (left, right) =>
+        sideOrder(left) - sideOrder(right) || left.localeCompare(right),
     );
     const winnerSide =
       data.forfeit?.winnerSideId ??
       sides.find((side) =>
         data.participants.some(
-          (participant) => participant.sideId === side && participant.outcome === 'win',
+          (participant) =>
+            participant.sideId === side && participant.outcome === 'win',
         ),
       );
     const winnerIndex = winnerSide ? sides.indexOf(winnerSide) : -1;
     const winnerLabel =
-      winnerIndex >= 0 ? (sideLabels[winnerIndex] ?? UNKNOWN_PLAYER) : UNKNOWN_PLAYER;
+      winnerIndex >= 0
+        ? (sideLabels[winnerIndex] ?? UNKNOWN_PLAYER)
+        : UNKNOWN_PLAYER;
     const loserIndex =
       winnerIndex >= 0 ? sides.findIndex((side) => side !== winnerSide) : -1;
     const loserLabel =
-      loserIndex >= 0 ? (sideLabels[loserIndex] ?? UNKNOWN_PLAYER) : UNKNOWN_PLAYER;
+      loserIndex >= 0
+        ? (sideLabels[loserIndex] ?? UNKNOWN_PLAYER)
+        : UNKNOWN_PLAYER;
 
     if (data.forfeit) {
       const cause =
@@ -355,8 +394,10 @@ export class GameNotificationsService {
     }
 
     const winnerTotal = sideTotals.get(winnerSide!) ?? 0;
-    const loserTotal = loserIndex >= 0 ? (sideTotals.get(sides[loserIndex]!) ?? 0) : 0;
-    const deadline = data.endedBecause === 'deadline' ? ' (time limit reached)' : '';
+    const loserTotal =
+      loserIndex >= 0 ? (sideTotals.get(sides[loserIndex]!) ?? 0) : 0;
+    const deadline =
+      data.endedBecause === 'deadline' ? ' (time limit reached)' : '';
     return `${winnerLabel} won ${winnerTotal} – ${loserTotal}${deadline}`;
   }
 }

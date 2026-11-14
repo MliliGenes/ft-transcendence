@@ -87,7 +87,10 @@ test('avatar and banner uploads', async (t) => {
     .overrideProvider(RabbitMqEventsService)
     .useValue({ publishUpdated: async (profile) => updates.push(profile) })
     .overrideProvider(MailService)
-    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
+    .useValue({
+      sendVerificationEmail: async () => {},
+      sendPasswordResetEmail: async () => {},
+    })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({
@@ -243,20 +246,23 @@ test('avatar and banner uploads', async (t) => {
         .expect(400);
     }
   });
-  await t.test('removal requires authentication and cannot target another user', async () => {
-    for (const kind of ['avatar', 'banner']) {
-      await request(server).delete(`/accounts/me/${kind}`).expect(401);
-      await request(server)
-        .delete(`/accounts/me/${kind}`)
-        .auth('invalid', { type: 'bearer' })
-        .expect(401);
-      await request(server)
-        .delete(`/accounts/${id}/${kind}`)
-        .auth(token, { type: 'bearer' })
-        .expect(404);
-    }
-    assert.equal(images.size, 2);
-  });
+  await t.test(
+    'removal requires authentication and cannot target another user',
+    async () => {
+      for (const kind of ['avatar', 'banner']) {
+        await request(server).delete(`/accounts/me/${kind}`).expect(401);
+        await request(server)
+          .delete(`/accounts/me/${kind}`)
+          .auth('invalid', { type: 'bearer' })
+          .expect(401);
+        await request(server)
+          .delete(`/accounts/${id}/${kind}`)
+          .auth(token, { type: 'bearer' })
+          .expect(404);
+      }
+      assert.equal(images.size, 2);
+    },
+  );
   await t.test('removal rolls back if clearing the URL fails', async () => {
     const avatar = images.get('AVATAR');
     const url = user.avatarUrl;
@@ -271,29 +277,35 @@ test('avatar and banner uploads', async (t) => {
     assert.equal(user.avatarUrl, url);
     assert.equal(updates.length, eventCount);
   });
-  await t.test('removes only the selected image and allows repeated removal', async () => {
-    for (const kind of ['avatar', 'banner']) {
-      const other = kind === 'avatar' ? 'banner' : 'avatar';
-      const otherImage = images.get(other.toUpperCase());
-      const otherUrl = user[`${other}Url`];
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const eventCount = updates.length;
-        const response = await request(server)
-          .delete(`/accounts/me/${kind}`)
-          .auth(token, { type: 'bearer' })
-          .expect(204);
-        assert.equal(response.text, '');
-        assert.equal(response.headers['cache-control'], 'no-store');
-        assert.equal(user[`${kind}Url`], null);
-        assert.equal(images.has(kind.toUpperCase()), false);
-        assert.equal(images.get(other.toUpperCase()), otherImage);
-        assert.equal(user[`${other}Url`], otherUrl);
-        assert.equal(updates.length, eventCount + (kind === 'avatar' ? 1 : 0));
-        if (kind === 'avatar') assert.equal(updates.at(-1).avatarUrl, null);
+  await t.test(
+    'removes only the selected image and allows repeated removal',
+    async () => {
+      for (const kind of ['avatar', 'banner']) {
+        const other = kind === 'avatar' ? 'banner' : 'avatar';
+        const otherImage = images.get(other.toUpperCase());
+        const otherUrl = user[`${other}Url`];
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const eventCount = updates.length;
+          const response = await request(server)
+            .delete(`/accounts/me/${kind}`)
+            .auth(token, { type: 'bearer' })
+            .expect(204);
+          assert.equal(response.text, '');
+          assert.equal(response.headers['cache-control'], 'no-store');
+          assert.equal(user[`${kind}Url`], null);
+          assert.equal(images.has(kind.toUpperCase()), false);
+          assert.equal(images.get(other.toUpperCase()), otherImage);
+          assert.equal(user[`${other}Url`], otherUrl);
+          assert.equal(
+            updates.length,
+            eventCount + (kind === 'avatar' ? 1 : 0),
+          );
+          if (kind === 'avatar') assert.equal(updates.at(-1).avatarUrl, null);
+        }
+        await request(server).get(`/accounts/${id}/${kind}`).expect(404);
       }
-      await request(server).get(`/accounts/${id}/${kind}`).expect(404);
-    }
-  });
+    },
+  );
   await t.test('a deleted account cannot upload or remove images', async () => {
     user = null;
     for (const kind of ['avatar', 'banner']) {

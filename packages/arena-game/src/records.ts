@@ -1,5 +1,10 @@
-import type { MatchMode, PlayerStatus, Presence, RoundPhase } from "arena-model";
-import type { ExecutionStatus } from "./judge.js";
+import type {
+  MatchMode,
+  PlayerStatus,
+  Presence,
+  RoundPhase,
+} from 'arena-model';
+import type { ExecutionStatus } from './judge.js';
 
 export type SideId = string;
 
@@ -8,7 +13,7 @@ export interface ForfeitRecord {
   loser: SideId;
   /** Server time of the terminal decision. */
   at: number;
-  reason: "grace-expired" | "leave" | "surrender";
+  reason: 'grace-expired' | 'leave' | 'surrender';
 }
 
 export interface Participant {
@@ -52,7 +57,17 @@ export interface RoundState {
   attempts: Partial<Record<SideId, number>>;
   activities: Partial<Record<SideId, PlayerStatus>>;
   /** Last visible-run results per side (visible only; restored on reconnect). */
-  runTests: Partial<Record<SideId, Array<{ id: string; status: "idle" | "running" | "passed" | "failed"; output: string | null; ms: number | null }>>>;
+  runTests: Partial<
+    Record<
+      SideId,
+      Array<{
+        id: string;
+        status: 'idle' | 'running' | 'passed' | 'failed';
+        output: string | null;
+        ms: number | null;
+      }>
+    >
+  >;
   /**
    * 2v2 only: one shared-document identity per team side. Absent in 1v1
    * (no shared document exists there). Ticket 15 binds real Yjs state here.
@@ -119,7 +134,8 @@ export interface GroupResult {
   earnedBp: number;
 }
 
-export type SubmissionStatus = "pending" | "completed" | "failed" | "superseded";
+export type SubmissionStatus =
+  'pending' | 'completed' | 'failed' | 'superseded';
 
 export interface SubmissionRecord {
   submissionId: string;

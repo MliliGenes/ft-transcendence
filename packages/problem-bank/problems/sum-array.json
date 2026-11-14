@@ -18,10 +18,7 @@
       "explanation": "-5 + 0 + 5 = 0"
     }
   ],
-  "constraints": [
-    "1 <= n <= 10^5",
-    "-10^9 <= a_i <= 10^9"
-  ],
+  "constraints": ["1 <= n <= 10^5", "-10^9 <= a_i <= 10^9"],
   "timeLimitMs": 2000,
   "memoryLimitMb": 256,
   "driver": "stdio",
@@ -49,7 +46,11 @@
       "weight": 50,
       "tests": [
         { "id": "h3", "input": "4\n-10 -20 -30 -40", "expected": "-100" },
-        { "id": "h4", "input": "2\n1000000000 1000000000", "expected": "2000000000" }
+        {
+          "id": "h4",
+          "input": "2\n1000000000 1000000000",
+          "expected": "2000000000"
+        }
       ]
     }
   ],

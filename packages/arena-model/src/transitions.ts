@@ -4,7 +4,7 @@ import {
   type Readiness,
   type RoundPhase,
   bothReady,
-} from "./model.js";
+} from './model.js';
 
 /**
  * Round lifecycle: the ONE global state machine. Tracks match/round progress
@@ -21,14 +21,14 @@ import {
  * disabled (canSubmit requires round CODING).
  */
 const ROUND_LEGAL: Record<RoundPhase, readonly RoundPhase[]> = {
-  MATCH_FOUND: ["ROUND_INTRO"],
-  ROUND_INTRO: ["CODING"],
+  MATCH_FOUND: ['ROUND_INTRO'],
+  ROUND_INTRO: ['CODING'],
   // ponytail: CODING has no generic exit — the round leaves it only through
   // the game-owned publishRoundReveal helper, so evaluation completions and
   // ordinary callers can never disclose hidden results or end a round.
   CODING: [],
-  SCORE_REVEAL: ["ROUND_COMPLETE", "ROUND_INTRO", "MATCH_COMPLETE"],
-  ROUND_COMPLETE: ["ROUND_INTRO", "MATCH_COMPLETE"],
+  SCORE_REVEAL: ['ROUND_COMPLETE', 'ROUND_INTRO', 'MATCH_COMPLETE'],
+  ROUND_COMPLETE: ['ROUND_INTRO', 'MATCH_COMPLETE'],
   MATCH_COMPLETE: [],
 };
 
@@ -38,35 +38,46 @@ export function canTransition(from: RoundPhase, to: RoundPhase): boolean {
 
 /** Only round CODING permits Run. ROUND_INTRO keeps Run disabled so Start gates play. */
 export function canRun(phase: RoundPhase): boolean {
-  return phase === "CODING";
+  return phase === 'CODING';
 }
 
 /**
  * Only round CODING permits Submit. 1v1 needs nothing else; 2v2 additionally
  * requires both teammates Ready (enforced server-side regardless of UI).
  */
-export function canSubmit(phase: RoundPhase, mode: MatchMode, readiness: Readiness): boolean {
-  if (phase !== "CODING") return false;
-  return mode === "1v1" || bothReady(readiness);
+export function canSubmit(
+  phase: RoundPhase,
+  mode: MatchMode,
+  readiness: Readiness,
+): boolean {
+  if (phase !== 'CODING') return false;
+  return mode === '1v1' || bothReady(readiness);
 }
 
 /** Only round CODING allows editing; every other round phase is read-only. */
 export function isEditable(phase: RoundPhase): boolean {
-  return phase === "CODING";
+  return phase === 'CODING';
 }
 
 /** Cause gating disclosure of a sealed Round result. */
-export type RevealCause = "REVEAL_CONDITION_MET" | "MATCH_DEADLINE";
+export type RevealCause = 'REVEAL_CONDITION_MET' | 'MATCH_DEADLINE';
 
 /**
  * Normal reveal follows a completed coding Round. A Match deadline can also
  * publish the current Round while it is found, in intro, or coding. Evaluation
  * completion alone never reveals hidden group information.
  */
-export function publishRoundReveal(from: RoundPhase, cause: RevealCause): RoundPhase {
-  if (cause === "REVEAL_CONDITION_MET" && from === "CODING") return "SCORE_REVEAL";
-  if (cause === "MATCH_DEADLINE" && (from === "MATCH_FOUND" || from === "ROUND_INTRO" || from === "CODING")) {
-    return "SCORE_REVEAL";
+export function publishRoundReveal(
+  from: RoundPhase,
+  cause: RevealCause,
+): RoundPhase {
+  if (cause === 'REVEAL_CONDITION_MET' && from === 'CODING')
+    return 'SCORE_REVEAL';
+  if (
+    cause === 'MATCH_DEADLINE' &&
+    (from === 'MATCH_FOUND' || from === 'ROUND_INTRO' || from === 'CODING')
+  ) {
+    return 'SCORE_REVEAL';
   }
   throw new Error(`illegal reveal ${String(from)} with cause ${String(cause)}`);
 }
@@ -84,23 +95,26 @@ export function publishRoundReveal(from: RoundPhase, cause: RevealCause): RoundP
  * connectivity state.
  */
 const SIDE_LEGAL: Record<PlayerStatus, readonly PlayerStatus[]> = {
-  coding: ["running", "submitted", "locked"],
-  running: ["coding", "locked"],
-  submitted: ["evaluating", "coding", "locked"],
-  evaluating: ["coding", "locked"],
-  locked: ["coding"],
+  coding: ['running', 'submitted', 'locked'],
+  running: ['coding', 'locked'],
+  submitted: ['evaluating', 'coding', 'locked'],
+  evaluating: ['coding', 'locked'],
+  locked: ['coding'],
 };
 
-export function canSideTransition(from: PlayerStatus, to: PlayerStatus): boolean {
+export function canSideTransition(
+  from: PlayerStatus,
+  to: PlayerStatus,
+): boolean {
   return SIDE_LEGAL[from].includes(to);
 }
 
 /** A side may start a visible Run only while its own activity is coding. */
 export function canSideRun(status: PlayerStatus): boolean {
-  return status === "coding";
+  return status === 'coding';
 }
 
 /** A side may start a Submit only while its own activity is coding. */
 export function canSideSubmit(status: PlayerStatus): boolean {
-  return status === "coding";
+  return status === 'coding';
 }

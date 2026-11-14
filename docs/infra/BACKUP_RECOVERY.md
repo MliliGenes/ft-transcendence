@@ -4,13 +4,13 @@ The complete snapshot workflow covers User, Chat and Game PostgreSQL plus the Mi
 
 ## Snapshot contents
 
-| File | Source |
-| --- | --- |
-| `user-db.sql.gz` | Account, authentication, profile and social tables |
-| `chat-db.sql.gz` | Conversations, messages, groups and read receipts |
-| `game-db.sql.gz` | Matches, submissions, results and collaborative snapshots |
-| `minio-attachments.tar.gz` | MinIO `chat-attachments` data directory |
-| `SHA256SUMS` / `manifest.json` | Integrity checks and snapshot metadata |
+| File                           | Source                                                    |
+| ------------------------------ | --------------------------------------------------------- |
+| `user-db.sql.gz`               | Account, authentication, profile and social tables        |
+| `chat-db.sql.gz`               | Conversations, messages, groups and read receipts         |
+| `game-db.sql.gz`               | Matches, submissions, results and collaborative snapshots |
+| `minio-attachments.tar.gz`     | MinIO `chat-attachments` data directory                   |
+| `SHA256SUMS` / `manifest.json` | Integrity checks and snapshot metadata                    |
 
 The database dumps omit ownership/ACL statements; provision roles and grants separately. These are sequential per-service backups, not one cross-service transaction. Coordinate writes for an application-consistent recovery point. User-service filesystem uploads, other MinIO buckets, TLS keys, environment secrets, broker state, logs and monitoring volumes are outside this snapshot and need their own retention/recovery policy.
 

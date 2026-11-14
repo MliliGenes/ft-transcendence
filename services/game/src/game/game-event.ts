@@ -11,14 +11,15 @@
  * User service / Chat service `user.events` pair.
  */
 export const GAME_EVENT_TYPES = {
-  MATCH_STARTED: "game.match.started",
-  MATCH_ENDED: "game.match.ended",
-  CHALLENGE_CANCELLED: "game.challenge.cancelled",
+  MATCH_STARTED: 'game.match.started',
+  MATCH_ENDED: 'game.match.ended',
+  CHALLENGE_CANCELLED: 'game.challenge.cancelled',
 } as const;
 
-export type GameEventType = (typeof GAME_EVENT_TYPES)[keyof typeof GAME_EVENT_TYPES];
+export type GameEventType =
+  (typeof GAME_EVENT_TYPES)[keyof typeof GAME_EVENT_TYPES];
 
-export type GameMatchMode = "1v1" | "2v2";
+export type GameMatchMode = '1v1' | '2v2';
 
 export interface GameEventParticipant {
   userId: string;
@@ -40,7 +41,7 @@ export interface MatchStartedData {
 }
 
 export interface MatchEndedParticipant extends GameEventParticipant {
-  outcome: "win" | "loss" | "draw";
+  outcome: 'win' | 'loss' | 'draw';
   /** Public total for this participant's side. Never a hidden test result. */
   score: number;
 }
@@ -49,21 +50,34 @@ export interface MatchEndedData {
   matchId: string;
   mode: GameMatchMode;
   participants: MatchEndedParticipant[];
-  forfeit: { winnerSideId: string; loserSideId: string; reason: "leave" | "grace-expired" | "surrender" } | null;
-  endedBecause: "completed" | "deadline" | "forfeit";
+  forfeit: {
+    winnerSideId: string;
+    loserSideId: string;
+    reason: 'leave' | 'grace-expired' | 'surrender';
+  } | null;
+  endedBecause: 'completed' | 'deadline' | 'forfeit';
 }
 
 export interface ChallengeCancelledData {
   roomCode: string;
-  reason: "room-closed" | "expired";
+  reason: 'room-closed' | 'expired';
   /** Accounts that were in the room when the challenge was cancelled. */
   participantUserIds: string[];
 }
 
 export type GameEvent =
-  | (GameEventBase & { eventType: typeof GAME_EVENT_TYPES.MATCH_STARTED; data: MatchStartedData })
-  | (GameEventBase & { eventType: typeof GAME_EVENT_TYPES.MATCH_ENDED; data: MatchEndedData })
-  | (GameEventBase & { eventType: typeof GAME_EVENT_TYPES.CHALLENGE_CANCELLED; data: ChallengeCancelledData });
+  | (GameEventBase & {
+      eventType: typeof GAME_EVENT_TYPES.MATCH_STARTED;
+      data: MatchStartedData;
+    })
+  | (GameEventBase & {
+      eventType: typeof GAME_EVENT_TYPES.MATCH_ENDED;
+      data: MatchEndedData;
+    })
+  | (GameEventBase & {
+      eventType: typeof GAME_EVENT_TYPES.CHALLENGE_CANCELLED;
+      data: ChallengeCancelledData;
+    });
 
 export function isGameEventType(value: unknown): value is GameEventType {
   return (

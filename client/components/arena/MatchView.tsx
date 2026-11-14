@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useAuth } from "@/components/auth/auth-provider";
-import { SocketArenaTransport } from "@/lib/arena/socket";
-import { ArenaWorkspace } from "@/components/arena/ArenaWorkspace";
-import type { AuthenticatedRequest } from "@/lib/auth/client";
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/components/auth/auth-provider';
+import { SocketArenaTransport } from '@/lib/arena/socket';
+import { ArenaWorkspace } from '@/components/arena/ArenaWorkspace';
+import type { AuthenticatedRequest } from '@/lib/auth/client';
 
 export function MatchView({ matchId }: { matchId: string }) {
   const { session, isRestoring, requestWithSession } = useAuth();
@@ -41,14 +41,17 @@ function AuthenticatedMatch({
   accessToken: string;
   requestWithSession: AuthenticatedRequest;
 }) {
-  const [transport] = useState(() => new SocketArenaTransport({
-    baseUrl: "",
-    userId,
-    matchId,
-    token: accessToken,
-    socketPath: "/api/game/socket.io",
-    requestWithSession,
-  }));
+  const [transport] = useState(
+    () =>
+      new SocketArenaTransport({
+        baseUrl: '',
+        userId,
+        matchId,
+        token: accessToken,
+        socketPath: '/api/game/socket.io',
+        requestWithSession,
+      }),
+  );
 
   useEffect(() => {
     transport.setAccessToken(accessToken);

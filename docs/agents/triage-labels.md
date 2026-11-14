@@ -1,9 +1,9 @@
 # Triage labels
 
-| Role | Label | Meaning |
-| --- | --- | --- |
-| `needs-triage` | `needs-triage` | A maintainer needs to evaluate the issue. |
-| `needs-info` | `needs-info` | Waiting for more information from the reporter. |
+| Role              | Label             | Meaning                                            |
+| ----------------- | ----------------- | -------------------------------------------------- |
+| `needs-triage`    | `needs-triage`    | A maintainer needs to evaluate the issue.          |
+| `needs-info`      | `needs-info`      | Waiting for more information from the reporter.    |
 | `ready-for-agent` | `ready-for-agent` | Fully specified and ready for an agent to work on. |
-| `ready-for-human` | `ready-for-human` | Requires a human to implement. |
-| `wontfix` | `wontfix` | The project will not action it. |
+| `ready-for-human` | `ready-for-human` | Requires a human to implement.                     |
+| `wontfix`         | `wontfix`         | The project will not action it.                    |

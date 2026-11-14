@@ -1,7 +1,10 @@
-import { ArenaEngine, type EngineOptions } from "../src/engine.js";
-import { FileBank } from "../src/file-bank.js";
-import { testPrincipal, type AuthenticatedPrincipal } from "../src/principal.js";
-import { ScriptedJudge, type ScriptPlan } from "./scripted-judge.js";
+import { ArenaEngine, type EngineOptions } from '../src/engine.js';
+import { FileBank } from '../src/file-bank.js';
+import {
+  testPrincipal,
+  type AuthenticatedPrincipal,
+} from '../src/principal.js';
+import { ScriptedJudge, type ScriptPlan } from './scripted-judge.js';
 
 export const SOLVED_PY = `def ledger_sum(nums):
     total = 0
@@ -20,17 +23,17 @@ export const STARTER_PY = `def ledger_sum(nums):
  */
 export function passes(s: string): ScriptPlan {
   if (!/^[01]{7}$/.test(s)) throw new Error(`pattern must be 7 bits, got ${s}`);
-  return { passes: s.split("").map((c) => c === "1") };
+  return { passes: s.split('').map((c) => c === '1') };
 }
 
 export const P100: ScriptPlan = { score: 100 };
-export const P85: ScriptPlan = passes("1111110");
-export const P70: ScriptPlan = passes("1111100");
-export const P60: ScriptPlan = passes("0001111");
-export const P55: ScriptPlan = passes("1110010");
-export const P45: ScriptPlan = passes("0001101");
-export const P40: ScriptPlan = passes("1110000");
-export const P30: ScriptPlan = passes("0000011");
+export const P85: ScriptPlan = passes('1111110');
+export const P70: ScriptPlan = passes('1111100');
+export const P60: ScriptPlan = passes('0001111');
+export const P55: ScriptPlan = passes('1110010');
+export const P45: ScriptPlan = passes('0001101');
+export const P40: ScriptPlan = passes('1110000');
+export const P30: ScriptPlan = passes('0000011');
 
 /**
  * Flush pending microtask chains (store writes between dispatch and judge).
@@ -49,7 +52,10 @@ export interface Fixture {
   advance: (ms: number) => void;
 }
 
-export async function setup(plan: ScriptPlan[] = [{ score: 100 }], options: Partial<EngineOptions> = {}): Promise<Fixture> {
+export async function setup(
+  plan: ScriptPlan[] = [{ score: 100 }],
+  options: Partial<EngineOptions> = {},
+): Promise<Fixture> {
   let now = 1_000_000;
   const judge = new ScriptedJudge(plan);
   const engine = new ArenaEngine({
@@ -59,18 +65,28 @@ export async function setup(plan: ScriptPlan[] = [{ score: 100 }], options: Part
     revealGraceMs: 0,
     ...options,
   });
-  const left = testPrincipal("user-left");
-  const right = testPrincipal("user-right");
-  const stranger = testPrincipal("user-stranger");
+  const left = testPrincipal('user-left');
+  const right = testPrincipal('user-right');
+  const stranger = testPrincipal('user-stranger');
   const matchId = await engine.createMatch({
-    mode: "1v1",
+    mode: '1v1',
     participants: [
-      { userId: "user-left", sideId: "left" },
-      { userId: "user-right", sideId: "right" },
+      { userId: 'user-left', sideId: 'left' },
+      { userId: 'user-right', sideId: 'right' },
     ],
-    problemVersionIds: ["even-ledger", "even-ledger", "even-ledger"],
+    problemVersionIds: ['even-ledger', 'even-ledger', 'even-ledger'],
   });
   await engine.startRound(left, matchId);
   await engine.beginCoding(left, matchId);
-  return { engine, judge, left, right, stranger, matchId, advance: (ms: number) => { now += ms; } };
+  return {
+    engine,
+    judge,
+    left,
+    right,
+    stranger,
+    matchId,
+    advance: (ms: number) => {
+      now += ms;
+    },
+  };
 }

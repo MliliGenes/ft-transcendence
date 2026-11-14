@@ -17,7 +17,9 @@ test('password reset revokes every active refresh session for only its user', as
     { userId: randomUUID(), revokedAt: null },
   ];
   const stored = {
-    userId, purpose: 'PASSWORD_RESET', usedAt: null,
+    userId,
+    purpose: 'PASSWORD_RESET',
+    usedAt: null,
     expiresAt: new Date(Date.now() + 60000),
     tokenHash: createHash('sha256').update(secret).digest('hex'),
   };
@@ -35,39 +37,63 @@ test('password reset revokes every active refresh session for only its user', as
       assert.equal(lockUserId, userId);
       locked = true;
     },
-    authToken: { updateMany: async ({ data }) => {
-      assert.equal(locked, true);
-      if (consumed) return { count: 0 };
-      consumed = true;
-      resetTokens.find(row => row.id === id).usedAt = data.usedAt;
-      return { count: 1 };
-    }, deleteMany: async ({ where }) => {
-      assert.equal(locked, true);
-      assert.deepEqual(where, { userId, purpose: 'PASSWORD_RESET', usedAt: null });
-      resetTokens = resetTokens.filter(row =>
-        row.userId !== where.userId || row.purpose !== where.purpose || row.usedAt !== null);
-      return { count: 1 };
-    } },
-    user: { update: async ({ where, data }) => {
-      assert.equal(where.id, userId);
-      passwordHash = data.passwordHash;
-    } },
-    refreshToken: { updateMany: async ({ where, data }) => {
-      assert.equal(locked, true);
-      assert.deepEqual(where, { userId, revokedAt: null });
-      for (const session of sessions) {
-        if (session.userId === where.userId && session.revokedAt === null)
-          session.revokedAt = data.revokedAt;
-      }
-      return { count: 2 };
-    } },
+    authToken: {
+      updateMany: async ({ data }) => {
+        assert.equal(locked, true);
+        if (consumed) return { count: 0 };
+        consumed = true;
+        resetTokens.find((row) => row.id === id).usedAt = data.usedAt;
+        return { count: 1 };
+      },
+      deleteMany: async ({ where }) => {
+        assert.equal(locked, true);
+        assert.deepEqual(where, {
+          userId,
+          purpose: 'PASSWORD_RESET',
+          usedAt: null,
+        });
+        resetTokens = resetTokens.filter(
+          (row) =>
+            row.userId !== where.userId ||
+            row.purpose !== where.purpose ||
+            row.usedAt !== null,
+        );
+        return { count: 1 };
+      },
+    },
+    user: {
+      update: async ({ where, data }) => {
+        assert.equal(where.id, userId);
+        passwordHash = data.passwordHash;
+      },
+    },
+    refreshToken: {
+      updateMany: async ({ where, data }) => {
+        assert.equal(locked, true);
+        assert.deepEqual(where, { userId, revokedAt: null });
+        for (const session of sessions) {
+          if (session.userId === where.userId && session.revokedAt === null)
+            session.revokedAt = data.revokedAt;
+        }
+        return { count: 2 };
+      },
+    },
   };
-  const service = new AuthService({
-    authToken: { findUnique: async ({ where }) => resetTokens.find(row => row.id === where.id) },
-    $transaction: async (work) => work(tx),
-  }, {}, {});
+  const service = new AuthService(
+    {
+      authToken: {
+        findUnique: async ({ where }) =>
+          resetTokens.find((row) => row.id === where.id),
+      },
+      $transaction: async (work) => work(tx),
+    },
+    {},
+    {},
+  );
   const token = `${id}.${secret}`;
-  await assert.rejects(service.confirmPasswordReset(`${id}.${'A'.repeat(43)}`, 'newpassword'));
+  await assert.rejects(
+    service.confirmPasswordReset(`${id}.${'A'.repeat(43)}`, 'newpassword'),
+  );
   assert.equal(consumed, false);
   assert.equal(resetTokens.length, 4);
   assert.equal(sessions[0].revokedAt, null);
@@ -77,7 +103,10 @@ test('password reset revokes every active refresh session for only its user', as
   assert.equal(sessions[1].revokedAt, sessions[0].revokedAt);
   assert.equal(sessions[2].revokedAt, priorRevocation);
   assert.equal(sessions[3].revokedAt, null);
-  assert.deepEqual(resetTokens.map(row => row.id), [id, 'verification', 'other-reset']);
+  assert.deepEqual(
+    resetTokens.map((row) => row.id),
+    [id, 'verification', 'other-reset'],
+  );
   assert.ok(resetTokens[0].usedAt instanceof Date);
   const previousHash = passwordHash;
   await assert.rejects(service.confirmPasswordReset(token, 'otherpassword'));

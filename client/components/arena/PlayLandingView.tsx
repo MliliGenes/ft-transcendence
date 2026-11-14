@@ -1,29 +1,41 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { IconCode, IconDeviceGamepad2, IconPlus, IconUserPlus, IconUsers } from "@tabler/icons-react";
-import { useAuth } from "@/components/auth/auth-provider";
-import { LobbyClient, type PrivateRoom } from "@/lib/arena/lobby";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import {
+  IconCode,
+  IconDeviceGamepad2,
+  IconPlus,
+  IconUserPlus,
+  IconUsers,
+} from '@tabler/icons-react';
+import { useAuth } from '@/components/auth/auth-provider';
+import { LobbyClient, type PrivateRoom } from '@/lib/arena/lobby';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export function PlayLandingView() {
   const router = useRouter();
   const { session, requestWithSession } = useAuth();
-  const [joinCode, setJoinCode] = useState("");
+  const [joinCode, setJoinCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeRoom, setActiveRoom] = useState<PrivateRoom | null>(null);
 
-  const userId = session?.user?.id ?? "guest-user";
+  const userId = session?.user?.id ?? 'guest-user';
   const token = session?.accessToken;
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    const client = new LobbyClient("", userId, token, undefined, requestWithSession);
+    const client = new LobbyClient(
+      '',
+      userId,
+      token,
+      undefined,
+      requestWithSession,
+    );
     client
       .getActive()
       .then(({ room }) => {
@@ -40,7 +52,13 @@ export function PlayLandingView() {
   async function handleLeaveActiveRoom() {
     if (!activeRoom || !token) return;
     try {
-      const client = new LobbyClient("", userId, token, undefined, requestWithSession);
+      const client = new LobbyClient(
+        '',
+        userId,
+        token,
+        undefined,
+        requestWithSession,
+      );
       await client.leaveRoom(activeRoom.id);
       setActiveRoom(null);
     } catch {
@@ -48,15 +66,21 @@ export function PlayLandingView() {
     }
   }
 
-  async function handleCreate(mode: "1v1" | "2v2") {
+  async function handleCreate(mode: '1v1' | '2v2') {
     setLoading(true);
     setError(null);
     try {
-      const client = new LobbyClient("", userId, token, undefined, requestWithSession);
+      const client = new LobbyClient(
+        '',
+        userId,
+        token,
+        undefined,
+        requestWithSession,
+      );
       const { room } = await client.createRoom(mode);
       router.push(`/play/lobby/${room.code}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create lobby");
+      setError(err instanceof Error ? err.message : 'Failed to create lobby');
     } finally {
       setLoading(false);
     }
@@ -68,11 +92,17 @@ export function PlayLandingView() {
     setLoading(true);
     setError(null);
     try {
-      const client = new LobbyClient("", userId, token, undefined, requestWithSession);
+      const client = new LobbyClient(
+        '',
+        userId,
+        token,
+        undefined,
+        requestWithSession,
+      );
       const { room } = await client.joinRoom(joinCode.trim().toUpperCase());
       router.push(`/play/lobby/${room.code}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to join lobby");
+      setError(err instanceof Error ? err.message : 'Failed to join lobby');
     } finally {
       setLoading(false);
     }
@@ -86,20 +116,30 @@ export function PlayLandingView() {
             <IconDeviceGamepad2 className="size-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Play — Code Arena</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Play — Code Arena
+            </h1>
             <p className="text-sm text-muted-foreground">
-              Competitive multiplayer programming battles. Solve problems, check tests, and evaluate under time pressure.
+              Competitive multiplayer programming battles. Solve problems, check
+              tests, and evaluate under time pressure.
             </p>
           </div>
         </div>
-        <Link href="/play/leaderboard" className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}>Leaderboard</Link>
+        <Link
+          href="/play/leaderboard"
+          className={cn(buttonVariants({ variant: 'outline' }), 'min-h-11')}
+        >
+          Leaderboard
+        </Link>
       </div>
 
       {activeRoom && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-none border border-primary/40 bg-primary/10 p-4 text-xs font-medium text-foreground">
           <div className="flex items-center gap-3">
             <span className="font-semibold text-primary">Active Lobby:</span>
-            <span className="font-mono text-sm tracking-wider font-bold tabular-nums">{activeRoom.code}</span>
+            <span className="font-mono text-sm tracking-wider font-bold tabular-nums">
+              {activeRoom.code}
+            </span>
             <span className="text-muted-foreground">({activeRoom.mode})</span>
             {activeRoom.matchId && (
               <span className="rounded-none bg-success/20 px-2 py-0.5 text-[11px] font-semibold text-success">
@@ -108,8 +148,17 @@ export function PlayLandingView() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => router.push(activeRoom.matchId ? `/play/match/${activeRoom.matchId}` : `/play/lobby/${activeRoom.code}`)}>
-              {activeRoom.matchId ? "Rejoin Active Match" : "Resume Lobby"}
+            <Button
+              size="sm"
+              onClick={() =>
+                router.push(
+                  activeRoom.matchId
+                    ? `/play/match/${activeRoom.matchId}`
+                    : `/play/lobby/${activeRoom.code}`,
+                )
+              }
+            >
+              {activeRoom.matchId ? 'Rejoin Active Match' : 'Resume Lobby'}
             </Button>
             <Button size="sm" variant="outline" onClick={handleLeaveActiveRoom}>
               Leave
@@ -131,12 +180,13 @@ export function PlayLandingView() {
             <span>Create a Match Lobby</span>
           </div>
           <p className="text-xs text-muted-foreground mb-6">
-            Host a private lobby with a 6-character room code. Share the code with classmates or invite them directly in chat.
+            Host a private lobby with a 6-character room code. Share the code
+            with classmates or invite them directly in chat.
           </p>
 
           <div className="flex flex-col gap-3">
             <Button
-              onClick={() => handleCreate("1v1")}
+              onClick={() => handleCreate('1v1')}
               disabled={loading}
               className="w-full justify-start text-sm"
             >
@@ -146,7 +196,7 @@ export function PlayLandingView() {
 
             <Button
               variant="secondary"
-              onClick={() => handleCreate("2v2")}
+              onClick={() => handleCreate('2v2')}
               disabled={loading}
               className="w-full justify-start text-sm"
             >
@@ -162,12 +212,16 @@ export function PlayLandingView() {
             <span>Join with Code</span>
           </div>
           <p className="text-xs text-muted-foreground mb-6">
-            Enter the 6-character room code received from your friend or chat invitation.
+            Enter the 6-character room code received from your friend or chat
+            invitation.
           </p>
 
           <form onSubmit={handleJoin} className="space-y-4">
             <div>
-              <label htmlFor="join-code" className="block text-xs font-medium text-muted-foreground mb-1">
+              <label
+                htmlFor="join-code"
+                className="block text-xs font-medium text-muted-foreground mb-1"
+              >
                 Lobby Code
               </label>
               <input
@@ -182,7 +236,11 @@ export function PlayLandingView() {
               />
             </div>
 
-            <Button type="submit" disabled={loading || joinCode.length < 4} className="w-full">
+            <Button
+              type="submit"
+              disabled={loading || joinCode.length < 4}
+              className="w-full"
+            >
               <span>Join Lobby</span>
             </Button>
           </form>
@@ -196,20 +254,25 @@ export function PlayLandingView() {
             <span>Active Matches & Session Overview</span>
           </div>
           <span className="text-[11px] text-muted-foreground font-mono">
-            {activeRoom ? "1 active session" : "0 active sessions"}
+            {activeRoom ? '1 active session' : '0 active sessions'}
           </span>
         </div>
         {activeRoom ? (
           <div className="flex items-center justify-between py-2 text-xs">
             <div>
-              <span className="font-semibold text-foreground">{activeRoom.mode.toUpperCase()} Arena Match</span>
-              <span className="ml-2 font-mono text-muted-foreground">Room: {activeRoom.code}</span>
+              <span className="font-semibold text-foreground">
+                {activeRoom.mode.toUpperCase()} Arena Match
+              </span>
+              <span className="ml-2 font-mono text-muted-foreground">
+                Room: {activeRoom.code}
+              </span>
             </div>
             <span className="font-mono text-success text-[11px]">Active</span>
           </div>
         ) : (
           <p className="text-xs text-muted-foreground italic py-2">
-            No active match in progress. Create a 1v1 duel or 2v2 team battle above to start coding!
+            No active match in progress. Create a 1v1 duel or 2v2 team battle
+            above to start coding!
           </p>
         )}
       </div>

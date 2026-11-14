@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
-import { AuthForm } from "@/components/auth/auth-form";
+import type { Metadata } from 'next';
+import { AuthForm } from '@/components/auth/auth-form';
 
-export const metadata: Metadata = { title: "Log in — Nook" };
+export const metadata: Metadata = { title: 'Log in — Nook' };
 
 export default function LoginPage() {
   return <AuthForm mode="login" />;

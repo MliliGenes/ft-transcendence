@@ -25,15 +25,15 @@ For staff review, start with `README.md`, `docs/README.md`, and `docs/project/PR
 
 ### Source entry points
 
-| Area | Start at | Follow into |
-| --- | --- | --- |
-| Web client | `client/app/` | `client/components/`, `client/lib/`; see `docs/services/client.md` and `docs/integrations/client-backend.md` |
-| User and auth | `user-service/src/main.ts` | `user-service/src/auth/`, `user-service/src/accounts/`; see `docs/services/user-service.md` and `docs/integrations/user-chat.md` |
-| Chat | `chat-service/src/main.ts` | `chat-service/src/chat/`, `chat-service/src/groups/`; see `docs/services/chat-service.md` and `docs/integrations/chat-storage.md` |
-| Code Arena API and lobby | `services/game/src/main.ts` | `services/game/src/game/`; see `docs/spec/code-arena-integration-spec.md` |
-| Code Arena rules | `packages/arena-game/src/engine.ts` | `packages/arena-game/src/round-lifecycle.ts`, `packages/arena-model/src/`; see `docs/spec/code-arena-gameplay-review.md` and ADRs `0015`–`0016` |
-| Problems and judging | `packages/problem-bank/problems/` | `packages/arena-game/src/file-bank.ts`, `services/judge-worker/src/main.ts`; see `packages/problem-bank/schema.json` and `docs/project/COMPOSE.md` |
-| Infrastructure | `compose.yaml`, `nginx/` | `infra/`; see `docs/services/infrastructure.md` and `docs/infra/BACKUP_RECOVERY.md` |
+| Area                     | Start at                            | Follow into                                                                                                                                        |
+| ------------------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web client               | `client/app/`                       | `client/components/`, `client/lib/`; see `docs/services/client.md` and `docs/integrations/client-backend.md`                                       |
+| User and auth            | `user-service/src/main.ts`          | `user-service/src/auth/`, `user-service/src/accounts/`; see `docs/services/user-service.md` and `docs/integrations/user-chat.md`                   |
+| Chat                     | `chat-service/src/main.ts`          | `chat-service/src/chat/`, `chat-service/src/groups/`; see `docs/services/chat-service.md` and `docs/integrations/chat-storage.md`                  |
+| Code Arena API and lobby | `services/game/src/main.ts`         | `services/game/src/game/`; see `docs/spec/code-arena-integration-spec.md`                                                                          |
+| Code Arena rules         | `packages/arena-game/src/engine.ts` | `packages/arena-game/src/round-lifecycle.ts`, `packages/arena-model/src/`; see `docs/spec/code-arena-gameplay-review.md` and ADRs `0015`–`0016`    |
+| Problems and judging     | `packages/problem-bank/problems/`   | `packages/arena-game/src/file-bank.ts`, `services/judge-worker/src/main.ts`; see `packages/problem-bank/schema.json` and `docs/project/COMPOSE.md` |
+| Infrastructure           | `compose.yaml`, `nginx/`            | `infra/`; see `docs/services/infrastructure.md` and `docs/infra/BACKUP_RECOVERY.md`                                                                |
 
 Tests are nearest each subsystem: `client/tests/`, `user-service/test/`, `chat-service/test/`, `services/game/src/game/*.test.ts`, `packages/arena-game/test/`, `packages/arena-harness/test/`, and `services/judge-worker/test/`.
 

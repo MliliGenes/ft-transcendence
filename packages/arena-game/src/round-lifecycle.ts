@@ -7,17 +7,29 @@ import {
   type RevealCause,
   roundScoreBp,
   roundScoreFromBp,
-} from "arena-model";
-import { isCompetitiveVerdict, type ExecutionStatus } from "./judge.js";
-import { IllegalStateError } from "./match-authority.js";
-import type { CountedResult, GroupResult, MatchRecord, RevealSnapshot, RoundState, SideId } from "./records.js";
+} from 'arena-model';
+import { isCompetitiveVerdict, type ExecutionStatus } from './judge.js';
+import { IllegalStateError } from './match-authority.js';
+import type {
+  CountedResult,
+  GroupResult,
+  MatchRecord,
+  RevealSnapshot,
+  RoundState,
+  SideId,
+} from './records.js';
 
 /** Judge output that the Game turns into a scored Match result. */
 export interface SealedVerdict {
   groups: Array<{
     name: string;
     weight: number;
-    results: Array<{ id: string; passed: boolean; status: ExecutionStatus; runtimeMs: number }>;
+    results: Array<{
+      id: string;
+      passed: boolean;
+      status: ExecutionStatus;
+      runtimeMs: number;
+    }>;
   }>;
 }
 
@@ -30,9 +42,9 @@ export interface ScoredVerdict {
 
 export interface FinalResult {
   scores: Partial<Record<SideId, number>>;
-  outcome: "left" | "right" | "draw";
+  outcome: 'left' | 'right' | 'draw';
   winner: SideId | null;
-  forfeit: MatchRecord["forfeit"];
+  forfeit: MatchRecord['forfeit'];
 }
 
 export interface RoundAdvance {
@@ -43,7 +55,7 @@ export interface RoundAdvance {
 
 export interface RevealInput {
   scores: Partial<Record<SideId, number>>;
-  groups: RevealSnapshot["groups"];
+  groups: RevealSnapshot['groups'];
   totals: Partial<Record<SideId, number>>;
   publishedAt: number;
 }
@@ -56,24 +68,25 @@ export interface RevealInput {
  */
 export class RoundLifecycle {
   startRound(match: MatchRecord): void {
-    if (!canTransition(match.roundPhase, "ROUND_INTRO")) {
+    if (!canTransition(match.roundPhase, 'ROUND_INTRO')) {
       throw new IllegalStateError(`cannot start round in ${match.roundPhase}`);
     }
-    match.roundPhase = "ROUND_INTRO";
+    match.roundPhase = 'ROUND_INTRO';
   }
 
   beginCoding(match: MatchRecord): void {
-    if (!canTransition(match.roundPhase, "CODING")) {
+    if (!canTransition(match.roundPhase, 'CODING')) {
       throw new IllegalStateError(`cannot begin coding in ${match.roundPhase}`);
     }
-    match.roundPhase = "CODING";
+    match.roundPhase = 'CODING';
     const round = this.currentRound(match);
-    for (const side of Object.keys(round.activities)) round.activities[side] = "coding";
+    for (const side of Object.keys(round.activities))
+      round.activities[side] = 'coding';
   }
 
   beginReveal(match: MatchRecord): void {
     const round = this.currentRound(match);
-    if (match.roundPhase !== "CODING") {
+    if (match.roundPhase !== 'CODING') {
       throw new IllegalStateError(`reveal rejected in ${match.roundPhase}`);
     }
     // A deadline reveal with zero submissions is valid. The flag closes the
@@ -87,12 +100,13 @@ export class RoundLifecycle {
     inFlightEvaluationIds: readonly string[],
   ): void {
     const round = this.currentRound(match);
-    if (match.roundPhase !== "CODING") {
+    if (match.roundPhase !== 'CODING') {
       throw new IllegalStateError(`reveal rejected in ${match.roundPhase}`);
     }
     round.cutoffPassed = true;
     for (const evaluationId of inFlightEvaluationIds) {
-      if (!settledEvaluationIds.has(evaluationId)) round.superseded.push(evaluationId);
+      if (!settledEvaluationIds.has(evaluationId))
+        round.superseded.push(evaluationId);
     }
   }
 
@@ -101,17 +115,25 @@ export class RoundLifecycle {
     settledEvaluationIds: ReadonlySet<string>,
     inFlightEvaluationIds: readonly string[],
   ): void {
-    if (match.roundPhase === "CODING") {
+    if (match.roundPhase === 'CODING') {
       this.prepareReveal(match, settledEvaluationIds, inFlightEvaluationIds);
       return;
     }
-    if (match.roundPhase !== "MATCH_FOUND" && match.roundPhase !== "ROUND_INTRO") {
-      throw new IllegalStateError(`deadline reveal rejected in ${match.roundPhase}`);
+    if (
+      match.roundPhase !== 'MATCH_FOUND' &&
+      match.roundPhase !== 'ROUND_INTRO'
+    ) {
+      throw new IllegalStateError(
+        `deadline reveal rejected in ${match.roundPhase}`,
+      );
     }
     const round = this.currentRound(match);
     round.cutoffPassed = true;
     for (const evaluationId of inFlightEvaluationIds) {
-      if (!settledEvaluationIds.has(evaluationId) && !round.superseded.includes(evaluationId)) {
+      if (
+        !settledEvaluationIds.has(evaluationId) &&
+        !round.superseded.includes(evaluationId)
+      ) {
         round.superseded.push(evaluationId);
       }
     }
@@ -129,7 +151,11 @@ export class RoundLifecycle {
     }) as RevealSnapshot;
   }
 
-  commitReveal(match: MatchRecord, snapshot: RevealSnapshot, cause: RevealCause = "REVEAL_CONDITION_MET"): void {
+  commitReveal(
+    match: MatchRecord,
+    snapshot: RevealSnapshot,
+    cause: RevealCause = 'REVEAL_CONDITION_MET',
+  ): void {
     const round = this.currentRound(match);
     round.reveal = snapshot;
     round.closing = false;
@@ -137,24 +163,34 @@ export class RoundLifecycle {
   }
 
   finishAtDeadline(match: MatchRecord): boolean {
-    if (match.roundPhase === "MATCH_COMPLETE") return false;
-    if (match.roundPhase !== "SCORE_REVEAL" && match.roundPhase !== "ROUND_COMPLETE") {
-      throw new IllegalStateError(`cannot finish expired Match in ${match.roundPhase}`);
+    if (match.roundPhase === 'MATCH_COMPLETE') return false;
+    if (
+      match.roundPhase !== 'SCORE_REVEAL' &&
+      match.roundPhase !== 'ROUND_COMPLETE'
+    ) {
+      throw new IllegalStateError(
+        `cannot finish expired Match in ${match.roundPhase}`,
+      );
     }
-    if (!canTransition(match.roundPhase, "MATCH_COMPLETE")) {
-      throw new IllegalStateError(`cannot finish expired Match in ${match.roundPhase}`);
+    if (!canTransition(match.roundPhase, 'MATCH_COMPLETE')) {
+      throw new IllegalStateError(
+        `cannot finish expired Match in ${match.roundPhase}`,
+      );
     }
-    match.roundPhase = "MATCH_COMPLETE";
+    match.roundPhase = 'MATCH_COMPLETE';
     return true;
   }
 
   advance(match: MatchRecord): RoundAdvance {
-    const target = match.currentRound >= match.totalRounds ? "MATCH_COMPLETE" : "ROUND_INTRO";
+    const target =
+      match.currentRound >= match.totalRounds
+        ? 'MATCH_COMPLETE'
+        : 'ROUND_INTRO';
     if (!canTransition(match.roundPhase, target)) {
       throw new IllegalStateError(`cannot advance from ${match.roundPhase}`);
     }
     match.roundPhase = target;
-    if (target === "MATCH_COMPLETE") {
+    if (target === 'MATCH_COMPLETE') {
       return { completed: true, previousRoundId: null, activityResets: [] };
     }
 
@@ -168,23 +204,30 @@ export class RoundLifecycle {
     round.closing = false;
     round.cutoffPassed = false;
     round.superseded = [];
-    if (match.mode === "2v2") {
+    if (match.mode === '2v2') {
       round.readiness = {};
       round.teamDocs ??= {};
       for (const side of Object.keys(round.activities)) {
-        round.teamDocs[side] = { revision: 1, language: round.teamDocs[side]?.language ?? "Python" };
+        round.teamDocs[side] = {
+          revision: 1,
+          language: round.teamDocs[side]?.language ?? 'Python',
+        };
       }
     }
 
     return {
       completed: false,
       previousRoundId: previousRound.roundId,
-      activityResets: Object.keys(round.activities).filter((side) => this.activityOf(round, side) !== "coding"),
+      activityResets: Object.keys(round.activities).filter(
+        (side) => this.activityOf(round, side) !== 'coding',
+      ),
     };
   }
 
   scoreVerdict(verdict: SealedVerdict): ScoredVerdict | undefined {
-    const testStatuses = verdict.groups.flatMap((group) => group.results.map((result) => result.status));
+    const testStatuses = verdict.groups.flatMap((group) =>
+      group.results.map((result) => result.status),
+    );
     if (!testStatuses.every(isCompetitiveVerdict)) return undefined;
 
     const counts = verdict.groups.map((group) => ({
@@ -210,13 +253,15 @@ export class RoundLifecycle {
     if (match.forfeit) {
       const scores: Partial<Record<SideId, number>> = {};
       for (const side of Object.keys(match.rounds[0]?.activities ?? {})) {
-        scores[side] = matchSum(match.rounds.map((round) => round.counted[side]?.score ?? 0));
+        scores[side] = matchSum(
+          match.rounds.map((round) => round.counted[side]?.score ?? 0),
+        );
       }
       const [left, right] = Object.keys(match.rounds[0]?.activities ?? {});
       const winner = match.forfeit.winner;
       return {
         scores,
-        outcome: winner === left ? "left" : winner === right ? "right" : "draw",
+        outcome: winner === left ? 'left' : winner === right ? 'right' : 'draw',
         winner,
         forfeit: { ...match.forfeit },
       };
@@ -232,21 +277,34 @@ export class RoundLifecycle {
     const [left, right] = sides;
     const outcome = compareSides(contributions(left), contributions(right));
     const scores: Partial<Record<SideId, number>> = {};
-    for (const side of sides) scores[side] = matchSum(contributions(side).map((contribution) => contribution.score));
-    return { scores, outcome, winner: outcome === "draw" ? null : outcome === "left" ? left : right, forfeit: null };
+    for (const side of sides)
+      scores[side] = matchSum(
+        contributions(side).map((contribution) => contribution.score),
+      );
+    return {
+      scores,
+      outcome,
+      winner: outcome === 'draw' ? null : outcome === 'left' ? left : right,
+      forfeit: null,
+    };
   }
 
   totalScore(match: MatchRecord, side: SideId): number {
-    return matchSum(match.rounds.slice(0, match.currentRound).map((round) => round.counted[side]?.score ?? 0));
+    return matchSum(
+      match.rounds
+        .slice(0, match.currentRound)
+        .map((round) => round.counted[side]?.score ?? 0),
+    );
   }
 
   private currentRound(match: MatchRecord): RoundState {
     const round = match.rounds[match.currentRound - 1];
-    if (!round) throw new IllegalStateError(`match ${match.id} has no current round`);
+    if (!round)
+      throw new IllegalStateError(`match ${match.id} has no current round`);
     return round;
   }
 
   private activityOf(round: RoundState, side: SideId): string {
-    return round.activities[side] ?? "coding";
+    return round.activities[side] ?? 'coding';
   }
 }

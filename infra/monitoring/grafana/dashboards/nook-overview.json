@@ -2,9 +2,7 @@
   "uid": "nook-overview",
   "title": "Nook / Overview",
   "description": "Service health, firing alerts and container resources at a glance.",
-  "tags": [
-    "nook"
-  ],
+  "tags": ["nook"],
   "editable": false,
   "schemaVersion": 39,
   "version": 1,
@@ -84,9 +82,7 @@
         "colorMode": "background",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -156,9 +152,7 @@
         "colorMode": "background",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -228,9 +222,7 @@
         "colorMode": "background",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -300,9 +292,7 @@
         "colorMode": "background",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -372,9 +362,7 @@
         "colorMode": "background",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -435,9 +423,7 @@
         "colorMode": "background",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },

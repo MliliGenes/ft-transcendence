@@ -26,19 +26,19 @@ Every example assignment uses `VAR_NAME=<EXAMPLE_VALUE>`:
 
 ## File ownership
 
-| Local file | Loaded by | Contents |
-| --- | --- | --- |
-| `backend.env` | User, Chat and Game services | Shared runtime mode |
-| `user-db.env` | User database and User service | User database credentials/name |
-| `chat-db.env` | Chat database and Chat service | Chat database credentials/name |
-| `game-db.env` | Game database | Game database credentials/name |
-| `rabbitmq.env` | RabbitMQ plus User, Chat and Game services | Shared broker credentials |
-| `minio.env` | MinIO and its initializer | Storage admin credentials and browser CORS origins |
-| `user-service.env` | User service only | Internal addresses, SMTP, initial app admin |
-| `user-auth.env` | User service only | RSA signing key pair, frontend origin, OAuth |
-| `chat-service.env` | Chat service only | Internal addresses, public RSA key, storage settings |
-| `game-service.env` | Game service only | Game DB URL, public RSA key, judge worker URL/token and game settings |
-| `judge-worker.env` | Judge worker only | Shared request token and execution limits |
+| Local file         | Loaded by                                  | Contents                                                              |
+| ------------------ | ------------------------------------------ | --------------------------------------------------------------------- |
+| `backend.env`      | User, Chat and Game services               | Shared runtime mode                                                   |
+| `user-db.env`      | User database and User service             | User database credentials/name                                        |
+| `chat-db.env`      | Chat database and Chat service             | Chat database credentials/name                                        |
+| `game-db.env`      | Game database                              | Game database credentials/name                                        |
+| `rabbitmq.env`     | RabbitMQ plus User, Chat and Game services | Shared broker credentials                                             |
+| `minio.env`        | MinIO and its initializer                  | Storage admin credentials and browser CORS origins                    |
+| `user-service.env` | User service only                          | Internal addresses, SMTP, initial app admin                           |
+| `user-auth.env`    | User service only                          | RSA keys, canonical frontend origin, extra trusted origins, OAuth    |
+| `chat-service.env` | Chat service only                          | Internal addresses, public RSA key, storage settings                  |
+| `game-service.env` | Game service only                          | Game DB URL, public RSA key, judge worker URL/token and game settings |
+| `judge-worker.env` | Judge worker only                          | Shared request token and execution limits                             |
 
 Compose loads these files in the order declared under each service's
 `env_file`. Later files override earlier values with the same name.
@@ -67,7 +67,10 @@ requests use `/api/` and `/api/chat/` on the current origin. The obsolete
    `node scripts/generate-jwt-keys.mjs`. Put both keys in `user-auth.env`;
    copy only the matching public key into `chat-service.env` and
    `game-service.env`. Never give the private key to Chat or Game.
-5. Configure SMTP, `AUTH_FRONTEND_URL`, and the initial superadmin.
+5. Configure SMTP, `AUTH_FRONTEND_URL`, optional comma-separated
+   `AUTH_FRONTEND_ORIGINS`, and the initial superadmin. Use the additional
+   origins for exact LAN browser URLs; keep `AUTH_FRONTEND_URL` as the
+   canonical OAuth and email link origin.
    SMTP is required even when OAuth is disabled. Superadmin settings do not
    reset an account that already exists.
 6. Configure any OAuth providers you want to use. Their callback registrations

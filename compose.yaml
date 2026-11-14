@@ -8,35 +8,35 @@ include:
 # Rotate container logs: at most 3 files of 10 MB per container.
 x-logging: &logging
   driver: json-file
-  options:  
-    max-size: "10m"
-    max-file: "3"
+  options:
+    max-size: '10m'
+    max-file: '3'
 
 x-db-backup: &db-backup
   image: prodrigestivill/postgres-backup-local:18-alpine
-  profiles: ["database-only-backups"]
+  profiles: ['database-only-backups']
   restart: unless-stopped
   user: postgres:postgres
   logging: *logging
 
 x-db-backup-environment: &db-backup-environment
-  POSTGRES_PORT: "5432"
+  POSTGRES_PORT: '5432'
   # Dump every schema; restore ownership/permissions separately if needed.
-  POSTGRES_EXTRA_OPTS: "-Z1 --no-owner --no-acl"
-  SCHEDULE: "@daily"
+  POSTGRES_EXTRA_OPTS: '-Z1 --no-owner --no-acl'
+  SCHEDULE: '@daily'
   TZ: Africa/Casablanca
-  BACKUP_ON_START: "TRUE"
-  BACKUP_KEEP_DAYS: "7"
-  BACKUP_KEEP_WEEKS: "4"
-  BACKUP_KEEP_MONTHS: "6"
-  HEALTHCHECK_PORT: "8080"
+  BACKUP_ON_START: 'TRUE'
+  BACKUP_KEEP_DAYS: '7'
+  BACKUP_KEEP_WEEKS: '4'
+  BACKUP_KEEP_MONTHS: '6'
+  HEALTHCHECK_PORT: '8080'
 
 services:
   nginx:
     build: ./nginx
     ports:
-      - "443:443"
-      - "127.0.0.1:9443:9443"
+      - '443:443'
+      - '9443:9443'
     volumes:
       - ./volumes/nginx/certs:/etc/nginx/certs
     depends_on:
@@ -58,7 +58,11 @@ services:
       - ./volumes/user-db:/var/lib/postgresql
       - ./infra/postgres/10-monitoring-role.sh:/docker-entrypoint-initdb.d/10-monitoring-role.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"',
+        ]
       interval: 5s
       timeout: 5s
       start_period: 10s
@@ -76,7 +80,11 @@ services:
       - ./volumes/chat-db:/var/lib/postgresql
       - ./infra/postgres/10-monitoring-role.sh:/docker-entrypoint-initdb.d/10-monitoring-role.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"',
+        ]
       interval: 5s
       timeout: 5s
       start_period: 10s
@@ -90,7 +98,11 @@ services:
     volumes:
       - ./volumes/game-db:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"',
+        ]
       interval: 5s
       timeout: 5s
       start_period: 10s
@@ -101,10 +113,10 @@ services:
   # including on Docker Desktop. Only this one-shot initializer runs as root.
   backup-storage-init:
     image: postgres:18-alpine
-    profiles: ["database-only-backups"]
-    user: "0:0"
+    profiles: ['database-only-backups']
+    user: '0:0'
     network_mode: none
-    entrypoint: ["/bin/sh", "-ec"]
+    entrypoint: ['/bin/sh', '-ec']
     command:
       - |
         chown postgres:postgres /user-backups /chat-backups /game-backups
@@ -113,7 +125,7 @@ services:
       - user-db-backups:/user-backups
       - chat-db-backups:/chat-backups
       - game-db-backups:/game-backups
-    restart: "no"
+    restart: 'no'
     logging: *logging
 
   user-db-backup:
@@ -163,14 +175,14 @@ services:
     hostname: rabbitmq
     env_file: ./envs/rabbitmq.env
     ports:
-      - "127.0.0.1:5672:5672"
-      - "127.0.0.1:15672:15672"
+      - '127.0.0.1:5672:5672'
+      - '127.0.0.1:15672:15672'
     volumes:
       - ./volumes/rabbitmq:/var/lib/rabbitmq
       # Adds the Prometheus plugin (metrics on internal port 15692).
       - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
       interval: 10s
       timeout: 5s
       start_period: 30s
@@ -179,14 +191,21 @@ services:
 
   minio:
     build: ./minio
-    command: ["server", "/data", "--console-address", ":9001"]
+    command: ['server', '/data', '--console-address', ':9001']
     env_file: ./envs/minio.env
     ports:
-      - "127.0.0.1:9001:9001"
+      - '127.0.0.1:9001:9001'
     volumes:
       - ./volumes/minio:/data
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9000/minio/health/live"]
+      test:
+        [
+          'CMD',
+          'wget',
+          '-q',
+          '--spider',
+          'http://127.0.0.1:9000/minio/health/live',
+        ]
       interval: 10s
       timeout: 5s
       start_period: 30s
@@ -203,7 +222,7 @@ services:
     depends_on:
       minio:
         condition: service_healthy
-    restart: "no"
+    restart: 'no'
     logging: *logging
 
   user-service:
@@ -220,7 +239,7 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/"]
+      test: ['CMD-SHELL', 'wget -q --spider http://127.0.0.1:3000/']
       interval: 10s
       timeout: 5s
       start_period: 20s
@@ -250,7 +269,7 @@ services:
       user-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/"]
+      test: ['CMD-SHELL', 'wget -q --spider http://127.0.0.1:3000/']
       interval: 10s
       timeout: 5s
       start_period: 20s
@@ -269,7 +288,13 @@ services:
       - judge-internal
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3010/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3010/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -286,7 +311,7 @@ services:
       - ./envs/rabbitmq.env
     environment:
       RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: "5672"
+      RABBITMQ_PORT: '5672'
     depends_on:
       game-db:
         condition: service_healthy
@@ -300,7 +325,13 @@ services:
       - default
       - judge-internal
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3002/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3002/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -316,7 +347,7 @@ services:
       game-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/"]
+      test: ['CMD-SHELL', 'wget -q --spider http://127.0.0.1:3000/']
       interval: 10s
       timeout: 5s
       start_period: 20s

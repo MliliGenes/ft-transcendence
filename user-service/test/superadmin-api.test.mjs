@@ -125,11 +125,18 @@ test('superadmin HTTP API', async (t) => {
   });
   const module = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(RabbitMqEventsService)
-    .useValue({ publishCreated: async () => {}, publishUpdated: async () => {}, publishDeleted: async () => {} })
+    .useValue({
+      publishCreated: async () => {},
+      publishUpdated: async () => {},
+      publishDeleted: async () => {},
+    })
     .overrideProvider(PrismaService)
     .useValue(prisma)
     .overrideProvider(MailService)
-    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
+    .useValue({
+      sendVerificationEmail: async () => {},
+      sendPasswordResetEmail: async () => {},
+    })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({

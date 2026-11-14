@@ -50,7 +50,10 @@ export class ChatController {
   }
 
   @Post('conversations/dm')
-  createOrGetDm(@Request() req: ExpressRequest & { user: { sub: string } }, @Body() body: CreateDmDto) {
+  createOrGetDm(
+    @Request() req: ExpressRequest & { user: { sub: string } },
+    @Body() body: CreateDmDto,
+  ) {
     return this.chatService.createOrGetDm(
       req.user.sub,
       body.userId,
@@ -67,7 +70,7 @@ export class ChatController {
   createMessage(
     @Request() req: ExpressRequest & { user: { sub: string } },
     @Param('conversationId') _conversationId: string,
-    @Body() message: SendMessageDto
+    @Body() message: SendMessageDto,
   ) {
     return this.chatService.sendMessage(
       req.user.sub,
@@ -80,7 +83,8 @@ export class ChatController {
   @Post('conversations/:conversationId/attachments/upload-url')
   createAttachmentUploadUrl(
     @Request() req: ExpressRequest & { user: { sub: string } },
-    @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
+    @Param('conversationId', new ParseUUIDPipe({ version: '4' }))
+    conversationId: string,
     @Body() body: CreateAttachmentUploadUrlDto,
   ) {
     return this.chatService.createAttachmentUploadUrl(
@@ -94,7 +98,8 @@ export class ChatController {
   @Get('conversations/:conversationId/attachments/download-url')
   createAttachmentDownloadUrl(
     @Request() req: ExpressRequest & { user: { sub: string } },
-    @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
+    @Param('conversationId', new ParseUUIDPipe({ version: '4' }))
+    conversationId: string,
     @Query('objectKey') objectKey: string,
   ) {
     return this.chatService.createAttachmentDownloadUrl(
@@ -108,7 +113,8 @@ export class ChatController {
   @Get('conversations/:conversationId/attachments/preview-url')
   createAttachmentPreviewUrl(
     @Request() req: ExpressRequest & { user: { sub: string } },
-    @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
+    @Param('conversationId', new ParseUUIDPipe({ version: '4' }))
+    conversationId: string,
     @Query('objectKey') objectKey: string,
   ) {
     return this.chatService.createAttachmentPreviewUrl(
@@ -122,7 +128,8 @@ export class ChatController {
   @Get('conversations/:conversationId/messages')
   getMessages(
     @Request() req: ExpressRequest & { user: { sub: string } },
-    @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
+    @Param('conversationId', new ParseUUIDPipe({ version: '4' }))
+    conversationId: string,
     @Query() query: GetMessagesQueryDto,
   ) {
     return this.chatService.getMessages(req.user.sub, conversationId, query);
@@ -131,7 +138,8 @@ export class ChatController {
   @Get('conversations/:conversationId/read-states')
   getReadStates(
     @Request() req: ExpressRequest & { user: { sub: string } },
-    @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
+    @Param('conversationId', new ParseUUIDPipe({ version: '4' }))
+    conversationId: string,
   ) {
     return this.chatService.getReadStates(req.user.sub, conversationId);
   }
@@ -139,10 +147,15 @@ export class ChatController {
   @Patch('conversations/:conversationId/read-state')
   markRead(
     @Request() req: ExpressRequest & { user: { sub: string } },
-    @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string,
+    @Param('conversationId', new ParseUUIDPipe({ version: '4' }))
+    conversationId: string,
     @Body() body: MarkReadDto,
   ) {
-    return this.chatService.markRead(req.user.sub, conversationId, body.messageId);
+    return this.chatService.markRead(
+      req.user.sub,
+      conversationId,
+      body.messageId,
+    );
   }
 
   @Patch('messages/:messageId')

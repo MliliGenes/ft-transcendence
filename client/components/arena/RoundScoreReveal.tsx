@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { IconAward, IconLoader2, IconPlayerPlay } from "@tabler/icons-react";
-import type { RevealView } from "@/lib/arena/types";
-import { Button } from "@/components/ui/button";
+import { IconAward, IconLoader2, IconPlayerPlay } from '@tabler/icons-react';
+import type { RevealView } from '@/lib/arena/types';
+import { Button } from '@/components/ui/button';
 
 export interface RoundScoreRevealProps {
   reveal: RevealView | null;
@@ -15,7 +15,15 @@ export interface RoundScoreRevealProps {
   status?: string | null;
 }
 
-export function RoundScoreReveal({ reveal, round, totalRounds, onAdvance, pending, error, status }: RoundScoreRevealProps) {
+export function RoundScoreReveal({
+  reveal,
+  round,
+  totalRounds,
+  onAdvance,
+  pending,
+  error,
+  status,
+}: RoundScoreRevealProps) {
   if (!reveal) return null;
 
   const isFinalRound = round >= totalRounds;
@@ -29,15 +37,27 @@ export function RoundScoreReveal({ reveal, round, totalRounds, onAdvance, pendin
         </div>
 
         <h3 className="text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
-          {reveal.roundScore} <span className="text-sm font-normal text-muted-foreground font-sans">points earned</span>
+          {reveal.roundScore}{' '}
+          <span className="text-sm font-normal text-muted-foreground font-sans">
+            points earned
+          </span>
         </h3>
 
         <div className="mt-4 space-y-2 border-t border-b border-border py-3 text-xs">
-          <div className="font-semibold text-muted-foreground">Hidden Test Evaluation:</div>
+          <div className="font-semibold text-muted-foreground">
+            Hidden Test Evaluation:
+          </div>
           {reveal.groups.map((g, idx) => (
-            <div key={idx} className="flex items-center justify-between font-mono tabular-nums">
-              <span className="text-foreground">{g.name} (weight: {g.weight})</span>
-              <span className={`font-semibold ${g.earned > 0 ? "text-success" : "text-danger"}`}>
+            <div
+              key={idx}
+              className="flex items-center justify-between font-mono tabular-nums"
+            >
+              <span className="text-foreground">
+                {g.name} (weight: {g.weight})
+              </span>
+              <span
+                className={`font-semibold ${g.earned > 0 ? 'text-success' : 'text-danger'}`}
+              >
                 +{g.earned}
               </span>
             </div>
@@ -47,20 +67,43 @@ export function RoundScoreReveal({ reveal, round, totalRounds, onAdvance, pendin
         <div className="mt-4 flex items-center justify-between text-sm font-medium tabular-nums">
           <span>Match Totals:</span>
           <span className="font-mono text-foreground">
-            You: <strong className="text-primary">{reveal.totals.you}</strong> | Opponent: <strong>{reveal.totals.opponent}</strong>
+            You: <strong className="text-primary">{reveal.totals.you}</strong> |
+            Opponent: <strong>{reveal.totals.opponent}</strong>
           </span>
         </div>
 
         <div className="mt-6 flex justify-end">
-          <Button onClick={onAdvance} disabled={pending} aria-busy={Boolean(status)} className="w-full">
-            {status
-              ? <IconLoader2 className="size-4 mr-2 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-              : <IconPlayerPlay className="size-4 mr-2" />}
-            <span>{isFinalRound ? "View Match Results" : "Next Round"}</span>
+          <Button
+            onClick={onAdvance}
+            disabled={pending}
+            aria-busy={Boolean(status)}
+            className="w-full"
+          >
+            {status ? (
+              <IconLoader2
+                className="size-4 mr-2 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            ) : (
+              <IconPlayerPlay className="size-4 mr-2" />
+            )}
+            <span>{isFinalRound ? 'View Match Results' : 'Next Round'}</span>
           </Button>
         </div>
-        {status && <p role="status" aria-live="polite" className="mt-3 text-xs text-muted-foreground">{status}</p>}
-        {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+        {status && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="mt-3 text-xs text-muted-foreground"
+          >
+            {status}
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="mt-3 text-sm text-destructive">
+            {error}
+          </p>
+        )}
       </div>
     </div>
   );

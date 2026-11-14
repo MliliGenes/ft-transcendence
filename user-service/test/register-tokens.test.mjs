@@ -49,7 +49,11 @@ test('registration issues tokens and prepares a nested user/session write', asyn
   };
   const module = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(RabbitMqEventsService)
-    .useValue({ publishCreated: async () => {}, publishUpdated: async () => {}, publishDeleted: async () => {} })
+    .useValue({
+      publishCreated: async () => {},
+      publishUpdated: async () => {},
+      publishDeleted: async () => {},
+    })
     .overrideProvider(PrismaService)
     .useValue(prisma)
     .overrideProvider(MailService)
@@ -88,7 +92,14 @@ test('registration issues tokens and prepares a nested user/session write', asyn
       assert.equal(response.headers['cache-control'], 'no-store');
       const result = readSession(response);
       const { data, select } = writes[0];
-      assert.deepEqual(select, { id: true, email: true, username: true, displayName: true, avatarUrl: true, updatedAt: true });
+      assert.deepEqual(select, {
+        id: true,
+        email: true,
+        username: true,
+        displayName: true,
+        avatarUrl: true,
+        updatedAt: true,
+      });
       assert.deepEqual(result.user, {
         id: data.id,
         username: dto.username,

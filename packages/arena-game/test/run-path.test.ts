@@ -1,102 +1,149 @@
-import { describe, expect, it } from "vitest";
-import { P100, SOLVED_PY, setup, tick } from "./setup.js";
+import { describe, expect, it } from 'vitest';
+import { P100, SOLVED_PY, setup, tick } from './setup.js';
 
-describe("07 run path (visible tests only, independent sides)", () => {
-  it("1. A Run succeeds while B remains coding", async () => {
+describe('07 run path (visible tests only, independent sides)', () => {
+  it('1. A Run succeeds while B remains coding', async () => {
     const { engine, left, right, matchId } = await setup();
-    const res = await engine.run(left, matchId, { code: SOLVED_PY, language: "Python" });
+    const res = await engine.run(left, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
     expect(res.tests.every((t) => t.passed)).toBe(true);
     const snap = await engine.snapshot(right, matchId);
-    expect(snap.roundPhase).toBe("CODING");
-    expect(snap.sides.left?.status).toBe("coding");
-    expect(snap.sides.right?.status).toBe("coding");
+    expect(snap.roundPhase).toBe('CODING');
+    expect(snap.sides.left?.status).toBe('coding');
+    expect(snap.sides.right?.status).toBe('coding');
     expect(snap.reveal).toBeNull();
   });
 
-  it("2. A Run completes while B submits", async () => {
+  it('2. A Run completes while B submits', async () => {
     const { engine, left, right, matchId } = await setup([P100]);
-    const aRun = engine.run(left, matchId, { code: SOLVED_PY, language: "Python" });
-    const receipt = await engine.submit(right, matchId, { code: SOLVED_PY, language: "Python" });
+    const aRun = engine.run(left, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
+    const receipt = await engine.submit(right, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
     expect(receipt.ok).toBe(true);
     const res = await aRun;
     expect(res.tests.every((t) => t.passed)).toBe(true);
-    expect((await engine.snapshot(left, matchId)).roundPhase).toBe("CODING");
+    expect((await engine.snapshot(left, matchId)).roundPhase).toBe('CODING');
   });
 
-  it("3. judge receives visible tests only, never hidden material", async () => {
+  it('3. judge receives visible tests only, never hidden material', async () => {
     const { engine, judge, left, matchId } = await setup();
-    await engine.run(left, matchId, { code: SOLVED_PY, language: "Python" });
+    await engine.run(left, matchId, { code: SOLVED_PY, language: 'Python' });
     const ids = judge.lastRunTests.map((t) => t.id);
-    expect(ids).toEqual(["ex1", "ex2", "ex3"]);
-    expect(judge.lastRunEntrypoint).toBe("ledger_sum");
-    expect(ids).not.toContain("b1");
+    expect(ids).toEqual(['ex1', 'ex2', 'ex3']);
+    expect(judge.lastRunEntrypoint).toBe('ledger_sum');
+    expect(ids).not.toContain('b1');
     const snap = await engine.snapshot(left, matchId);
-    expect(JSON.stringify(snap)).not.toContain("1000000000");
-    expect(JSON.stringify(snap)).not.toContain("hiddenGroups");
+    expect(JSON.stringify(snap)).not.toContain('1000000000');
+    expect(JSON.stringify(snap)).not.toContain('hiddenGroups');
   });
 
-  it("4. run judge failure returns A to coding and is recorded", async () => {
+  it('4. run judge failure returns A to coding and is recorded', async () => {
     const { engine, judge, left, right, matchId } = await setup();
-    judge.failNextRun("judge unreachable");
-    await expect(engine.run(left, matchId, { code: SOLVED_PY, language: "Python" })).rejects.toThrow("judge unreachable");
+    judge.failNextRun('judge unreachable');
+    await expect(
+      engine.run(left, matchId, { code: SOLVED_PY, language: 'Python' }),
+    ).rejects.toThrow('judge unreachable');
     const snap = await engine.snapshot(left, matchId);
-    expect(snap.roundPhase).toBe("CODING");
-    expect(snap.sides.left?.status).toBe("coding");
-    expect(snap.failures).toEqual(["run: judge unreachable"]);
-    expect(snap.sides.right?.status).toBe("coding");
+    expect(snap.roundPhase).toBe('CODING');
+    expect(snap.sides.left?.status).toBe('coding');
+    expect(snap.failures).toEqual(['run: judge unreachable']);
+    expect(snap.sides.right?.status).toBe('coding');
   });
 
-  it("5. run timeout verdict is represented without touching score", async () => {
+  it('5. run timeout verdict is represented without touching score', async () => {
     const { engine, judge, left, matchId } = await setup();
-    judge.queueRunStatus("time_limit_exceeded");
-    const res = await engine.run(left, matchId, { code: SOLVED_PY, language: "Python" });
+    judge.queueRunStatus('time_limit_exceeded');
+    const res = await engine.run(left, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
     expect(res.tests.every((t) => !t.passed)).toBe(true);
     const snap = await engine.snapshot(left, matchId);
-    expect(snap.roundPhase).toBe("CODING");
+    expect(snap.roundPhase).toBe('CODING');
     expect(snap.reveal).toBeNull();
   });
 
-  it("6. invalid language and oversized source rejected before judge", async () => {
+  it('6. invalid language and oversized source rejected before judge', async () => {
     const { engine, judge, left, matchId } = await setup();
-    await expect(engine.run(left, matchId, { code: SOLVED_PY, language: "Brainfuck" })).rejects.toThrow();
-    await expect(engine.run(left, matchId, { code: "", language: "Python" })).rejects.toThrow();
-    await expect(engine.run(left, matchId, { code: "x".repeat(200 * 1024), language: "Python" })).rejects.toThrow();
+    await expect(
+      engine.run(left, matchId, { code: SOLVED_PY, language: 'Brainfuck' }),
+    ).rejects.toThrow();
+    await expect(
+      engine.run(left, matchId, { code: '', language: 'Python' }),
+    ).rejects.toThrow();
+    await expect(
+      engine.run(left, matchId, {
+        code: 'x'.repeat(200 * 1024),
+        language: 'Python',
+      }),
+    ).rejects.toThrow();
     expect(judge.runCalls).toBe(0);
   });
 
-  it("7. non-member principal rejected", async () => {
+  it('7. non-member principal rejected', async () => {
     const { engine, stranger, matchId } = await setup();
-    await expect(engine.run(stranger, matchId, { code: SOLVED_PY, language: "Python" })).rejects.toThrow();
-    await expect(engine.submit(stranger, matchId, { code: SOLVED_PY, language: "Python" })).rejects.toThrow();
+    await expect(
+      engine.run(stranger, matchId, { code: SOLVED_PY, language: 'Python' }),
+    ).rejects.toThrow();
+    await expect(
+      engine.submit(stranger, matchId, { code: SOLVED_PY, language: 'Python' }),
+    ).rejects.toThrow();
     await expect(engine.snapshot(stranger, matchId)).rejects.toThrow();
   });
 
-  it("8. duplicate concurrent Run for the same side is blocked", async () => {
+  it('8. duplicate concurrent Run for the same side is blocked', async () => {
     const { engine, judge, left, matchId } = await setup();
     judge.deferNextRun();
-    const first = engine.run(left, matchId, { code: SOLVED_PY, language: "Python" });
-    await expect(engine.run(left, matchId, { code: SOLVED_PY, language: "Python" })).rejects.toThrow();
+    const first = engine.run(left, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
+    await expect(
+      engine.run(left, matchId, { code: SOLVED_PY, language: 'Python' }),
+    ).rejects.toThrow();
     judge.releaseRun();
     await first;
-    expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe("coding");
+    expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe(
+      'coding',
+    );
   });
 
-  it("9. other side can still submit after A run failure", async () => {
-    const { engine, judge, left, right, matchId } = await setup([{ score: 100 }]);
-    judge.failNextRun("boom");
-    await expect(engine.run(left, matchId, { code: SOLVED_PY, language: "Python" })).rejects.toThrow();
-    const receipt = await engine.submit(right, matchId, { code: SOLVED_PY, language: "Python" });
+  it('9. other side can still submit after A run failure', async () => {
+    const { engine, judge, left, right, matchId } = await setup([
+      { score: 100 },
+    ]);
+    judge.failNextRun('boom');
+    await expect(
+      engine.run(left, matchId, { code: SOLVED_PY, language: 'Python' }),
+    ).rejects.toThrow();
+    const receipt = await engine.submit(right, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
     expect(receipt.ok).toBe(true);
   });
 
   it("10. a Run that completes after its round advanced leaves the new round's activity alone", async () => {
     const { engine, judge, left, right, matchId } = await setup([P100]);
     // The left side is counted first, then starts a Run that stays in flight.
-    await engine.submit(left, matchId, { code: SOLVED_PY, language: "Python" });
+    await engine.submit(left, matchId, { code: SOLVED_PY, language: 'Python' });
     judge.deferNextRun();
-    const stale = engine.run(left, matchId, { code: SOLVED_PY, language: "Python" });
+    const stale = engine.run(left, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
     await tick();
-    await engine.submit(right, matchId, { code: SOLVED_PY, language: "Python" });
+    await engine.submit(right, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
     await engine.publishReveal(left, matchId, { graceMs: 0 });
     await engine.nextRound(left, matchId);
     await engine.beginCoding(left, matchId);
@@ -104,18 +151,27 @@ describe("07 run path (visible tests only, independent sides)", () => {
     // The same side starts a new Run in the new round while the old one is
     // still in flight: the activity gate is per round.
     judge.deferNextRun();
-    const current = engine.run(left, matchId, { code: SOLVED_PY, language: "Python" });
+    const current = engine.run(left, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
     await tick();
-    expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe("running");
+    expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe(
+      'running',
+    );
 
     // The older Run completes now: it may only ever touch its own round, so
     // the newer Run's running state survives.
     judge.releaseRun();
     await stale;
-    expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe("running");
+    expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe(
+      'running',
+    );
 
     judge.releaseRun();
     await current;
-    expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe("coding");
+    expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe(
+      'coding',
+    );
   });
 });

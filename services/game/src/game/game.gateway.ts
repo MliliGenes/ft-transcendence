@@ -6,16 +6,16 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
-} from "@nestjs/websockets";
-import type { Server, Socket } from "socket.io";
-import { GameService } from "./game.service.js";
+} from '@nestjs/websockets';
+import type { Server, Socket } from 'socket.io';
+import { GameService } from './game.service.js';
 import {
   attachSocketPrincipal,
   principalFromHandshake,
   requireSocketPrincipal,
   socketPrincipal,
   type MatchSocketPrincipal,
-} from "./socket-auth.js";
+} from './socket-auth.js';
 
 function roomFor(matchId: string): string {
   return `match:${matchId}`;
@@ -38,11 +38,12 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (matchId) this.server?.to(roomFor(matchId)).emit(event, payload);
     });
     this.game.onAccountDeleted((userId) => this.disconnectUser(userId));
-    this.game.registerActiveSocketEnumerator(() => [...(this.server?.sockets.sockets.values() ?? [])]
-      .flatMap((socket) => {
+    this.game.registerActiveSocketEnumerator(() =>
+      [...(this.server?.sockets.sockets.values() ?? [])].flatMap((socket) => {
         const userId = socketPrincipal(socket)?.userId;
         return userId ? [userId] : [];
-      }));
+      }),
+    );
   }
 
   private disconnectUser(userId: string): void {
@@ -78,11 +79,16 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
       await client.join(roomFor(matchId));
-      client.emit("snapshot", await this.game.snapshot(userId, matchId));
+      client.emit('snapshot', await this.game.snapshot(userId, matchId));
     } catch {
       if (opened) {
         try {
-          if (principal?.matchId) await this.game.noteSocketClosed(principal.userId, principal.matchId, client.id);
+          if (principal?.matchId)
+            await this.game.noteSocketClosed(
+              principal.userId,
+              principal.matchId,
+              client.id,
+            );
         } catch {
           // Best effort only.
         }
@@ -99,61 +105,105 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleDisconnect(client: Socket): Promise<void> {
     const principal = socketPrincipal(client, { matchIdRequired: true });
     if (principal?.matchId) {
-      await this.game.noteSocketClosed(principal.userId, principal.matchId, client.id);
+      await this.game.noteSocketClosed(
+        principal.userId,
+        principal.matchId,
+        client.id,
+      );
     }
   }
 
-  @SubscribeMessage("run")
-  async onRun(@ConnectedSocket() client: Socket, @MessageBody() body: { code: string; language: string }) {
-    try {
-      const principal = requireSocketPrincipal(client, { matchIdRequired: true });
-      const result = await this.game.run(principal.userId, principal.matchId, body);
-      return { ok: true as const, result };
-    } catch (error) {
-      return { ok: false as const, error: error instanceof Error ? error.message : "run failed" };
-    }
-  }
-
-  @SubscribeMessage("submit")
-  async onSubmit(
+  @SubscribeMessage('run')
+  async onRun(
     @ConnectedSocket() client: Socket,
-    @MessageBody() body: { code: string; language: string; submissionId?: string; evaluationId?: string },
+    @MessageBody() body: { code: string; language: string },
   ) {
     try {
-      const principal = requireSocketPrincipal(client, { matchIdRequired: true });
-      const result = await this.game.submit(principal.userId, principal.matchId, body);
+      const principal = requireSocketPrincipal(client, {
+        matchIdRequired: true,
+      });
+      const result = await this.game.run(
+        principal.userId,
+        principal.matchId,
+        body,
+      );
       return { ok: true as const, result };
     } catch (error) {
-      return { ok: false as const, error: error instanceof Error ? error.message : "submit failed" };
+      return {
+        ok: false as const,
+        error: error instanceof Error ? error.message : 'run failed',
+      };
     }
   }
 
-  @SubscribeMessage("setReady")
-  async onReady(@ConnectedSocket() client: Socket, @MessageBody() body: { value: boolean; documentRevision?: number }) {
+  @SubscribeMessage('submit')
+  async onSubmit(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    body: {
+      code: string;
+      language: string;
+      submissionId?: string;
+      evaluationId?: string;
+    },
+  ) {
+    try {
+      const principal = requireSocketPrincipal(client, {
+        matchIdRequired: true,
+      });
+      const result = await this.game.submit(
+        principal.userId,
+        principal.matchId,
+        body,
+      );
+      return { ok: true as const, result };
+    } catch (error) {
+      return {
+        ok: false as const,
+        error: error instanceof Error ? error.message : 'submit failed',
+      };
+    }
+  }
+
+  @SubscribeMessage('setReady')
+  async onReady(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { value: boolean; documentRevision?: number },
+  ) {
     // 2v2: revision-bound per-player readiness (engine-enforced). 1v1 keeps
     // the legacy no-op ack — the engine returns without effect there.
     try {
-      const principal = requireSocketPrincipal(client, { matchIdRequired: true });
+      const principal = requireSocketPrincipal(client, {
+        matchIdRequired: true,
+      });
       await this.game.setReady(principal.userId, principal.matchId, {
         ready: body?.value === true,
         documentRevision: body?.documentRevision,
       });
       return { ok: true as const };
     } catch (error) {
-      return { ok: false as const, error: error instanceof Error ? error.message : "setReady failed" };
+      return {
+        ok: false as const,
+        error: error instanceof Error ? error.message : 'setReady failed',
+      };
     }
   }
 
-  @SubscribeMessage("leave")
+  @SubscribeMessage('leave')
   async onLeave(@ConnectedSocket() client: Socket) {
     // Deliberate leave only: immediate forfeit (§15). Socket loss never lands
     // here — handleDisconnect owns that path and never forfeits.
     try {
-      const principal = requireSocketPrincipal(client, { matchIdRequired: true });
+      const principal = requireSocketPrincipal(client, {
+        matchIdRequired: true,
+      });
       const result = await this.game.leave(principal.userId, principal.matchId);
       return { ok: true as const, result };
     } catch (error) {
-      return { ok: false as const, error: error instanceof Error ? error.message : "leave failed" };
+      return {
+        ok: false as const,
+        error: error instanceof Error ? error.message : 'leave failed',
+      };
     }
   }
 }

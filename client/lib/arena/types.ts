@@ -1,6 +1,6 @@
-export type MatchMode = "1v1" | "2v2";
+export type MatchMode = '1v1' | '2v2';
 
-export type SupportedLanguage = "Python" | "C++" | "C";
+export type SupportedLanguage = 'Python' | 'C++' | 'C';
 
 export interface ArenaConnectionOptions {
   baseUrl: string;
@@ -11,29 +11,24 @@ export interface ArenaConnectionOptions {
 }
 
 export type RoundPhase =
-  | "MATCH_FOUND"
-  | "ROUND_INTRO"
-  | "CODING"
-  | "SCORE_REVEAL"
-  | "ROUND_COMPLETE"
-  | "MATCH_COMPLETE";
+  | 'MATCH_FOUND'
+  | 'ROUND_INTRO'
+  | 'CODING'
+  | 'SCORE_REVEAL'
+  | 'ROUND_COMPLETE'
+  | 'MATCH_COMPLETE';
 
 export type PlayerStatus =
-  | "coding"
-  | "running"
-  | "submitted"
-  | "evaluating"
-  | "locked"
-  | "left";
+  'coding' | 'running' | 'submitted' | 'evaluating' | 'locked' | 'left';
 
-export type Presence = "online" | "offline";
+export type Presence = 'online' | 'offline';
 
 export interface Readiness {
   you: boolean;
   mate: boolean;
 }
 
-export type VisibleTestStatus = "passed" | "failed" | "error" | "running";
+export type VisibleTestStatus = 'passed' | 'failed' | 'error' | 'running';
 
 export interface ProblemExample {
   id: string;
@@ -47,7 +42,7 @@ export interface ArenaProblem {
   description: string;
   examples: ProblemExample[];
   constraints?: string[];
-  starters: Partial<Record<"C++" | "Python" | "C", string>>;
+  starters: Partial<Record<'C++' | 'Python' | 'C', string>>;
 }
 
 export interface TestView {
@@ -59,7 +54,7 @@ export interface TestView {
 
 export interface SideView {
   name: string;
-  status: PlayerStatus | "ready";
+  status: PlayerStatus | 'ready';
   presence: Presence;
   submissions: number;
   departed?: boolean;

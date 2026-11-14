@@ -13,9 +13,7 @@ export class EnsureActiveUserGuard implements CanActivate {
   constructor(private readonly userProfiles: UserProfilesService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context
-      .switchToHttp()
-      .getRequest<AuthenticatedRequest>();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     await this.userProfiles.ensureActiveUsers([request.user.sub]);
     return true;
   }

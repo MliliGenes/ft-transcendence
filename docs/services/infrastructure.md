@@ -4,19 +4,19 @@ Docker Compose runs everything. This covers startup, environment files, the Ngin
 
 ## Services
 
-| Service | Role | Reachable from the host |
-| --- | --- | --- |
-| `nginx` | TLS gateway | `443`, and `127.0.0.1:9443` for MinIO S3 |
-| `client` | Next.js app | Through Nginx |
-| `user-service`, `chat-service`, `game-service` | NestJS APIs | Through Nginx |
-| `user-db`, `chat-db`, `game-db` | PostgreSQL 18, one per service | No |
-| `user-db-backup`, `chat-db-backup`, `game-db-backup` | Optional database-only scheduled dumps (`database-only-backups` profile) | No |
-| `backup-storage-init` | One-shot backup-volume permissions setup | No |
-| `rabbitmq` | Broker | `127.0.0.1:5672`, management UI `127.0.0.1:15672` |
-| `minio` | Object storage | Console `127.0.0.1:9001` |
-| `minio-init` | One-shot bucket and user setup | No |
-| `grafana` | Dashboards | `https://localhost/grafana/` |
-| `prometheus`, `loki`, `alloy`, `cadvisor`, `docker-socket-proxy` | Monitoring internals | No |
+| Service                                                          | Role                                                                     | Reachable from the host                           |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------- |
+| `nginx`                                                          | TLS gateway                                                              | `443`, and `127.0.0.1:9443` for MinIO S3          |
+| `client`                                                         | Next.js app                                                              | Through Nginx                                     |
+| `user-service`, `chat-service`, `game-service`                   | NestJS APIs                                                              | Through Nginx                                     |
+| `user-db`, `chat-db`, `game-db`                                  | PostgreSQL 18, one per service                                           | No                                                |
+| `user-db-backup`, `chat-db-backup`, `game-db-backup`             | Optional database-only scheduled dumps (`database-only-backups` profile) | No                                                |
+| `backup-storage-init`                                            | One-shot backup-volume permissions setup                                 | No                                                |
+| `rabbitmq`                                                       | Broker                                                                   | `127.0.0.1:5672`, management UI `127.0.0.1:15672` |
+| `minio`                                                          | Object storage                                                           | Console `127.0.0.1:9001`                          |
+| `minio-init`                                                     | One-shot bucket and user setup                                           | No                                                |
+| `grafana`                                                        | Dashboards                                                               | `https://localhost/grafana/`                      |
+| `prometheus`, `loki`, `alloy`, `cadvisor`, `docker-socket-proxy` | Monitoring internals                                                     | No                                                |
 
 ## Running the stack
 
@@ -38,18 +38,18 @@ Open `https://localhost` and accept the local certificate. Source changes need `
 
 ### Environment files
 
-| File | Holds |
-| --- | --- |
-| `backend.env` | Shared runtime mode for User, Chat and Game |
+| File                                        | Holds                                                                                                                            |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `backend.env`                               | Shared runtime mode for User, Chat and Game                                                                                      |
 | `user-db.env`, `chat-db.env`, `game-db.env` | Database credentials, loaded by each database and its backup container; User and Chat services also load their database settings |
-| `rabbitmq.env` | Broker credentials, loaded by RabbitMQ and the User, Chat and Game services |
-| `minio.env` | MinIO root account and CORS origins |
-| `user-service.env` | Internal addresses, SMTP, initial superadmin |
-| `user-auth.env` | JWT keys, frontend origin, OAuth |
-| `chat-service.env` | Internal addresses, public JWT key, storage credentials |
-| `game-service.env` | Game database URL, public JWT key, judge worker connection and game settings |
-| `judge-worker.env` | Shared judge token and execution limits |
-| `grafana.env`, `monitoring.env` | Monitoring credentials |
+| `rabbitmq.env`                              | Broker credentials, loaded by RabbitMQ and the User, Chat and Game services                                                      |
+| `minio.env`                                 | MinIO root account and CORS origins                                                                                              |
+| `user-service.env`                          | Internal addresses, SMTP, initial superadmin                                                                                     |
+| `user-auth.env`                             | JWT keys, frontend origin, OAuth                                                                                                 |
+| `chat-service.env`                          | Internal addresses, public JWT key, storage credentials                                                                          |
+| `game-service.env`                          | Game database URL, public JWT key, judge worker connection and game settings                                                     |
+| `judge-worker.env`                          | Shared judge token and execution limits                                                                                          |
+| `grafana.env`, `monitoring.env`             | Monitoring credentials                                                                                                           |
 
 ### Superadmin bootstrap
 
@@ -70,7 +70,6 @@ The [complete backup/recovery guide](../infra/BACKUP_RECOVERY.md) covers User, C
 ## Optional database-only backups
 
 This alternative preserves the database backup containers added by the platform branch and extends them to Game. They are behind the `database-only-backups` Compose profile, so ordinary startup does not enable a second scheduler. Do not enable this profile alongside the complete snapshot schedule unless intentionally maintaining independent backup sets. These containers do not cover MinIO and cannot replace a complete recovery plan.
-
 
 The root stack includes one `prodrigestivill/postgres-backup-local:18-alpine`
 container for each database, matching PostgreSQL 18. Each reads its database's
@@ -187,17 +186,17 @@ requires coordinating all three services and restoring the matching MinIO files.
 
 ## Gateway (Nginx)
 
-| Path | Destination | Notes |
-| --- | --- | --- |
-| `/api/chat/socket.io/` | chat-service `/socket.io/` | Unbuffered, 65-second timeouts |
-| `/api/game/socket.io/` | game-service `/socket.io/` | Authenticated match/lobby/collaboration/team-chat sockets |
-| `/api/game/` | game-service `/` | Authenticated game HTTP API |
-| `/api/chat/` | chat-service `/chat/` | 300 requests per minute per IP |
-| `/api/` | user-service, prefix stripped | Rate limited, cookie path rewritten to `/api/auth/` |
-| `/socket.io/` | chat-service | Legacy path |
-| `/grafana/` | Grafana | Login required |
-| `/` | client | Everything else |
-| `:9443` | minio `:9000` | S3 API, 52 MB body limit, `Host` preserved |
+| Path                   | Destination                   | Notes                                                     |
+| ---------------------- | ----------------------------- | --------------------------------------------------------- |
+| `/api/chat/socket.io/` | chat-service `/socket.io/`    | Unbuffered, 65-second timeouts                            |
+| `/api/game/socket.io/` | game-service `/socket.io/`    | Authenticated match/lobby/collaboration/team-chat sockets |
+| `/api/game/`           | game-service `/`              | Authenticated game HTTP API                               |
+| `/api/chat/`           | chat-service `/chat/`         | 300 requests per minute per IP                            |
+| `/api/`                | user-service, prefix stripped | Rate limited, cookie path rewritten to `/api/auth/`       |
+| `/socket.io/`          | chat-service                  | Legacy path                                               |
+| `/grafana/`            | Grafana                       | Login required                                            |
+| `/`                    | client                        | Everything else                                           |
+| `:9443`                | minio `:9000`                 | S3 API, 52 MB body limit, `Host` preserved                |
 
 Stricter per-IP limits apply to login (10 per minute), register (3), password reset request (3) and reset confirm (5). The main server has a 6 MB body limit.
 
@@ -241,13 +240,13 @@ cAdvisor, RabbitMQ (:15692), PostgreSQL exporters, health probes
 
 ### Dashboards
 
-| Dashboard | Shows |
-| --- | --- |
-| Overview | Service and database health, firing alerts, CPU and memory |
-| Containers | CPU, memory, network, disk writes, restarts |
-| Databases & Broker | PostgreSQL activity, RabbitMQ queue depth and rates |
-| Logs | Searchable container logs and error rate |
-| HTTP & Realtime | Probe availability, latency and status codes |
+| Dashboard          | Shows                                                      |
+| ------------------ | ---------------------------------------------------------- |
+| Overview           | Service and database health, firing alerts, CPU and memory |
+| Containers         | CPU, memory, network, disk writes, restarts                |
+| Databases & Broker | PostgreSQL activity, RabbitMQ queue depth and rates        |
+| Logs               | Searchable container logs and error rate                   |
+| HTTP & Realtime    | Probe availability, latency and status codes               |
 
 Dashboards are generated by `infra/monitoring/grafana/build-dashboards.mjs`. Edit that script, run it, then restart Grafana.
 
@@ -255,15 +254,15 @@ Dashboards are generated by `infra/monitoring/grafana/build-dashboards.mjs`. Edi
 
 Rules are in `infra/monitoring/prometheus/alerts.yml` and are shown in Grafana only. Nothing is sent by email or chat.
 
-| Alert | Fires when |
-| --- | --- |
-| `ServiceDown` | A health probe fails for 1 minute |
-| `ContainerRestarting` | More than 3 restarts in 15 minutes |
-| `ContainerHighMemory` | Over 90% of the limit, or over 1 GiB with no limit, for 5 minutes |
-| `PostgresDown` | A database is unreachable for 1 minute |
-| `PostgresTooManyConnections` | Over 80% of `max_connections` for 5 minutes |
-| `RabbitMQQueueBacklog` | Over 100 waiting messages for 5 minutes |
-| `RabbitMQUnackedHigh` | Over 50 unacknowledged messages for 5 minutes |
+| Alert                        | Fires when                                                        |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `ServiceDown`                | A health probe fails for 1 minute                                 |
+| `ContainerRestarting`        | More than 3 restarts in 15 minutes                                |
+| `ContainerHighMemory`        | Over 90% of the limit, or over 1 GiB with no limit, for 5 minutes |
+| `PostgresDown`               | A database is unreachable for 1 minute                            |
+| `PostgresTooManyConnections` | Over 80% of `max_connections` for 5 minutes                       |
+| `RabbitMQQueueBacklog`       | Over 100 waiting messages for 5 minutes                           |
+| `RabbitMQUnackedHigh`        | Over 50 unacknowledged messages for 5 minutes                     |
 
 To demo one, run `docker compose stop chat-service`, wait about 90 seconds, then start it again.
 
@@ -284,12 +283,12 @@ docker compose exec user-db sh /docker-entrypoint-initdb.d/10-monitoring-role.sh
 
 ### Troubleshooting
 
-| Symptom | Check |
-| --- | --- |
-| Dashboard says "No data" | Wait 30 seconds, then check `docker compose logs alloy` |
-| PostgreSQL panels empty | The `monitoring` login is missing or has the wrong password |
-| Container panels empty | cAdvisor must be 0.54.0 or newer with the containerd image store |
-| `/grafana/` returns 502 | Grafana is still starting |
+| Symptom                  | Check                                                            |
+| ------------------------ | ---------------------------------------------------------------- |
+| Dashboard says "No data" | Wait 30 seconds, then check `docker compose logs alloy`          |
+| PostgreSQL panels empty  | The `monitoring` login is missing or has the wrong password      |
+| Container panels empty   | cAdvisor must be 0.54.0 or newer with the containerd image store |
+| `/grafana/` returns 502  | Grafana is still starting                                        |
 
 ## Adding a service
 

@@ -101,7 +101,9 @@ export class AuthController {
   @Get('verify-email/:token')
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
-  async verifyEmail(@Param('token') token: string): Promise<{ verified: boolean }> {
+  async verifyEmail(
+    @Param('token') token: string,
+  ): Promise<{ verified: boolean }> {
     await this.authService.verifyEmail(token);
     return { verified: true };
   }
@@ -119,15 +121,19 @@ export class AuthController {
   @Post('password-reset/request')
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
-  async requestPasswordReset(@Body() dto: RequestPasswordResetDto): Promise<{ requested: boolean }> {
+  async requestPasswordReset(
+    @Body() dto: RequestPasswordResetDto,
+  ): Promise<{ requested: boolean }> {
     await this.authService.requestPasswordReset(dto.email);
-    return {requested: true};
+    return { requested: true };
   }
 
   @Post('password-reset/confirm')
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
-  async confirmPasswordReset(@Body() dto: ConfirmPasswordResetDto): Promise<{ confirmed: boolean }> {
+  async confirmPasswordReset(
+    @Body() dto: ConfirmPasswordResetDto,
+  ): Promise<{ confirmed: boolean }> {
     await this.authService.confirmPasswordReset(dto.token, dto.newPassword);
     return { confirmed: true };
   }

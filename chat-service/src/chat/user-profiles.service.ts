@@ -58,7 +58,8 @@ export class UserProfilesService {
     const activeUsers = await this.prisma.chatUser.count({
       where: { id: { in: ids }, deletedAt: null },
     });
-    if (activeUsers !== ids.length) throw new NotFoundException('User not found');
+    if (activeUsers !== ids.length)
+      throw new NotFoundException('User not found');
   }
 
   async ensureCanContact(otherUserId: string, authorization: string) {
@@ -84,14 +85,19 @@ export class UserProfilesService {
       typeof result !== 'object' ||
       typeof (result as { blocked?: unknown }).blocked !== 'boolean'
     ) {
-      throw new ServiceUnavailableException('User service returned invalid data');
+      throw new ServiceUnavailableException(
+        'User service returned invalid data',
+      );
     }
     if ((result as { blocked: boolean }).blocked)
       throw new ForbiddenException('You cannot contact this user');
   }
 
   private async fetchPublicUser(userId: string): Promise<PublicUser> {
-    const url = new URL(`/accounts/${encodeURIComponent(userId)}`, this.userServiceUrl);
+    const url = new URL(
+      `/accounts/${encodeURIComponent(userId)}`,
+      this.userServiceUrl,
+    );
     let response: Response;
 
     try {
@@ -106,11 +112,16 @@ export class UserProfilesService {
 
     const value: unknown = await response.json().catch(() => null);
     if (!this.isPublicUser(value, userId))
-      throw new ServiceUnavailableException('User service returned invalid data');
+      throw new ServiceUnavailableException(
+        'User service returned invalid data',
+      );
     return value;
   }
 
-  private isPublicUser(value: unknown, expectedId: string): value is PublicUser {
+  private isPublicUser(
+    value: unknown,
+    expectedId: string,
+  ): value is PublicUser {
     if (!value || typeof value !== 'object') return false;
     const user = value as Record<string, unknown>;
     return (

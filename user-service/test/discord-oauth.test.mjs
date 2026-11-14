@@ -1,7 +1,7 @@
 import { MailService } from '../dist/mail/mail.service.js';
 import { RabbitMqEventsService } from '../dist/events/rabbitmq-events.service.js';
 import { readSession } from './helpers/session.mjs';
-﻿import 'reflect-metadata';
+import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto';
@@ -157,9 +157,16 @@ test('Discord authorization-code login', async (t) => {
     .overrideProvider(PrismaService)
     .useValue(prisma)
     .overrideProvider(MailService)
-    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
+    .useValue({
+      sendVerificationEmail: async () => {},
+      sendPasswordResetEmail: async () => {},
+    })
     .overrideProvider(RabbitMqEventsService)
-    .useValue({ publishCreated: async () => {}, publishUpdated: async () => {}, publishDeleted: async () => {} })
+    .useValue({
+      publishCreated: async () => {},
+      publishUpdated: async () => {},
+      publishDeleted: async () => {},
+    })
     .overrideProvider(ConfigService)
     .useValue(new ConfigService(config))
     .compile();

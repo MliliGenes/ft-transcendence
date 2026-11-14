@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile } from 'node:child_process';
 import {
   type CaseResult,
   type DriverKind,
@@ -10,7 +10,7 @@ import {
   type SupportedLanguage,
   type VisibleTest,
   type GameJudge,
-} from "./judge.js";
+} from './judge.js';
 
 /**
  * Each test case runs in its own one-shot container. The caller keeps expected
@@ -24,15 +24,15 @@ export interface ContainerJudgeOptions {
 }
 
 const DEFAULT_IMAGES: Record<SupportedLanguage, string> = {
-  Python: "python:3.12-slim",
-  "C++": "gcc:14-bookworm",
-  C: "gcc:14-bookworm",
+  Python: 'python:3.12-slim',
+  'C++': 'gcc:14-bookworm',
+  C: 'gcc:14-bookworm',
 };
 
 const SOURCE_FILE: Record<SupportedLanguage, string> = {
-  Python: "player.py",
-  "C++": "player.cpp",
-  C: "player.c",
+  Python: 'player.py',
+  'C++': 'player.cpp',
+  C: 'player.c',
 };
 
 /**
@@ -135,22 +135,22 @@ interface RunnerRecord {
 }
 
 const EXECUTION_STATUSES = new Set<ExecutionStatus>([
-  "accepted",
-  "compile_error",
-  "runtime_error",
-  "time_limit_exceeded",
-  "memory_limit_exceeded",
-  "output_limit_exceeded",
-  "process_limit_exceeded",
-  "internal_error",
+  'accepted',
+  'compile_error',
+  'runtime_error',
+  'time_limit_exceeded',
+  'memory_limit_exceeded',
+  'output_limit_exceeded',
+  'process_limit_exceeded',
+  'internal_error',
 ]);
 
 function decodeBase64(value: unknown): string {
-  if (typeof value !== "string") return "";
+  if (typeof value !== 'string') return '';
   try {
-    return Buffer.from(value, "base64").toString("utf8");
+    return Buffer.from(value, 'base64').toString('utf8');
   } catch {
-    return "";
+    return '';
   }
 }
 
@@ -163,37 +163,56 @@ function parseRunnerRecord(stdout: string): RawExecution | null {
   } catch {
     return null;
   }
-  if (typeof parsed.status !== "string" || !EXECUTION_STATUSES.has(parsed.status as ExecutionStatus)) return null;
-  if (typeof parsed.output_b64 !== "string" || typeof parsed.comparison_b64 !== "string") return null;
+  if (
+    typeof parsed.status !== 'string' ||
+    !EXECUTION_STATUSES.has(parsed.status as ExecutionStatus)
+  )
+    return null;
+  if (
+    typeof parsed.output_b64 !== 'string' ||
+    typeof parsed.comparison_b64 !== 'string'
+  )
+    return null;
   return {
     status: parsed.status as ExecutionStatus,
     output: decodeBase64(parsed.output_b64),
     comparison: decodeBase64(parsed.comparison_b64),
-    ms: typeof parsed.ms === "number" && Number.isFinite(parsed.ms) && parsed.ms >= 0 ? parsed.ms : 0,
+    ms:
+      typeof parsed.ms === 'number' &&
+      Number.isFinite(parsed.ms) &&
+      parsed.ms >= 0
+        ? parsed.ms
+        : 0,
   };
 }
 
 function verdictFromContainerExit(code: number): ExecutionStatus {
-  if (code === 124 || code === 143) return "time_limit_exceeded";
-  if (code === 137) return "memory_limit_exceeded";
-  return "internal_error";
+  if (code === 124 || code === 143) return 'time_limit_exceeded';
+  if (code === 137) return 'memory_limit_exceeded';
+  return 'internal_error';
 }
 
-function expectedMatches(language: SupportedLanguage, driver: DriverKind, actual: string, expected: string): boolean {
-  if (driver === "snippet" && language === "Python") return actual.trim() === expected.trim();
+function expectedMatches(
+  language: SupportedLanguage,
+  driver: DriverKind,
+  actual: string,
+  expected: string,
+): boolean {
+  if (driver === 'snippet' && language === 'Python')
+    return actual.trim() === expected.trim();
   // Match shell command substitution's removal of trailing line feeds while
   // preserving spaces and carriage returns in stdio answers.
-  return actual.replace(/\n+$/, "") === expected.replace(/\n+$/, "");
+  return actual.replace(/\n+$/, '') === expected.replace(/\n+$/, '');
 }
 
 export class ContainerJudge implements GameJudge {
-  readonly provider = "container";
+  readonly provider = 'container';
   private readonly dockerBin: string;
   private readonly images: Record<SupportedLanguage, string>;
   private readonly outerTimeoutMs: number;
 
   constructor(options: ContainerJudgeOptions = {}) {
-    this.dockerBin = options.dockerBin ?? "docker";
+    this.dockerBin = options.dockerBin ?? 'docker';
     this.images = { ...DEFAULT_IMAGES, ...options.images };
     this.outerTimeoutMs = options.outerTimeoutMs ?? 240000;
   }
@@ -208,7 +227,14 @@ export class ContainerJudge implements GameJudge {
   ): Promise<CaseResult[]> {
     const results: CaseResult[] = [];
     for (const test of tests) {
-      const verdict = await this.runCase(language, driver, source, entrypoint, test, limits);
+      const verdict = await this.runCase(
+        language,
+        driver,
+        source,
+        entrypoint,
+        test,
+        limits,
+      );
       results.push({
         id: test.id,
         passed: verdict.passed,
@@ -220,10 +246,12 @@ export class ContainerJudge implements GameJudge {
     return results;
   }
 
-  async evaluateSealed(request: SealedEvaluationRequest): Promise<{ groups: SealedGroupResult[] }> {
+  async evaluateSealed(
+    request: SealedEvaluationRequest,
+  ): Promise<{ groups: SealedGroupResult[] }> {
     const groups: SealedGroupResult[] = [];
     for (const group of request.groups) {
-      const results: SealedGroupResult["results"] = [];
+      const results: SealedGroupResult['results'] = [];
       for (const test of group.tests) {
         const verdict = await this.runCase(
           request.language,
@@ -253,13 +281,28 @@ export class ContainerJudge implements GameJudge {
     test: CaseInput,
     limits: JudgeLimits,
   ): Promise<TrustedVerdict> {
-    if (driver === "snippet" && language !== "Python") {
-      return { id: test.id, passed: false, status: "internal_error", output: "", comparison: "", ms: 0 };
+    if (driver === 'snippet' && language !== 'Python') {
+      return {
+        id: test.id,
+        passed: false,
+        status: 'internal_error',
+        output: '',
+        comparison: '',
+        ms: 0,
+      };
     }
 
-    const execution = await this.executeOneCase({ language, driver, source, entrypoint, input: test.input, limits });
-    const passed = execution.status === "accepted"
-      && expectedMatches(language, driver, execution.comparison, test.expected);
+    const execution = await this.executeOneCase({
+      language,
+      driver,
+      source,
+      entrypoint,
+      input: test.input,
+      limits,
+    });
+    const passed =
+      execution.status === 'accepted' &&
+      expectedMatches(language, driver, execution.comparison, test.expected);
     return {
       id: test.id,
       passed,
@@ -281,46 +324,50 @@ export class ContainerJudge implements GameJudge {
     const image = this.images[input.language];
     const memory = `${input.limits.runMemoryMb}m`;
     const args = [
-      "run",
-      "--rm",
-      "--cap-drop=ALL",
-      "--security-opt=no-new-privileges",
-      "--network",
-      "none",
-      "--cpus",
+      'run',
+      '--rm',
+      '--cap-drop=ALL',
+      '--security-opt=no-new-privileges',
+      '--network',
+      'none',
+      '--cpus',
       String(input.limits.runCpus),
-      "--memory",
+      '--memory',
       memory,
-      "--memory-swap",
+      '--memory-swap',
       memory,
-      "--pids-limit",
+      '--pids-limit',
       String(input.limits.runPids),
-      "--read-only",
-      "--tmpfs",
+      '--read-only',
+      '--tmpfs',
       `/scratch:rw,exec,size=${memory},mode=1777`,
-      "--tmpfs",
+      '--tmpfs',
       `/tmp:rw,exec,size=${memory},mode=1777`,
-      "--workdir",
-      "/scratch",
-      "--user",
-      "nobody",
-      "-e",
-      `SRC=${Buffer.from(input.source, "utf8").toString("base64")}`,
-      "-e",
-      `INP=${Buffer.from(input.input, "utf8").toString("base64")}`,
-      "-e",
-      `DRV=${Buffer.from(SNIPPET_DRIVER, "utf8").toString("base64")}`,
-      "-e",
-      `ENTRY=${input.entrypoint ?? ""}`,
+      '--workdir',
+      '/scratch',
+      '--user',
+      'nobody',
+      '-e',
+      `SRC=${Buffer.from(input.source, 'utf8').toString('base64')}`,
+      '-e',
+      `INP=${Buffer.from(input.input, 'utf8').toString('base64')}`,
+      '-e',
+      `DRV=${Buffer.from(SNIPPET_DRIVER, 'utf8').toString('base64')}`,
+      '-e',
+      `ENTRY=${input.entrypoint ?? ''}`,
       image,
-      "bash",
-      "-c",
+      'bash',
+      '-c',
       this.oneCaseScript(input.language, input.driver, input.limits),
     ];
 
     const outputCap = Math.max(1, Math.floor(input.limits.runOutputBytes));
-    const maxBuffer = Math.max(64 * 1024, Math.ceil((outputCap + 1) * 4 / 3) + 16 * 1024);
-    const pythonSnippet = input.language === "Python" && input.driver === "snippet";
+    const maxBuffer = Math.max(
+      64 * 1024,
+      Math.ceil(((outputCap + 1) * 4) / 3) + 16 * 1024,
+    );
+    const pythonSnippet =
+      input.language === 'Python' && input.driver === 'snippet';
 
     return new Promise<RawExecution>((resolve, reject) => {
       execFile(
@@ -328,51 +375,80 @@ export class ContainerJudge implements GameJudge {
         args,
         { timeout: this.outerTimeoutMs, maxBuffer },
         (error, stdout, stderr) => {
-          const code = typeof (error as { code?: unknown } | null)?.code === "number"
-            ? (error as { code: number }).code
-            : 0;
-          if (error && (error as NodeJS.ErrnoException).code === "ETIMEDOUT") {
-            reject(new JudgeInfraError("judge orchestrator timeout"));
+          const code =
+            typeof (error as { code?: unknown } | null)?.code === 'number'
+              ? (error as { code: number }).code
+              : 0;
+          if (error && (error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {
+            reject(new JudgeInfraError('judge orchestrator timeout'));
             return;
           }
           // String error codes (ENOENT/EACCES/ERR_CHILD_PROCESS_*) mean Docker
           // never returned a container verdict. Do not turn launch failures
           // into competitive failures or phantom Submit counts.
-          if (error && typeof (error as { code?: unknown }).code === "string") {
-            if (pythonSnippet && (error as NodeJS.ErrnoException).code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+          if (error && typeof (error as { code?: unknown }).code === 'string') {
+            if (
+              pythonSnippet &&
+              (error as NodeJS.ErrnoException).code ===
+                'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+            ) {
               resolve({
-                status: "output_limit_exceeded",
+                status: 'output_limit_exceeded',
                 output: stderr.slice(0, 4000),
-                comparison: "",
+                comparison: '',
                 ms: 0,
               });
               return;
             }
-            reject(new JudgeInfraError(`judge launch failed: ${(error as Error).message}`));
+            reject(
+              new JudgeInfraError(
+                `judge launch failed: ${(error as Error).message}`,
+              ),
+            );
             return;
           }
           if (code !== 0) {
             if ([124, 137, 143].includes(code)) {
-              resolve({ status: verdictFromContainerExit(code), output: "", comparison: "", ms: 0 });
+              resolve({
+                status: verdictFromContainerExit(code),
+                output: '',
+                comparison: '',
+                ms: 0,
+              });
             } else {
-              reject(new JudgeInfraError(`judge runner exited without a verdict (code ${code})`));
+              reject(
+                new JudgeInfraError(
+                  `judge runner exited without a verdict (code ${code})`,
+                ),
+              );
             }
             return;
           }
           const record = parseRunnerRecord(stdout);
           if (!record) {
-            resolve({ status: "internal_error", output: "", comparison: "", ms: 0 });
+            resolve({
+              status: 'internal_error',
+              output: '',
+              comparison: '',
+              ms: 0,
+            });
             return;
           }
           if (pythonSnippet) {
             const display = stderr
-              ? `${stderr}${stderr.endsWith("\n") || !record.output ? "" : "\n"}${record.output}`
+              ? `${stderr}${stderr.endsWith('\n') || !record.output ? '' : '\n'}${record.output}`
               : record.output;
-            if (Buffer.byteLength(stderr, "utf8") + Buffer.byteLength(record.comparison, "utf8") > outputCap) {
+            if (
+              Buffer.byteLength(stderr, 'utf8') +
+                Buffer.byteLength(record.comparison, 'utf8') >
+              outputCap
+            ) {
               resolve({
-                status: "output_limit_exceeded",
-                output: Buffer.from(display, "utf8").subarray(0, outputCap).toString("utf8"),
-                comparison: "",
+                status: 'output_limit_exceeded',
+                output: Buffer.from(display, 'utf8')
+                  .subarray(0, outputCap)
+                  .toString('utf8'),
+                comparison: '',
                 ms: record.ms,
               });
               return;
@@ -386,69 +462,74 @@ export class ContainerJudge implements GameJudge {
     });
   }
 
-  private oneCaseScript(language: SupportedLanguage, driver: DriverKind, limits: JudgeLimits): string {
+  private oneCaseScript(
+    language: SupportedLanguage,
+    driver: DriverKind,
+    limits: JudgeLimits,
+  ): string {
     const file = SOURCE_FILE[language];
     const runSeconds = Math.max(1, Math.ceil(limits.runWallMs / 1000));
     const compileSeconds = Math.max(1, Math.ceil(limits.compileWallMs / 1000));
     const cap = Math.max(1, Math.floor(limits.runOutputBytes));
-    const compiler = language === "C++" ? "g++" : "gcc";
-    const compile = language === "Python"
-      ? `timeout ${compileSeconds} python3 -m py_compile ${file} 2> compile.err`
-      : `timeout ${compileSeconds} ${compiler} -O2 -o prog ${file} 2> compile.err`;
-    const prog = language === "Python" ? "python3 player.py" : "./prog";
+    const compiler = language === 'C++' ? 'g++' : 'gcc';
+    const compile =
+      language === 'Python'
+        ? `timeout ${compileSeconds} python3 -m py_compile ${file} 2> compile.err`
+        : `timeout ${compileSeconds} ${compiler} -O2 -o prog ${file} 2> compile.err`;
+    const prog = language === 'Python' ? 'python3 player.py' : './prog';
 
     const prefix = [
       `printf '%s' "$SRC" | base64 -d > ${file}`,
       `printf '%s' "$INP" | base64 -d > input.txt`,
       `printf '%s' "$DRV" | base64 -d > driver.py`,
       `export ENTRYPOINT="$ENTRY"`,
-      "unset SRC INP DRV ENTRY",
-      "emit_result() { printf '{\"status\":\"%s\",\"output_b64\":\"%s\",\"comparison_b64\":\"%s\",\"ms\":%s}\\n' \"$1\" \"$2\" \"$3\" \"$4\"; }",
+      'unset SRC INP DRV ENTRY',
+      'emit_result() { printf \'{"status":"%s","output_b64":"%s","comparison_b64":"%s","ms":%s}\\n\' "$1" "$2" "$3" "$4"; }',
       `${compile}`,
-      "COMPILE_STATUS=$?",
+      'COMPILE_STATUS=$?',
       `if [ "$COMPILE_STATUS" = 124 ]; then OUTPUT_B64=$(head -c ${cap} compile.err | base64 -w0); emit_result time_limit_exceeded "$OUTPUT_B64" '' 0; exit 0; fi`,
       `if [ "$COMPILE_STATUS" != 0 ]; then OUTPUT_B64=$(head -c ${cap} compile.err | base64 -w0); emit_result compile_error "$OUTPUT_B64" '' 0; exit 0; fi`,
     ];
 
-    if (driver === "snippet") {
+    if (driver === 'snippet') {
       prefix.push(
-        "set +e",
-        "START_NS=$(date +%s%N)",
+        'set +e',
+        'START_NS=$(date +%s%N)',
         `COMPARISON_B64=$(timeout --kill-after=1s ${runSeconds} python3 driver.py ${runSeconds} | head -c ${cap + 1} | base64 -w0; PIPE_CODES=("\${PIPESTATUS[@]}"); exit "\${PIPE_CODES[0]:-1}")`,
-        "RUN_STATUS=$?",
-        "END_NS=$(date +%s%N)",
-        "RUNTIME_MS=$(( (END_NS - START_NS) / 1000000 ))",
+        'RUN_STATUS=$?',
+        'END_NS=$(date +%s%N)',
+        'RUNTIME_MS=$(( (END_NS - START_NS) / 1000000 ))',
         "COMPARISON_BYTES=$(printf '%s' \"$COMPARISON_B64\" | base64 -d | wc -c | tr -d ' ')",
-        "OUTPUT_B64=$COMPARISON_B64",
+        'OUTPUT_B64=$COMPARISON_B64',
         `if [ "$COMPARISON_BYTES" -gt ${cap} ]; then STATUS=output_limit_exceeded; COMPARISON_B64='';`,
-        "elif [ \"$RUN_STATUS\" = 124 ] || [ \"$RUN_STATUS\" = 143 ]; then STATUS=time_limit_exceeded",
-        "elif [ \"$RUN_STATUS\" = 137 ]; then STATUS=memory_limit_exceeded",
-        "elif [ \"$RUN_STATUS\" = 20 ]; then STATUS=compile_error",
-        "elif [ \"$RUN_STATUS\" = 22 ]; then STATUS=internal_error",
-        "elif [ \"$RUN_STATUS\" != 0 ]; then STATUS=runtime_error",
-        "else STATUS=accepted; fi",
-        "emit_result \"$STATUS\" \"$OUTPUT_B64\" \"$COMPARISON_B64\" \"$RUNTIME_MS\"",
+        'elif [ "$RUN_STATUS" = 124 ] || [ "$RUN_STATUS" = 143 ]; then STATUS=time_limit_exceeded',
+        'elif [ "$RUN_STATUS" = 137 ]; then STATUS=memory_limit_exceeded',
+        'elif [ "$RUN_STATUS" = 20 ]; then STATUS=compile_error',
+        'elif [ "$RUN_STATUS" = 22 ]; then STATUS=internal_error',
+        'elif [ "$RUN_STATUS" != 0 ]; then STATUS=runtime_error',
+        'else STATUS=accepted; fi',
+        'emit_result "$STATUS" "$OUTPUT_B64" "$COMPARISON_B64" "$RUNTIME_MS"',
       );
-      return prefix.join("\n");
+      return prefix.join('\n');
     }
 
     prefix.push(
-      "START_NS=$(date +%s%N)",
-      "set +e",
+      'START_NS=$(date +%s%N)',
+      'set +e',
       `timeout ${runSeconds} ${prog} < input.txt 2>/dev/null | head -c ${cap + 1} > output.raw`,
-      "PIPE_CODES=(\"${PIPESTATUS[@]}\")",
-      "RUN_STATUS=${PIPE_CODES[0]:-1}",
-      "END_NS=$(date +%s%N)",
-      "RUNTIME_MS=$(( (END_NS - START_NS) / 1000000 ))",
+      'PIPE_CODES=("${PIPESTATUS[@]}")',
+      'RUN_STATUS=${PIPE_CODES[0]:-1}',
+      'END_NS=$(date +%s%N)',
+      'RUNTIME_MS=$(( (END_NS - START_NS) / 1000000 ))',
       "OUTPUT_BYTES=$(wc -c < output.raw | tr -d ' ')",
       `if [ "$OUTPUT_BYTES" -gt ${cap} ]; then head -c ${cap} output.raw > output.capped; OUTPUT_B64=$(base64 -w0 output.capped); emit_result output_limit_exceeded "$OUTPUT_B64" "$OUTPUT_B64" "$RUNTIME_MS"; exit 0; fi`,
-      "OUTPUT_B64=$(base64 -w0 output.raw)",
-      "if [ \"$RUN_STATUS\" = 124 ] || [ \"$RUN_STATUS\" = 143 ]; then STATUS=time_limit_exceeded",
-      "elif [ \"$RUN_STATUS\" = 137 ]; then STATUS=memory_limit_exceeded",
-      "elif [ \"$RUN_STATUS\" != 0 ]; then STATUS=runtime_error",
-      "else STATUS=accepted; fi",
-      "emit_result \"$STATUS\" \"$OUTPUT_B64\" \"$OUTPUT_B64\" \"$RUNTIME_MS\"",
+      'OUTPUT_B64=$(base64 -w0 output.raw)',
+      'if [ "$RUN_STATUS" = 124 ] || [ "$RUN_STATUS" = 143 ]; then STATUS=time_limit_exceeded',
+      'elif [ "$RUN_STATUS" = 137 ]; then STATUS=memory_limit_exceeded',
+      'elif [ "$RUN_STATUS" != 0 ]; then STATUS=runtime_error',
+      'else STATUS=accepted; fi',
+      'emit_result "$STATUS" "$OUTPUT_B64" "$OUTPUT_B64" "$RUNTIME_MS"',
     );
-    return prefix.join("\n");
+    return prefix.join('\n');
   }
 }

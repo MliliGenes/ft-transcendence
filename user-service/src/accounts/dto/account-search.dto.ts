@@ -10,7 +10,11 @@ import {
   Min,
 } from 'class-validator';
 
-export const ACCOUNT_SORT_FIELDS = ['username', 'displayName', 'createdAt'] as const;
+export const ACCOUNT_SORT_FIELDS = [
+  'username',
+  'displayName',
+  'createdAt',
+] as const;
 export const JOINED_WITHIN_VALUES = ['7d', '30d', '365d'] as const;
 
 export type AccountSortField = (typeof ACCOUNT_SORT_FIELDS)[number];
@@ -24,13 +28,15 @@ const toBoolean = ({ value }: { value: unknown }) =>
 export class AccountSearchDto {
   // Optional: an empty term browses every member with the same filters.
   @IsOptional()
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MaxLength(100, { message: 'Search query must not exceed 100 characters.' })
   username?: string;
 
   @IsOptional()
-  @IsIn(ACCOUNT_SORT_FIELDS, { message: 'Sort must be username, displayName, or createdAt.' })
+  @IsIn(ACCOUNT_SORT_FIELDS, {
+    message: 'Sort must be username, displayName, or createdAt.',
+  })
   sortBy: AccountSortField = 'username';
 
   @IsOptional()
@@ -38,7 +44,9 @@ export class AccountSearchDto {
   sortOrder: 'asc' | 'desc' = 'asc';
 
   @IsOptional()
-  @IsIn(JOINED_WITHIN_VALUES, { message: 'Joined filter must be 7d, 30d, or 365d.' })
+  @IsIn(JOINED_WITHIN_VALUES, {
+    message: 'Joined filter must be 7d, 30d, or 365d.',
+  })
   joinedWithin?: JoinedWithin;
 
   @IsOptional()

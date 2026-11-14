@@ -5,7 +5,7 @@ import type {
   JudgePort,
   VisibleCase,
   VisibleVerdict,
-} from "./judge-port.js";
+} from './judge-port.js';
 
 /**
  * FakeJudge: fixture-only stand-in for the isolated judge.
@@ -22,7 +22,13 @@ import type {
 export class FakeJudge implements JudgePort {
   private failNextMessage: string | null = null;
 
-  constructor(private readonly placeholderMarkers: string[] = ["return 0", "return NULL", "return [];"]) {}
+  constructor(
+    private readonly placeholderMarkers: string[] = [
+      'return 0',
+      'return NULL',
+      'return [];',
+    ],
+  ) {}
 
   failNext(message: string): void {
     this.failNextMessage = message;
@@ -49,7 +55,7 @@ export class FakeJudge implements JudgePort {
     this.takeFailure();
     const placeholder = this.isPlaceholder(code);
     return tests.map((t, i) => {
-      const output = placeholder ? "0" : t.expected;
+      const output = placeholder ? '0' : t.expected;
       return { id: t.id, output, ms: 1 + i, passed: output === t.expected };
     });
   }
@@ -63,7 +69,11 @@ export class FakeJudge implements JudgePort {
     this.takeFailure();
     const solved = !this.isPlaceholder(code);
     return {
-      groups: groups.map((g) => ({ name: g.name, weight: g.weight, earned: solved ? g.weight : 0 })),
+      groups: groups.map((g) => ({
+        name: g.name,
+        weight: g.weight,
+        earned: solved ? g.weight : 0,
+      })),
     };
   }
 }

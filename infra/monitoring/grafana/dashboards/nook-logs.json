@@ -2,9 +2,7 @@
   "uid": "nook-logs",
   "title": "Nook / Logs",
   "description": "Searchable container logs (secrets are redacted by Alloy before storage).",
-  "tags": [
-    "nook"
-  ],
+  "tags": ["nook"],
   "editable": false,
   "schemaVersion": 39,
   "version": 1,

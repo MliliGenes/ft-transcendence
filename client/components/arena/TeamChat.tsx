@@ -1,19 +1,28 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { IconMessageCircle, IconSend } from "@tabler/icons-react";
-import { TeamChatClient, TEAM_PINGS, TEAM_PING_LABELS, type TeamPing } from "@/lib/arena/chat";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from 'react';
+import { IconMessageCircle, IconSend } from '@tabler/icons-react';
+import {
+  TeamChatClient,
+  TEAM_PINGS,
+  TEAM_PING_LABELS,
+  type TeamPing,
+} from '@/lib/arena/chat';
+import { Button } from '@/components/ui/button';
 
 export interface TeamChatProps {
   client: TeamChatClient | null;
 }
 
 export function TeamChat({ client }: TeamChatProps) {
-  const [messagesState, setMessagesState] = useState(() => ({ client, messages: client?.getMessages() ?? [] }));
-  if (messagesState.client !== client) setMessagesState({ client, messages: client?.getMessages() ?? [] });
+  const [messagesState, setMessagesState] = useState(() => ({
+    client,
+    messages: client?.getMessages() ?? [],
+  }));
+  if (messagesState.client !== client)
+    setMessagesState({ client, messages: client?.getMessages() ?? [] });
   const messages = messagesState.messages;
-  const [text, setText] = useState("");
+  const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -29,7 +38,7 @@ export function TeamChat({ client }: TeamChatProps) {
     setSending(true);
     try {
       await client.sendMessage(text);
-      setText("");
+      setText('');
     } catch {
       // Error handled by chat client state
     } finally {
@@ -64,11 +73,18 @@ export function TeamChat({ client }: TeamChatProps) {
           messages.map((m) => (
             <div key={m.id} className="rounded-none bg-secondary/40 p-2">
               <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono tabular-nums">
-                <span className="font-semibold text-foreground">{m.senderUserId}</span>
-                <span>{new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                <span className="font-semibold text-foreground">
+                  {m.senderUserId}
+                </span>
+                <span>
+                  {new Date(m.timestamp).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
               </div>
               <div className="mt-1 text-foreground">
-                {"ping" in m ? (
+                {'ping' in m ? (
                   <span className="inline-block rounded-none bg-primary/20 px-1.5 py-0.5 text-primary font-medium text-xs">
                     {TEAM_PING_LABELS[m.ping as TeamPing] ?? m.ping}
                   </span>
@@ -94,7 +110,10 @@ export function TeamChat({ client }: TeamChatProps) {
         ))}
       </div>
 
-      <form onSubmit={handleSend} className="flex gap-2 border-t border-border p-2">
+      <form
+        onSubmit={handleSend}
+        className="flex gap-2 border-t border-border p-2"
+      >
         <input
           type="text"
           value={text}

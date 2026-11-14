@@ -1,13 +1,13 @@
-import type { AuthenticatedPrincipal } from "./principal.js";
-import type { MatchPersistence } from "./persistence.js";
-import type { CollabRow } from "./collab.js";
-import type { MatchRecord, RoundState, SideId } from "./records.js";
+import type { AuthenticatedPrincipal } from './principal.js';
+import type { MatchPersistence } from './persistence.js';
+import type { CollabRow } from './collab.js';
+import type { MatchRecord, RoundState, SideId } from './records.js';
 
 export class NotMemberError extends Error {
   readonly code = 403;
   constructor(matchId: string) {
     super(`principal is not a participant of match ${matchId}`);
-    this.name = "NotMemberError";
+    this.name = 'NotMemberError';
   }
 }
 
@@ -15,7 +15,7 @@ export class IllegalStateError extends Error {
   readonly code = 409;
   constructor(message: string) {
     super(message);
-    this.name = "IllegalStateError";
+    this.name = 'IllegalStateError';
   }
 }
 
@@ -50,24 +50,41 @@ export class MatchAuthority {
    * module performs the durable write and this module supplies the revision
    * used by events emitted during the command.
    */
-  async withLock<T>(matchId: string, fn: () => Promise<T>, options: MatchLockOptions = {}): Promise<MatchLockResult<T>> {
+  async withLock<T>(
+    matchId: string,
+    fn: () => Promise<T>,
+    options: MatchLockOptions = {},
+  ): Promise<MatchLockResult<T>> {
     const prev = this.matchLocks.get(matchId) ?? Promise.resolve();
     let release!: () => void;
     const mine = new Promise<void>((resolve) => {
       release = resolve;
     });
-    this.matchLocks.set(matchId, prev.then(() => mine));
+    this.matchLocks.set(
+      matchId,
+      prev.then(() => mine),
+    );
     await prev;
-    const beforeRow = await this.persistence.loadMatch(matchId).catch(() => undefined);
+    const beforeRow = await this.persistence
+      .loadMatch(matchId)
+      .catch(() => undefined);
     const beforeText = beforeRow ? JSON.stringify(beforeRow) : null;
     this.lockBaseRevision.set(matchId, beforeRow?.revision);
     this.lockRevision.set(matchId, (beforeRow?.revision ?? 0) + 1);
     this.lockPersisted.delete(matchId);
-    this.lockLastState.set(matchId, beforeRow ? this.stateText(beforeRow) : null);
+    this.lockLastState.set(
+      matchId,
+      beforeRow ? this.stateText(beforeRow) : null,
+    );
     try {
       const result = await fn();
       const fresh = await this.persistence.loadMatch(matchId);
-      if (!options.skipFinalSave && fresh && JSON.stringify(fresh) !== beforeText && !this.lockPersisted.has(matchId)) {
+      if (
+        !options.skipFinalSave &&
+        fresh &&
+        JSON.stringify(fresh) !== beforeText &&
+        !this.lockPersisted.has(matchId)
+      ) {
         fresh.revision = this.lockRevision.get(matchId) ?? fresh.revision + 1;
         await this.saveMatch(fresh);
       }
@@ -78,7 +95,8 @@ export class MatchAuthority {
       this.lockBaseRevision.delete(matchId);
       this.lockPersisted.delete(matchId);
       this.lockLastState.delete(matchId);
-      if (this.matchLocks.get(matchId) === mine) this.matchLocks.delete(matchId);
+      if (this.matchLocks.get(matchId) === mine)
+        this.matchLocks.delete(matchId);
     }
   }
 
@@ -98,7 +116,9 @@ export class MatchAuthority {
     const expectedRevision = this.lockPersisted.has(match.id)
       ? nextRevision
       : this.lockBaseRevision.get(match.id);
-    const committedRevision = this.lockPersisted.has(match.id) ? nextRevision + 1 : nextRevision;
+    const committedRevision = this.lockPersisted.has(match.id)
+      ? nextRevision + 1
+      : nextRevision;
     match.revision = committedRevision;
     await this.persistence.saveMatch(match, expectedRevision);
     this.lockRevision.set(match.id, committedRevision);
@@ -107,7 +127,10 @@ export class MatchAuthority {
   }
 
   /** Persist Match + shared-document rows through the active optimistic lock. */
-  async saveMatchAndTeamDocuments(match: MatchRecord, rows: CollabRow[]): Promise<void> {
+  async saveMatchAndTeamDocuments(
+    match: MatchRecord,
+    rows: CollabRow[],
+  ): Promise<void> {
     const nextRevision = this.lockRevision.get(match.id);
     if (nextRevision === undefined) {
       await this.persistence.commitMatchAndTeamDocuments(match, rows);
@@ -118,16 +141,25 @@ export class MatchAuthority {
     const expectedRevision = this.lockPersisted.has(match.id)
       ? nextRevision
       : this.lockBaseRevision.get(match.id);
-    const committedRevision = this.lockPersisted.has(match.id) ? nextRevision + 1 : nextRevision;
+    const committedRevision = this.lockPersisted.has(match.id)
+      ? nextRevision + 1
+      : nextRevision;
     match.revision = committedRevision;
-    await this.persistence.commitMatchAndTeamDocuments(match, rows, expectedRevision);
+    await this.persistence.commitMatchAndTeamDocuments(
+      match,
+      rows,
+      expectedRevision,
+    );
     this.lockRevision.set(match.id, committedRevision);
     this.lockPersisted.add(match.id);
     this.lockLastState.set(match.id, state);
   }
 
   /** Persist an anonymized match and purge its source rows under the active revision lock. */
-  async eraseMatchSideData(match: MatchRecord, sideIds: string[]): Promise<void> {
+  async eraseMatchSideData(
+    match: MatchRecord,
+    sideIds: string[],
+  ): Promise<void> {
     const nextRevision = this.lockRevision.get(match.id);
     if (nextRevision === undefined) {
       await this.persistence.eraseMatchSideData(match, sideIds);
@@ -138,7 +170,9 @@ export class MatchAuthority {
     const expectedRevision = this.lockPersisted.has(match.id)
       ? nextRevision
       : this.lockBaseRevision.get(match.id);
-    const committedRevision = this.lockPersisted.has(match.id) ? nextRevision + 1 : nextRevision;
+    const committedRevision = this.lockPersisted.has(match.id)
+      ? nextRevision + 1
+      : nextRevision;
     match.revision = committedRevision;
     await this.persistence.eraseMatchSideData(match, sideIds, expectedRevision);
     this.lockRevision.set(match.id, committedRevision);
@@ -152,9 +186,16 @@ export class MatchAuthority {
     return JSON.stringify(snapshot);
   }
 
-  async requireMember(principal: AuthenticatedPrincipal, matchId: string): Promise<MatchRecord> {
+  async requireMember(
+    principal: AuthenticatedPrincipal,
+    matchId: string,
+  ): Promise<MatchRecord> {
     const match = await this.loadOrThrow(matchId);
-    if (!match.participants.some((participant) => participant.userId === principal.userId)) {
+    if (
+      !match.participants.some(
+        (participant) => participant.userId === principal.userId,
+      )
+    ) {
       throw new NotMemberError(matchId);
     }
     return match;
@@ -167,14 +208,17 @@ export class MatchAuthority {
   }
 
   sideOf(match: MatchRecord, principal: AuthenticatedPrincipal): SideId {
-    const participant = match.participants.find((candidate) => candidate.userId === principal.userId);
+    const participant = match.participants.find(
+      (candidate) => candidate.userId === principal.userId,
+    );
     if (!participant) throw new NotMemberError(match.id);
     return participant.sideId;
   }
 
   currentRound(match: MatchRecord): RoundState {
     const round = match.rounds[match.currentRound - 1];
-    if (!round) throw new IllegalStateError(`match ${match.id} has no current round`);
+    if (!round)
+      throw new IllegalStateError(`match ${match.id} has no current round`);
     return round;
   }
 }
