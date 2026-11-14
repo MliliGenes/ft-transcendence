@@ -2,9 +2,8 @@
 
 This combines the bounded Antigravity review with coordinator checks against the
 latest merged main `9f66044`. It is not a full penetration test, deployment audit,
-or certification of school points. Application code is unchanged from `048e7db`,
-which passed all 22 verification stages on a clean tree at
-`2026-11-14T18:11:51.960Z`.
+or certification of school points. Application code baseline is `d5ad6cf`, which passed all 22 verification stages on a clean tree at
+`2026-11-14T21:16:38.967Z` (incorporating the verified TICKET-15 tiebreak/history outcome consistency fix on top of `048e7db`).
 
 ## Do the services fit together?
 
