@@ -443,6 +443,9 @@ export class SocketArenaTransport implements ArenaTransport {
       if (myTeam?.language) this.language = myTeam.language;
       this.lastDocRevision = myTeam?.documentRevision ?? null;
     }
+    if (snap.mode === "1v1" && !Object.hasOwn(snap.problem.starters, this.language)) {
+      this.language = Object.keys(snap.problem.starters)[0] ?? this.language;
+    }
     this.currentSnapshot = adapt(snap, this.language, this.options.userId);
     return true;
   }

@@ -519,3 +519,100 @@ test("an unreachable auth service keeps the Arena transport online, polling and 
     transport.disconnect();
   }
 });
+
+test("1v1 snapshot falls back from unsupported language to available starter and preserves supported C++", async () => {
+  let socket;
+  let currentSnapshot;
+
+  const { SocketArenaTransport } = loadTypeScriptModule(
+    "../lib/arena/socket.ts",
+    {
+      "socket.io-client": {
+        io() {
+          socket = new FakeSocket();
+          return socket;
+        },
+      },
+      "./transport": loadTypeScriptModule("../lib/arena/transport.ts"),
+    },
+    {
+      fetch: async () => ({
+        ok: true,
+        json: async () => currentSnapshot,
+      }),
+    },
+  );
+
+  // 1. Initial snapshot with only Python available:
+  // Transport defaults to C++, but since C++ is not in starters, it must fall back to Python.
+  currentSnapshot = {
+    ...matchSnapshot(1),
+    mode: "1v1",
+    problem: {
+      id: "python-only",
+      title: "Python Only Problem",
+      description: "...",
+      examples: [],
+      starters: { Python: "def solve(): pass" },
+    },
+  };
+
+  const transport = new SocketArenaTransport({
+    baseUrl: "http://game.test",
+    userId: "player-1",
+    matchId: "match-1",
+  });
+
+  try {
+    socket.fire("connect");
+    assert.ok(await waitUntil(() => transport.snapshot().revision === 1));
+    assert.equal(
+      transport.snapshot().language,
+      "Python",
+      "initial Python-only snapshot must select Python instead of default C++",
+    );
+
+    // 2. Subsequent snapshot changes to a problem offering C and C++:
+    transport.setLanguage("C++");
+    currentSnapshot = {
+      ...matchSnapshot(2),
+      mode: "1v1",
+      problem: {
+        id: "multi-lang",
+        title: "Multi Lang Problem",
+        description: "...",
+        examples: [],
+        starters: {
+          C: "int main() { return 0; }",
+          "C++": "int main() { return 0; }",
+        },
+      },
+    };
+    socket.emitFromServer("match:event", { revision: 2, round: 1 });
+    assert.ok(await waitUntil(() => transport.snapshot().revision === 2));
+    assert.equal(transport.snapshot().language, "C++", "valid C++ selection remains when supported");
+
+    // 3. Next round/snapshot offers only Python (no C++):
+    currentSnapshot = {
+      ...matchSnapshot(3),
+      mode: "1v1",
+      round: 2,
+      problem: {
+        id: "snippet-round",
+        title: "Snippet Only",
+        description: "...",
+        examples: [],
+        starters: { Python: "class Solution: pass" },
+      },
+    };
+    socket.emitFromServer("match:event", { revision: 3, round: 2 });
+    assert.ok(await waitUntil(() => transport.snapshot().revision === 3));
+    assert.equal(
+      transport.snapshot().language,
+      "Python",
+      "subsequent snapshot with unsupported current language selects valid starter",
+    );
+  } finally {
+    transport.disconnect();
+  }
+});
