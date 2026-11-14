@@ -6,6 +6,7 @@
 **Reference Delivery Commit:** `ae6a3aa75312597702ccdd3f82313a9fa7c6b1d4`
 **Remote Integration Ref:** `ed4c149f0bb0b3e36ed4f16699551f6c8b3fc465` (PR #4 merge)
 **Main Branch Ref:** `origin/main` (`c52c1d413e404dc154b38daebbc07be54ae55d8f`; prior checked ref `b01eabb6b4a49e2cf90425cba54765f4d19b663c`)
+**Merged Platform Candidate Commit:** `afe99b8068bdf3e87ddc976fa12981ac55916b7a` (Normal merge of `origin/main` `c52c1d4` into local integration `f72a743`)
 
 ---
 
@@ -15,9 +16,10 @@ This tracked delivery readiness document records the consolidated verification e
 
 All code, tests, documentation, and browser evidence have been reviewed, repaired, and validated across both the initial consolidated delivery and the reconciled integration candidate:
 - **Historical Pre-Reconciliation Verification:** Pre-merge verification `npm run check` completed with **21/21 steps `ok: true`** (historical artifact generated `2026-11-14T15:50:04.103Z` at base HEAD `0ef74ba` dirty, prior to consolidation).
-- **Current Reconciled Candidate Verification:** Full root verification `npm run check` completed with **22/22 steps `ok: true`** (`dirty: false`, artifact generated at `.verification/latest-full.json`), covering merged code reconciling `ae6a3aa` with remote integration `ed4c149` (preserving Saad Elm's commits `5635641` and `fdc912e`, 1v1 language fallback, candidate bank/version guards, and all round deadline/auth recovery features).
-- **Client Verification:** All 109 client tests passing (`npm test`), ESLint clean (0 errors), TypeScript compilation clean (`tsc --noEmit`). Includes 9 socket transport regressions (unsupported language fallback, offline on 401, transient error survival), F1 auth-provider session recovery, and client console error handling.
-- **User Service Verification:** 93/93 unit/mock tests passing, 22/22 Discord mock tests passing. Test harness port-churn stabilized.
+- **Post-PR4 Integration Candidate Verification:** Root verification `npm run check` completed with **22/22 steps `ok: true`** (`dirty: false`, artifact generated `2026-11-14T17:03:42.367Z` at `f72a743`), reconciling `ae6a3aa` with remote integration `ed4c149` (preserving Saad Elm's commits `5635641` and `fdc912e`, 1v1 language fallback, candidate bank/version guards, and all round deadline/auth recovery features).
+- **Current Merged Candidate Verification (Latest Main Consolidation):** Full root verification `npm run check` completed with **22/22 steps `ok: true`** (`dirty: false`, artifact generated `2026-11-14T17:21:18.644Z` at commit `afe99b8068bdf3e87ddc976fa12981ac55916b7a`), covering merged code reconciling latest `origin/main` (`c52c1d4`) with integration platform delivery (`f72a743`). Fully preserves Saad Elm's email verification resend endpoint, DTO validation, and UI resend form alongside client graceful error handling, auth session recovery, and client verification view test coverage. Raw logs captured at `.scratch/code-arena/npm-check-2026-11-14-merged.log`.
+- **Client Verification:** All **114/114 client tests passing** (`npm test`), ESLint clean (0 errors, 0 warnings), TypeScript compilation clean (`tsc --noEmit`). Includes new email verification view coverage (`email-verification-view.test.mjs`), 9 socket transport regressions (unsupported language fallback, offline on 401, transient error survival), F1 auth-provider session recovery, and client console error handling.
+- **User Service Verification:** **95/95 unit/mock tests passing**, 22/22 Discord mock tests passing. Test harness port-churn stabilized. Includes `/auth/email-verification/request` route validation and token rotation.
 - **Browser Runtime QA:** Real 10-minute round deadline verified on pre-reconciliation rebuilt client image `sha256:e706b77a3a4231c17cbb4c494e1111ddcd566056198214a4a2ed408ea0696ed1` (four-client 2v2 completed all 3 scored rounds, 100:100 each round, 300:300 final normal completion without forfeit or timeout); no new merged-tree browser claim made.
 - **Deployment Qualification:** Deployment readiness remains qualified on existing pending owner actions: evaluators' multi-computer test (G02), Saad Elm live OAuth/domain deployment confirmation, and admin CI runner unblocking.
 
@@ -27,11 +29,11 @@ All code, tests, documentation, and browser evidence have been reviewed, repaire
 
 | Check / Suite | Command | Result | Scope / Notes |
 |---|---|---|---|
-| **Root Full Gate** | `npm run check` | **22/22 PASS (`ok: true`, `dirty: false`)** | Covers packages, services, client, lint, typecheck, integration. Duration: ~5m51s. |
-| **Client Test Suite** | `npm test` (in `client/`) | **109/109 PASS** | Includes 9 socket transport regressions, F1 auth recovery, and feed carousel. |
+| **Root Full Gate** | `npm run check` | **22/22 PASS (`ok: true`, `dirty: false`)** | Covers packages, services, client, lint, typecheck, integration. Duration: ~5m41s (generated `2026-11-14T17:21:18.644Z` at `afe99b8`). |
+| **Client Test Suite** | `npm test` (in `client/`) | **114/114 PASS** | Includes email verification view (5), 9 socket transport regressions, F1 auth recovery, and feed carousel. |
 | **Client Typecheck** | `npx tsc --noEmit` (in `client/`) | **PASS (exit 0)** | Zero type errors. |
 | **Client Lint** | `npm run lint` (in `client/`) | **PASS (exit 0)** | Zero lint warnings/errors. |
-| **User Service Tests** | `node --test ...` (in `user-service/`) | **93/93 PASS** | Zero failures. Ephemeral listener churn eliminated. |
+| **User Service Tests** | `node --test ...` (in `user-service/`) | **95/95 PASS** | Zero failures. Includes email verification request and DTO tests. Ephemeral listener churn eliminated. |
 | **Discord Mock Tests** | `node --test test/discord-oauth.test.mjs` | **22/22 PASS** | Red/green teardown fixture proves state isolation. |
 | **Arena Game Suite** | `node scripts/checks/arena-tests.mjs` | **PASS** | 5/5 deadline regressions, 13/13 PostgreSQL tests pass. |
 | **Secret Prevention** | `node scripts/checks/secrets.mjs staged` | **PASS** | Zero staged credentials, keys, or forbidden files. |
@@ -110,17 +112,19 @@ Sanitized screenshot evidence is tracked in the repository:
    - **Authentication / Session Contracts:** F1 client auth fix clears sessions only on genuine `401 Unauthorized` HTTP responses (`isAuthenticationRejection`), preserving sessions on transient network errors (status 0) or 5xx gateway errors. This complements Saad's graceful error handling in `5635641`.
    - **OAuth Redirects & Callbacks:** Local redirect URIs remain configured for `https://localhost:18443/api/auth/discord/callback` and `/github/callback`.
    - **Deployment & Config:** No changes to `envs/*.env`, Docker Compose service topologies, or proxy mappings.
-3. **Precise Limitation:**
-   - Verification covers published commits and shared refs up to `origin/integration/nook-arena-platform` (`ed4c149`) and `origin/main` (`c52c1d4`, advancing past `b01eabb`). Any unpushed local changes in teammate working copies cannot be inspected from the repository.
+3. **Precise Limitation & Latest Main Inclusion:**
+   - Latest `origin/main` (`c52c1d4`) has been merged into local integration (`afe99b8`), fully preserving Saad Elm's email verification resend endpoint, DTO validation, and UI resend form alongside all Code Arena delivery features and auth recovery.
+   - Any unpushed local changes in teammate working copies cannot be inspected from the repository.
 
 ---
 
 ## 7. Main Branch Readiness & Next Owner Actions
 
 ### Current Status
-- `origin/main` advanced to `c52c1d413e404dc154b38daebbc07be54ae55d8f` (with previous checked ref `b01eabb`).
-- No delivery code has been pushed or merged into `main`. Direct update of `main` is reserved for explicit user instruction this evening.
-- Clean mergeability between the reconciled integration candidate and `origin/main` is evaluated across both references.
+- `origin/main` (`c52c1d413e404dc154b38daebbc07be54ae55d8f`) is now cleanly merged into local `integration/nook-arena-platform` candidate (`afe99b8068bdf3e87ddc976fa12981ac55916b7a`).
+- All 22/22 full gate verification checks pass on the committed candidate (`dirty: false`, artifact at `.verification/latest-full.json`).
+- All pushes are held locally on `integration/nook-arena-platform` pending coordinator review and explicit authorization. Main itself remains untouched.
+- Promotion to `main` via PR #3 is ready for coordinator authorization.
 
 ### Remaining Owner Actions for this Evening
 

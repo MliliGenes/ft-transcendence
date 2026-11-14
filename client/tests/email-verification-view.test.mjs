@@ -96,7 +96,7 @@ test("resend request flow disables submit, surfaces graceful error, and recovers
   let resolveSend;
   const { ui, calls } = createHarness({
     search: "",
-    requestResult: (email) => new Promise((resolve, reject) => {
+    requestResult: () => new Promise((resolve, reject) => {
       resolveSend = () => {
         if (failResend) reject(new Error("SMTP service unavailable"));
         else resolve({ requested: true });
