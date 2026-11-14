@@ -34,21 +34,30 @@ PR #3 is the current integration-to-main proposal. PR #5's candidate is already
 included in integration; PR #1 targets the older Arena lineage. No PR was closed
 as part of this audit, and no historical branch was bulk merged.
 
+## Resolved findings (verified 2026-11-14)
+
+1. **Source-limit byte admission resolved (TICKET-13):** [engine validation](../../packages/arena-game/src/engine.ts)
+   now checks UTF-8 byte length via `Buffer.byteLength(source, "utf8")` against
+   `maxSourceBytes` (default 100 KiB) across both Run and Submit paths. Multibyte
+   payloads exceeding the byte bound are rejected prior to attempt mutation or judge
+   dispatch. Verified by 3 focused regressions in `source-byte-admission.test.ts`.
+2. **Judge payload transport & cleanup resolved (TICKET-14):** [container judge](../../packages/arena-game/src/container-judge.ts)
+   replaces Docker CLI base64 `-e` arguments with bounded stdin streaming (`SOURCE_BYTES\nINPUT_BYTES\nDRIVER_BYTES\n`
+   headers followed by raw byte streams read by `head -c` into memory-backed `/dev/shm`).
+   An upper transport limit of 8 MiB (`MAX_CASE_PAYLOAD_BYTES`) protects against memory exhaustion
+   while preserving the normal 100 KiB source admission contract. Containers are uniquely named
+   (`arena-judge-<uuid>`) with `--label arena-judge-owned=true`; on orchestrator timeout (`outerTimeoutMs`
+   or killed process), an explicit bounded `docker rm -f <containerName>` cleans the container,
+   settling cleanly as `JudgeInfraError` with zero container leaks. Real Docker runner framing validation
+   (exit code 70 on truncated/corrupted input) and stdio execution with binary NUL/multibyte payloads
+   are verified by 15 tests in `judge-payload.test.ts` and 5 tests in `container-judge-trust.test.ts`.
+
 ## Remaining findings
 
-1. **Confirmed source-limit mismatch:** [engine validation](../../packages/arena-game/src/engine.ts)
-   compares JavaScript string length with a limit named `maxSourceBytes` (default
-   100 KiB). Non-ASCII source can exceed that UTF-8 byte limit. Legacy `6ad5ae9`
-   used byte-length admission. A focused repair and Run/Submit regressions remain.
-2. **Judge payload transport risk:** [container judge](../../packages/arena-game/src/container-judge.ts)
-   passes base64 source/input through Docker `-e` arguments. Legacy `2039079`
-   streamed payloads over stdin. Large arguments can hit host OS limits; a
-   current-stack boundary reproduction and bounded-input/streaming repair remain.
-   No current production failure was reproduced by this audit.
-3. **Socket token expiry:** server-enforced expiry of active sockets remains a
+1. **Socket token expiry:** server-enforced expiry of active sockets remains a
    separately documented design concern. Client renewal does not prove that idle
    server connections expire. This audit did not establish an exploit or repair it.
-4. **Setup and evaluation material:** `scripts/play.sh` still references the absent
+2. **Setup and evaluation material:** `scripts/play.sh` still references the absent
    `arena-frontend` workspace. README/Compose setup and the Nook handbook already
    exist; adapting the old one-command setup/seeding and evaluation guides is an
    optional scoped improvement, not a wholesale documentation port.

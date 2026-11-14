@@ -1782,7 +1782,7 @@ export class ArenaEngine {
 
   private validateSource(code: string): void {
     if (code.length === 0) throw new ValidationError("empty source");
-    if (code.length > this.maxSourceBytes) {
+    if (Buffer.byteLength(code, "utf8") > this.maxSourceBytes) {
       throw new ValidationError(`source exceeds ${this.maxSourceBytes} bytes`);
     }
   }

@@ -36,6 +36,8 @@ All code, tests, documentation, and browser evidence have been reviewed, repaire
 | **User Service Tests** | `node --test ...` (in `user-service/`) | **95/95 PASS** | Zero failures. Includes email verification request and DTO tests. Ephemeral listener churn eliminated. |
 | **Discord Mock Tests** | `node --test test/discord-oauth.test.mjs` | **22/22 PASS** | Red/green teardown fixture proves state isolation. |
 | **Arena Game Suite** | `node scripts/checks/arena-tests.mjs` | **PASS** | 5/5 deadline regressions, 13/13 PostgreSQL tests pass. |
+| **Source Byte Admission** | `npx vitest run packages/arena-game/test/source-byte-admission.test.ts` | **3/3 PASS** | TICKET-13: UTF-8 byte-length admission across Run/Submit. |
+| **Judge Payload Transport** | `npx vitest run packages/arena-game/test/judge-payload.test.ts` | **15/15 PASS** | TICKET-14: Stdin framing, 8 MiB bound, binary NUL, and zero container leaks on timeout. |
 | **Secret Prevention** | `node scripts/checks/secrets.mjs staged` | **PASS** | Zero staged credentials, keys, or forbidden files. |
 
 *Local Verification Scope:* Automated suites run in sanitized mock environments with transient credentials. Browser QA was executed on pre-reconciliation images against the local disposable Compose stack (`nook-live2v2`) at `https://localhost:18443`.
@@ -124,7 +126,7 @@ Sanitized screenshot evidence is tracked in the repository:
 - `origin/main` (`c52c1d413e404dc154b38daebbc07be54ae55d8f`) is now cleanly merged into local `integration/nook-arena-platform` candidate (`afe99b8068bdf3e87ddc976fa12981ac55916b7a`).
 - All 22/22 full gate verification checks pass on the committed candidate (`dirty: false`, artifact at `.verification/latest-full.json`).
 - All pushes are held locally on `integration/nook-arena-platform` pending coordinator review and explicit authorization. Main itself remains untouched.
-- The [branch completeness audit](branch-completeness-2026-11-14.md) records two remaining source/judge findings and the limits of the historical branch comparison. Passing checks do not establish that every historical fix has been ported. Review those findings and the owner actions below before deciding on promotion to `main` via PR #3.
+- The [branch completeness audit](branch-completeness-2026-11-14.md) records that the two source and judge findings have been fixed and verified: TICKET-13 enforces UTF-8 byte-length admission in `engine.ts` (100 KiB contract verified by `source-byte-admission.test.ts`), and TICKET-14 replaces Docker argv base64 arguments with bounded stdin transport (8 MiB upper limit) and explicit bounded container cleanup on orchestrator timeout in `container-judge.ts` (verified by `judge-payload.test.ts` with zero container leaks). Historical branch comparison limits, socket token expiry, and optional setup/eval documentation remain recorded. Review these verified findings and the owner actions below before deciding on promotion to `main` via PR #3.
 
 ### Remaining Owner Actions for this Evening
 
