@@ -750,6 +750,53 @@ export class AuthService {
     });
   }
 
+  async requestEmailVerification(email: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, emailVerifiedAt: true },
+    });
+    if (!user || user.emailVerifiedAt) return;
+
+    const now = new Date();
+    const verification = await this.prisma.$transaction(async (tx) => {
+      await this.lockUserSessions(tx, user.id);
+      const current = await tx.user.findUnique({
+        where: { id: user.id },
+        select: { email: true, emailVerifiedAt: true },
+      });
+      if (!current || current.emailVerifiedAt) return null;
+
+      const recent = await tx.authToken.findFirst({
+        where: {
+          userId: user.id,
+          purpose: AuthTokenPurpose.EMAIL_VERIFICATION,
+          createdAt: { gt: new Date(now.getTime() - 10 * 60 * 1000) },
+        },
+        select: { id: true },
+      });
+      if (recent) return null;
+
+      await tx.authToken.deleteMany({
+        where: {
+          userId: user.id,
+          purpose: AuthTokenPurpose.EMAIL_VERIFICATION,
+          usedAt: null,
+        },
+      });
+      return {
+        email: current.email,
+        token: await this.createAuthToken(user.id, AuthTokenPurpose.EMAIL_VERIFICATION, tx),
+      };
+    });
+    if (!verification) return;
+
+    try {
+      await this.mail.sendVerificationEmail(verification.email, verification.token);
+    } catch {
+      // Keep the generic response and cooldown state even when delivery fails.
+    }
+  }
+
   async requestPasswordReset(email: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { email },
