@@ -135,3 +135,34 @@ Beta view now says Opponent wins the match at125–125, matching serverwinnerlef
 The corrected image and the earlier wrong draw image are saved at original
 3456×2166 resolution. The user-selected Feed upload and persisted carousel were
 also visually verified in this session; both scoped live follow-ups are complete.
+
+## Follow-up: forbidden match synchronization
+
+On 2026-11-14, browser QA found repeated snapshot HTTP 403 responses when opening
+a match the viewer could not access. The transport treated access denial as a
+temporary failure and displayed “Retrying automatically.”
+
+A forbidden snapshot now disconnects that match transport, cancels background
+refreshes, and displays “Access denied. You cannot access this match.” Queued
+snapshot reads, late socket events, and token renewal cannot restart its requests.
+This state belongs to the current match transport; it does not expire the user's
+Nook session. Server authorization and HTTP response statuses remain intact.
+Transient network/503 failures still retry and recover; 401 retains its sign-in
+notice.
+
+The regression failed before the repair and passed afterward. The complete client
+suite passed (117 tests), as did client lint, TypeScript checking and whitespace
+checks. The production build also passed. Only the local QA client was rebuilt
+and recreated, running image
+`sha256:c59687cc4c80ea8beb55765f08fe770af17055a89c79a6644f18777f9503f2e2`;
+all backend container identities remained unchanged.
+
+In the existing synthetic QA browser profile, the forbidden-match page displayed
+the access-denied alert. Its current document recorded one snapshot request over
+75 seconds, with no repeated polling. The browser's cumulative network log held
+two 403 responses across navigations, with no increase between captures; these
+are not two requests by the final document. The saved console capture was empty.
+Navigating afterward to the viewer's completed 2v2 match loaded its 300–300 final
+result, confirming that the denial did not end the Nook session. This verifies the
+current client against the existing QA backends, not a public deployment or a
+full browser replay of gameplay.

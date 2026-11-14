@@ -343,6 +343,122 @@ test("the public match snapshot preserves the authoritative winner when totals a
   }
 });
 
+test("a forbidden match stops polling, queued refreshes, and reconnects without expiring the session", async () => {
+  let socket;
+  let resolveSnapshot;
+  const requests = [];
+  const intervals = new Set();
+  const timeouts = new Set();
+  const socketModule = loadTypeScriptModule(
+    "../lib/arena/socket.ts",
+    {
+      "socket.io-client": {
+        io() {
+          socket = new FakeSocket();
+          socket.connect = () => assert.fail("a token update must not reconnect a forbidden match");
+          return socket;
+        },
+      },
+      "./transport": loadTypeScriptModule("../lib/arena/transport.ts"),
+    },
+    {
+      setInterval: (callback) => { intervals.add(callback); return callback; },
+      clearInterval: (callback) => intervals.delete(callback),
+      setTimeout: (callback) => { timeouts.add(callback); return callback; },
+      clearTimeout: (callback) => timeouts.delete(callback),
+      fetch: (url) => {
+        requests.push(url);
+        return new Promise((resolve) => { resolveSnapshot = resolve; });
+      },
+    },
+  );
+  const transport = new socketModule.SocketArenaTransport({
+    baseUrl: "http://game.test", userId: "player-1", matchId: "match-1", token: "valid-token",
+  });
+
+  try {
+    const poll = [...intervals][0];
+    socket.fire("connect");
+    assert.ok(await waitUntil(() => requests.length === 1));
+    // A reconnect queues another immediate read; an event also asks for a trailing refresh.
+    socket.fire("connect");
+    socket.emitFromServer("phase.changed", { revision: 2, round: 1 });
+    resolveSnapshot({ ok: false, status: 403 });
+    assert.ok(await waitUntil(() => transport.connection() === "offline"), "403 must take the match offline");
+    await wait(0);
+
+    assert.equal(transport.snapshot().notice, "Access denied. You cannot access this match.");
+    assert.equal(socket.connected, false);
+    assert.equal(intervals.size, 0, "polling is stopped");
+    assert.equal(timeouts.size, 0, "trailing refresh is cancelled");
+    assert.equal(requests.length, 1, "queued reads must not reach the server after denial");
+
+    transport.setAccessToken("renewed-valid-token");
+    socket.fire("connect");
+    socket.fire("disconnect");
+    socket.fire("connect_error");
+    socket.emitFromServer("phase.changed", { revision: 3, round: 1 });
+    poll(); // Even a previously queued timer callback must be harmless.
+    await transport.setLanguage("Python");
+    await wait(0);
+
+    assert.equal(requests.length, 1);
+    assert.equal(intervals.size, 0, "token renewal must not restart polling");
+    assert.equal(timeouts.size, 0);
+    assert.equal(transport.connection(), "offline");
+    assert.equal(transport.snapshot().notice, "Access denied. You cannot access this match.");
+    await assert.rejects(transport.run({ code: "", language: "Python" }), /unavailable while offline/);
+  } finally {
+    transport.disconnect();
+  }
+});
+
+for (const failure of ["network", "503"]) {
+  test(`snapshot ${failure} failure remains retryable and recovers on the next poll`, async () => {
+    let socket;
+    let poll;
+    let now = 0;
+    let requests = 0;
+    const socketModule = loadTypeScriptModule(
+      "../lib/arena/socket.ts",
+      {
+        "socket.io-client": { io() { socket = new FakeSocket(); return socket; } },
+        "./transport": loadTypeScriptModule("../lib/arena/transport.ts"),
+      },
+      {
+        Date: { now: () => now },
+        setInterval: (callback) => { poll = callback; return callback; },
+        clearInterval: () => { poll = undefined; },
+        fetch: async () => {
+          requests += 1;
+          if (requests === 1) {
+            if (failure === "network") throw new TypeError("Failed to fetch");
+            return { ok: false, status: 503 };
+          }
+          return { ok: true, json: async () => matchSnapshot(1) };
+        },
+      },
+    );
+    const transport = new socketModule.SocketArenaTransport({
+      baseUrl: "http://game.test", userId: "player-1", matchId: "match-1", token: "valid-token",
+    });
+    try {
+      socket.fire("connect");
+      assert.ok(await waitUntil(() => transport.snapshot().notice?.includes("Retrying automatically")));
+      assert.equal(transport.connection(), "connected");
+      assert.equal(socket.connected, true);
+      assert.equal(typeof poll, "function", "transient failure must preserve polling");
+      now = 2000;
+      poll();
+      assert.ok(await waitUntil(() => transport.snapshot().revision === 1));
+      assert.equal(transport.snapshot().notice, null);
+      assert.equal(requests, 2);
+    } finally {
+      transport.disconnect();
+    }
+  });
+}
+
 test("SocketArenaTransport transitions to offline and stops polling on unrecoverable auth failure", async () => {
   let socket;
   const requests = [];

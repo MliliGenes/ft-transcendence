@@ -1,5 +1,5 @@
 import { io, type Socket } from "socket.io-client";
-import { AuthRequestError, type AuthenticatedRequest } from "../auth/client";
+import type { AuthenticatedRequest } from "../auth/client";
 import { TransportSession, type ArenaTransport, type ConnectionState, type RunReceipt, type SubmitReceipt } from "./transport";
 import type { ArenaConnectionOptions, ArenaSnapshot, MatchFinalView, PlayerStatus, RevealView, SideView, TeamView } from "./types";
 
@@ -283,6 +283,8 @@ export class SocketArenaTransport implements ArenaTransport {
   /** A rate limit is reported once per episode, not once per request. */
   private rateLimitReported = false;
   private accessToken: string | undefined;
+  /** A forbidden match stays closed for this transport, including after token renewal. */
+  private matchAccessDenied = false;
   private readonly session = new TransportSession("connecting");
 
   constructor(private readonly options: SocketTransportOptions) {
@@ -358,6 +360,7 @@ export class SocketArenaTransport implements ArenaTransport {
   setAccessToken(token: string | undefined): void {
     if (this.accessToken === token) return;
     this.accessToken = token;
+    if (this.matchAccessDenied) return;
     if (this.socket) {
       this.socket.auth = this.socketAuth();
       if (token && !this.socket.connected) {
@@ -396,16 +399,22 @@ export class SocketArenaTransport implements ArenaTransport {
     this.socket = sock;
 
     sock.on("connect", () => {
+      if (this.matchAccessDenied) {
+        sock.disconnect();
+        return;
+      }
       if (this.session.setConnection("connected")) this.emit();
-      void this.refreshNow().catch((error) => this.reportRefreshError(error));
+      void this.refreshNow().catch(() => {}); // Snapshot failures are reported before draining the queue.
     });
 
     sock.on("disconnect", () => {
+      if (this.matchAccessDenied) return;
       this.session.setConnection("reconnecting");
       this.emit();
     });
 
     sock.on("connect_error", () => {
+      if (this.matchAccessDenied) return;
       this.session.setConnection("offline");
       this.emit();
     });
@@ -470,7 +479,7 @@ export class SocketArenaTransport implements ArenaTransport {
       return;
     }
     this.language = language;
-    void this.refreshNow().catch((error) => this.reportRefreshError(error));
+    void this.refreshNow().catch(() => {});
   }
 
   async run(input: { code: string; language: string }): Promise<RunReceipt> {
@@ -542,6 +551,7 @@ export class SocketArenaTransport implements ArenaTransport {
    * per keystroke and the gateway answers 429.
    */
   private scheduleRefresh(trigger?: SnapshotTrigger): void {
+    if (this.matchAccessDenied) return;
     if (
       trigger &&
       !shouldApplyUpdate(
@@ -557,6 +567,7 @@ export class SocketArenaTransport implements ArenaTransport {
 
   /** Run the pending refresh as soon as the spacing window allows it. */
   private pumpSnapshotRefresh(): void {
+    if (this.matchAccessDenied) return;
     if (this.snapshotRequests > 0) return;
     if (!this.snapshotRefreshPending) return;
     const wait = this.nextSnapshotAllowedAt - Date.now();
@@ -570,20 +581,22 @@ export class SocketArenaTransport implements ArenaTransport {
       return;
     }
     this.snapshotRefreshPending = false;
-    void this.enqueueSnapshotRequest().catch((error) => this.reportRefreshError(error));
+    void this.enqueueSnapshotRequest().catch(() => {});
   }
 
   /** Read server truth. Requests are serialized, so two never overlap. */
   private enqueueSnapshotRequest(): Promise<void> {
     this.snapshotRequests += 1;
-    const start = () => {
+    const run = this.snapshotLane.then(async () => {
+      if (this.matchAccessDenied) return;
       this.nextSnapshotAllowedAt = Date.now() + SNAPSHOT_REFRESH_MIN_INTERVAL_MS;
-      return this.get("/snapshot");
-    };
-    const run = this.snapshotLane.then(start).then((raw) => {
-      const snap = raw as ServerSnapshot;
+      const snap = await this.get("/snapshot") as ServerSnapshot;
       if (this.applySnapshot(snap)) this.emit();
       this.rateLimitReported = false;
+    }).catch((error) => {
+      // Set terminal access state before finally can start a queued/trailing read.
+      this.reportRefreshError(error);
+      throw error;
     });
     const tracked = run.finally(() => {
       this.snapshotRequests -= 1;
@@ -604,11 +617,16 @@ export class SocketArenaTransport implements ArenaTransport {
 
   /** Surface a failed background refresh instead of hiding it or rejecting late. */
   private reportRefreshError(error: unknown): void {
-    const isUnrecoverableAuth =
-      (error instanceof ArenaHttpError && error.status === 401) ||
-      (error instanceof AuthRequestError && error.status === 401) ||
-      (typeof error === "object" && error !== null && "status" in error && (error as { status: unknown }).status === 401);
-    if (isUnrecoverableAuth) {
+    if (this.matchAccessDenied) return;
+    const status = typeof error === "object" && error !== null && "status" in error ? error.status : undefined;
+    if (status === 403) {
+      this.matchAccessDenied = true;
+      this.disconnect();
+      this.currentSnapshot = { ...this.currentSnapshot, notice: "Access denied. You cannot access this match." };
+      this.emit();
+      return;
+    }
+    if (status === 401) {
       if (this.syncTimer) {
         clearInterval(this.syncTimer);
         this.syncTimer = null;
