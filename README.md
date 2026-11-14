@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by sel-mlil, ayousr, amsbai, elakhfif.*
+_This project has been created as part of the 42 curriculum by sel-mlil, ayousr, amsbai, elakhfif._
 
 # Nook
 
@@ -10,12 +10,12 @@ For coding competitions, **Code Arena** supports 1v1 challenges and 2v2 team mat
 
 ## Team and contributions
 
-| 42 login | Role(s) | Contributions |
-|---|---|---|
+| 42 login   | Role(s)                                  | Contributions                                                                                                                                                                                                                                                                                                                                  |
+| ---------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `sel-mlil` | Product Owner, Technical Lead, Developer | Proposed the project and selected its technology stack, drawing on prior web and full-stack experience. Built user management and its Next.js client integration; implemented Chat endpoints and client integration, including service integration informed by the RabbitMQ setup. Co-developed infrastructure specifications with `elakhfif`. |
-| `ayousr` | Project Manager, Developer | Coordinated work through Trello and Discord and helped mediate team tensions. Built the game service and judge server, contributed to 1v1 design decisions, and continued with 2v2 gameplay and client integration. |
-| `amsbai` | Developer | Helped plan the Chat service and contributed to 1v1 design decisions. The project was also a hands-on learning experience. |
-| `elakhfif` | Infrastructure / DevOps contributor | Shared infrastructure guidance from prior experience and helped shape the Nginx routing and Grafana monitoring specifications. |
+| `ayousr`   | Project Manager, Developer               | Coordinated work through Trello and Discord and helped mediate team tensions. Built the game service and judge server, contributed to 1v1 design decisions, and continued with 2v2 gameplay and client integration.                                                                                                                            |
+| `amsbai`   | Developer                                | Helped plan the Chat service and contributed to 1v1 design decisions. The project was also a hands-on learning experience.                                                                                                                                                                                                                     |
+| `elakhfif` | Infrastructure / DevOps contributor      | Shared infrastructure guidance from prior experience and helped shape the Nginx routing and Grafana monitoring specifications.                                                                                                                                                                                                                 |
 
 ### Team reflection
 
@@ -64,24 +64,24 @@ flowchart LR
   Monitor -. observes services .-> Game
 ```
 
-Nginx is the browser-facing HTTPS entry point. Service and database ports are private to the Compose network, apart from the explicitly loopback-bound development tools below. User owns account identity and authentication; Chat owns messages and groups; Code Arena owns matches, rounds, submissions and collaboration snapshots. The services use separate PostgreSQL databases. RabbitMQ carries User account events to Chat and account-deletion events to Game. Game also publishes match and challenge lifecycle events to Chat, which stores them as notices in the conversation that carries an invitation. Delivery is best effort because Game does not keep an outbox for replay after a broker failure. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. The engine caps source at 100 KiB in UTF-8 bytes; public Run/Submit routes also cap request code at 65,536 JavaScript string characters. Judge payload transport streams test cases over bounded stdin (up to 8 MiB) with explicit owned container cleanup on orchestrator timeout. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records.
+Nginx is the browser-facing HTTPS entry point. Service and database ports are private to the Compose network, apart from the explicitly loopback-bound development tools below. User owns account identity and authentication; Chat owns messages and groups; Code Arena owns matches, rounds, submissions and collaboration snapshots. The services use separate PostgreSQL databases. RabbitMQ carries User account events to Chat and account-deletion events to Game. Game also publishes match and challenge lifecycle events to Chat, which stores them as notices in the conversation that carries an invitation. Delivery is best effort because Game does not keep an outbox for replay after a broker failure. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records.
 
 The judge worker currently mounts the host Docker socket because it creates the isolated execution containers. Treat that worker as a privileged host component: keep the worker endpoint and shared token private, and review the Docker-host trust boundary before using this setup for an untrusted public multi-tenant service.
 
 ## Stack and why
 
-| Area | Technology | Use in Nook |
-|---|---|---|
-| Web client | Next.js App Router, React, TypeScript, Tailwind CSS | Shared application, public pages, server-rendered routes, accessible responsive components |
-| Backend services | NestJS, Node.js, TypeScript | Separate account, chat and game boundaries with validated APIs and WebSocket gateways |
-| Account and Chat persistence | PostgreSQL and Prisma | Relational identity/social data and conversation/group data with migrations |
-| Game persistence | PostgreSQL with parameterized SQL | Atomic match snapshots, round/submission records and collaborative state |
-| Realtime | Socket.IO, Yjs | Presence, chat, matchmaking and collaborative 2v2 editing |
-| Service events | RabbitMQ | Profile synchronization to Chat, account deletion to Chat and Game, and Code Arena lifecycle notices to Chat |
-| Attachments | MinIO | Private object storage with presigned browser uploads/downloads |
-| Code execution | Judge worker and Docker | Isolated execution of Code Arena submissions |
-| Local orchestration | Docker Compose | Repeatable multi-service development and demonstration |
-| Gateway and monitoring | Nginx, Grafana, Prometheus, Loki, Alloy | TLS termination, path routing, health/metrics dashboards and operational logs |
+| Area                         | Technology                                          | Use in Nook                                                                                                  |
+| ---------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Web client                   | Next.js App Router, React, TypeScript, Tailwind CSS | Shared application, public pages, server-rendered routes, accessible responsive components                   |
+| Backend services             | NestJS, Node.js, TypeScript                         | Separate account, chat and game boundaries with validated APIs and WebSocket gateways                        |
+| Account and Chat persistence | PostgreSQL and Prisma                               | Relational identity/social data and conversation/group data with migrations                                  |
+| Game persistence             | PostgreSQL with parameterized SQL                   | Atomic match snapshots, round/submission records and collaborative state                                     |
+| Realtime                     | Socket.IO, Yjs                                      | Presence, chat, matchmaking and collaborative 2v2 editing                                                    |
+| Service events               | RabbitMQ                                            | Profile synchronization to Chat, account deletion to Chat and Game, and Code Arena lifecycle notices to Chat |
+| Attachments                  | MinIO                                               | Private object storage with presigned browser uploads/downloads                                              |
+| Code execution               | Judge worker and Docker                             | Isolated execution of Code Arena submissions                                                                 |
+| Local orchestration          | Docker Compose                                      | Repeatable multi-service development and demonstration                                                       |
+| Gateway and monitoring       | Nginx, Grafana, Prometheus, Loki, Alloy             | TLS termination, path routing, health/metrics dashboards and operational logs                                |
 
 ## Instructions: start the local stack
 
@@ -102,42 +102,32 @@ docker compose config --quiet
 docker compose up --build
 ```
 
-Alternatively, use the repository `Makefile`:
-
-```sh
-make config   # Validate Compose configuration
-make up       # Build and start the project in background
-make ps       # View service container status
-make check    # Run the full 22/22 verification gate
-make down     # Stop containers (preserves bind-mounted data)
-```
-
 Open **https://localhost** and accept or trust the development certificate generated by Nginx. The default development certificate is self-signed and is not suitable for a public deployment. Compose persists application data in local bind-mounted directories and named monitoring volumes; `docker compose down` stops the stack but keeps that data.
 
-| Local address | Service |
-|---|---|
-| `https://localhost` | Nook web application and API gateway |
-| `https://localhost/grafana/` | Login-protected Grafana dashboards |
-| `https://localhost:9443` | Loopback-bound MinIO S3 proxy for browser attachments |
-| `http://localhost:9001` | Loopback-bound MinIO console |
-| `http://localhost:15672` | Loopback-bound RabbitMQ management console |
+| Local address                | Service                                               |
+| ---------------------------- | ----------------------------------------------------- |
+| `https://localhost`          | Nook web application and API gateway                  |
+| `https://localhost/grafana/` | Login-protected Grafana dashboards                    |
+| `https://localhost:9443`     | Loopback-bound MinIO S3 proxy for browser attachments |
+| `http://localhost:9001`      | Loopback-bound MinIO console                          |
+| `http://localhost:15672`     | Loopback-bound RabbitMQ management console            |
 
 Prometheus, Loki, Alloy, databases, backend services and the judge worker are not published as public ports. Default admin credentials are set by the local environment files; the repository does not ship usable credentials.
 
 ## Data model overview
 
-| Store | Owned information | Access path |
-|---|---|---|
-| User PostgreSQL | Accounts, profile fields and images, auth providers, hashed credentials, sessions/tokens, friendships, blocks and recovery/2FA records | User service, Prisma migrations |
-| Chat PostgreSQL | Cached user profiles, groups/memberships, DMs and channels, messages, reactions and read state | Chat service, Prisma migrations |
-| Game PostgreSQL | Private rooms, match snapshots, rounds, submissions, results and collaborative editor snapshots | Code Arena service, SQL schema initialization |
-| MinIO | Chat attachment objects | Chat service presigned upload/download flows |
+| Store           | Owned information                                                                                                                      | Access path                                   |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| User PostgreSQL | Accounts, profile fields and images, auth providers, hashed credentials, sessions/tokens, friendships, blocks and recovery/2FA records | User service, Prisma migrations               |
+| Chat PostgreSQL | Cached user profiles, groups/memberships, DMs and channels, messages, reactions and read state                                         | Chat service, Prisma migrations               |
+| Game PostgreSQL | Private rooms, match snapshots, rounds, submissions, results and collaborative editor snapshots                                        | Code Arena service, SQL schema initialization |
+| MinIO           | Chat attachment objects                                                                                                                | Chat service presigned upload/download flows  |
 
-The databases have separate owners and no cross-database foreign keys. The Chat service receives profile changes through RabbitMQ and stores the existing User UUID. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. The engine caps source at 100 KiB in UTF-8 bytes; public Run/Submit routes also cap request code at 65,536 JavaScript string characters. Judge payload transport streams test cases over bounded stdin (up to 8 MiB) with explicit owned container cleanup on orchestrator timeout. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records. See the [User service guide](docs/services/user-service.md), [Chat schema notes](docs/services/chat-service.md), and [game persistence implementation](packages/arena-game/src/postgres-store.ts).
+The databases have separate owners and no cross-database foreign keys. The Chat service receives profile changes through RabbitMQ and stores the existing User UUID. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records. See the [User service guide](docs/services/user-service.md), [Chat schema notes](docs/services/chat-service.md), and [game persistence implementation](packages/arena-game/src/postgres-store.ts).
 
 ## Verification
 
-Run `npm run check` (or `make check`) for the complete 22/22 project gate. Setup, disposable integration tests, local secret hooks and CI scope are documented in [Repeatable verification](docs/project/VERIFICATION.md).
+Run `npm run check` for the complete project gate. Setup, disposable integration tests, local secret hooks and CI scope are documented in [Repeatable verification](docs/project/VERIFICATION.md).
 
 ## Code Arena integration
 
@@ -156,25 +146,39 @@ Invitation cards poll room status every ten seconds, show Open, In Match or Expi
 
 The team tracks ft_transcendence module coverage against the [42 subject](ft_trans_subject.pdf) and the [local module tracker](docs/requirements/index.html). `sel-mlil` built [FT Trans Score](https://ft-trans-score.vercel.app/) to keep the module counter, evidence, and acceptance status organized during the project.
 
-The current coverage snapshot records **19 modules with verified evidence** (29 raw points maximum) and **4 modules with implementation present but an acceptance demonstration still open** (6 raw points maximum), for **23 modules and 35 raw points under consideration**. These are sums of module values, not the evaluator score. The local catalog lists 55 modules and 79 raw possible points. Its scoring display has a **14-point required threshold plus up to 5 bonus points**; the module score can therefore exceed 14, up to 19 points. Twelve mandatory foundation checks are separate from module points. No tracker total is an evaluator award; final acceptance rests with the evaluators. See the [submission gate and foundation requirements](docs/project/POINTS_ROADMAP.md#submission-gate--foundation-requirements).
+The team currently claims the **22 modules** in the table below, worth **31 raw points** under the local tracker. `U04` (advanced permissions) is excluded from this claim. The tracker catalog lists 55 modules and 79 raw possible points. Its scoring display has a **14-point required threshold plus up to 5 bonus points**; the bonus is capped even when raw module points exceed 19. Twelve mandatory foundation checks are separate from module points. This is a team coverage calculation, not an evaluator award; evaluators decide whether each requirement is met. See the [submission gate and foundation requirements](docs/project/POINTS_ROADMAP.md#submission-gate--foundation-requirements).
 
 ## Module evidence and point calculation
 
-The [ft_transcendence v21.2 subject](ft_trans_subject.pdf) is the requirements source; [the module tracker](docs/requirements/index.html) assigns local IDs such as G01 and U02 for planning. Evaluator decisions are not recorded here. The table below is an evidence map, not a claim that the team has been awarded points. `Maximum` is the module value in the local tracker; assessors decide whether every requirement is met.
+The [ft_transcendence v21.2 subject](ft_trans_subject.pdf) is the requirements source; the [local tracker](docs/requirements/index.html) supplies the IDs and point values. This table records the team’s implementation claims and where to inspect or demonstrate them. The subject and evaluator determine final acceptance.
 
-| Module | Maximum | Current evidence and remaining condition |
-|---|---:|---|
-| G01 · Complete web-based game | 2 | Earlier 1v1 evidence records a forfeit result and a scored round. Later [delivery evidence](docs/evidence/arena-delivery-2026-11-14.md) records a normal three-round scored 2v2 completion and a real ten-minute 1v1 round cutoff with a non-submitting opponent. The [integration specification](docs/spec/code-arena-integration-spec.md) describes the rules and outcomes. Be ready to explain them during evaluation; automated checks and local evidence do not guarantee evaluator acceptance. |
-| G02 · Remote players | 2 | Server-authoritative deadlines, revisioned snapshots, reconnect grace, and visible connection state are covered by engine and real-socket/PostgreSQL restart tests. Demonstrate two clients on separate computers with latency/disconnection recovery. |
-| G03 · More than two players | 2 | The later local four-client 2v2 run completed all three scored rounds normally (100:100 per round, 300:300 final, with a server-authoritative tie-break winner). Earlier evidence also shows shared teammate edits and isolation between teams. See the [delivery evidence and its image/version limits](docs/evidence/arena-delivery-2026-11-14.md). Separate computers remain part of the G02 demonstration; local multi-tab QA does not satisfy that requirement. |
-| U01 · User management | 2 | Account, profile, friend and presence flows exist. Verify the full rubric and demonstrate the flows. |
-| U02 · Game statistics/history | 1 | Match history, win/loss summaries, leaderboard, player progression (XP, levels, rank titles) and 6 unlockable achievements are implemented and displayed on profile and leaderboard. Demonstrate the flows. |
-| W09 · Real-time collaboration | 1 | Code Arena 2v2 implements synchronized multi-user code editing with CodeMirror and Yjs over authenticated Socket.IO (`/collab` namespace), with conflict resolution and document revision tracking. The saved four-client run showed a teammate's edits arrive live while the other team's document stayed separate; details are in the [gameplay review](docs/spec/code-arena-gameplay-review.md). |
-| G06 · Advanced chat | 1 | Persistent history, bidirectional block enforcement, game invitations, profile access, typing indicators and durable read receipts are implemented, with prior automated and live dual-user verification recorded. Game notifications in chat are a separate server-backed path: the Game service publishes authoritative match events and Chat writes match-start, match-result (including forfeit) and cancellation notices into the linked conversation. Automated evidence and the live two-client demonstration (2026-11-11) are recorded in the [G06 evidence](docs/evidence/g06-live-demo/README.md). Full-module acceptance still depends on the complete subject rubric. |
-| D03 · Backend microservices | 2 | User, Chat, Game and judge responsibilities have separate service boundaries and APIs/events. Demonstrate the service interactions. |
-| D04 · Health/status/backups/recovery | 1 | Compose health checks cover all service containers; public `/status` page and `/api/status` endpoint; multi-database (User, Chat, Game) and MinIO snapshot/restore scripts with checksums and retention. Install one operator-managed schedule and demonstrate clean-service recovery; prior live restore smoke checks do not establish that. See [backup guidance](docs/infra/BACKUP_RECOVERY.md). |
+| ID | Module | Points | Implementation and evidence |
+| --- | --- | ---: | --- |
+| W02 | Frontend framework | 1 | React and Next.js App Router power the client application. |
+| W03 | Backend framework | 1 | NestJS structures the User, Chat, Game, and Judge services. |
+| W04 | Real-time features | 2 | Socket.IO carries live chat, presence, and game updates; demonstrate updates and reconnect behavior with multiple clients. |
+| W05 | User interaction | 2 | Direct messages, public profiles, friend requests, and friend lists connect the social flows. |
+| W07 | Database ORM | 1 | Prisma provides database access for User and Chat; Game uses its Postgres persistence layer. |
+| W09 | Real-time collaboration | 1 | In Code Arena 2v2, teammates edit the same code document concurrently through CodeMirror and Yjs over authenticated Socket.IO. See the [gameplay review](docs/spec/code-arena-gameplay-review.md). |
+| W10 | Server-side rendering | 1 | Next.js App Router server components render server-side pages and metadata. |
+| W12 | Custom design system | 1 | Shared design tokens, palette, typography, Tabler icons, and more than ten reusable UI components form the Nook design system. |
+| W13 | Advanced search | 1 | Account search supports filters, sorting, and pagination in the client and User API. |
+| W14 | File upload and management | 1 | Chat uploads validate type and size, use private MinIO with short-lived signed access, show supported previews and progress, and hide deleted-message attachments from future access. Existing signed URLs expire after five minutes; orphaned MinIO objects are retained. See the [Chat and storage integration](docs/integrations/chat-storage.md). |
+| U01 | User management and authentication | 2 | Account registration/login, editable profiles and images, friend management, and online presence are implemented. |
+| U02 | Game statistics and match history | 1 | Game Postgres stores completed match records; the service derives dated history, opponents, results, statistics, and leaderboard data from them. |
+| U03 | OAuth 2.0 authentication | 1 | Discord and GitHub OAuth flows are implemented. |
+| U05 | Organization system | 2 | Users can create and manage groups, members, roles, and channels. |
+| G01 | Complete web-based game | 2 | Code Arena provides playable timed coding matches with explicit rules, scoring, and win/loss outcomes. The team can demonstrate a complete match. See the [integration specification](docs/spec/code-arena-integration-spec.md). |
+| G02 | Remote players | 2 | Separate clients can play the same live match; the server handles authoritative timing, disconnections, and reconnection. The team can demonstrate play from separate computers. |
+| G06 | Advanced chat | 1 | Chat adds blocking, typing indicators, read receipts, persistent history, profile access, game invitations, and persisted game lifecycle notices. See the [G06 evidence](docs/evidence/g06-live-demo/README.md). |
+| G09 | Gamification | 1 | Match records drive XP, levels, rank titles, six achievements, and leaderboard progression; these values are shown in the Game profile UI. |
+| D02 | Prometheus and Grafana monitoring | 2 | Prometheus metrics, exporters/integrations, provisioned Grafana dashboards, alert rules, and protected Grafana access are configured in Compose. |
+| D03 | Backend microservices | 2 | User, Chat, Game, and Judge responsibilities run as separate services with REST and RabbitMQ interfaces. |
+| D04 | Health, status, backups, and recovery | 1 | Compose health checks and a status page are provided. `make backup-up` starts scheduled database backups; snapshot/restore and recovery procedures are documented in the [backup guide](docs/infra/BACKUP_RECOVERY.md). |
+| C01 | Custom major module: Nook Feed | 2 | The global live feed is a public starting point for student discovery: posts support media, link to public profiles, and lead into friend requests, DMs, groups, and games. Chat provisions the feed idempotently, backfills existing users, and adds new users through account events. This custom-module claim and its two-point value remain subject to evaluator judgment. See the [feed integration](docs/integrations/feed.md). |
+| **Total** | **22 modules claimed** | **31 raw points** | **9 major modules (18 points) + 13 minor modules (13 points). U04 is excluded.** |
 
-No evaluator-awarded total is recorded here. This table is a selected evidence map: its nine listed modules sum to a **14-point raw maximum**, not the total module coverage for Nook. The broader snapshot records 29 raw points maximum across verified evidence and 6 more across modules with acceptance demonstrations still open. Several entries still need acceptance demonstrations; implementation or a local test alone does not guarantee points. The scoring tracker applies a 14-point required threshold and up to 5 bonus points, subject to module eligibility and evaluator review. G09 gamification is a candidate outside this table's subtotal: achievements, leaderboards and XP/levels exist, but database persistence across restart, visual feedback and clear progression rules still need an acceptance demonstration against subject §IV.6.
+The 31-point sum is the raw value of these claims, not an evaluator-awarded score. The local tracker’s required threshold is 14 points, with up to 5 bonus points; mandatory foundation requirements are assessed separately. The team should be ready to demonstrate each listed behavior and explain the implementation. The custom module is described separately so it is not double-counted with basic or advanced chat.
 
 ## Privacy, terms and operational notes
 
@@ -184,13 +188,13 @@ Public pages are available at [Privacy Policy](/privacy) and [Terms of Service](
 
 We used AI as an engineering assistant while the team remained responsible for product decisions, architecture, API contracts, and final behavior. Agentic tools helped patch code the team was building, review security, refactor existing work, improve code quality, and support tests and documentation. Team members reviewed and integrated the resulting changes.
 
-| Resource/tool | Use |
-|---|---|
-| Claude Code | Planning, implementation assistance, code review, tests and repository documentation |
-| Codex (OpenAI) | Code Arena/Nook integration audit and implementation assistance, fixes, verification and documentation |
+| Resource/tool          | Use                                                                                                                                                                                                                                                         |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code            | Planning, implementation assistance, code review, tests and repository documentation                                                                                                                                                                        |
+| Codex (OpenAI)         | Code Arena/Nook integration audit and implementation assistance, fixes, verification and documentation                                                                                                                                                      |
 | OpenCode / Antigravity | Advanced chat (G06) typing indicators and read receipts implementation, verification, and session continuation; game lifecycle notifications in chat (game event contract and publisher, Chat consumer and correlation checks, client rendering) with tests |
-| Graphify | Generated a code relationship map in `graphify-out/` |
-| Understand Anything | Generated a repository knowledge graph and codebase tour in `.ua/` |
+| Graphify               | Generated a code relationship map in `graphify-out/`                                                                                                                                                                                                        |
+| Understand Anything    | Generated a repository knowledge graph and codebase tour in `.ua/`                                                                                                                                                                                          |
 
 AI helped translate the Figma design into React components and shape frontend state handling: React Query for server data and caching, and `useState` for local component state. Security reviews helped surface early XSS risks and the risk of storing refresh tokens in `localStorage`; refresh tokens are now carried in HttpOnly cookies. AI suggestions were reviewed and adapted by the team rather than accepted as a substitute for implementation decisions or security review.
 
@@ -204,7 +208,7 @@ cd client && npm test && npm run lint && npm run build
 cd .. && node nginx/check.mjs
 ```
 
-Direct Game PostgreSQL tests need `TEST_PG_URL` to point to a disposable test database; the in-memory game suite does not exercise persistent SQL behavior. `npm run test:integration` starts disposable PostgreSQL and RabbitMQ containers and runs the database/socket suites without a preconfigured `TEST_PG_URL`. Root `npm run check` runs all 22 verification stages for the complete product gate. `nginx/check.mjs` verifies local gateway routing after the stack is running. See [all project documentation](docs/README.md) for service guides, plans, diagrams and setup details.
+Direct Game PostgreSQL tests need `TEST_PG_URL` to point to a disposable test database; the in-memory game suite does not exercise persistent SQL behavior. `npm run test:integration` starts disposable PostgreSQL and RabbitMQ containers and runs the database/socket suites without a preconfigured `TEST_PG_URL`. `nginx/check.mjs` verifies local gateway routing after the stack is running. See [all project documentation](docs/README.md) for service guides, plans, diagrams and setup details.
 
 ## Git activity report
 
