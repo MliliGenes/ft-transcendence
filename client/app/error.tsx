@@ -1,13 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
 import { ErrorPage, errorDigest } from "@/components/error-page";
 
 export default function RootError({ error, retry }: { error: unknown; retry: () => void }) {
-  useEffect(() => {
-    console.error(error);
-  }, [error]);
-
   return (
     <ErrorPage
       standalone

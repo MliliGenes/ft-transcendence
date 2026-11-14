@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AccountAvatar } from "@/components/app/account-avatar";
 import { ChatMarkdown } from "@/components/app/chat/chat-markdown";
 import { DeleteMessageDialog, MessageEditor, MessageOwnerActions } from "@/components/app/chat/message-actions";
-import { MessageAttachment } from "@/components/app/chat/message-list";
+import { AttachmentCarousel } from "@/components/app/feed/attachment-carousel";
 import { accountImageSource } from "@/lib/accounts/images";
 import { accountDisplayName } from "@/lib/accounts/status-icons";
 import type { ChatMessage } from "@/lib/chat/client";
@@ -51,11 +51,7 @@ export function PostCard({ post, own }: { post: ChatMessage; own: boolean }) {
       {editing
         ? <div className="mt-3"><MessageEditor message={post} onClose={() => setEditing(false)} /></div>
         : post.content && <ChatMarkdown className="mt-3 text-[15px] leading-6">{post.content}</ChatMarkdown>}
-      {post.attachments?.length > 0 && (
-        <div className="mt-3 flex flex-col gap-3 [&_img]:max-h-[28rem] [&_video]:max-h-[28rem] [&_video]:w-full">
-          {post.attachments.map(key => <MessageAttachment key={key} conversationId={post.conversationId} objectKey={key} />)}
-        </div>
-      )}
+      {post.attachments?.length > 0 && <AttachmentCarousel conversationId={post.conversationId} attachments={post.attachments} />}
     </article>
   );
 }

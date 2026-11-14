@@ -1,15 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { IconClock, IconDeviceGamepad2, IconDoorExit, IconWifi, IconWifiOff } from "@tabler/icons-react";
+import { IconClock, IconDeviceGamepad2, IconDoorExit, IconLoader2, IconWifi, IconWifiOff } from "@tabler/icons-react";
 import type { ArenaSnapshot } from "@/lib/arena/types";
 import type { ConnectionState } from "@/lib/arena/transport";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export interface ArenaHeaderProps {
   snapshot: ArenaSnapshot;
   connection: ConnectionState;
   onLeave: () => Promise<void>;
+  pending: boolean;
+  /** Name of the action that is currently in flight, when it is the leave request. */
+  pendingAction?: string | null;
 }
 
 function formatClock(seconds: number): string {
@@ -18,7 +22,7 @@ function formatClock(seconds: number): string {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
-export function ArenaHeader({ snapshot, connection, onLeave }: ArenaHeaderProps) {
+export function ArenaHeader({ snapshot, connection, onLeave, pending, pendingAction }: ArenaHeaderProps) {
   const [leaving, setLeaving] = useState(false);
   const { round, totalRounds, remainingSeconds, mode, roundPhase, you, opponent } = snapshot;
 
@@ -42,8 +46,8 @@ export function ArenaHeader({ snapshot, connection, onLeave }: ArenaHeaderProps)
   const isLowTime = displaySeconds <= 30 && displaySeconds > 0 && isCoding;
 
   return (
-    <header className="flex h-14 w-full shrink-0 items-center justify-between border-b border-border bg-card px-4 text-card-foreground">
-      <div className="flex items-center gap-3">
+    <header className="flex min-h-14 min-w-0 w-full shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 text-card-foreground">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 font-semibold">
           <IconDeviceGamepad2 className="size-5 text-primary" aria-hidden="true" />
           <span>Code Arena</span>
@@ -58,8 +62,8 @@ export function ArenaHeader({ snapshot, connection, onLeave }: ArenaHeaderProps)
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-4 text-sm font-medium font-mono tabular-nums">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-4 text-sm font-medium font-mono tabular-nums">
           <span className="text-foreground">{you.name}: {snapshot.reveal?.totals.you ?? 0}</span>
           <span className="text-muted-foreground">vs</span>
           <span className="text-muted-foreground">{opponent.name}: {snapshot.reveal?.totals.opponent ?? 0}</span>
@@ -97,11 +101,14 @@ export function ArenaHeader({ snapshot, connection, onLeave }: ArenaHeaderProps)
             variant="ghost"
             size="sm"
             onClick={handleLeave}
-            disabled={leaving}
+            disabled={leaving || pending}
+            aria-busy={pendingAction === "leave"}
             aria-label={mode === "2v2" ? "Leave match" : "Forfeit and leave match"}
-            className="text-muted-foreground hover:text-destructive"
+            className={cn("text-muted-foreground hover:text-destructive", pendingAction === "leave" && "disabled:opacity-100")}
           >
-            <IconDoorExit className="size-4 mr-1" aria-hidden="true" />
+            {pendingAction === "leave"
+              ? <IconLoader2 className="size-4 mr-1 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              : <IconDoorExit className="size-4 mr-1" aria-hidden="true" />}
             <span>Leave</span>
           </Button>
         </div>

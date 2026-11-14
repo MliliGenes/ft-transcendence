@@ -1,6 +1,6 @@
 "use client";
 
-import { IconAward, IconPlayerPlay } from "@tabler/icons-react";
+import { IconAward, IconLoader2, IconPlayerPlay } from "@tabler/icons-react";
 import type { RevealView } from "@/lib/arena/types";
 import { Button } from "@/components/ui/button";
 
@@ -9,9 +9,13 @@ export interface RoundScoreRevealProps {
   round: number;
   totalRounds: number;
   onAdvance: () => Promise<void>;
+  pending: boolean;
+  error: string | null;
+  /** Progress shown in this overlay while the advance request runs. */
+  status?: string | null;
 }
 
-export function RoundScoreReveal({ reveal, round, totalRounds, onAdvance }: RoundScoreRevealProps) {
+export function RoundScoreReveal({ reveal, round, totalRounds, onAdvance, pending, error, status }: RoundScoreRevealProps) {
   if (!reveal) return null;
 
   const isFinalRound = round >= totalRounds;
@@ -59,11 +63,15 @@ export function RoundScoreReveal({ reveal, round, totalRounds, onAdvance }: Roun
         )}
 
         <div className="mt-6 flex justify-end">
-          <Button onClick={onAdvance} className="w-full">
-            <IconPlayerPlay className="size-4 mr-2" />
+          <Button onClick={onAdvance} disabled={pending} aria-busy={Boolean(status)} className="w-full">
+            {status
+              ? <IconLoader2 className="size-4 mr-2 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              : <IconPlayerPlay className="size-4 mr-2" />}
             <span>{isFinalRound ? "View Match Results" : "Next Round"}</span>
           </Button>
         </div>
+        {status && <p role="status" aria-live="polite" className="mt-3 text-xs text-muted-foreground">{status}</p>}
+        {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
       </div>
     </div>
   );

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { IconDeviceGamepad2 } from "@tabler/icons-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/auth-provider";
 import { accountApi, type PublicAccount } from "@/lib/accounts/client";
 import { accountDisplayName } from "@/lib/accounts/status-icons";
@@ -48,7 +49,7 @@ export function CodeArenaProfile({ userId }: { userId: string }) {
     return <div role="status" className="grid gap-4 py-6"><span className="sr-only">Loading Code Arena activity…</span><div className="h-24 animate-pulse bg-muted" /><div className="h-48 animate-pulse bg-muted" /></div>;
   }
   if (!session) {
-    return <section className="bg-card px-5 py-10 text-center"><h2 className="text-lg font-semibold">Code Arena activity</h2><p className="mt-2 text-sm text-muted-foreground">Log in to view match records.</p><Button render={<Link href="/login" />} className="mt-4 min-h-11">Log in</Button></section>;
+    return <section className="bg-card px-5 py-10 text-center"><h2 className="text-lg font-semibold">Code Arena activity</h2><p className="mt-2 text-sm text-muted-foreground">Log in to view match records.</p><Link href="/login" className={cn(buttonVariants(), "mt-4 min-h-11")}>Log in</Link></section>;
   }
 
   return <section className="grid gap-5 py-5" aria-labelledby="code-arena-profile-title">
@@ -123,7 +124,7 @@ export function CodeArenaProfile({ userId }: { userId: string }) {
       {matches.isError
         ? <div className="p-5"><p role="alert" className="text-sm text-destructive">Could not load match history.</p><Button variant="outline" className="mt-3 min-h-10" onClick={() => void matches.refetch()}>Try again</Button></div>
         : matches.data?.matches.length === 0
-          ? <div className="px-5 py-10 text-center"><p className="font-medium">No completed matches yet</p><p className="mt-1 text-sm text-muted-foreground">Play a duel to start building a record.</p><Button render={<Link href="/play" />} variant="outline" className="mt-4 min-h-10">Go to Code Arena</Button></div>
+          ? <div className="px-5 py-10 text-center"><p className="font-medium">No completed matches yet</p><p className="mt-1 text-sm text-muted-foreground">Play a duel to start building a record.</p><Link href="/play" className={cn(buttonVariants({ variant: "outline" }), "mt-4 min-h-10")}>Go to Code Arena</Link></div>
           : matches.data && <MatchHistory matches={matches.data.matches} opponents={opponents} />}
     </section>
   </section>;
@@ -156,6 +157,6 @@ export function CodeArenaSidebar() {
   return <section className="bg-card p-5" aria-labelledby="game-activity-title">
     <h2 id="game-activity-title" className="flex items-center gap-2 text-sm font-semibold"><IconDeviceGamepad2 size={17} className="text-primary" aria-hidden="true" />Code Arena</h2>
     <p className="mt-3 text-sm text-muted-foreground">Start a duel, join a private lobby, or review the leaderboard.</p>
-    <div className="mt-4 flex flex-wrap gap-2"><Button render={<Link href="/play" />} variant="outline" className="min-h-10">Play</Button><Button render={<Link href="/play/leaderboard" />} variant="ghost" className="min-h-10">Leaderboard</Button></div>
+    <div className="mt-4 flex flex-wrap gap-2"><Link href="/play" className={cn(buttonVariants({ variant: "outline" }), "min-h-10")}>Play</Link><Link href="/play/leaderboard" className={cn(buttonVariants({ variant: "ghost" }), "min-h-10")}>Leaderboard</Link></div>
   </section>;
 }

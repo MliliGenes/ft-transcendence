@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { IconAlertTriangle, IconCheck } from "@tabler/icons-react";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { authApi, AuthRequestError } from "@/lib/auth/client";
 
 type State = "checking" | "verified" | "invalid" | "missing" | "error";
@@ -52,7 +53,7 @@ export function VerifyEmailView() {
             <IconCheck size={18} className="mt-0.5 shrink-0 text-nook-success" aria-hidden="true" />
             Thanks! Your email address is confirmed.
           </p>
-          <Button render={<Link href="/login" />} className="mt-5 min-h-11">Continue to Nook</Button>
+          <Link href="/login" className={cn(buttonVariants(), "mt-5 min-h-11")}>Continue to Nook</Link>
         </div>
       )}
 
@@ -66,7 +67,7 @@ export function VerifyEmailView() {
                 ? "This verification link is invalid, has expired, or was already used. If you already verified your email, you can simply log in."
                 : "Something went wrong while verifying your email. Please try the link again in a moment."}
           </p>
-          <Button render={<Link href="/login" />} className="mt-5 min-h-11">Go to log in</Button>
+          <Link href="/login" className={cn(buttonVariants(), "mt-5 min-h-11")}>Go to log in</Link>
         </div>
       )}
     </section>

@@ -10,7 +10,8 @@ import { ChatMarkdown } from "@/components/app/chat/chat-markdown";
 import { AccountAvatar } from "@/components/app/account-avatar";
 import { ConfirmDialog } from "@/components/app/confirm-dialog";
 import { StatusDot, presenceLabel } from "@/components/app/status-dot";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { accountApi } from "@/lib/accounts/client";
 import { accountImageSource } from "@/lib/accounts/images";
@@ -90,7 +91,7 @@ export function DirectDetails({ user, presence }: { user: ChatUser; presence: st
         {friendships.isPending ? <Skeleton className="h-5 w-32 rounded-none" />
           : isFriend ? <p className="flex items-center gap-2 text-sm"><IconUserCheck size={17} className="text-primary" aria-hidden="true" />You’re friends</p>
             : sent ? <p className="text-sm text-muted-foreground">Friend request sent</p>
-              : incoming ? <Button render={<Link href="/search" />} variant="outline" className="min-h-10 w-full">Review friend request</Button>
+              : incoming ? <Link href="/search" className={cn(buttonVariants({ variant: "outline" }), "min-h-10 w-full")}>Review friend request</Link>
                 : <>
                   <Button className="min-h-10 w-full" disabled={addFriend.isPending || friendships.isError} onClick={() => addFriend.mutate()}><IconUserPlus size={16} aria-hidden="true" />{addFriend.isPending ? "Sending…" : "Add friend"}</Button>
                   {addFriend.error && <p role="alert" className="mt-2 text-xs text-destructive">{addFriend.error.message}</p>}
@@ -98,7 +99,7 @@ export function DirectDetails({ user, presence }: { user: ChatUser; presence: st
       </PanelSection>
     </div>
     <div className="mt-auto border-t border-border p-4">
-      <Button render={<Link href={`/profile/${encodeURIComponent(user.id)}`} />} variant="outline" className="min-h-11 w-full">View full profile</Button>
+      <Link href={`/profile/${encodeURIComponent(user.id)}`} className={cn(buttonVariants({ variant: "outline" }), "min-h-11 w-full")}>View full profile</Link>
     </div>
   </div>;
 }

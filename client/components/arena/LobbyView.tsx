@@ -7,6 +7,7 @@ import {
   IconArrowLeft,
   IconCheck,
   IconCopy,
+  IconLoader2,
   IconPlayerPlay,
   IconSwitchHorizontal,
 } from "@tabler/icons-react";
@@ -16,6 +17,20 @@ import { LobbyClient, lobbyMatchPath, lobbyMemberName, type PrivateRoomMember, t
 import { accountApi, type PublicAccount } from "@/lib/accounts/client";
 import { accountImageSource } from "@/lib/accounts/images";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+// The lobby exposes one action at a time, so the pending state is a named action
+// rather than a flag: it keeps the action label stable while the request runs and
+// lets the view announce which action is in flight.
+type LobbyAction = "ready" | "side" | "start" | "leave" | "copy";
+
+const lobbyActionStatus: Record<LobbyAction, string> = {
+  ready: "Updating readiness…",
+  side: "Switching teams…",
+  start: "Starting the match…",
+  leave: "Leaving the lobby…",
+  copy: "Copying the invite code…",
+};
 
 function TeamSlotCard({
   name,
@@ -75,7 +90,11 @@ export function LobbyView({ code }: { code: string }) {
   const [lobbyData, setLobbyData] = useState<RoomWithMembers | null>(null);
   const [resolvedLobbyKey, setResolvedLobbyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<LobbyAction | null>(null);
   const [copied, setCopied] = useState(false);
+  const pending = pendingAction !== null;
+  const isBusy = (action: LobbyAction) => pendingAction === action;
   const loading = resolvedLobbyKey !== lobbyKey;
   const lobbyMembers = lobbyData?.members ?? [];
   const memberProfiles = useQueries({
@@ -165,43 +184,71 @@ export function LobbyView({ code }: { code: string }) {
       client = null;
     };
   }, [normalizedCode, userId, token, requestWithSession, isRestoring, router, lobbyKey]);
+  async function performAction(action: LobbyAction, run: () => Promise<void>, message: string) {
+    if (pendingAction) return;
+    setPendingAction(action);
+    setActionError(null);
+    try {
+      await run();
+    } catch {
+      setActionError(message);
+    } finally {
+      setPendingAction(null);
+    }
+  }
 
   async function handleToggleReady() {
     if (!lobbyData) return;
-    const currentMember = lobbyData.members.find((m) => m.userId === userId);
-    const client = new LobbyClient("", userId, token, undefined, requestWithSession);
-    const updated = await client.setReady(lobbyData.room.id, !currentMember?.ready);
-    setLobbyData(updated);
+    await performAction("ready", async () => {
+      const currentMember = lobbyData.members.find((m) => m.userId === userId);
+      const client = new LobbyClient("", userId, token, undefined, requestWithSession);
+      const updated = await client.setReady(lobbyData.room.id, !currentMember?.ready);
+      setLobbyData(updated);
+    }, "Unable to update readiness. Please try again.");
   }
 
   async function handleSwitchSide() {
     if (!lobbyData) return;
-    const currentMember = lobbyData.members.find((m) => m.userId === userId);
-    const nextSide = currentMember?.sideId === "left" ? "right" : "left";
-    const client = new LobbyClient("", userId, token, undefined, requestWithSession);
-    const updated = await client.setSide(lobbyData.room.id, nextSide);
-    setLobbyData(updated);
+    await performAction("side", async () => {
+      const currentMember = lobbyData.members.find((m) => m.userId === userId);
+      const nextSide = currentMember?.sideId === "left" ? "right" : "left";
+      const client = new LobbyClient("", userId, token, undefined, requestWithSession);
+      const updated = await client.setSide(lobbyData.room.id, nextSide);
+      setLobbyData(updated);
+    }, "Unable to switch teams. Please try again.");
   }
 
   async function handleStart() {
     if (!lobbyData) return;
-    const client = new LobbyClient("", userId, token, undefined, requestWithSession);
-    const { matchId } = await client.startRoom(lobbyData.room.id);
-    router.push(`/play/match/${matchId}`);
+    await performAction("start", async () => {
+      const client = new LobbyClient("", userId, token, undefined, requestWithSession);
+      const { matchId } = await client.startRoom(lobbyData.room.id);
+      router.push(`/play/match/${matchId}`);
+    }, "Unable to start the match. Please try again.");
   }
 
   async function handleLeave() {
-    if (lobbyData) {
-      const client = new LobbyClient("", userId, token, undefined, requestWithSession);
-      await client.leaveRoom(lobbyData.room.id).catch(() => {});
-    }
-    router.push("/play");
+    await performAction("leave", async () => {
+      if (lobbyData) {
+        const client = new LobbyClient("", userId, token, undefined, requestWithSession);
+        await client.leaveRoom(lobbyData.room.id);
+      }
+      router.push("/play");
+    }, "Unable to leave the lobby. Please try again.");
   }
 
-  function handleCopy() {
-    navigator.clipboard.writeText(normalizedCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  async function handleCopy() {
+    const message = "Unable to copy automatically. Select and copy the invite code above.";
+    setCopied(false);
+    await performAction("copy", async () => {
+      if (!navigator.clipboard?.writeText) {
+        setActionError(message);
+        return;
+      }
+      await navigator.clipboard.writeText(normalizedCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }, message);
   }
 
   if (isRestoring || loading && token) {
@@ -250,19 +297,37 @@ export function LobbyView({ code }: { code: string }) {
             <button
               type="button"
               onClick={handleCopy}
-              className="inline-flex items-center gap-1 rounded-none bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+              disabled={pending}
+              aria-busy={isBusy("copy")}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-none bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground",
+                isBusy("copy") && "opacity-100",
+              )}
             >
-              <IconCopy className="size-3" />
+              {isBusy("copy")
+                ? <IconLoader2 className="size-3 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                : <IconCopy className="size-3" />}
               <span>{copied ? "Copied!" : "Copy Code"}</span>
             </button>
           </div>
         </div>
 
-        <Button variant="ghost" size="sm" onClick={handleLeave} className="text-muted-foreground hover:text-destructive">
-          <IconArrowLeft className="size-4 mr-1" />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleLeave}
+          disabled={pending}
+          aria-busy={isBusy("leave")}
+          className={cn("text-muted-foreground hover:text-destructive", isBusy("leave") && "disabled:opacity-100")}
+        >
+          {isBusy("leave")
+            ? <IconLoader2 className="size-4 mr-1 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            : <IconArrowLeft className="size-4 mr-1" />}
           <span>Leave Lobby</span>
         </Button>
       </div>
+
+      {actionError && <p role="alert" className="mb-4 text-sm text-destructive">{actionError}</p>}
 
       <div className="grid gap-6 md:grid-cols-2 mb-8">
         <TeamSlotCard
@@ -281,10 +346,24 @@ export function LobbyView({ code }: { code: string }) {
         />
       </div>
 
+      {/* The live region stays mounted so the pending action is announced when it starts. */}
+      <p role="status" aria-live="polite" className="mb-2 min-h-4 text-xs text-muted-foreground">
+        {pendingAction ? lobbyActionStatus[pendingAction] : ""}
+      </p>
+
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-none border border-border bg-card p-4">
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={handleSwitchSide}>
-            <IconSwitchHorizontal className="size-4 mr-1.5" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSwitchSide}
+            disabled={pending}
+            aria-busy={isBusy("side")}
+            className={cn(isBusy("side") && "disabled:opacity-100")}
+          >
+            {isBusy("side")
+              ? <IconLoader2 className="size-4 mr-1.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              : <IconSwitchHorizontal className="size-4 mr-1.5" />}
             <span>Switch Team</span>
           </Button>
 
@@ -292,8 +371,13 @@ export function LobbyView({ code }: { code: string }) {
             variant={currentMember?.ready ? "secondary" : "default"}
             size="sm"
             onClick={handleToggleReady}
+            disabled={pending}
+            aria-busy={isBusy("ready")}
+            className={cn(isBusy("ready") && "disabled:opacity-100")}
           >
-            <IconCheck className={`size-4 mr-1.5 ${currentMember?.ready ? "text-success" : ""}`} />
+            {isBusy("ready")
+              ? <IconLoader2 className="size-4 mr-1.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              : <IconCheck className={`size-4 mr-1.5 ${currentMember?.ready ? "text-success" : ""}`} />}
             <span>{currentMember?.ready ? "Ready (Click to Cancel)" : "Mark Ready"}</span>
           </Button>
         </div>
@@ -302,10 +386,13 @@ export function LobbyView({ code }: { code: string }) {
           <Button
             size="sm"
             onClick={handleStart}
-            disabled={!allReady}
-            className="bg-primary text-primary-foreground font-semibold"
+            disabled={!allReady || pending}
+            aria-busy={isBusy("start")}
+            className={cn("bg-primary text-primary-foreground font-semibold", isBusy("start") && "disabled:opacity-100")}
           >
-            <IconPlayerPlay className="size-4 mr-1.5" />
+            {isBusy("start")
+              ? <IconLoader2 className="size-4 mr-1.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              : <IconPlayerPlay className="size-4 mr-1.5" />}
             <span>{allReady ? "Start Match" : "Waiting for all players to ready up…"}</span>
           </Button>
         )}

@@ -7,7 +7,8 @@ import { IconArrowUpRight, IconCheck, IconLock, IconMail, IconUser } from "@tabl
 import { ConnectedAccounts } from "@/components/app/connected-accounts";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ThemeSelector } from "@/components/theme-selector";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { currentAccountQueryKey, useCurrentAccount } from "@/hooks/use-current-account";
@@ -68,7 +69,7 @@ export function SettingsView() {
   }
 
   if (isRestoring) return <div role="status" className="mx-auto w-full max-w-4xl p-6 text-sm text-muted-foreground">Loading settings…</div>;
-  if (!session) return <div className="mx-auto w-full max-w-4xl p-6 text-sm text-muted-foreground">Log in to manage your settings. <Button render={<Link href="/login" />} className="ml-3 min-h-11">Log in</Button></div>;
+  if (!session) return <div className="mx-auto w-full max-w-4xl p-6 text-sm text-muted-foreground">Log in to manage your settings. <Link href="/login" className={cn(buttonVariants(), "ml-3 min-h-11")}>Log in</Link></div>;
   if (account.isPending) return <div role="status" className="mx-auto w-full max-w-4xl p-6 text-sm text-muted-foreground">Loading settings…</div>;
   if (account.error || !account.data) return <div role="alert" className="mx-auto w-full max-w-4xl p-6 text-sm text-destructive">Unable to load your settings. <Button variant="outline" onClick={() => account.refetch()} className="ml-3">Try again</Button></div>;
 
@@ -84,9 +85,9 @@ export function SettingsView() {
 
       <Panel id="account" title="Account" description="Manage your account information.">
         <div className="divide-y divide-border border-y border-border">
-          <div className="flex flex-wrap items-center justify-between gap-4 py-4"><div className="flex items-center gap-3"><IconMail aria-hidden="true" className="text-muted-foreground" /><div><p className="text-sm font-medium">Email</p><p className="mt-1 text-sm text-muted-foreground">{account.data.email}</p></div></div><div className="flex items-center gap-3"><span className={`text-xs ${account.data.emailVerifiedAt ? "text-nook-success" : "text-muted-foreground"}`}>{account.data.emailVerifiedAt ? "Verified" : "Not verified"}</span><Button variant="outline" render={<Link href="/profile/edit#email" />} className="min-h-10">Edit</Button></div></div>
-          <div className="flex flex-wrap items-center justify-between gap-4 py-4"><div className="flex items-center gap-3"><IconUser aria-hidden="true" className="text-muted-foreground" /><div><p className="text-sm font-medium">Username</p><p className="mt-1 text-sm text-muted-foreground">@{account.data.username}</p></div></div><Button variant="outline" render={<Link href="/profile/edit#username" />} className="min-h-10 gap-2">Edit profile <IconArrowUpRight size={15} aria-hidden="true" /></Button></div>
-          <div className="flex flex-wrap items-center justify-between gap-4 py-4"><div><p className="text-sm font-medium">Display name</p><p className="mt-1 text-sm text-muted-foreground">{account.data.displayName || "Not set"}</p></div><Button variant="outline" render={<Link href="/profile/edit#displayName" />} className="min-h-10">Edit profile</Button></div>
+          <div className="flex flex-wrap items-center justify-between gap-4 py-4"><div className="flex items-center gap-3"><IconMail aria-hidden="true" className="text-muted-foreground" /><div><p className="text-sm font-medium">Email</p><p className="mt-1 text-sm text-muted-foreground">{account.data.email}</p></div></div><div className="flex items-center gap-3"><span className={`text-xs ${account.data.emailVerifiedAt ? "text-nook-success" : "text-muted-foreground"}`}>{account.data.emailVerifiedAt ? "Verified" : "Not verified"}</span><Link href="/profile/edit#email" className={cn(buttonVariants({ variant: "outline" }), "min-h-10")}>Edit</Link></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-4 py-4"><div className="flex items-center gap-3"><IconUser aria-hidden="true" className="text-muted-foreground" /><div><p className="text-sm font-medium">Username</p><p className="mt-1 text-sm text-muted-foreground">@{account.data.username}</p></div></div><Link href="/profile/edit#username" className={cn(buttonVariants({ variant: "outline" }), "min-h-10 gap-2")}>Edit profile <IconArrowUpRight size={15} aria-hidden="true" /></Link></div>
+          <div className="flex flex-wrap items-center justify-between gap-4 py-4"><div><p className="text-sm font-medium">Display name</p><p className="mt-1 text-sm text-muted-foreground">{account.data.displayName || "Not set"}</p></div><Link href="/profile/edit#displayName" className={cn(buttonVariants({ variant: "outline" }), "min-h-10")}>Edit profile</Link></div>
         </div>
       </Panel>
 

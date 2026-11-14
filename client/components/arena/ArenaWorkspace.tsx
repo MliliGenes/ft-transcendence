@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { IconCheck, IconCode, IconFlag, IconPlayerPlay, IconSend } from "@tabler/icons-react";
+import { IconCheck, IconCode, IconFlag, IconLoader2, IconPlayerPlay, IconSend } from "@tabler/icons-react";
 import type { ArenaTransport } from "@/lib/arena/transport";
 import { useArena } from "@/hooks/useArena";
 import { createArenaSidecarLifecycle, type SidecarState } from "@/lib/arena/sidecars";
@@ -14,6 +14,7 @@ import { RoundScoreReveal } from "./RoundScoreReveal";
 import { MatchResult } from "./MatchResult";
 import { TeamChat } from "./TeamChat";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // Dynamic import with SSR disabled per next-frontend rules to guard CodeMirror & Yjs browser globals
 const EditorAdapter = dynamic(
@@ -25,6 +26,36 @@ export interface ArenaWorkspaceProps {
   transport: ArenaTransport;
 }
 
+// The workspace runs one arena action at a time, so the pending state is a closed
+// set of action names rather than an arbitrary string.
+type ArenaPendingAction =
+  | "run"
+  | "submit"
+  | "ready"
+  | "surrender"
+  | "language"
+  | "leave"
+  | "begin"
+  | "advance";
+
+// Progress for every action that stays on screen while its request runs. The
+// action label is preserved while loading, so the announcement carries the
+// progress instead (Nook design system: preserve the label while loading).
+const arenaActionStatus: Record<ArenaPendingAction, string> = {
+  run: "Running visible tests…",
+  submit: "Evaluating your submission…",
+  ready: "Updating readiness…",
+  surrender: "Updating surrender approval…",
+  language: "Changing language…",
+  leave: "Leaving the match…",
+  begin: "Preparing the coding round…",
+  advance: "Advancing to the next round…",
+};
+
+// These two run behind a full overlay, so the overlay itself carries the
+// progress instead of the toolbar status line.
+const overlayPendingActions: ArenaPendingAction[] = ["begin", "advance"];
+
 export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
   const snapshot = useArena(transport);
   const [sidecars, setSidecars] = useState<SidecarState>({ collab: null, chat: null });
@@ -35,8 +66,12 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
   const code = codeState.value;
   const setCode = (value: string) => setCodeState({ key: codeKey, value });
   const [fontSize, setFontSize] = useState(14);
-  const [isRunning, setIsRunning] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingAction, setPendingAction] = useState<ArenaPendingAction | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const isRunning = pendingAction === "run";
+  const isSubmitting = pendingAction === "submit";
+  const pendingInOverlay = pendingAction !== null && overlayPendingActions.includes(pendingAction);
+  const feedback = actionError ?? snapshot.notice;
 
   const sidecarLifecycleRef = useRef(createArenaSidecarLifecycle());
 
@@ -76,53 +111,65 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
     };
   }, [transport]);
 
-  async function handleRun() {
-    setIsRunning(true);
+  async function performAction(name: ArenaPendingAction, action: () => Promise<void>, message: string) {
+    if (pendingAction) return;
+    setPendingAction(name);
+    setActionError(null);
     try {
-      const currentCode = sidecars.collab ? sidecars.collab.getSource() : code;
-      await transport.run({ code: currentCode, language: snapshot.language });
+      await action();
+    } catch {
+      setActionError(message);
     } finally {
-      setIsRunning(false);
+      setPendingAction(null);
     }
   }
 
+  async function handleRun() {
+    await performAction("run", async () => {
+      const currentCode = sidecars.collab ? sidecars.collab.getSource() : code;
+      await transport.run({ code: currentCode, language: snapshot.language });
+    }, "Unable to run tests. Please try again.");
+  }
+
   async function handleSubmit() {
-    setIsSubmitting(true);
-    try {
+    await performAction("submit", async () => {
       const currentCode = sidecars.collab ? sidecars.collab.getSource() : code;
       await transport.submit({
         code: currentCode,
         language: snapshot.language,
         documentRevision: snapshot.docRevision ?? undefined,
       });
-    } finally {
-      setIsSubmitting(false);
-    }
+    }, "Unable to submit your code. Please try again.");
   }
 
   async function handleToggleReady() {
-    await transport.setReady(!snapshot.ready.you);
+    await performAction("ready", () => transport.setReady(!snapshot.ready.you), "Unable to update readiness. Please try again.");
   }
 
   async function handleSurrender() {
-    await transport.surrender(!snapshot.surrender.you);
+    await performAction("surrender", () => transport.surrender(!snapshot.surrender.you), "Unable to update surrender approval. Please try again.");
   }
 
   const isCoding = snapshot.roundPhase === "CODING";
   const canSubmit2v2 = snapshot.mode === "2v2" ? (snapshot.ready.you && snapshot.ready.mate) : true;
-  const isSubmitDisabled = !isCoding || isSubmitting || !canSubmit2v2;
+  const isSubmitDisabled = !isCoding || Boolean(pendingAction) || !canSubmit2v2;
 
   return (
-    <div className="flex h-screen w-full flex-col bg-background text-foreground overflow-hidden">
+    <div className="flex h-screen min-w-0 w-full flex-col bg-background text-foreground overflow-hidden">
       <ArenaHeader
         snapshot={snapshot}
         connection={transport.connection()}
-        onLeave={() => transport.leave()}
+        pending={Boolean(pendingAction)}
+        pendingAction={pendingAction}
+        onLeave={() => performAction("leave", () => transport.leave(), "Unable to leave the match. Please try again.")}
       />
+      {feedback && snapshot.roundPhase !== "SCORE_REVEAL" && (
+        <p role="alert" className="border-b border-border bg-card px-4 py-2 text-sm text-destructive">{feedback}</p>
+      )}
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {/* Left Side: Problem & Match Panels */}
-        <div className="flex w-[40%] flex-col border-r border-border bg-card">
+        <div className="flex min-w-0 w-[40%] flex-col border-r border-border bg-card">
           <div className="flex-1 overflow-hidden">
             <ProblemPanel problem={snapshot.problem} />
           </div>
@@ -139,20 +186,22 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
         </div>
 
         {/* Right Side: Editor & Tests */}
-        <div className="flex w-[60%] flex-col bg-background">
+        <div className="flex min-w-0 w-[60%] flex-col bg-background">
           {/* Editor Toolbar */}
-          <div className="flex h-11 items-center justify-between border-b border-border bg-card px-4 text-xs">
-            <div className="flex items-center gap-3">
-              <span className="font-semibold text-muted-foreground">Language:</span>
+          <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2 text-xs">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <label htmlFor="arena-language" className="font-semibold text-muted-foreground">Language:</label>
               <select
+                id="arena-language"
                 value={snapshot.language}
-                onChange={(e) => transport.setLanguage(e.target.value)}
-                disabled={!isCoding}
+                onChange={(e) => performAction("language", () => transport.setLanguage(e.target.value), "Unable to change language. Please try again.")}
+                disabled={!isCoding || Boolean(pendingAction)}
+                aria-busy={pendingAction === "language"}
                 className="rounded-none border border-border bg-background px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-mono text-xs"
               >
-                <option value="C++">C++</option>
-                <option value="Python">Python</option>
-                <option value="C">C</option>
+                {Object.keys(snapshot.problem.starters).map((language) => (
+                  <option key={language} value={language}>{language}</option>
+                ))}
               </select>
 
               <span className="ml-2 text-muted-foreground">Font:</span>
@@ -167,16 +216,19 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
               </select>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleRun}
-                disabled={!isCoding || isRunning}
-                className="h-7 text-xs font-medium"
+                disabled={!isCoding || Boolean(pendingAction)}
+                aria-busy={isRunning}
+                className={cn("h-7 text-xs font-medium", isRunning && "disabled:opacity-100")}
               >
-                <IconPlayerPlay className="size-3.5 mr-1" />
-                <span>{isRunning ? "Running…" : "Run Tests"}</span>
+                {isRunning
+                  ? <IconLoader2 className="size-3.5 mr-1 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                  : <IconPlayerPlay className="size-3.5 mr-1" />}
+                <span>Run Tests</span>
               </Button>
 
               {snapshot.mode === "2v2" && (
@@ -184,10 +236,13 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                   variant={snapshot.ready.you ? "secondary" : "outline"}
                   size="sm"
                   onClick={handleToggleReady}
-                  disabled={!isCoding}
-                  className="h-7 text-xs font-medium"
+                  disabled={!isCoding || Boolean(pendingAction)}
+                  aria-busy={pendingAction === "ready"}
+                  className={cn("h-7 text-xs font-medium", pendingAction === "ready" && "disabled:opacity-100")}
                 >
-                  <IconCheck className={`size-3.5 mr-1 ${snapshot.ready.you ? "text-success" : ""}`} />
+                  {pendingAction === "ready"
+                    ? <IconLoader2 className="size-3.5 mr-1 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    : <IconCheck className={`size-3.5 mr-1 ${snapshot.ready.you ? "text-success" : ""}`} />}
                   <span>{snapshot.ready.you ? "Ready (click to cancel)" : "Mark Ready"}</span>
                 </Button>
               )}
@@ -197,11 +252,14 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                   variant={snapshot.surrender.you ? "secondary" : "outline"}
                   size="sm"
                   onClick={handleSurrender}
-                  disabled={snapshot.roundPhase === "MATCH_COMPLETE"}
-                  className="h-7 text-xs font-medium"
+                  disabled={snapshot.roundPhase === "MATCH_COMPLETE" || Boolean(pendingAction)}
+                  aria-busy={pendingAction === "surrender"}
+                  className={cn("h-7 text-xs font-medium", pendingAction === "surrender" && "disabled:opacity-100")}
                   title="Both active teammates must approve. After a teammate leaves or is disconnected for 90 seconds, you may decide alone."
                 >
-                  <IconFlag className="size-3.5 mr-1" />
+                  {pendingAction === "surrender"
+                    ? <IconLoader2 className="size-3.5 mr-1 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    : <IconFlag className="size-3.5 mr-1" />}
                   <span>
                     {snapshot.surrender.you
                       ? "Cancel surrender"
@@ -216,13 +274,21 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                 size="sm"
                 onClick={handleSubmit}
                 disabled={isSubmitDisabled}
-                className="h-7 text-xs font-medium"
+                aria-busy={isSubmitting}
+                className={cn("h-7 text-xs font-medium", isSubmitting && "disabled:opacity-100")}
                 title="Your latest completed submission replaces your team's scored answer. The round reveals when both sides score or the 10-minute round deadline expires."
               >
-                <IconSend className="size-3.5 mr-1" />
-                <span>{isSubmitting ? "Evaluating…" : "Submit"}</span>
+                {isSubmitting
+                  ? <IconLoader2 className="size-3.5 mr-1 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                  : <IconSend className="size-3.5 mr-1" />}
+                <span>Submit</span>
               </Button>
             </div>
+
+            {/* Keep progress readable without competing with the action controls. */}
+            <p role="status" aria-live="polite" aria-atomic="true" className="min-h-4 min-w-0 basis-full text-muted-foreground">
+              {pendingAction && !pendingInOverlay ? arenaActionStatus[pendingAction] : ""}
+            </p>
           </div>
 
           <p className="border-t border-border bg-muted/30 px-3 py-1 text-xs text-muted-foreground" role="status">
@@ -274,22 +340,28 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                   Read the problem description and examples on the left. Click below to begin coding!
                 </p>
                 <Button
-                  onClick={async () => {
-                    try {
-                      if (snapshot.roundPhase === "MATCH_FOUND") {
-                        await transport.startRound();
-                      }
-                      await transport.beginCoding();
-                    } catch (e) {
-                      console.error("Failed to begin coding:", e);
+                  onClick={() => performAction("begin", async () => {
+                    if (snapshot.roundPhase === "MATCH_FOUND") {
+                      await transport.startRound();
                     }
-                  }}
-                  className="mt-6 font-semibold"
+                    await transport.beginCoding();
+                  }, "Unable to begin coding. Please try again.")}
+                  disabled={Boolean(pendingAction)}
+                  aria-busy={pendingAction === "begin"}
+                  className={cn("mt-6 font-semibold", pendingAction === "begin" && "disabled:opacity-100")}
                   size="lg"
                 >
-                  <IconCode className="size-4 mr-2" />
+                  {pendingAction === "begin"
+                    ? <IconLoader2 className="size-4 mr-2 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    : <IconCode className="size-4 mr-2" />}
                   <span>Begin Coding</span>
                 </Button>
+                {pendingAction === "begin" && (
+                  <p role="status" aria-live="polite" className="mt-3 text-xs text-muted-foreground">
+                    {arenaActionStatus.begin}
+                  </p>
+                )}
+                {feedback && <p role="alert" className="mt-3 text-sm text-destructive">{feedback}</p>}
               </div>
             )}
           </div>
@@ -307,7 +379,10 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
           reveal={snapshot.reveal}
           round={snapshot.round}
           totalRounds={snapshot.totalRounds}
-          onAdvance={() => transport.advance()}
+          onAdvance={() => performAction("advance", () => transport.advance(), "Unable to advance the match. Please try again.")}
+          pending={Boolean(pendingAction)}
+          error={feedback}
+          status={pendingAction === "advance" ? arenaActionStatus.advance : null}
         />
       )}
 
