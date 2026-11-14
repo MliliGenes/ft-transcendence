@@ -54,7 +54,7 @@
 - No drift detected. Preserves dated 2026-11-11 integration milestone.
 
 ## docs/project/POINTS_ROADMAP.md
-- No drift detected. Preserves backlog and acceptance checks.
+- **Attribution status after latest main:** The foundation checklist explanation still said README logins/roles needed insertion, although main `9f66044` supplies them. *Resolution: Updated the explanation to confirm their presence and retain team accuracy/acceptance checks.*
 
 ## docs/project/PROJECT_CONTEXT.md
 - No drift detected. Confirmed decisions match current implementation.
@@ -131,3 +131,8 @@
 
 ## docs/book/Nook-Book.pdf
 - **Stale Handbook Claims & Missing Email Verification Endpoint:** Generated handbook repeated stale claims from source docs and omitted `POST /auth/email-verification/request`. *Resolution: Rebuilt via `docs/book/build.mjs`, verified generated PDF page count (194 pages) and text inclusion across pages 44, 45, 83, 98, and 106 using Swift PDFKit.*
+
+## Coordinator closeout clarification
+- Current source-limit wording distinguishes the engine default (100 KiB UTF-8), the public Run/Submit request-code check (65,536 JavaScript string characters), and the judge transport frame (8 MiB). These are separate checks; direct judge boundary tests do not establish public HTTP acceptance of every 100 KiB source.
+- Timeout tests establish no new containers on the covered path. Documentation no longer promises unconditional cleanup when the Docker daemon is unavailable.
+- The coordinator reviewed the latest merged README attribution and roles, preserving pending school demonstrations and production operational checks in `docs/evidence/readiness-assessment-2026-11-14.md`.

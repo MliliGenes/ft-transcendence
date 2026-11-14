@@ -45,8 +45,8 @@ as part of this audit, and no historical branch was bulk merged.
 2. **Judge payload transport & cleanup resolved (TICKET-14):** [container judge](../../packages/arena-game/src/container-judge.ts)
    replaces Docker CLI base64 `-e` arguments with bounded stdin streaming (`SOURCE_BYTES\nINPUT_BYTES\nDRIVER_BYTES\n`
    headers followed by raw byte streams read by `head -c` into memory-backed `/dev/shm`).
-   An upper transport limit of 8 MiB (`MAX_CASE_PAYLOAD_BYTES`) protects against memory exhaustion
-   while preserving the normal 100 KiB source admission contract. Containers are uniquely named
+   An upper transport limit of 8 MiB (`MAX_CASE_PAYLOAD_BYTES`) bounds each execution payload
+   while preserving the engine's default 100 KiB UTF-8 source limit. Public Run/Submit routes retain an additional 65,536-character request-code check. Containers are uniquely named
    (`arena-judge-<uuid>`) with `--label arena-judge-owned=true`; on orchestrator timeout (`outerTimeoutMs`
    or killed process), an explicit bounded `docker rm -f <containerName>` cleans the container,
    settling cleanly as `JudgeInfraError` with zero container leaks. Real Docker runner framing validation
