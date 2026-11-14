@@ -1,4 +1,4 @@
-import type { MatchRecord } from "arena-game-engine";
+import { computeFinal, type MatchRecord } from "arena-game-engine";
 
 export type MatchOutcome = "win" | "loss" | "draw";
 
@@ -56,12 +56,16 @@ export function summarizeCompletedMatch(match: MatchRecord, userId: string): Com
   const participant = match.participants.find((entry) => entry.userId === userId);
   if (!participant) return null;
 
+  const final = computeFinal(match);
   const opponentSide = match.participants.find((entry) => entry.sideId !== participant.sideId)?.sideId;
-  const scoreFor = totalForSide(match, participant.sideId);
-  const scoreAgainst = opponentSide ? totalForSide(match, opponentSide) : 0;
-  const outcome: MatchOutcome = match.forfeit
-    ? (match.forfeit.winner === participant.sideId ? "win" : "loss")
-    : scoreFor > scoreAgainst ? "win" : scoreFor < scoreAgainst ? "loss" : "draw";
+  const scoreFor = final.scores[participant.sideId] ?? totalForSide(match, participant.sideId);
+  const scoreAgainst = opponentSide ? (final.scores[opponentSide] ?? totalForSide(match, opponentSide)) : 0;
+  const outcome: MatchOutcome =
+    final.winner === null
+      ? "draw"
+      : final.winner === participant.sideId
+        ? "win"
+        : "loss";
 
   return {
     matchId: match.id,

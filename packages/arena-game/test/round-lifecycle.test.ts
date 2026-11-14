@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RoundLifecycle, type SealedVerdict } from "../src/round-lifecycle.js";
+import { computeFinal, RoundLifecycle, type SealedVerdict } from "../src/round-lifecycle.js";
 import type { MatchRecord } from "../src/records.js";
 
 function round(roundId: string, activity: "coding" | "locked" = "coding") {
@@ -84,6 +84,76 @@ describe("RoundLifecycle", () => {
       closing: false,
       cutoffPassed: false,
       superseded: [],
+    });
+  });
+
+  describe("computeFinal authoritative outcome", () => {
+    it("computes final with scoring-time tiebreak when scores are equal", () => {
+      const lifecycle = new RoundLifecycle();
+      const m = match();
+      m.roundPhase = "MATCH_COMPLETE";
+      m.rounds[0]!.counted = {
+        left: { score: 100, scoringTimeMs: 1200 },
+        right: { score: 100, scoringTimeMs: 1800 },
+      };
+      m.rounds[0]!.attempts = { left: 1, right: 1 };
+      m.rounds = [m.rounds[0]!];
+
+      const direct = computeFinal(m);
+      const fromClass = lifecycle.computeFinal(m);
+
+      expect(direct).toEqual(fromClass);
+      expect(direct.outcome).toBe("left");
+      expect(direct.winner).toBe("left");
+      expect(direct.scores).toEqual({ left: 100, right: 100 });
+      expect(direct.forfeit).toBeNull();
+    });
+
+    it("computes final with attempts tiebreak when scores and times are equal", () => {
+      const m = match();
+      m.roundPhase = "MATCH_COMPLETE";
+      m.rounds[0]!.counted = {
+        left: { score: 100, scoringTimeMs: 1500 },
+        right: { score: 100, scoringTimeMs: 1500 },
+      };
+      m.rounds[0]!.attempts = { left: 2, right: 1 };
+      m.rounds = [m.rounds[0]!];
+
+      const res = computeFinal(m);
+      expect(res.outcome).toBe("right");
+      expect(res.winner).toBe("right");
+    });
+
+    it("handles forfeit outcome regardless of points", () => {
+      const m = match();
+      m.roundPhase = "MATCH_COMPLETE";
+      m.rounds[0]!.counted = {
+        left: { score: 100, scoringTimeMs: 0 },
+        right: { score: 20, scoringTimeMs: 0 },
+      };
+      m.forfeit = { winner: "right", loser: "left", at: 5000, reason: "leave" };
+
+      const res = computeFinal(m);
+      expect(res.outcome).toBe("right");
+      expect(res.winner).toBe("right");
+      expect(res.forfeit).toEqual(m.forfeit);
+      expect(res.scores).toEqual({ left: 100, right: 20 });
+    });
+
+    it("resolves sides robustly when activities are omitted", () => {
+      const m = match();
+      m.roundPhase = "MATCH_COMPLETE";
+      (m.rounds[0] as any).activities = {};
+      m.rounds[0]!.counted = {
+        left: { score: 100, scoringTimeMs: 900 },
+        right: { score: 100, scoringTimeMs: 1400 },
+      };
+      m.rounds[0]!.attempts = { left: 1, right: 1 };
+      m.rounds = [m.rounds[0]!];
+
+      const res = computeFinal(m);
+      expect(res.outcome).toBe("left");
+      expect(res.winner).toBe("left");
     });
   });
 });

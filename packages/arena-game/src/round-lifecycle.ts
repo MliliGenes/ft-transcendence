@@ -50,6 +50,54 @@ export interface RevealInput {
   noSubmission?: Partial<Record<SideId, boolean>>;
 }
 
+function matchSides(match: MatchRecord): [SideId, SideId] {
+  const fromActivities = Object.keys(match.rounds[0]?.activities ?? {});
+  if (fromActivities.length >= 2) return [fromActivities[0]!, fromActivities[1]!];
+  const fromParticipants = [...new Set(match.participants?.map((p) => p.sideId) ?? [])];
+  if (fromParticipants.length >= 2) return [fromParticipants[0]!, fromParticipants[1]!];
+  const fromCounted = Object.keys(match.rounds[0]?.counted ?? {});
+  if (fromCounted.length >= 2) return [fromCounted[0]!, fromCounted[1]!];
+  if (match.forfeit) {
+    const loser = match.forfeit.loser || (match.forfeit.winner === "left" ? "right" : "left");
+    return [match.forfeit.winner === "left" ? "left" : loser, match.forfeit.winner === "left" ? loser : "right"];
+  }
+  if (fromParticipants.length === 1) {
+    const side = fromParticipants[0]!;
+    return side === "left" ? ["left", "right"] : ["left", side];
+  }
+  return ["left", "right"];
+}
+
+export function computeFinal(match: MatchRecord): FinalResult {
+  const sides = matchSides(match);
+  const [left, right] = sides;
+
+  if (match.forfeit) {
+    const scores: Partial<Record<SideId, number>> = {};
+    for (const side of sides) {
+      scores[side] = matchSum((match.rounds ?? []).map((round) => round.counted?.[side]?.score ?? 0));
+    }
+    const winner = match.forfeit.winner;
+    return {
+      scores,
+      outcome: winner === left ? "left" : winner === right ? "right" : "draw",
+      winner,
+      forfeit: { ...match.forfeit },
+    };
+  }
+
+  const contributions = (side: SideId) =>
+    (match.rounds ?? []).map((round) => ({
+      score: round.counted?.[side]?.score ?? 0,
+      scoringTimeMs: round.counted?.[side]?.scoringTimeMs ?? 0,
+      submissions: round.attempts?.[side] ?? 0,
+    }));
+  const outcome = compareSides(contributions(left), contributions(right));
+  const scores: Partial<Record<SideId, number>> = {};
+  for (const side of sides) scores[side] = matchSum(contributions(side).map((contribution) => contribution.score));
+  return { scores, outcome, winner: outcome === "draw" ? null : outcome === "left" ? left : right, forfeit: null };
+}
+
 /**
  * Match/Round state machine rules that do not need persistence, sockets, or
  * judge execution. ArenaEngine keeps the transport-facing facade and owns
@@ -219,33 +267,7 @@ export class RoundLifecycle {
   }
 
   computeFinal(match: MatchRecord): FinalResult {
-    if (match.forfeit) {
-      const scores: Partial<Record<SideId, number>> = {};
-      for (const side of Object.keys(match.rounds[0]?.activities ?? {})) {
-        scores[side] = matchSum(match.rounds.map((round) => round.counted[side]?.score ?? 0));
-      }
-      const [left, right] = Object.keys(match.rounds[0]?.activities ?? {});
-      const winner = match.forfeit.winner;
-      return {
-        scores,
-        outcome: winner === left ? "left" : winner === right ? "right" : "draw",
-        winner,
-        forfeit: { ...match.forfeit },
-      };
-    }
-
-    const sides = Object.keys(match.rounds[0]?.activities ?? {});
-    const contributions = (side: SideId) =>
-      match.rounds.map((round) => ({
-        score: round.counted[side]?.score ?? 0,
-        scoringTimeMs: round.counted[side]?.scoringTimeMs ?? 0,
-        submissions: round.attempts[side] ?? 0,
-      }));
-    const [left, right] = sides;
-    const outcome = compareSides(contributions(left), contributions(right));
-    const scores: Partial<Record<SideId, number>> = {};
-    for (const side of sides) scores[side] = matchSum(contributions(side).map((contribution) => contribution.score));
-    return { scores, outcome, winner: outcome === "draw" ? null : outcome === "left" ? left : right, forfeit: null };
+    return computeFinal(match);
   }
 
   totalScore(match: MatchRecord, side: SideId): number {
