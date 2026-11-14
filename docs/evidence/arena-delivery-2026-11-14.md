@@ -124,7 +124,7 @@ Sanitized screenshot evidence is tracked in the repository:
 - `origin/main` (`c52c1d413e404dc154b38daebbc07be54ae55d8f`) is now cleanly merged into local `integration/nook-arena-platform` candidate (`afe99b8068bdf3e87ddc976fa12981ac55916b7a`).
 - All 22/22 full gate verification checks pass on the committed candidate (`dirty: false`, artifact at `.verification/latest-full.json`).
 - All pushes are held locally on `integration/nook-arena-platform` pending coordinator review and explicit authorization. Main itself remains untouched.
-- Promotion to `main` via PR #3 is ready for coordinator authorization.
+- The [branch completeness audit](branch-completeness-2026-11-14.md) records two remaining source/judge findings and the limits of the historical branch comparison. Passing checks do not establish that every historical fix has been ported. Review those findings and the owner actions below before deciding on promotion to `main` via PR #3.
 
 ### Remaining Owner Actions for this Evening
 
