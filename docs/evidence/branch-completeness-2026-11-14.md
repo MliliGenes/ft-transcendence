@@ -10,10 +10,11 @@ the adapted Nook import at `16fa0ed`.
   and the PR #4 candidate are ancestors of integration `f72a743`.
 - Latest checked main `c52c1d4` (Saad's email-verification resend endpoint and UI)
   is included by normal merge `afe99b8`, with parents `f72a743` and `c52c1d4`.
-- Full verification passed 22/22 on clean commit `afe99b8` at
-  `2026-11-14T17:21:18.644Z`: 114 client tests and 95 User tests passed.
-  Subsequent `99eb16b` changes only evidence documentation and removal of an
-  unused test callback parameter; the five affected component tests passed again.
+- Full verification passed 22/22 on clean candidate commit `048e7db` at
+  `2026-11-14T18:11:51.960Z` (prior baseline `afe99b8` at `17:21:18.644Z`):
+  114 client tests, 95 User tests, 3 source admission tests, and 15 judge payload
+  transport tests passed with zero leaked containers.
+  Subsequent documentation changes record verified TICKET-13 and TICKET-14 evidence.
 - No stashes exist. Four dirty console-review files contain earlier versions of
   pending-action UI and tests already covered by integration. They were left intact.
 
