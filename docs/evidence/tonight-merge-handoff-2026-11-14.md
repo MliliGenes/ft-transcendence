@@ -3,9 +3,11 @@
 **Date:** 2026-11-14
 **Integration Branch:** `integration/nook-arena-platform`
 **Target Branch:** `main`
-**Open Pull Request:** PR #3 (`integration/nook-arena-platform` -> `main`)
-**Production Code Baseline:** `f3926e01e41dfd63b896e1b7ed767c698c667b02` (`npm run check` 22/22 steps `ok: true`, `dirty: false` generated 2026-11-14T21:47:09.438Z; includes TICKET-15 authoritative outcome repair, strict matchSides resolution, and scoped test timeouts)
-**Latest Merged Main Ancestor:** `9f660442a28afc6549ed41484e68e7568f83f37d` (Saad Elm's Makefile, AGENTS scan map, graph refresh, volume gitkeeps)
+**Delivery Status:** Published to remote `main` and integration at application commit `ff1141f69e4cdf7c4b1310ec7a6ded534b40a29e`; later documentation-only commits may advance both refs.
+**Pull Request:** PR #3 merged during the earlier promotion to `9110538`.
+**Last Full-Project Verification:** `f3926e01e41dfd63b896e1b7ed767c698c667b02` (`npm run check` 22/22 steps `ok: true`, `dirty: false`, generated 2026-11-14T21:47:09.438Z; includes TICKET-15 authoritative outcome repair, strict matchSides resolution, and scoped test timeouts).
+**Subsequent Client Fix:** `ff1141f` stops forbidden-match snapshot retries (TICKET-16). Client tests 117/117, lint, TypeScript and production build passed, followed by focused local browser QA. The full-project gate was not rerun for this fix.
+**Preserved Main Ancestor:** `9f660442a28afc6549ed41484e68e7568f83f37d` (Saad Elm's Makefile, AGENTS scan map, graph refresh, volume gitkeeps).
 
 ---
 
@@ -19,13 +21,14 @@ The `integration/nook-arena-platform` branch consolidates all verified project w
 5. **Operational Automation & Tooling:** Saad's root `Makefile` (`make up`, `make down`, `make check`, `make backup-up`), updated `AGENTS.md` project scan map, refreshed `graphify-out/` architecture graph, and corrected infrastructure documentation.
 6. **Tracked Documentation & Handbook:** Rebuilt [Nook-Book.pdf](../book/Nook-Book.pdf) (194 pages) visually verified across 11 rendered page previews via Swift PDFKit; all internal links and anchors validated with balanced parentheses parsing.
 7. **Authoritative Match Outcomes & Statistics Consistency (TICKET-15):** The engine exports pure `computeFinal(match: MatchRecord)` from `packages/arena-game/src/round-lifecycle.ts` with strict two-side resolution from activities, participants, or counted data, failing explicitly on malformed unresolvable records. `services/game/src/game/match-statistics.ts` reuses this pure function in `summarizeCompletedMatch`, ensuring match summary, win/loss history, leaderboard ranking, XP calculation, and win achievements strictly agree with engine tiebreakers (scoring time and attempt count), genuine exact draws, and forfeit decisions across both 1v1 and 2v2 modes (with completion-based `coop_tactician` and win-based `first_win` preserved).
+8. **Forbidden-Match Recovery (TICKET-16):** Snapshot HTTP 403 stops that match's polling, queued refreshes and reconnects without ending the Nook session. The client shows access denied. Local browser QA observed one snapshot request over 75 seconds, then successfully opened an authorized completed match. See the [console audit](../client-console-audit.md#follow-up-forbidden-match-synchronization) for scope and evidence limits.
 
 ---
 
 ## 2. External Checks & Pull Request Status
 
-- **PR #3 Health:** Currently marked **MERGEABLE / UNSTABLE** on GitHub.
-  - Vercel deployment check reports `FAILURE` at commit `cc76da6`.
+- **PR #3:** Merged; no merge action remains for that PR.
+  - During the earlier main promotion, Vercel reported `FAILURE` with description “Deployment was blocked.” This is historical evidence, not a fresh deployment check for `ff1141f`.
   - **Note on Vercel Status:** This is an observed external status. No internal root-cause claim is made; Saad Elm owns shared Vercel deployment, environment credentials, and provider settings.
   - External GitHub Actions runner billing/quota status remains unverified and is not assumed blocked.
 - **Legacy PR Guidance:**
@@ -34,32 +37,17 @@ The `integration/nook-arena-platform` branch consolidates all verified project w
 
 ---
 
-## 3. Freshness Gate & Merge Procedure Tonight
+## 3. Main Promotion Completed
 
-After the coordinator publishes the reviewed documentation, use the existing PR #3 for tonight's main update. Confirm that it shows the final published integration commit and check whether main has advanced since `9f66044`. If it has, reconcile the new changes before merging. Merge through GitHub to update remote main; a second local push to main is unnecessary.
+The user authorized main promotion. The coordinator fetched remote refs, verified
+main ancestry, and used ordinary non-force fast-forward pushes: first to
+`9110538`, then to the tested client fix `ff1141f`. Secret-prevention hooks passed.
+Remote `main` and integration were independently confirmed at `ff1141f`; no
+teammate commits were replaced. Local integration was clean afterward.
 
-For a local or CLI workflow, start on the clean `integration/nook-arena-platform` branch:
-
-```bash
-# 1. Fetch remote refs to ensure no concurrent teammate pushes occurred:
-git fetch origin
-
-# 2. Verify that local integration includes the latest origin/main:
-git merge-base --is-ancestor origin/main HEAD && echo "Freshness check passed"
-
-# 3. Publish the integration branch to GitHub:
-git push origin integration/nook-arena-platform
-
-# 4. Promote integration to main:
-# Option A: Merge PR #3 via GitHub web interface / gh CLI (recommended)
-gh pr merge 3 --repo MliliGenes/ft-transcendence --merge
-
-# Option B: Fast-forward promotion via Git CLI (if branch protection allows):
-git checkout main
-git merge --ff-only integration/nook-arena-platform
-git push origin main
-git checkout integration/nook-arena-platform
-```
+There is no pending main merge for this delivery. Future changes still need fresh
+remote checks and relevant verification. Publishing Git refs does not establish
+a successful public deployment.
 
 ---
 
@@ -75,7 +63,7 @@ The following items are intentionally preserved boundaries and require subsequen
 
 ## 5. Coordinator readiness judgment
 
-- **Close this work session:** Yes, after the reviewed docs are pushed and the remote integration SHA is confirmed. All changes needed for this delivery stay on the existing integration branch. The [readiness assessment](readiness-assessment-2026-11-14.md) records the limits of that conclusion.
+- **Close this work session:** Yes. The reviewed application delivery is on main and integration. The [readiness assessment](readiness-assessment-2026-11-14.md) records the remaining team and operator actions; these are not pending code merges.
 - **Cross-service coherence:** User, Chat, and Game form a coherent application. Identity, database ownership and service interactions align. Prisma versus parameterized SQL, and DTO versus engine validation, are legitimate implementation differences. Error response shapes and overlapping input limits remain candidates for later consistency work.
 - **School evaluation:** Ready for a team dress rehearsal, with final acceptance conditional on demonstrating the claimed modules and mandatory requirements. Demonstrate remote play on two computers, backup/recovery where claimed, fresh setup, and the team's ability to explain and modify the code. README attribution and team roles are already present after Saad's latest main update; confirm their accuracy rather than adding them again. No module points are certified by this review.
 - **Public production:** Not signed off. Verify the target deployment, trusted TLS, real restore procedure and scheduling, resource/abuse capacity, the judge host's trust isolation, and socket expiry policy. A single Game instance is an explicit deployment constraint, not automatically a defect or a requirement to add Redis before school evaluation.

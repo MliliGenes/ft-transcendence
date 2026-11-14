@@ -1,9 +1,16 @@
 # Coordinator readiness assessment — 2026-11-14
 
-This combines the bounded Antigravity review with coordinator checks against the
-latest merged main `9f66044`. It is not a full penetration test, deployment audit,
-or certification of school points. Application code baseline is `f3926e0`, which passed all 22 verification stages on a clean tree at
-`2026-11-14T21:47:09.438Z` (incorporating the verified TICKET-15 tiebreak/history outcome consistency fix, strict matchSides resolution, and scoped test timeouts on top of `048e7db`).
+This combines the bounded Antigravity review with coordinator checks. Application
+delivery is published to main and integration at `ff1141f`, preserving Saad's
+`9f66044` ancestor. It is not a full penetration test, deployment audit, or
+certification of school points.
+
+The last full-project verification passed all 22 stages on clean `f3926e0` at
+`2026-11-14T21:47:09.438Z`, including TICKET-15. The later client-only TICKET-16
+repair at `ff1141f` passed 117 client tests, lint, TypeScript and production build,
+plus focused browser QA: forbidden-match polling stopped, and the same session
+could still open an authorized completed match. No fresh full-project pass is
+claimed for `ff1141f`. See the [console audit](../client-console-audit.md#follow-up-forbidden-match-synchronization).
 
 ## Do the services fit together?
 
@@ -80,10 +87,9 @@ dependency advisory, host configuration or user journey.
 
 ## Next action and owners
 
-The coordinator publishes the reviewed integration docs and confirms the remote
-ref. The user/team can then close this session and use [the existing PR #3
-handoff](tonight-merge-handoff-2026-11-14.md) for tonight's main update, refreshing
-remote refs first. Team members own the school rehearsal; Saad owns shared
+Main promotion is complete; PR #3 is merged. The user/team can close this session;
+the [delivery handoff](tonight-merge-handoff-2026-11-14.md) records the published
+application and verification scopes. Team members own the school rehearsal; Saad owns shared
 deployment/provider configuration; the operator owns production recovery and
 judge-host controls. A green local gate and mergeability do not establish a
 successful deployment.

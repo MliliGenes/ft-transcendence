@@ -3,6 +3,26 @@
 **Delivery Date:** 2026-11-14
 **Workspace:** `nook-client`
 **Target Integration Branch:** `integration/nook-arena-platform`
+**Published Application:** `ff1141f69e4cdf7c4b1310ec7a6ded534b40a29e` on remote main and integration; PR #3 merged. Later documentation-only commits may advance both refs.
+
+## Latest delivery update
+
+Main promotion is complete. The last full-project gate passed 22/22 on clean
+`f3926e0`, generated `2026-11-14T21:47:09.438Z`, including the TICKET-15
+authoritative history/result repair. The subsequent client-only TICKET-16 fix at
+`ff1141f` stops snapshot retries after access denial. It passed all 117 client
+tests, lint, TypeScript and production build, then focused local browser QA.
+The forbidden page made one snapshot request over 75 seconds, and the same
+session afterward opened its authorized completed 2v2 match. QA rebuilt only
+the client; backend container identities were preserved. This is not a fresh
+full-project gate or proof of public deployment.
+
+See the [handoff](tonight-merge-handoff-2026-11-14.md) and
+[console audit](../client-console-audit.md#follow-up-forbidden-match-synchronization)
+for current scope. Earlier candidate refs and checks below are historical.
+
+### Historical consolidation references
+
 **Reference Delivery Commit:** `ae6a3aa75312597702ccdd3f82313a9fa7c6b1d4`
 **Remote Integration Ref:** `ed4c149f0bb0b3e36ed4f16699551f6c8b3fc465` (PR #4 merge)
 **Main Branch Ref:** `origin/main` (`c52c1d413e404dc154b38daebbc07be54ae55d8f`; prior checked ref `b01eabb6b4a49e2cf90425cba54765f4d19b663c`)
@@ -17,12 +37,12 @@ This tracked delivery readiness document records the consolidated verification e
 All code, tests, documentation, and browser evidence have been reviewed, repaired, and validated across both the initial consolidated delivery and the reconciled integration candidate:
 - **Historical Pre-Reconciliation Verification:** Pre-merge verification `npm run check` completed with **21/21 steps `ok: true`** (historical artifact generated `2026-11-14T15:50:04.103Z` at base HEAD `0ef74ba` dirty, prior to consolidation).
 - **Post-PR4 Integration Candidate Verification:** Root verification `npm run check` completed with **22/22 steps `ok: true`** (`dirty: false`, artifact generated `2026-11-14T17:03:42.367Z` at `f72a743`), reconciling `ae6a3aa` with remote integration `ed4c149` (preserving Saad Elm's commits `5635641` and `fdc912e`, 1v1 language fallback, candidate bank/version guards, and all round deadline/auth recovery features).
-- **Current Merged Candidate Verification (Latest Main Consolidation):** Full root verification `npm run check` completed with **22/22 steps `ok: true`** (`dirty: false`, artifact generated `2026-11-14T17:21:18.644Z` at commit `afe99b8068bdf3e87ddc976fa12981ac55916b7a`), covering merged code reconciling latest `origin/main` (`c52c1d4`) with integration platform delivery (`f72a743`). Fully preserves Saad Elm's email verification resend endpoint, DTO validation, and UI resend form alongside client graceful error handling, auth session recovery, and client verification view test coverage. Raw logs captured at `.scratch/code-arena/npm-check-2026-11-14-merged.log`.
+- **Historical Merged Candidate Verification:** Full root verification `npm run check` completed with **22/22 steps `ok: true`** (`dirty: false`, artifact generated `2026-11-14T17:21:18.644Z` at commit `afe99b8068bdf3e87ddc976fa12981ac55916b7a`), covering merged code reconciling latest `origin/main` (`c52c1d4`) with integration platform delivery (`f72a743`). Fully preserves Saad Elm's email verification resend endpoint, DTO validation, and UI resend form alongside client graceful error handling, auth session recovery, and client verification view test coverage. Raw logs captured at `.scratch/code-arena/npm-check-2026-11-14-merged.log`.
 - **Consolidated TICKET-13 & TICKET-14 Verified Candidate:** Full root verification `npm run check` completed with **22/22 steps `ok: true`** (`dirty: false`, artifact generated `2026-11-14T18:11:51.960Z` at commit `048e7dbcffee44a6da1b52e779a3da2936ede2d2`), validating the complete delivery platform including UTF-8 source byte admission (TICKET-13) and bounded stdin judge payload transport with explicit container cleanup on orchestrator timeout (TICKET-14). Raw logs captured at `.scratch/code-arena/npm-check-2026-11-14-ticket13-14.log`.
 - **Client Verification:** All **114/114 client tests passing** (`npm test`), ESLint clean (0 errors, 0 warnings), TypeScript compilation clean (`tsc --noEmit`). Includes new email verification view coverage (`email-verification-view.test.mjs`), 9 socket transport regressions (unsupported language fallback, offline on 401, transient error survival), F1 auth-provider session recovery, and client console error handling.
 - **User Service Verification:** **95/95 unit/mock tests passing**, 22/22 Discord mock tests passing. Test harness port-churn stabilized. Includes `/auth/email-verification/request` route validation and token rotation.
 - **Browser Runtime QA:** Real 10-minute round deadline verified on pre-reconciliation rebuilt client image `sha256:e706b77a3a4231c17cbb4c494e1111ddcd566056198214a4a2ed408ea0696ed1` (four-client 2v2 completed all 3 scored rounds, 100:100 each round, 300:300 final normal completion without forfeit or timeout); no new merged-tree browser claim made.
-- **Deployment Qualification:** Deployment readiness remains qualified on existing pending owner actions: evaluators' multi-computer test (G02), Saad Elm live OAuth/domain deployment confirmation, and admin CI runner unblocking.
+- **Deployment Qualification:** Deployment readiness remains qualified on existing pending owner actions: evaluators' multi-computer test (G02), Saad Elm live OAuth/domain deployment confirmation, and confirmation of hosted CI runner execution (unverified; no billing/quota blockage established).
 
 ---
 
@@ -124,16 +144,14 @@ Sanitized screenshot evidence is tracked in the repository:
 ## 7. Main Branch Readiness & Next Owner Actions
 
 ### Current Status
-- `origin/main` (`c52c1d413e404dc154b38daebbc07be54ae55d8f`) and latest candidate fixes are cleanly consolidated on `integration/nook-arena-platform` (candidate `048e7dbcffee44a6da1b52e779a3da2936ede2d2`, published on integration baseline `cc76da64b4cef767a81d86b01c9a266acbdd32f5`).
-- All 22/22 full gate verification checks pass on the clean committed candidate (`dirty: false`, artifact at `.verification/latest-full.json` generated `2026-11-14T18:11:51.960Z`).
-- Integration branch baseline `cc76da6` is published to `origin/integration/nook-arena-platform`. Promotion to `main` via PR #3 and all pushes to `main` remain held pending coordinator review and explicit authorization. Main itself remains untouched.
-- The [branch completeness audit](branch-completeness-2026-11-14.md) records that the two source and judge findings have been fixed and verified: TICKET-13 enforces UTF-8 byte-length admission in `engine.ts` (100 KiB contract verified by `source-byte-admission.test.ts`), and TICKET-14 replaces Docker argv base64 arguments with bounded stdin transport (8 MiB upper limit) and explicit bounded container cleanup on orchestrator timeout in `container-judge.ts` (verified by `judge-payload.test.ts` with zero container leaks). Historical branch comparison limits, socket token expiry, and optional setup/eval documentation remain recorded. Review these verified findings and the owner actions below before deciding on promotion to `main` via PR #3.
+- Application commit `ff1141f` is published on remote main and integration after user-authorized non-force fast-forward promotions. PR #3 is merged; no merge remains for this delivery.
+- Verification scope is recorded in the latest delivery update above: full-project 22/22 at `f3926e0`, followed by focused client checks and browser QA for `ff1141f`.
+- The [branch completeness audit](branch-completeness-2026-11-14.md) records the repaired UTF-8 source and judge payload findings (TICKET-13/14). Historical branch comparison limits, socket token expiry, and optional setup/eval documentation remain recorded; main promotion does not resolve those separate concerns.
 
 ### Remaining Owner Actions for this Evening
 
 | Owner | Action | Description |
 |---|---|---|
-| **Coordinator / User** | **Authorize Main Update** | Review consolidated commit and delivery readiness note; authorize promotion from `integration/nook-arena-platform` to `main`. |
 | **Team / Evaluators** | **G02 Multi-Computer Test** | Perform the required demonstration of Code Arena match completion and reconnect/recovery across **two separate physical computers**. (Local multi-tab browser QA confirms 2v2 logic but does not satisfy G02). |
 | **Saad Elm** | **Deploy & Live OAuth** | Verify Vercel / staging deployment status, production domain configurations, and live Discord/GitHub OAuth provider redirect URIs. |
-| **Repository Admin** | **CI Billing & Runner Check** | Confirm whether external GitHub Actions billing/runner startup limitations have been resolved. (Checked read-only / marked unverified in this report). |
+| **Repository Admin** | **CI Runner Check** | Confirm hosted CI runner execution and capacity; billing/quota blockage has not been established. |

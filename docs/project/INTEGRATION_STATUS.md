@@ -1,6 +1,12 @@
 # Nook / Arena integration status
 
-Source tips: local `970b3bd`; teammate remote `f85969d`; main `b01eabb`. Both local `49a0936` and rewritten remote `4232a34` have identical trees. The integration uses that verified content baseline while retaining both actual histories. No shared branch is force-pushed or history rewritten.
+**2026-11-14 delivery update:** Application commit `ff1141f` is published on main
+and integration, including the forbidden-match retry repair. PR #3 is merged.
+See the [current handoff](../evidence/tonight-merge-handoff-2026-11-14.md) for
+verification scopes and remaining owner actions. The sections below preserve
+earlier integration evidence; their refs and results are historical.
+
+Historical source tips: local `970b3bd`; teammate remote `f85969d`; main `b01eabb`. Both local `49a0936` and rewritten remote `4232a34` have identical trees. The integration used that verified content baseline while retaining both actual histories. No shared branch was force-pushed or history rewritten.
 
 ## Decisions
 
