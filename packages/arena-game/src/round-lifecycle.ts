@@ -52,20 +52,20 @@ export interface RevealInput {
 
 function matchSides(match: MatchRecord): [SideId, SideId] {
   const fromActivities = Object.keys(match.rounds[0]?.activities ?? {});
-  if (fromActivities.length >= 2) return [fromActivities[0]!, fromActivities[1]!];
-  const fromParticipants = [...new Set(match.participants?.map((p) => p.sideId) ?? [])];
-  if (fromParticipants.length >= 2) return [fromParticipants[0]!, fromParticipants[1]!];
+  if (fromActivities.length === 2) return [fromActivities[0]!, fromActivities[1]!];
+
+  const fromParticipants: SideId[] = [];
+  for (const p of match.participants ?? []) {
+    if (p.sideId && !fromParticipants.includes(p.sideId)) {
+      fromParticipants.push(p.sideId);
+    }
+  }
+  if (fromParticipants.length === 2) return [fromParticipants[0]!, fromParticipants[1]!];
+
   const fromCounted = Object.keys(match.rounds[0]?.counted ?? {});
-  if (fromCounted.length >= 2) return [fromCounted[0]!, fromCounted[1]!];
-  if (match.forfeit) {
-    const loser = match.forfeit.loser || (match.forfeit.winner === "left" ? "right" : "left");
-    return [match.forfeit.winner === "left" ? "left" : loser, match.forfeit.winner === "left" ? loser : "right"];
-  }
-  if (fromParticipants.length === 1) {
-    const side = fromParticipants[0]!;
-    return side === "left" ? ["left", "right"] : ["left", side];
-  }
-  return ["left", "right"];
+  if (fromCounted.length === 2) return [fromCounted[0]!, fromCounted[1]!];
+
+  throw new Error("Cannot determine match sides: match record must have exactly two distinct sides");
 }
 
 export function computeFinal(match: MatchRecord): FinalResult {

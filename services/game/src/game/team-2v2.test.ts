@@ -243,7 +243,7 @@ describe("2v2 service integration (real HTTP + sockets + Postgres)", () => {
     // The accepted submit starts a real judge container; the default 5 s
     // budget is too tight for that on a loaded machine (this test needs
     // 3.5-4.5 s), so give it the same room as its sibling below.
-  }, 60000);
+  }, 30000);
 
   it("10. Alpha evaluation does not block Beta; both teams count, reveal is team scores", async () => {
     const matchId = await newTeamMatch();
@@ -295,7 +295,7 @@ describe("2v2 service integration (real HTTP + sockets + Postgres)", () => {
     await startCoding(matchId);
     const socks = await Promise.all([connect(A1, matchId), connect(A2, matchId), connect(B1, matchId), connect(B2, matchId)]);
     try {
-      const waits = socks.map((s) => once(s, "reveal.published", 60000));
+      const waits = socks.map((s) => once(s, "reveal.published", 30000));
       const revA = await pushSource(A1, matchId, SOLVED_PY);
       const revB = await pushSource(B1, matchId, SOLVED_PY);
       for (const u of [A1, A2]) {

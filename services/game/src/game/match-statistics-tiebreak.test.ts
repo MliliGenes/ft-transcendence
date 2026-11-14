@@ -255,9 +255,9 @@ describe("authoritative match outcome tiebreaks and history consistency", () => 
     expect(summarizeCompletedMatch(completedMatch, "spectator-user")).toBeNull();
   });
 
-  it("correctly summarizes historical records where round activities are omitted", () => {
-    const historicalMatch = makeMatch({
-      id: "match-historical",
+  it("correctly summarizes synthetic/partial fixtures where round activities are omitted via participant fallback", () => {
+    const fixtureMatch = makeMatch({
+      id: "match-fixture-no-activities",
       mode: "1v1",
       leftScore: 100,
       rightScore: 100,
@@ -272,7 +272,93 @@ describe("authoritative match outcome tiebreaks and history consistency", () => 
       omitActivities: true,
     });
 
-    expect(summarizeCompletedMatch(historicalMatch, "player-alpha")?.outcome).toBe("win");
-    expect(summarizeCompletedMatch(historicalMatch, "player-beta")?.outcome).toBe("loss");
+    expect(summarizeCompletedMatch(fixtureMatch, "player-alpha")?.outcome).toBe("win");
+    expect(summarizeCompletedMatch(fixtureMatch, "player-beta")?.outcome).toBe("loss");
+  });
+
+  it("supports arbitrary non-left/right side IDs for summary and forfeit outcomes", () => {
+    const arbitrarySideMatch: MatchRecord = {
+      id: "match-arbitrary-sides",
+      mode: "1v1",
+      roundPhase: "MATCH_COMPLETE",
+      currentRound: 1,
+      totalRounds: 1,
+      durationMs: 60000,
+      startedAt: 1000000,
+      participants: [
+        { userId: "user-red", sideId: "team-red" },
+        { userId: "user-blue", sideId: "team-blue" },
+      ],
+      rounds: [
+        {
+          index: 0,
+          problemId: "p1",
+          startedAt: 1000000,
+          durationMs: 20000,
+          counted: {
+            "team-red": { score: 100, scoringTimeMs: 900 },
+            "team-blue": { score: 100, scoringTimeMs: 1500 },
+          },
+          attempts: { "team-red": 1, "team-blue": 1 },
+          activities: { "team-red": "coding", "team-blue": "coding" },
+          reveal: {
+            publishedAt: 1020000,
+            deadline: 1020000,
+            scores: { "team-red": 100, "team-blue": 100 },
+          },
+        },
+      ],
+      failures: [],
+      revision: 1,
+      presence: {},
+      offlineSinceMs: {},
+      forfeit: null,
+    } as unknown as MatchRecord;
+
+    const summaryRed = summarizeCompletedMatch(arbitrarySideMatch, "user-red");
+    const summaryBlue = summarizeCompletedMatch(arbitrarySideMatch, "user-blue");
+    expect(summaryRed?.outcome).toBe("win");
+    expect(summaryBlue?.outcome).toBe("loss");
+
+    // Forfeit override with arbitrary side IDs
+    const forfeitMatch: MatchRecord = {
+      ...arbitrarySideMatch,
+      forfeit: { winner: "team-blue", loser: "team-red", at: 1010000, reason: "leave" },
+    };
+    expect(summarizeCompletedMatch(forfeitMatch, "user-red")?.outcome).toBe("loss");
+    expect(summarizeCompletedMatch(forfeitMatch, "user-blue")?.outcome).toBe("win");
+  });
+
+  it("fails explicitly when match record has unresolvable sides", () => {
+    const invalidMatch: MatchRecord = {
+      id: "match-invalid",
+      mode: "1v1",
+      roundPhase: "MATCH_COMPLETE",
+      currentRound: 1,
+      totalRounds: 1,
+      durationMs: 60000,
+      startedAt: 1000000,
+      participants: [],
+      rounds: [
+        {
+          index: 0,
+          problemId: "p1",
+          startedAt: 1000000,
+          durationMs: 20000,
+          counted: {},
+          attempts: {},
+          activities: {},
+          reveal: null,
+        },
+      ],
+      failures: [],
+      revision: 1,
+      presence: {},
+      offlineSinceMs: {},
+      forfeit: null,
+    } as unknown as MatchRecord;
+
+    expect(() => summarizeCompletedMatch({ ...invalidMatch, participants: [{ userId: "u1", sideId: "solo" }] }, "u1"))
+      .toThrow(/Cannot determine match sides/);
   });
 });

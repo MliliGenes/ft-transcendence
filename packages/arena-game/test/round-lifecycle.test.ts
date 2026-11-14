@@ -155,5 +155,49 @@ describe("RoundLifecycle", () => {
       expect(res.outcome).toBe("left");
       expect(res.winner).toBe("left");
     });
+
+    it("supports arbitrary non-left/right side IDs for tiebreaks and forfeits", () => {
+      const m = match();
+      m.roundPhase = "MATCH_COMPLETE";
+      m.participants = [
+        { userId: "u1", sideId: "team-alpha" },
+        { userId: "u2", sideId: "team-bravo" },
+      ];
+      m.rounds[0]!.activities = { "team-alpha": "coding", "team-bravo": "coding" } as any;
+      m.rounds[0]!.counted = {
+        "team-alpha": { score: 100, scoringTimeMs: 800 },
+        "team-bravo": { score: 100, scoringTimeMs: 1200 },
+      } as any;
+      m.rounds[0]!.attempts = { "team-alpha": 1, "team-bravo": 1 } as any;
+      m.rounds = [m.rounds[0]!];
+
+      const res = computeFinal(m);
+      expect(res.outcome).toBe("left");
+      expect(res.winner).toBe("team-alpha");
+      expect(res.scores).toEqual({ "team-alpha": 100, "team-bravo": 100 });
+
+      // Forfeit override with arbitrary side IDs
+      m.forfeit = { winner: "team-bravo", loser: "team-alpha", at: 5000, reason: "leave" } as any;
+      const forfeitRes = computeFinal(m);
+      expect(forfeitRes.outcome).toBe("right");
+      expect(forfeitRes.winner).toBe("team-bravo");
+      expect(forfeitRes.forfeit).toEqual(m.forfeit);
+    });
+
+    it("fails explicitly when match sides are unresolvable", () => {
+      const m = match();
+      m.roundPhase = "MATCH_COMPLETE";
+      m.participants = [];
+      (m.rounds[0] as any).activities = {};
+      (m.rounds[0] as any).counted = {};
+      m.rounds = [m.rounds[0]!];
+
+      expect(() => computeFinal(m)).toThrow(/Cannot determine match sides/);
+
+      // Only one side present in activities and participants
+      m.participants = [{ userId: "u1", sideId: "solo" }];
+      (m.rounds[0] as any).activities = { solo: "coding" };
+      expect(() => computeFinal(m)).toThrow(/Cannot determine match sides/);
+    });
   });
 });

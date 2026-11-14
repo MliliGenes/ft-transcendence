@@ -10,7 +10,7 @@ import { JudgeInfraError, SPIKE_LIMITS } from "../src/judge.js";
 const LIMITS = {
   ...SPIKE_LIMITS,
   runWallMs: 4000,
-  compileWallMs: 60000,
+  compileWallMs: 15000,
   runMemoryMb: 256,
   runOutputBytes: 65536,
   runPids: 64,
@@ -90,7 +90,7 @@ describe("judge payload transport (TICKET-14)", () => {
       passed: true,
       status: "accepted",
     });
-  }, 60000);
+  }, 30000);
 
   it("python snippet: resolves Solution class entrypoint", async () => {
     const source = `
@@ -116,7 +116,7 @@ class Solution:
       passed: true,
       status: "accepted",
     });
-  }, 60000);
+  }, 30000);
 
   it("python snippet: resolves top-level function entrypoint without Solution class", async () => {
     const source = `
@@ -135,7 +135,7 @@ def multiply(a, b):
       passed: true,
       status: "accepted",
     });
-  }, 60000);
+  }, 30000);
 
   it("python stdio: handles standard input and output correctly", async () => {
     const source = `
@@ -155,7 +155,7 @@ print(sum(nums))
       passed: true,
       status: "accepted",
     });
-  }, 60000);
+  }, 30000);
 
   it("c stdio: compiles and runs with stdio input", async () => {
     const source = `
@@ -179,7 +179,7 @@ int main() {
       passed: true,
       status: "accepted",
     });
-  }, 60000);
+  }, 30000);
 
   it("c++ stdio: compiles and runs with stdio input", async () => {
     const source = `
@@ -204,7 +204,7 @@ int main() {
       passed: true,
       status: "accepted",
     });
-  }, 60000);
+  }, 30000);
 
   it("stdio with binary NUL, newlines, quotes, shell metacharacters and multibyte UTF-8", async () => {
     // Tests real binary NUL bytes (0x00), multiple newlines, multi-byte UTF-8, quotes, and shell metacharacters
@@ -266,7 +266,7 @@ def count_multibyte(data):
       passed: true,
       status: "accepted",
     });
-  }, 60000);
+  }, 30000);
 
   it("unusual content in snippet mode: quotes, backslashes, newlines without delimiter collision", async () => {
     const source = `
@@ -294,7 +294,7 @@ def inspect_content(raw):
     );
     expect(result[0].status).toBe("accepted");
     expect(result[0].passed).toBe(true);
-  });
+  }, 30000);
 
   it("normal competitive inner timeout: preserves time_limit_exceeded and cleans container via --rm", async () => {
     const baseline = new Set(listOwnedContainers());
@@ -316,7 +316,7 @@ def loop_forever(x):
 
     // Verify container cleanly exited and was cleaned up by Docker --rm
     await waitForOwnedContainersClean(baseline);
-  });
+  }, 30000);
 
   it("outerTimeoutMs regression: orchestrator timeout shorter than inner limit settles as JudgeInfraError with zero leaked containers", async () => {
     const baseline = new Set(listOwnedContainers());
@@ -376,7 +376,7 @@ def loop_forever(x):
 
     // Test D: Length exceeding 8 MiB bound in header
     runCorrupted("99999999\n10\n10\n");
-  });
+  }, 30000);
 
   it("runner exit code 70 maps to JudgeInfraError and ensures container cleanup", async () => {
     const fakeBinary = makeFakeDocker("", 70, "framing validation failed");
