@@ -4,7 +4,7 @@
 **Integration Branch:** `integration/nook-arena-platform`
 **Target Branch:** `main`
 **Open Pull Request:** PR #3 (`integration/nook-arena-platform` -> `main`)
-**Production Code Baseline:** `d5ad6cf25a3ab732926293422d2300e0a25f0230` (`npm run check` 22/22 steps `ok: true`, `dirty: false` generated 2026-11-14T21:16:38.967Z; includes TICKET-15 authoritative outcome repair)
+**Production Code Baseline:** `f3926e01e41dfd63b896e1b7ed767c698c667b02` (`npm run check` 22/22 steps `ok: true`, `dirty: false` generated 2026-11-14T21:47:09.438Z; includes TICKET-15 authoritative outcome repair, strict matchSides resolution, and scoped test timeouts)
 **Latest Merged Main Ancestor:** `9f660442a28afc6549ed41484e68e7568f83f37d` (Saad Elm's Makefile, AGENTS scan map, graph refresh, volume gitkeeps)
 
 ---
@@ -18,7 +18,7 @@ The `integration/nook-arena-platform` branch consolidates all verified project w
 4. **Email Verification Resend:** Saad Elm's `POST /auth/email-verification/request` endpoint and client UI form, fully documented in `docs/api/user-service.openapi.json` with `Cache-Control: no-store` header, required `requested: true` (`const: true`), and inline schema validation.
 5. **Operational Automation & Tooling:** Saad's root `Makefile` (`make up`, `make down`, `make check`, `make backup-up`), updated `AGENTS.md` project scan map, refreshed `graphify-out/` architecture graph, and corrected infrastructure documentation.
 6. **Tracked Documentation & Handbook:** Rebuilt [Nook-Book.pdf](../book/Nook-Book.pdf) (194 pages) visually verified across 11 rendered page previews via Swift PDFKit; all internal links and anchors validated with balanced parentheses parsing.
-7. **Authoritative Match Outcomes & Statistics Consistency (TICKET-15):** The engine exports pure `computeFinal(match: MatchRecord)` from `packages/arena-game/src/round-lifecycle.ts` with robust side discovery across historical and active records. `services/game/src/game/match-statistics.ts` reuses this pure function in `summarizeCompletedMatch`, ensuring match summary, win/loss history, leaderboard ranking, XP calculation, and win achievements strictly agree with engine tiebreakers (scoring time and attempt count), genuine exact draws, and forfeit decisions across both 1v1 and 2v2 modes.
+7. **Authoritative Match Outcomes & Statistics Consistency (TICKET-15):** The engine exports pure `computeFinal(match: MatchRecord)` from `packages/arena-game/src/round-lifecycle.ts` with strict two-side resolution from activities, participants, or counted data, failing explicitly on malformed unresolvable records. `services/game/src/game/match-statistics.ts` reuses this pure function in `summarizeCompletedMatch`, ensuring match summary, win/loss history, leaderboard ranking, XP calculation, and win achievements strictly agree with engine tiebreakers (scoring time and attempt count), genuine exact draws, and forfeit decisions across both 1v1 and 2v2 modes (with completion-based `coop_tactician` and win-based `first_win` preserved).
 
 ---
 
