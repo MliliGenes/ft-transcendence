@@ -36,7 +36,7 @@ Next.js 16 differs from older versions. Read `node_modules/next/dist/docs/` befo
 | `/chat` | DMs, groups, channels, presence, attachments, edit and delete |
 | `/profile`, `/profile/[id]` | Profile, friends, blocks, status, Posts tab |
 | `/profile/edit`, `/settings` | Profile fields, image cropping, status composer, account settings |
-| `/play`, `/play/lobby`, `/play/match/[id]`, `/play/leaderboard` | Code Arena catalog, rooms, matches and leaderboard |
+| `/play`, `/play/lobby/[code]`, `/play/match/[id]`, `/play/leaderboard` | Code Arena catalog, rooms, matches and leaderboard |
 | `/play/chess` | Coming soon |
 
 ## How data flows

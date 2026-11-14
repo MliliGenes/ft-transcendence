@@ -631,6 +631,63 @@
         ]
       }
     },
+    "/auth/email-verification/request": {
+      "post": {
+        "operationId": "postAuthEmailVerificationRequest",
+        "summary": "Request Email Verification Resend",
+        "tags": [
+          "Auth"
+        ],
+        "description": "### Request Email Verification Resend\n\n  `POST /auth/email-verification/request`\n\n  No access token is required. Request:\n\n  ```json\n  {\n    \"email\": \"user@example.com\"\n  }\n  ```\n\n  `email` must be a valid email address. For eligible unverified accounts without an active 10-minute cooldown, deletes prior unused verification tokens, creates a new single-use token that expires after two hours, and sends a replacement verification link to `${AUTH_FRONTEND_URL}/verify-email?token=<token>`. Returns a generic `{ \"requested\": true }` response for all valid requests (including nonexistent, already verified, or on cooldown accounts) to prevent email enumeration.\n\n  Responses:\n\n  - `200 OK`: `{ \"requested\": true }`\n  - `400 Bad Request`: invalid body or email format",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requested": {
+                      "type": "boolean"
+                    }
+                  }
+                },
+                "example": {
+                  "requested": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "email"
+                ]
+              },
+              "example": {
+                "email": "user@example.com"
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/password-reset/request": {
       "post": {
         "operationId": "postAuthPasswordResetRequest",

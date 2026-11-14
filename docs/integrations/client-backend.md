@@ -35,6 +35,8 @@ sequenceDiagram
 - The access token lives only in React state in `AuthProvider`. It is never written to storage.
 - On load, `AuthProvider` calls refresh, except on `/login`, `/register`, `/forgot-password`, `/reset-password` and `/verify-email`.
 - `requestWithSession` runs a request and refreshes on expiry. Concurrent refreshes share one promise, because refresh tokens rotate and a second use would look like token reuse.
+- Sessions approaching expiration (within a 60-second skew threshold) are refreshed proactively before dispatching actions.
+- Transient network failures (status 0) and 5xx server errors preserve the in-memory session in `AuthProvider` so callers can retry and background polling continues. Only an authoritative HTTP 401 unauthenticated response disposes the session (`setSessionValue(null)`) and transitions transports to offline.
 - Nginx rewrites the cookie path from `/auth/` to `/api/auth/`.
 
 ## Realtime
@@ -45,7 +47,7 @@ New messages arrive as `message:created` and are merged into the query cache by 
 
 ## Errors
 
-The API clients in `lib/` turn HTTP status codes into user-facing messages and raise `AuthRequestError`, which carries `status`. Components branch on `status`, for example to show "This reset link has expired" on 401.
+The API clients in `lib/` turn HTTP status codes into user-facing messages and raise `AuthRequestError`, which carries `status`. `UnauthenticatedSessionError` extends it for genuine 401 unauthenticated rejections. Components branch on `status`, for example to show "This reset link has expired" on 401. Non-401 errors (transient network 0 or gateway 5xx) retain session state and permit retries.
 
 ## Where each merging point is documented
 

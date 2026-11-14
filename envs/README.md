@@ -31,7 +31,7 @@ Every example assignment uses `VAR_NAME=<EXAMPLE_VALUE>`:
 | `backend.env` | User, Chat and Game services | Shared runtime mode |
 | `user-db.env` | User database and User service | User database credentials/name |
 | `chat-db.env` | Chat database and Chat service | Chat database credentials/name |
-| `game-db.env` | Game database | Game database credentials/name |
+| `game-db.env` | Game database and backup container (`game-db-backup`) | Game database credentials/name |
 | `rabbitmq.env` | RabbitMQ plus User, Chat and Game services | Shared broker credentials |
 | `minio.env` | MinIO and its initializer | Storage admin credentials and browser CORS origins |
 | `user-service.env` | User service only | Internal addresses, SMTP, initial app admin |
@@ -50,7 +50,7 @@ Use the same generated `JUDGE_WORKER_TOKEN` in `game-service.env` and
 `judge-worker.env`.
 
 The Next.js client currently needs no project-specific env file: browser
-requests use `/api/` and `/api/chat/` on the current origin. The obsolete
+requests use `/api/`, `/api/chat/`, and `/api/game/` on the current origin. The obsolete
 `client.example` Vite settings are no longer used.
 
 ## Configure a fresh clone

@@ -124,9 +124,9 @@ Sanitized screenshot evidence is tracked in the repository:
 ## 7. Main Branch Readiness & Next Owner Actions
 
 ### Current Status
-- `origin/main` (`c52c1d413e404dc154b38daebbc07be54ae55d8f`) and latest candidate fixes are cleanly consolidated on local `integration/nook-arena-platform` candidate (`048e7dbcffee44a6da1b52e779a3da2936ede2d2`).
-- All 22/22 full gate verification checks pass on the clean committed candidate (`dirty: false`, artifact at `.verification/latest-full.json`).
-- All pushes are held locally on `integration/nook-arena-platform` pending coordinator review and explicit authorization. Main itself remains untouched.
+- `origin/main` (`c52c1d413e404dc154b38daebbc07be54ae55d8f`) and latest candidate fixes are cleanly consolidated on `integration/nook-arena-platform` (candidate `048e7dbcffee44a6da1b52e779a3da2936ede2d2`, published on integration baseline `cc76da64b4cef767a81d86b01c9a266acbdd32f5`).
+- All 22/22 full gate verification checks pass on the clean committed candidate (`dirty: false`, artifact at `.verification/latest-full.json` generated `2026-11-14T18:11:51.960Z`).
+- Integration branch baseline `cc76da6` is published to `origin/integration/nook-arena-platform`. Promotion to `main` via PR #3 and all pushes to `main` remain held pending coordinator review and explicit authorization. Main itself remains untouched.
 - The [branch completeness audit](branch-completeness-2026-11-14.md) records that the two source and judge findings have been fixed and verified: TICKET-13 enforces UTF-8 byte-length admission in `engine.ts` (100 KiB contract verified by `source-byte-admission.test.ts`), and TICKET-14 replaces Docker argv base64 arguments with bounded stdin transport (8 MiB upper limit) and explicit bounded container cleanup on orchestrator timeout in `container-judge.ts` (verified by `judge-payload.test.ts` with zero container leaks). Historical branch comparison limits, socket token expiry, and optional setup/eval documentation remain recorded. Review these verified findings and the owner actions below before deciding on promotion to `main` via PR #3.
 
 ### Remaining Owner Actions for this Evening

@@ -62,7 +62,7 @@ flowchart LR
   Monitor -. observes services .-> Game
 ```
 
-Nginx is the browser-facing HTTPS entry point. Service and database ports are private to the Compose network, apart from the explicitly loopback-bound development tools below. User owns account identity and authentication; Chat owns messages and groups; Code Arena owns matches, rounds, submissions and collaboration snapshots. The services use separate PostgreSQL databases. RabbitMQ carries User account events to Chat and account-deletion events to Game. Game also publishes match and challenge lifecycle events to Chat, which stores them as notices in the conversation that carries an invitation. Delivery is best effort because Game does not keep an outbox for replay after a broker failure. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records.
+Nginx is the browser-facing HTTPS entry point. Service and database ports are private to the Compose network, apart from the explicitly loopback-bound development tools below. User owns account identity and authentication; Chat owns messages and groups; Code Arena owns matches, rounds, submissions and collaboration snapshots. The services use separate PostgreSQL databases. RabbitMQ carries User account events to Chat and account-deletion events to Game. Game also publishes match and challenge lifecycle events to Chat, which stores them as notices in the conversation that carries an invitation. Delivery is best effort because Game does not keep an outbox for replay after a broker failure. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Source admission enforces a 100 KiB UTF-8 byte limit, while judge payload transport streams test cases over bounded stdin (up to 8 MiB) with explicit owned container cleanup on orchestrator timeout. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records.
 
 The judge worker currently mounts the host Docker socket because it creates the isolated execution containers. Treat that worker as a privileged host component: keep the worker endpoint and shared token private, and review the Docker-host trust boundary before using this setup for an untrusted public multi-tenant service.
 
@@ -121,11 +121,11 @@ Prometheus, Loki, Alloy, databases, backend services and the judge worker are no
 | Game PostgreSQL | Private rooms, match snapshots, rounds, submissions, results and collaborative editor snapshots | Code Arena service, SQL schema initialization |
 | MinIO | Chat attachment objects | Chat service presigned upload/download flows |
 
-The databases have separate owners and no cross-database foreign keys. The Chat service receives profile changes through RabbitMQ and stores the existing User UUID. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records. See the [User service guide](docs/services/user-service.md), [Chat schema notes](docs/services/chat-service.md), and [game persistence implementation](packages/arena-game/src/postgres-store.ts).
+The databases have separate owners and no cross-database foreign keys. The Chat service receives profile changes through RabbitMQ and stores the existing User UUID. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Source admission enforces a 100 KiB UTF-8 byte limit, while judge payload transport streams test cases over bounded stdin (up to 8 MiB) with explicit owned container cleanup on orchestrator timeout. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records. See the [User service guide](docs/services/user-service.md), [Chat schema notes](docs/services/chat-service.md), and [game persistence implementation](packages/arena-game/src/postgres-store.ts).
 
 ## Verification
 
-Run `npm run check` for the complete project gate. Setup, disposable integration tests, local secret hooks and CI scope are documented in [Repeatable verification](docs/project/VERIFICATION.md).
+Run `npm run check` for the complete 22/22 project gate. Setup, disposable integration tests, local secret hooks and CI scope are documented in [Repeatable verification](docs/project/VERIFICATION.md).
 
 ## Code Arena integration
 
@@ -186,7 +186,7 @@ cd client && npm test && npm run lint && npm run build
 cd .. && node nginx/check.mjs
 ```
 
-Direct Game PostgreSQL tests need `TEST_PG_URL` to point to a disposable test database; the in-memory game suite does not exercise persistent SQL behavior. `npm run test:integration` starts disposable PostgreSQL and RabbitMQ containers and runs the database/socket suites without a preconfigured `TEST_PG_URL`. `nginx/check.mjs` verifies local gateway routing after the stack is running. See [all project documentation](docs/README.md) for service guides, plans, diagrams and setup details.
+Direct Game PostgreSQL tests need `TEST_PG_URL` to point to a disposable test database; the in-memory game suite does not exercise persistent SQL behavior. `npm run test:integration` starts disposable PostgreSQL and RabbitMQ containers and runs the database/socket suites without a preconfigured `TEST_PG_URL`. Root `npm run check` runs all 22 verification stages for the complete product gate. `nginx/check.mjs` verifies local gateway routing after the stack is running. See [all project documentation](docs/README.md) for service guides, plans, diagrams and setup details.
 
 ## Git activity report
 

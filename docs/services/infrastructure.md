@@ -41,7 +41,7 @@ Open `https://localhost` and accept the local certificate. Source changes need `
 | File | Holds |
 | --- | --- |
 | `backend.env` | Shared runtime mode for User, Chat and Game |
-| `user-db.env`, `chat-db.env`, `game-db.env` | Database credentials, loaded by each database and its backup container; User and Chat services also load their database settings |
+| `user-db.env`, `chat-db.env`, `game-db.env` | Database credentials, loaded by each database and its backup container; User and Chat services load their database settings, while Game loads `DATABASE_URL` from `game-service.env` |
 | `rabbitmq.env` | Broker credentials, loaded by RabbitMQ and the User, Chat and Game services |
 | `minio.env` | MinIO root account and CORS origins |
 | `user-service.env` | Internal addresses, SMTP, initial superadmin |
@@ -106,9 +106,10 @@ Enable the optional profile explicitly to start these services and their depende
 ```sh
 docker compose --profile database-only-backups up -d user-db-backup chat-db-backup game-db-backup
 docker compose --profile database-only-backups ps -a backup-storage-init user-db-backup chat-db-backup game-db-backup
-docker compose logs --tail=100 user-db-backup chat-db-backup
+docker compose logs --tail=100 user-db-backup chat-db-backup game-db-backup
 docker compose exec user-db-backup ls -lh /backups/last
 docker compose exec chat-db-backup ls -lh /backups/last
+docker compose exec game-db-backup ls -lh /backups/last
 ```
 
 Look for successful backup completion in the logs and a timestamped `.sql.gz`
@@ -121,6 +122,7 @@ progress (the image's backup script does not serialize concurrent runs):
 ```sh
 docker compose exec user-db-backup /backup.sh
 docker compose exec chat-db-backup /backup.sh
+docker compose exec game-db-backup /backup.sh
 ```
 
 ### Export a copy
@@ -130,6 +132,7 @@ Copy backups out of the Docker volumes; `-L` follows the `latest` symlinks:
 ```sh
 docker compose cp -L user-db-backup:/backups ./volumes/user-db-backup-export
 docker compose cp -L chat-db-backup:/backups ./volumes/chat-db-backup-export
+docker compose cp -L game-db-backup:/backups ./volumes/game-db-backup-export
 ```
 
 Use fresh destination directories for subsequent exports. These paths are already
@@ -276,10 +279,12 @@ To demo one, run `docker compose stop chat-service`, wait about 90 seconds, then
 
 ### Existing databases
 
-New databases create the `monitoring` login automatically. For a database that already had data, run this once for `user-db` and again for `chat-db`:
+New databases create the `monitoring` login automatically. For a database that already had data, run this for `user-db`, `chat-db`, and `game-db`:
 
 ```sh
 docker compose exec user-db sh /docker-entrypoint-initdb.d/10-monitoring-role.sh
+docker compose exec chat-db sh /docker-entrypoint-initdb.d/10-monitoring-role.sh
+docker compose exec game-db sh /docker-entrypoint-initdb.d/10-monitoring-role.sh
 ```
 
 ### Troubleshooting

@@ -38,5 +38,6 @@ The game is hosted inside Nook's web client under the `/play` route and follows 
 - **Hidden Suite**: Sealed evaluation tests evaluated inside `judge-worker`. Breakdown is disclosed only during Score Reveal.
 - **Reveal**: Per-round score disclosure (percentages and hidden-group breakdown) shown after evaluation settles.
 - **Match Phase**: State machine: `ROUND_INTRO` → `CODING` → (`RUNNING_TESTS` → `CODING`)* → `SUBMITTED` → `EVALUATING` → `SCORE_REVEAL` → next round / match end.
-- **Match Deadline**: Server-authoritative clock. Submissions accepted before the deadline are evaluated within a bounded grace window.
+- **Round Coding Deadline**: Server-authoritative 10-minute coding deadline per round, starting at the first `CODING` transition and capped by the overall 30-minute match budget. Persisted in `rounds.coding_deadline_ms`. New submissions are rejected at/after cutoff; pre-cutoff submissions follow bounded 2s evaluation grace. Unsubmitted sides receive 0 points at round deadline. Immediate reveal when both sides score before cutoff is preserved.
+- **Match Deadline**: Server-authoritative 30-minute overall match budget. Capped across rounds; submissions accepted before deadline are evaluated within a bounded grace window.
 - **Player Status**: One of `coding`, `running`, `submitted`, `evaluating`, `locked in`, `disconnected`. Modeled independently of presence (`online`/`offline`).

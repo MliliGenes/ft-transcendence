@@ -28,7 +28,7 @@ Nook's first game is Code Arena, a timed coding game for 1v1 duels and 2v2 teams
 ## Consequences and known limits
 
 - Code Arena provides three seeded problem IDs to a three-round match, avoiding repeats in the default pool.
-- Each round enforces a shared 10-minute coding deadline starting at the first CODING transition, capped by the overall 30-minute match budget. Unsubmitted sides receive zero points at round deadline, pre-cutoff submissions follow bounded evaluation grace, and early reveal when both sides score before cutoff is preserved.
+- Each round enforces a shared 10-minute coding deadline starting at the first CODING transition, capped by the overall 30-minute match budget. The deadline is persisted in PostgreSQL (`rounds.coding_deadline_ms`) across service restarts and reconnects. Unsubmitted sides receive zero points at round deadline, pre-cutoff submissions follow bounded evaluation grace, and early reveal when both sides score before cutoff is preserved.
 - The game supports four simultaneous participants in 2v2; separate-client remote play and reconnect behavior must still be demonstrated during evaluation.
 - Profile statistics and leaderboard use wins, losses, draws and win rate; profile progression and achievement badges are implemented. There is no Elo rating.
 - The Chat invitation card shows a live `Open`, `In Match`, or `Expired` status. That status is informational; Game checks joinability again when a participant opens or joins the room.

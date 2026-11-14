@@ -1,5 +1,10 @@
 #!/bin/bash
-# One-command local play for Code Arena (dev seam, no auth).
+# NOTE: This script is an obsolete standalone development seam that references
+# the absent legacy arena-frontend workspace. For the current integrated Nook platform,
+# use Docker Compose startup (docker compose up --build) as documented in README.md,
+# envs/README.md, and docs/project/COMPOSE.md.
+#
+# Historical one-command local play for Code Arena (dev seam, no auth).
 #   ./scripts/play.sh          # solo on this machine (localhost)
 #   ./scripts/play.sh lan      # expose over LAN so a friend can join
 # Ctrl-C stops everything.

@@ -14,7 +14,7 @@ the adapted Nook import at `16fa0ed`.
   `2026-11-14T18:11:51.960Z` (prior baseline `afe99b8` at `17:21:18.644Z`):
   114 client tests, 95 User tests, 3 source admission tests, and 15 judge payload
   transport tests passed with zero leaked containers.
-  Subsequent documentation changes record verified TICKET-13 and TICKET-14 evidence.
+  Subsequent documentation changes record verified TICKET-13 and TICKET-14 evidence and published integration baseline `cc76da6`.
 - No stashes exist. Four dirty console-review files contain earlier versions of
   pending-action UI and tests already covered by integration. They were left intact.
 
@@ -70,4 +70,4 @@ sending. Unconditional clearing alone does not establish the claimed scenario.
 The separate-computer G02 demonstration, Saad's shared deployment/provider checks,
 and current CI runner status remain owner actions. Browser evidence in the
 [delivery note](arena-delivery-2026-11-14.md) predates these reconciliation merges.
-Main has not been updated by this work.
+Integration baseline `cc76da6` is published; promotion to `main` via PR #3 remains held pending coordinator review.
