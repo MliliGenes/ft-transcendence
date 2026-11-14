@@ -82,7 +82,9 @@ export class GroupsService {
       where: { id: groupId },
       data: {
         ...(body.name !== undefined && { name: body.name }),
-        ...(body.description !== undefined && { description: body.description }),
+        ...(body.description !== undefined && {
+          description: body.description,
+        }),
         ...(body.rules !== undefined && { rules: body.rules }),
       },
     });
@@ -101,7 +103,12 @@ export class GroupsService {
         role: true,
         joinedAt: true,
         user: {
-          select: { id: true, username: true, displayName: true, avatarUrl: true },
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+          },
         },
       },
       orderBy: [{ joinedAt: 'asc' }, { userId: 'asc' }],
@@ -192,7 +199,13 @@ export class GroupsService {
         name: body.name,
         topic: body.topic,
       },
-      select: { id: true, groupId: true, name: true, topic: true, createdAt: true },
+      select: {
+        id: true,
+        groupId: true,
+        name: true,
+        topic: true,
+        createdAt: true,
+      },
     });
   }
 
@@ -256,7 +269,13 @@ export class GroupsService {
     await this.requireMember(groupId, userId);
     const channel = await this.prisma.conversation.findFirst({
       where: { id: channelId, groupId, kind: 'CHANNEL' },
-      select: { id: true, groupId: true, name: true, topic: true, createdAt: true },
+      select: {
+        id: true,
+        groupId: true,
+        name: true,
+        topic: true,
+        createdAt: true,
+      },
     });
     if (!channel) throw new NotFoundException('Channel not found');
     return channel;
@@ -279,7 +298,13 @@ export class GroupsService {
     if (!result.count) throw new NotFoundException('Channel not found');
     return this.prisma.conversation.findUniqueOrThrow({
       where: { id: channelId },
-      select: { id: true, groupId: true, name: true, topic: true, createdAt: true },
+      select: {
+        id: true,
+        groupId: true,
+        name: true,
+        topic: true,
+        createdAt: true,
+      },
     });
   }
 
@@ -291,7 +316,11 @@ export class GroupsService {
     if (!result.count) throw new NotFoundException('Channel not found');
   }
 
-  private async requireMember(groupId: string, userId: string, db: GroupDb = this.prisma) {
+  private async requireMember(
+    groupId: string,
+    userId: string,
+    db: GroupDb = this.prisma,
+  ) {
     const membership = await db.groupMember.findUnique({
       where: { groupId_userId: { groupId, userId } },
       select: { role: true },
@@ -300,7 +329,11 @@ export class GroupsService {
     return membership;
   }
 
-  private async requireAdmin(groupId: string, userId: string, db: GroupDb = this.prisma) {
+  private async requireAdmin(
+    groupId: string,
+    userId: string,
+    db: GroupDb = this.prisma,
+  ) {
     const membership = await db.groupMember.findUnique({
       where: { groupId_userId: { groupId, userId } },
       select: { role: true },

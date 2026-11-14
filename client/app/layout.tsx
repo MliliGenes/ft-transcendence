@@ -1,24 +1,29 @@
-import type { Metadata } from "next";
-import { Inter, Geist_Mono } from "next/font/google";
-import Providers from "./providers";
-import "./globals.css";
+import type { Metadata } from 'next';
+import { Inter, Geist_Mono } from 'next/font/google';
+import Providers from './providers';
+import './globals.css';
 
 const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
+  variable: '--font-inter',
+  subsets: ['latin'],
 });
 
 const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  variable: '--font-geist-mono',
+  subsets: ['latin'],
 });
 
 export const metadata: Metadata = {
-  title: "Nook — A place for your people",
-  description: "Share what you’re into, chat with friends, and play together. Nook brings your people, conversations, and games into one shared space.",
+  title: 'Nook — A place for your people',
+  description:
+    'Share what you’re into, chat with friends, and play together. Nook brings your people, conversations, and games into one shared space.',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"

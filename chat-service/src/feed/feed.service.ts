@@ -128,7 +128,12 @@ export class FeedService implements OnApplicationBootstrap {
       ...(query.before ? { cursor: { id: query.before }, skip: 1 } : {}),
       include: {
         author: {
-          select: { id: true, username: true, displayName: true, avatarUrl: true },
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+          },
         },
       },
     });

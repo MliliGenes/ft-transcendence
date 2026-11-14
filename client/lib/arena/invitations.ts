@@ -1,11 +1,13 @@
-import { LobbyClient } from "@/lib/arena/lobby";
-import { chatApi } from "@/lib/chat/client";
+import { LobbyClient } from '@/lib/arena/lobby';
+import { chatApi } from '@/lib/chat/client';
 
-const INVITE_PATTERN = /^🎮 Code Arena challenge\r?\n\r?\n\[Accept & Join\]\(\/play\/lobby\/([A-Z0-9]{6})\)$/u;
+const INVITE_PATTERN =
+  /^🎮 Code Arena challenge\r?\n\r?\n\[Accept & Join\]\(\/play\/lobby\/([A-Z0-9]{6})\)$/u;
 
 export function formatCodeArenaInvite(code: string): string {
   const normalizedCode = code.toUpperCase();
-  if (!/^[A-Z0-9]{6}$/.test(normalizedCode)) throw new Error("Invalid Code Arena lobby code.");
+  if (!/^[A-Z0-9]{6}$/.test(normalizedCode))
+    throw new Error('Invalid Code Arena lobby code.');
   return `🎮 Code Arena challenge\n\n[Accept & Join](/play/lobby/${normalizedCode})`;
 }
 
@@ -19,8 +21,8 @@ export async function createCodeArenaInvite(input: {
   token: string;
   conversationId: string;
 }): Promise<{ code: string }> {
-  const lobby = new LobbyClient("", input.userId, input.token);
-  const { room } = await lobby.createRoom("1v1");
+  const lobby = new LobbyClient('', input.userId, input.token);
+  const { room } = await lobby.createRoom('1v1');
   try {
     const content = formatCodeArenaInvite(room.code);
     // The room code travels with the message so the chat service can link

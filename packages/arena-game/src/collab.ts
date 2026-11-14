@@ -1,28 +1,41 @@
-import * as Y from "yjs";
+import * as Y from 'yjs';
 
 /** Canonical Y.Text key for the team source. Single source of truth per team doc. */
-export const COLLAB_TEXT_KEY = "source";
+export const COLLAB_TEXT_KEY = 'source';
 
 /** Exact room/document identity: one collaborative document per match+round+side. */
-export function collabRoomId(matchId: string, roundId: string, sideId: string): string {
+export function collabRoomId(
+  matchId: string,
+  roundId: string,
+  sideId: string,
+): string {
   return `${matchId}:${roundId}:${sideId}`;
 }
 
 function b64encode(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString("base64");
+  return Buffer.from(bytes).toString('base64');
 }
 
 function b64decode(b64: string): Uint8Array {
-  return new Uint8Array(Buffer.from(b64, "base64"));
+  return new Uint8Array(Buffer.from(b64, 'base64'));
 }
 
 export interface CollabPersist {
-  save(matchId: string, roundId: string, sideId: string, appRevision: number, language: string, stateB64: string): Promise<void>;
+  save(
+    matchId: string,
+    roundId: string,
+    sideId: string,
+    appRevision: number,
+    language: string,
+    stateB64: string,
+  ): Promise<void>;
   load(
     matchId: string,
     roundId: string,
     sideId: string,
-  ): Promise<{ appRevision: number; language: string; stateB64: string } | undefined>;
+  ): Promise<
+    { appRevision: number; language: string; stateB64: string } | undefined
+  >;
   /** Remove every persisted shared document for the selected match sides. */
   eraseForMatchSides(matchId: string, sideIds: string[]): Promise<void>;
 }
@@ -37,9 +50,23 @@ export interface CollabRow {
 }
 
 export class InMemoryCollabPersist implements CollabPersist {
-  private readonly rows = new Map<string, { appRevision: number; language: string; stateB64: string }>();
-  async save(matchId: string, roundId: string, sideId: string, appRevision: number, language: string, stateB64: string): Promise<void> {
-    this.rows.set(`${matchId}:${roundId}:${sideId}`, { appRevision, language, stateB64 });
+  private readonly rows = new Map<
+    string,
+    { appRevision: number; language: string; stateB64: string }
+  >();
+  async save(
+    matchId: string,
+    roundId: string,
+    sideId: string,
+    appRevision: number,
+    language: string,
+    stateB64: string,
+  ): Promise<void> {
+    this.rows.set(`${matchId}:${roundId}:${sideId}`, {
+      appRevision,
+      language,
+      stateB64,
+    });
   }
   async load(matchId: string, roundId: string, sideId: string) {
     return this.rows.get(`${matchId}:${roundId}:${sideId}`);
@@ -47,9 +74,10 @@ export class InMemoryCollabPersist implements CollabPersist {
   async eraseForMatchSides(matchId: string, sideIds: string[]): Promise<void> {
     const erasedSides = new Set(sideIds);
     for (const key of this.rows.keys()) {
-      const lastSeparator = key.lastIndexOf(":");
+      const lastSeparator = key.lastIndexOf(':');
       const sideId = key.slice(lastSeparator + 1);
-      if (key.startsWith(`${matchId}:`) && erasedSides.has(sideId)) this.rows.delete(key);
+      if (key.startsWith(`${matchId}:`) && erasedSides.has(sideId))
+        this.rows.delete(key);
     }
   }
 }
@@ -83,7 +111,7 @@ export class CollabDocs {
   /** Current authoritative source text ("": unseeded doc). */
   getSource(roomId: string): string {
     const doc = this.docs.get(roomId);
-    if (!doc) return "";
+    if (!doc) return '';
     return doc.getText(COLLAB_TEXT_KEY).toString();
   }
 
@@ -92,20 +120,23 @@ export class CollabDocs {
    * nothing (Yjs dedupes) and report changed=false so the caller never bumps
    * the application revision for them. Malformed frames throw.
    */
-  applyUpdate(roomId: string, updateB64: string): { changed: boolean; source: string } {
+  applyUpdate(
+    roomId: string,
+    updateB64: string,
+  ): { changed: boolean; source: string } {
     let bytes: Uint8Array;
     try {
       bytes = b64decode(updateB64);
     } catch {
-      throw new Error("malformed collab update");
+      throw new Error('malformed collab update');
     }
-    if (bytes.length === 0) throw new Error("malformed collab update");
+    if (bytes.length === 0) throw new Error('malformed collab update');
     const doc = this.docFor(roomId);
     const before = doc.getText(COLLAB_TEXT_KEY).toString();
     try {
       Y.applyUpdate(doc, bytes);
     } catch {
-      throw new Error("malformed collab update");
+      throw new Error('malformed collab update');
     }
     const after = doc.getText(COLLAB_TEXT_KEY).toString();
     return { changed: after !== before, source: after };
@@ -135,7 +166,7 @@ export class CollabDocs {
   /** Full durable state for persistence (option B). */
   encodeState(roomId: string): string {
     const doc = this.docs.get(roomId);
-    if (!doc) return "";
+    if (!doc) return '';
     return b64encode(Y.encodeStateAsUpdate(doc));
   }
 

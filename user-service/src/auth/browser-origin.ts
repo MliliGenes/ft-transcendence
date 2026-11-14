@@ -4,12 +4,20 @@ import type { Request } from 'express';
 
 export function trustedBrowserOrigins(config: ConfigService): Set<string> {
   const origins = new Set<string>();
-  const configured = config.get<string>('AUTH_FRONTEND_URL')?.trim();
-  if (configured) {
+  const configured = [
+    config.get<string>('AUTH_FRONTEND_URL'),
+    ...(config.get<string>('AUTH_FRONTEND_ORIGINS') ?? '').split(','),
+  ];
+  for (const candidate of configured) {
+    const value = candidate?.trim();
+    if (!value) continue;
     try {
-      origins.add(new URL(configured).origin);
+      const url = new URL(value);
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        origins.add(url.origin);
+      }
     } catch {
-      // An invalid frontend URL cannot authorize a browser request.
+      // An invalid frontend origin cannot authorize a browser request.
     }
   }
   if (config.get<string>('NODE_ENV') !== 'production') {

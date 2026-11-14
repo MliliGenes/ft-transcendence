@@ -10,11 +10,11 @@ How chat-service, MinIO, Nginx and the browser work together for attachments. Th
 
 Users attach images, PDFs and videos to chat messages and feed posts. Where do the bytes go?
 
-| Option | Problem |
-| --- | --- |
-| Store files in PostgreSQL | Bloats the DB, slow backups, bad for large binaries |
-| Upload through chat-service, which writes to disk or S3 | Every byte passes through the API. It ties up Node memory and bandwidth, and one 10 MB upload occupies a request for seconds |
-| **Browser uploads straight to object storage using a short-lived signed permission** | Chosen. The API only issues the permission and verifies the result |
+| Option                                                                               | Problem                                                                                                                      |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Store files in PostgreSQL                                                            | Bloats the DB, slow backups, bad for large binaries                                                                          |
+| Upload through chat-service, which writes to disk or S3                              | Every byte passes through the API. It ties up Node memory and bandwidth, and one 10 MB upload occupies a request for seconds |
+| **Browser uploads straight to object storage using a short-lived signed permission** | Chosen. The API only issues the permission and verifies the result                                                           |
 
 That signed permission is a **presigned URL** (or, for uploads here, a **presigned POST policy**).
 
@@ -32,11 +32,11 @@ Consequences worth remembering:
 
 **Presigned GET vs presigned POST policy.**
 
-| | Presigned GET (download/preview) | Presigned POST policy (upload) |
-| --- | --- | --- |
-| HTTP | `GET url` | `POST` of `multipart/form-data` to a URL |
-| Carries | everything in the query string | a set of **form fields** (policy + signature) plus the file |
-| Constraints | expiry, key, response headers | expiry, exact key, exact content type, **file size range**, bucket |
+|             | Presigned GET (download/preview) | Presigned POST policy (upload)                                     |
+| ----------- | -------------------------------- | ------------------------------------------------------------------ |
+| HTTP        | `GET url`                        | `POST` of `multipart/form-data` to a URL                           |
+| Carries     | everything in the query string   | a set of **form fields** (policy + signature) plus the file        |
+| Constraints | expiry, key, response headers    | expiry, exact key, exact content type, **file size range**, bucket |
 
 Why POST policy for uploads and not a presigned PUT? A presigned PUT cannot limit the file size. A POST policy can enforce `content-length-range` on the storage side, so a malicious client cannot upload 5 GB. (The original plan proposed presigned PUT; the implementation changed to POST for this reason.)
 
@@ -101,7 +101,7 @@ Step by step:
 2. The remainder must be a valid UUID v4. This blocks path tricks such as `../` or other prefixes.
 3. `statObject` against MinIO (over the internal endpoint) must succeed, meaning the object really exists. Size must be between 1 byte and the applicable cap: 10 MiB for images/PDF, or 50 MiB for video.
 
-Only then is the message written. Why check at all if the policy already limited the upload? Because the client could simply send a key it never uploaded, or a key belonging to someone else. The key is a *reference*, never proof of anything.
+Only then is the message written. Why check at all if the policy already limited the upload? Because the client could simply send a key it never uploaded, or a key belonging to someone else. The key is a _reference_, never proof of anything.
 
 The idempotency hash for message retries covers the conversation, message text, attachment list and optional challenge room code (`JSON.stringify([conversationId, content, attachments, gameChallenge?.roomCode ?? null])`). Retrying the same request ID with different attachments or a different challenge code conflicts.
 
@@ -123,12 +123,12 @@ After the URL is issued, MinIO serves the bytes directly. Chat is out of the loo
 
 This is the part that confuses people. `MinioModule` creates **two** MinIO SDK clients:
 
-| Injection token | Endpoint (local) | Used for |
-| --- | --- | --- |
-| `MINIO_CLIENT` | `minio:9000`, HTTP (internal) | `statObject`, `bucketExists`, `makeBucket`, `removeObject`: server-to-server calls inside Docker |
-| `MINIO_PRESIGN_CLIENT` | `localhost:9443`, HTTPS (public) | **only** signing presigned GET/POST URLs |
+| Injection token        | Endpoint (local)                 | Used for                                                                                         |
+| ---------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `MINIO_CLIENT`         | `minio:9000`, HTTP (internal)    | `statObject`, `bucketExists`, `makeBucket`, `removeObject`: server-to-server calls inside Docker |
+| `MINIO_PRESIGN_CLIENT` | `localhost:9443`, HTTPS (public) | **only** signing presigned GET/POST URLs                                                         |
 
-Why? The signature includes the host. The browser can reach MinIO only at `https://localhost:9443` (the `minio` hostname does not exist outside Docker, and port 9000 is not published). So URLs must be signed *as if for* `localhost:9443`. But chat-service itself, inside Docker, must reach MinIO at `minio:9000`. Same credentials, different address.
+Why? The signature includes the host. The browser can reach MinIO only at `https://localhost:9443` (the `minio` hostname does not exist outside Docker, and port 9000 is not published). So URLs must be signed _as if for_ `localhost:9443`. But chat-service itself, inside Docker, must reach MinIO at `minio:9000`. Same credentials, different address.
 
 The path of a browser request:
 
@@ -149,18 +149,18 @@ CORS: set on the MinIO server through `MINIO_API_CORS_ALLOW_ORIGIN` in `envs/min
 
 ## 6. Code map (read in this order)
 
-| File | What to look for |
-| --- | --- |
-| `chat-service/src/minio/minio.constants.ts` | The two injection tokens |
-| `chat-service/src/minio/minio.config.ts` | Validated env readers; `minioClientOptions` (internal) vs `minioPresignClientOptions` (public); region default `us-east-1` |
-| `chat-service/src/minio/minio.module.ts` | Builds both `Client`s |
-| `chat-service/src/minio/minio.service.ts` | Constants (5 min TTL, 10 MiB and 50 MiB video limits, inline media set); `createUploadUrl`, `createDownloadUrl`, `createInlineImageUrl`, `verifyUploadedAttachment`; `onModuleInit` ensures the bucket exists but only **logs** on failure, so chat still works without attachments |
-| `chat-service/src/chat/chat.controller.ts` | Routes `.../attachments/upload-url`, `download-url`, `preview-url` (all behind the auth guard) |
-| `chat-service/src/chat/chat.service.ts` | `createAttachment*Url`, `assertAttachmentAccessible`, and the verification loop inside `sendMessage` |
-| `chat-service/src/chat/dtos/create-attachment-upload-url.dto.ts` | MIME allowlist |
-| `chat-service/prisma/migrations/20261106120000_message_attachments` | The `attachments` array column |
-| `client/lib/chat/client.ts` | The browser side. XHR upload with progress, then message send |
-| `client/components/app/chat/message-list.tsx` | Requests preview URLs when rendering |
+| File                                                                | What to look for                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chat-service/src/minio/minio.constants.ts`                         | The two injection tokens                                                                                                                                                                                                                                                            |
+| `chat-service/src/minio/minio.config.ts`                            | Validated env readers; `minioClientOptions` (internal) vs `minioPresignClientOptions` (public); region default `us-east-1`                                                                                                                                                          |
+| `chat-service/src/minio/minio.module.ts`                            | Builds both `Client`s                                                                                                                                                                                                                                                               |
+| `chat-service/src/minio/minio.service.ts`                           | Constants (5 min TTL, 10 MiB and 50 MiB video limits, inline media set); `createUploadUrl`, `createDownloadUrl`, `createInlineImageUrl`, `verifyUploadedAttachment`; `onModuleInit` ensures the bucket exists but only **logs** on failure, so chat still works without attachments |
+| `chat-service/src/chat/chat.controller.ts`                          | Routes `.../attachments/upload-url`, `download-url`, `preview-url` (all behind the auth guard)                                                                                                                                                                                      |
+| `chat-service/src/chat/chat.service.ts`                             | `createAttachment*Url`, `assertAttachmentAccessible`, and the verification loop inside `sendMessage`                                                                                                                                                                                |
+| `chat-service/src/chat/dtos/create-attachment-upload-url.dto.ts`    | MIME allowlist                                                                                                                                                                                                                                                                      |
+| `chat-service/prisma/migrations/20261106120000_message_attachments` | The `attachments` array column                                                                                                                                                                                                                                                      |
+| `client/lib/chat/client.ts`                                         | The browser side. XHR upload with progress, then message send                                                                                                                                                                                                                       |
+| `client/components/app/chat/message-list.tsx`                       | Requests preview URLs when rendering                                                                                                                                                                                                                                                |
 
 ## 7. Infrastructure and provisioning
 
@@ -192,16 +192,16 @@ This is **least privilege**: chat-service never has the root credentials. If the
 
 What holds up:
 
-| Property | How |
-| --- | --- |
-| No credentials in the browser | Only signed URLs/fields are returned |
-| Only members can get URLs | Auth plus conversation membership on every URL endpoint |
-| Cannot attach another user's/conversation's object | Key prefix check at send time |
-| Cannot download an object not in the conversation | Message-reference lookup in `assertAttachmentAccessible` |
-| Size and type bounded at the storage layer | POST policy `content-length-range` and exact content type |
-| Short exposure | 5-minute expiry on every URL |
-| No filename in the path | Server-generated UUID key |
-| Safe rendering | Inline only for 4 image types and 3 video types; everything else is `attachment` |
+| Property                                           | How                                                                              |
+| -------------------------------------------------- | -------------------------------------------------------------------------------- |
+| No credentials in the browser                      | Only signed URLs/fields are returned                                             |
+| Only members can get URLs                          | Auth plus conversation membership on every URL endpoint                          |
+| Cannot attach another user's/conversation's object | Key prefix check at send time                                                    |
+| Cannot download an object not in the conversation  | Message-reference lookup in `assertAttachmentAccessible`                         |
+| Size and type bounded at the storage layer         | POST policy `content-length-range` and exact content type                        |
+| Short exposure                                     | 5-minute expiry on every URL                                                     |
+| No filename in the path                            | Server-generated UUID key                                                        |
+| Safe rendering                                     | Inline only for 4 image types and 3 video types; everything else is `attachment` |
 
 Known limits (say these before the evaluator does):
 

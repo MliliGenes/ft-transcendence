@@ -1,13 +1,23 @@
-import { Pool, type PoolClient } from "pg";
-import type { MatchRecord, RevealSnapshot, SubmissionRecord } from "./records.js";
-import type { CollabPersist, CollabRow } from "./collab.js";
+import { Pool, type PoolClient } from 'pg';
+import type {
+  MatchRecord,
+  RevealSnapshot,
+  SubmissionRecord,
+} from './records.js';
+import type { CollabPersist, CollabRow } from './collab.js';
 import {
   EvaluationClaimLostError,
   StoreBackedMatchPersistence,
   type EvaluationClaim,
   type MatchPersistence,
-} from "./persistence.js";
-import { DuplicateError, MatchRevisionConflictError, type MatchStore, type RevealStore, type SubmissionStore } from "./store.js";
+} from './persistence.js';
+import {
+  DuplicateError,
+  MatchRevisionConflictError,
+  type MatchStore,
+  type RevealStore,
+  type SubmissionStore,
+} from './store.js';
 
 export const GAME_SCHEMA = `
 CREATE TABLE IF NOT EXISTS matches (
@@ -82,7 +92,7 @@ CREATE INDEX IF NOT EXISTS erased_account_tokens_expiry_idx ON erased_account_to
  * changes nothing: same ids return the same outcome with no new attempt, and
  * a pending row left by a crash is re-driven under its original ids.
  */
-import { LobbyStore } from "./lobby.js";
+import { LobbyStore } from './lobby.js';
 
 class PostgresEvaluationClaim implements EvaluationClaim {
   constructor(
@@ -126,10 +136,14 @@ export class PostgresStores {
       submissions: this.submissions,
       reveals: this.reveals,
       collab: this.collab,
-      commitMatchAndTeamDocuments: (match, rows) => this.saveMatchAndCollab(match, rows),
-      eraseMatchSideData: (match, sideIds, expectedRevision) => this.persistErasure(match, sideIds, expectedRevision),
-      claimPendingEvaluation: (evaluationId) => this.claimPendingEvaluation(evaluationId),
-      commitClaimedEvaluation: (claim, match, submission) => this.commitClaimedEvaluation(claim, match, submission),
+      commitMatchAndTeamDocuments: (match, rows) =>
+        this.saveMatchAndCollab(match, rows),
+      eraseMatchSideData: (match, sideIds, expectedRevision) =>
+        this.persistErasure(match, sideIds, expectedRevision),
+      claimPendingEvaluation: (evaluationId) =>
+        this.claimPendingEvaluation(evaluationId),
+      commitClaimedEvaluation: (claim, match, submission) =>
+        this.commitClaimedEvaluation(claim, match, submission),
     });
   }
 
@@ -144,11 +158,17 @@ export class PostgresStores {
   }
 
   async recordFailure(matchId: string, message: string): Promise<void> {
-    await this.pool.query("INSERT INTO match_failures (match_id, message) VALUES ($1, $2)", [matchId, message]);
+    await this.pool.query(
+      'INSERT INTO match_failures (match_id, message) VALUES ($1, $2)',
+      [matchId, message],
+    );
   }
 
   async blockUserHash(userHash: string, expiresAt: number): Promise<void> {
-    await this.pool.query("DELETE FROM erased_account_tokens WHERE expires_at <= $1", [Date.now()]);
+    await this.pool.query(
+      'DELETE FROM erased_account_tokens WHERE expires_at <= $1',
+      [Date.now()],
+    );
     await this.pool.query(
       `INSERT INTO erased_account_tokens (user_hash, expires_at) VALUES ($1, $2)
        ON CONFLICT (user_hash) DO UPDATE SET expires_at = GREATEST(erased_account_tokens.expires_at, EXCLUDED.expires_at)`,
@@ -158,7 +178,7 @@ export class PostgresStores {
 
   async isUserHashBlocked(userHash: string): Promise<boolean> {
     const result = await this.pool.query(
-      "SELECT 1 FROM erased_account_tokens WHERE user_hash = $1 AND expires_at > $2",
+      'SELECT 1 FROM erased_account_tokens WHERE user_hash = $1 AND expires_at > $2',
       [userHash, Date.now()],
     );
     return (result.rowCount ?? 0) > 0;
@@ -167,20 +187,27 @@ export class PostgresStores {
   async blockedUserHashes(userHashes: string[]): Promise<Set<string>> {
     if (userHashes.length === 0) return new Set();
     const result = await this.pool.query<{ user_hash: string }>(
-      "SELECT user_hash FROM erased_account_tokens WHERE user_hash = ANY($1::text[]) AND expires_at > $2",
+      'SELECT user_hash FROM erased_account_tokens WHERE user_hash = ANY($1::text[]) AND expires_at > $2',
       [userHashes, Date.now()],
     );
     return new Set(result.rows.map((row) => row.user_hash));
   }
 
   async purgeExpiredAccountHashes(): Promise<void> {
-    await this.pool.query("DELETE FROM erased_account_tokens WHERE expires_at <= $1", [Date.now()]);
+    await this.pool.query(
+      'DELETE FROM erased_account_tokens WHERE expires_at <= $1',
+      [Date.now()],
+    );
   }
 
-  private async persistErasure(match: MatchRecord, sideIds: string[], expectedRevision?: number): Promise<void> {
+  private async persistErasure(
+    match: MatchRecord,
+    sideIds: string[],
+    expectedRevision?: number,
+  ): Promise<void> {
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await client.query('BEGIN');
       // Evaluations lock their submission before the match; use the same order
       // so erasure cannot deadlock with an accepted judge commit.
       await client.query(
@@ -189,13 +216,15 @@ export class PostgresStores {
       );
       await saveMatchTx(client, match, expectedRevision);
       await client.query(
-        "DELETE FROM collab_documents WHERE match_id = $1 AND side_id = ANY($2::text[])",
+        'DELETE FROM collab_documents WHERE match_id = $1 AND side_id = ANY($2::text[])',
         [match.id, sideIds],
       );
-      await client.query("DELETE FROM match_failures WHERE match_id = $1", [match.id]);
-      await client.query("COMMIT");
+      await client.query('DELETE FROM match_failures WHERE match_id = $1', [
+        match.id,
+      ]);
+      await client.query('COMMIT');
     } catch (error) {
-      await client.query("ROLLBACK");
+      await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
@@ -210,10 +239,14 @@ export class PostgresStores {
    * CASE 2 (collab without match) are both impossible as durable state.
    * Events/acks happen only after this resolves.
    */
-  async saveMatchAndCollab(match: MatchRecord, rows: CollabRow[], expectedRevision?: number): Promise<void> {
+  async saveMatchAndCollab(
+    match: MatchRecord,
+    rows: CollabRow[],
+    expectedRevision?: number,
+  ): Promise<void> {
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await client.query('BEGIN');
       await saveMatchTx(client, match, expectedRevision);
       for (const row of rows) {
         await client.query(
@@ -222,12 +255,20 @@ export class PostgresStores {
            ON CONFLICT (match_id, round_id, side_id) DO UPDATE SET
              app_revision = EXCLUDED.app_revision, language = EXCLUDED.language,
              ydoc_state = EXCLUDED.ydoc_state, updated_at = EXCLUDED.updated_at`,
-          [match.id, row.roundId, row.sideId, row.appRevision, row.language, row.stateB64, Date.now()],
+          [
+            match.id,
+            row.roundId,
+            row.sideId,
+            row.appRevision,
+            row.language,
+            row.stateB64,
+            Date.now(),
+          ],
         );
       }
-      await client.query("COMMIT");
+      await client.query('COMMIT');
     } catch (error) {
-      await client.query("ROLLBACK");
+      await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
@@ -240,30 +281,34 @@ export class PostgresStores {
    * commit; a lost process therefore releases ownership automatically when
    * PostgreSQL closes the session.
    */
-  async claimPendingEvaluation(evaluationId: string): Promise<EvaluationClaim | undefined> {
+  async claimPendingEvaluation(
+    evaluationId: string,
+  ): Promise<EvaluationClaim | undefined> {
     const client = await this.claimPool.connect();
     let lockHeld = false;
     let clientReleased = false;
     let releasePromise: Promise<void> | undefined;
     let connectionError: EvaluationClaimLostError | undefined;
-    const lockExpression = "hashtextextended($1, 0)";
+    const lockExpression = 'hashtextextended($1, 0)';
     const onClientError = (error: Error): void => {
       connectionError ??= new EvaluationClaimLostError(evaluationId, error);
     };
-    client.on("error", onClientError);
+    client.on('error', onClientError);
     const release = (destroy = false): Promise<void> => {
       if (releasePromise) return releasePromise;
       releasePromise = (async () => {
         let destroyClient = destroy || Boolean(connectionError);
         try {
           if (lockHeld && !connectionError) {
-            await client.query(`SELECT pg_advisory_unlock(${lockExpression})`, [evaluationId]);
+            await client.query(`SELECT pg_advisory_unlock(${lockExpression})`, [
+              evaluationId,
+            ]);
             lockHeld = false;
           }
         } catch {
           destroyClient = true;
         } finally {
-          client.removeListener("error", onClientError);
+          client.removeListener('error', onClientError);
           clientReleased = true;
           client.release(destroyClient);
         }
@@ -272,11 +317,16 @@ export class PostgresStores {
     };
 
     try {
-      await client.query(`SELECT pg_advisory_lock(${lockExpression})`, [evaluationId]);
+      await client.query(`SELECT pg_advisory_lock(${lockExpression})`, [
+        evaluationId,
+      ]);
       lockHeld = true;
-      const result = await client.query("SELECT data FROM submissions WHERE evaluation_id = $1", [evaluationId]);
+      const result = await client.query(
+        'SELECT data FROM submissions WHERE evaluation_id = $1',
+        [evaluationId],
+      );
       const stored = result.rows[0]?.data as SubmissionRecord | undefined;
-      if (!stored || stored.status !== "pending") {
+      if (!stored || stored.status !== 'pending') {
         await release();
         return undefined;
       }
@@ -302,28 +352,31 @@ export class PostgresStores {
     submission?: SubmissionRecord,
   ): Promise<void> {
     if (!(claim instanceof PostgresEvaluationClaim)) {
-      throw new Error("Postgres persistence requires a Postgres evaluation claim");
+      throw new Error(
+        'Postgres persistence requires a Postgres evaluation claim',
+      );
     }
     claim.assertActive();
     let inTransaction = false;
     try {
-      await claim.client.query("BEGIN");
+      await claim.client.query('BEGIN');
       inTransaction = true;
       if (submission) {
         const updated = await claim.client.query(
           "UPDATE submissions SET data = $2 WHERE evaluation_id = $1 AND data->>'status' = 'pending'",
           [submission.evaluationId, JSON.stringify(submission)],
         );
-        if (updated.rowCount !== 1) throw new EvaluationClaimLostError(claim.evaluationId);
+        if (updated.rowCount !== 1)
+          throw new EvaluationClaimLostError(claim.evaluationId);
       }
       await saveMatchTx(claim.client, match);
       claim.assertActive();
-      await claim.client.query("COMMIT");
+      await claim.client.query('COMMIT');
       inTransaction = false;
     } catch (error) {
       if (inTransaction) {
         try {
-          await claim.client.query("ROLLBACK");
+          await claim.client.query('ROLLBACK');
         } catch {
           // The claim session may already be gone; the database rolls back the session.
         }
@@ -342,14 +395,21 @@ export class PostgresStores {
 }
 
 /** Match-row writes against an already-open transaction client. */
-export async function saveMatchTx(client: PoolClient, match: MatchRecord, expectedRevision?: number): Promise<void> {
+export async function saveMatchTx(
+  client: PoolClient,
+  match: MatchRecord,
+  expectedRevision?: number,
+): Promise<void> {
   const storedMatch =
     expectedRevision !== undefined && match.revision <= expectedRevision
       ? { ...structuredClone(match), revision: expectedRevision + 1 }
       : match;
   if (expectedRevision === undefined) {
-    await client.query(`INSERT INTO matches (id, data) VALUES ($1, $2)
-      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`, [storedMatch.id, JSON.stringify(storedMatch)]);
+    await client.query(
+      `INSERT INTO matches (id, data) VALUES ($1, $2)
+      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
+      [storedMatch.id, JSON.stringify(storedMatch)],
+    );
   } else {
     const updated = await client.query(
       `UPDATE matches
@@ -358,9 +418,19 @@ export async function saveMatchTx(client: PoolClient, match: MatchRecord, expect
       [storedMatch.id, JSON.stringify(storedMatch), expectedRevision],
     );
     if (updated.rowCount !== 1) {
-      const current = await client.query("SELECT data FROM matches WHERE id = $1", [storedMatch.id]);
-      const actualRevision = current.rowCount === 1 ? (current.rows[0].data as MatchRecord).revision : undefined;
-      throw new MatchRevisionConflictError(storedMatch.id, expectedRevision, actualRevision);
+      const current = await client.query(
+        'SELECT data FROM matches WHERE id = $1',
+        [storedMatch.id],
+      );
+      const actualRevision =
+        current.rowCount === 1
+          ? (current.rows[0].data as MatchRecord).revision
+          : undefined;
+      throw new MatchRevisionConflictError(
+        storedMatch.id,
+        expectedRevision,
+        actualRevision,
+      );
     }
   }
   for (let idx = 0; idx < storedMatch.rounds.length; idx++) {
@@ -378,7 +448,15 @@ export async function saveMatchTx(client: PoolClient, match: MatchRecord, expect
          ON CONFLICT (match_id, round_id, side_id) DO UPDATE SET
            activity = EXCLUDED.activity, attempts = EXCLUDED.attempts,
            counted_score = EXCLUDED.counted_score, scoring_time_ms = EXCLUDED.scoring_time_ms`,
-        [storedMatch.id, round.roundId, sideId, activity ?? "coding", round.attempts[sideId] ?? 0, counted?.score ?? null, counted?.scoringTimeMs ?? null],
+        [
+          storedMatch.id,
+          round.roundId,
+          sideId,
+          activity ?? 'coding',
+          round.attempts[sideId] ?? 0,
+          counted?.score ?? null,
+          counted?.scoringTimeMs ?? null,
+        ],
       );
     }
   }
@@ -390,11 +468,11 @@ class PostgresMatchStore implements MatchStore {
   async save(match: MatchRecord, expectedRevision?: number): Promise<void> {
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await client.query('BEGIN');
       await saveMatchTx(client, match, expectedRevision);
-      await client.query("COMMIT");
+      await client.query('COMMIT');
     } catch (error) {
-      await client.query("ROLLBACK");
+      await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
@@ -402,13 +480,16 @@ class PostgresMatchStore implements MatchStore {
   }
 
   async load(matchId: string): Promise<MatchRecord | undefined> {
-    const res = await this.pool.query("SELECT data FROM matches WHERE id = $1", [matchId]);
+    const res = await this.pool.query(
+      'SELECT data FROM matches WHERE id = $1',
+      [matchId],
+    );
     if (res.rowCount === 0) return undefined;
     return res.rows[0].data as MatchRecord;
   }
 
   async listIds(): Promise<string[]> {
-    const res = await this.pool.query("SELECT id FROM matches");
+    const res = await this.pool.query('SELECT id FROM matches');
     return res.rows.map((r) => r.id as string);
   }
 
@@ -439,39 +520,60 @@ class PostgresSubmissionStore implements SubmissionStore {
     await this.pool.query(
       `INSERT INTO submissions (submission_id, evaluation_id, match_id, round_id, data)
        VALUES ($1, $2, $3, $4, $5) ON CONFLICT (submission_id) DO NOTHING`,
-      [record.submissionId, record.evaluationId, record.matchId, record.roundId, JSON.stringify(record)],
+      [
+        record.submissionId,
+        record.evaluationId,
+        record.matchId,
+        record.roundId,
+        JSON.stringify(record),
+      ],
     );
   }
 
   async update(record: SubmissionRecord): Promise<void> {
-    await this.pool.query("UPDATE submissions SET data = $2 WHERE submission_id = $1", [
-      record.submissionId,
-      JSON.stringify(record),
-    ]);
+    await this.pool.query(
+      'UPDATE submissions SET data = $2 WHERE submission_id = $1',
+      [record.submissionId, JSON.stringify(record)],
+    );
   }
 
-  async getBySubmissionId(submissionId: string): Promise<SubmissionRecord | undefined> {
-    const res = await this.pool.query("SELECT data FROM submissions WHERE submission_id = $1", [submissionId]);
+  async getBySubmissionId(
+    submissionId: string,
+  ): Promise<SubmissionRecord | undefined> {
+    const res = await this.pool.query(
+      'SELECT data FROM submissions WHERE submission_id = $1',
+      [submissionId],
+    );
     if (res.rowCount === 0) return undefined;
     return res.rows[0].data as SubmissionRecord;
   }
 
-  async getByEvaluationId(evaluationId: string): Promise<SubmissionRecord | undefined> {
-    const res = await this.pool.query("SELECT data FROM submissions WHERE evaluation_id = $1", [evaluationId]);
+  async getByEvaluationId(
+    evaluationId: string,
+  ): Promise<SubmissionRecord | undefined> {
+    const res = await this.pool.query(
+      'SELECT data FROM submissions WHERE evaluation_id = $1',
+      [evaluationId],
+    );
     if (res.rowCount === 0) return undefined;
     return res.rows[0].data as SubmissionRecord;
   }
 
-  async listRound(matchId: string, roundId: string): Promise<SubmissionRecord[]> {
-    const res = await this.pool.query("SELECT data FROM submissions WHERE match_id = $1 AND round_id = $2", [
-      matchId,
-      roundId,
-    ]);
+  async listRound(
+    matchId: string,
+    roundId: string,
+  ): Promise<SubmissionRecord[]> {
+    const res = await this.pool.query(
+      'SELECT data FROM submissions WHERE match_id = $1 AND round_id = $2',
+      [matchId, roundId],
+    );
     return res.rows.map((r) => r.data as SubmissionRecord);
   }
 
   async listPending(): Promise<SubmissionRecord[]> {
-    const res = await this.pool.query("SELECT data FROM submissions WHERE data->>'status' = 'pending'");
+    const res = await this.pool.query(
+      "SELECT data FROM submissions WHERE data->>'status' = 'pending'",
+    );
     return res.rows.map((r) => r.data as SubmissionRecord);
   }
 
@@ -486,7 +588,14 @@ class PostgresSubmissionStore implements SubmissionStore {
 class PostgresCollabStore implements CollabPersist {
   constructor(private readonly pool: Pool) {}
 
-  async save(matchId: string, roundId: string, sideId: string, appRevision: number, language: string, stateB64: string): Promise<void> {
+  async save(
+    matchId: string,
+    roundId: string,
+    sideId: string,
+    appRevision: number,
+    language: string,
+    stateB64: string,
+  ): Promise<void> {
     await this.pool.query(
       `INSERT INTO collab_documents (match_id, round_id, side_id, app_revision, language, ydoc_state, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -499,17 +608,21 @@ class PostgresCollabStore implements CollabPersist {
 
   async load(matchId: string, roundId: string, sideId: string) {
     const res = await this.pool.query(
-      "SELECT app_revision, language, ydoc_state FROM collab_documents WHERE match_id = $1 AND round_id = $2 AND side_id = $3",
+      'SELECT app_revision, language, ydoc_state FROM collab_documents WHERE match_id = $1 AND round_id = $2 AND side_id = $3',
       [matchId, roundId, sideId],
     );
     if (res.rowCount === 0) return undefined;
     const row = res.rows[0];
-    return { appRevision: row.app_revision as number, language: row.language as string, stateB64: row.ydoc_state as string };
+    return {
+      appRevision: row.app_revision as number,
+      language: row.language as string,
+      stateB64: row.ydoc_state as string,
+    };
   }
 
   async eraseForMatchSides(matchId: string, sideIds: string[]): Promise<void> {
     await this.pool.query(
-      "DELETE FROM collab_documents WHERE match_id = $1 AND side_id = ANY($2::text[])",
+      'DELETE FROM collab_documents WHERE match_id = $1 AND side_id = ANY($2::text[])',
       [matchId, sideIds],
     );
   }
@@ -518,27 +631,34 @@ class PostgresCollabStore implements CollabPersist {
 class PostgresRevealStore implements RevealStore {
   constructor(private readonly pool: Pool) {}
 
-  async record(matchId: string, roundId: string, snapshot: RevealSnapshot): Promise<void> {
+  async record(
+    matchId: string,
+    roundId: string,
+    snapshot: RevealSnapshot,
+  ): Promise<void> {
     try {
-      await this.pool.query("INSERT INTO reveals (match_id, round_id, published_at, data) VALUES ($1, $2, $3, $4)", [
-        matchId,
-        roundId,
-        snapshot.publishedAt,
-        JSON.stringify(snapshot),
-      ]);
+      await this.pool.query(
+        'INSERT INTO reveals (match_id, round_id, published_at, data) VALUES ($1, $2, $3, $4)',
+        [matchId, roundId, snapshot.publishedAt, JSON.stringify(snapshot)],
+      );
     } catch (error) {
-      if ((error as { code?: string }).code === "23505") {
-        throw new DuplicateError(`reveal already published for round ${roundId}`);
+      if ((error as { code?: string }).code === '23505') {
+        throw new DuplicateError(
+          `reveal already published for round ${roundId}`,
+        );
       }
       throw error;
     }
   }
 
-  async get(matchId: string, roundId: string): Promise<RevealSnapshot | undefined> {
-    const res = await this.pool.query("SELECT data FROM reveals WHERE match_id = $1 AND round_id = $2", [
-      matchId,
-      roundId,
-    ]);
+  async get(
+    matchId: string,
+    roundId: string,
+  ): Promise<RevealSnapshot | undefined> {
+    const res = await this.pool.query(
+      'SELECT data FROM reveals WHERE match_id = $1 AND round_id = $2',
+      [matchId, roundId],
+    );
     if (res.rowCount === 0) return undefined;
     return res.rows[0].data as RevealSnapshot;
   }

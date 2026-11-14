@@ -2,10 +2,7 @@
   "id": "even-ledger",
   "title": "Even Ledger",
   "difficulty": "Easy",
-  "tags": [
-    "Array",
-    "Math"
-  ],
+  "tags": ["Array", "Math"],
   "description": "Given an array of integers nums, compute the alternating sum: add the elements at even indices and subtract the elements at odd indices (S = nums[0] - nums[1] + nums[2] - nums[3] + ...). An empty array scores 0. Use 64-bit integers; inputs fit so the exact result fits in a signed 64-bit integer.",
   "examples": [
     {

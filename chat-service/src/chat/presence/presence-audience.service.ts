@@ -24,10 +24,12 @@ export class PresenceAudienceService {
     ]);
 
     return [
-      ...new Set([
-        ...dms.flatMap(({ dmUserAId, dmUserBId }) => [dmUserAId, dmUserBId]),
-        ...groupMembers.map(({ userId: memberId }) => memberId),
-      ].filter((id): id is string => id !== null && id !== userId)),
+      ...new Set(
+        [
+          ...dms.flatMap(({ dmUserAId, dmUserBId }) => [dmUserAId, dmUserBId]),
+          ...groupMembers.map(({ userId: memberId }) => memberId),
+        ].filter((id): id is string => id !== null && id !== userId),
+      ),
     ];
   }
 }

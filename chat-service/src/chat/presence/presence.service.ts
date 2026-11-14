@@ -57,12 +57,17 @@ export class PresenceService {
     }));
   }
 
-  private updateStatus(userId: string, now = Date.now()): PresenceChange | null {
+  private updateStatus(
+    userId: string,
+    now = Date.now(),
+  ): PresenceChange | null {
     const previous = this.statusByUser.get(userId) ?? 'OFFLINE';
     const sockets = this.socketsByUser.get(userId);
     const status: PresenceStatus = !sockets?.size
       ? 'OFFLINE'
-      : [...sockets.values()].some((lastActivity) => now - lastActivity < AWAY_AFTER_MS)
+      : [...sockets.values()].some(
+            (lastActivity) => now - lastActivity < AWAY_AFTER_MS,
+          )
         ? 'ONLINE'
         : 'AWAY';
 

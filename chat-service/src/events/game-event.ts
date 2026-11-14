@@ -61,9 +61,18 @@ export interface ChallengeCancelledData {
 }
 
 export type GameEvent =
-  | (GameEventBase & { eventType: typeof GAME_EVENT_TYPES.MATCH_STARTED; data: MatchStartedData })
-  | (GameEventBase & { eventType: typeof GAME_EVENT_TYPES.MATCH_ENDED; data: MatchEndedData })
-  | (GameEventBase & { eventType: typeof GAME_EVENT_TYPES.CHALLENGE_CANCELLED; data: ChallengeCancelledData });
+  | (GameEventBase & {
+      eventType: typeof GAME_EVENT_TYPES.MATCH_STARTED;
+      data: MatchStartedData;
+    })
+  | (GameEventBase & {
+      eventType: typeof GAME_EVENT_TYPES.MATCH_ENDED;
+      data: MatchEndedData;
+    })
+  | (GameEventBase & {
+      eventType: typeof GAME_EVENT_TYPES.CHALLENGE_CANCELLED;
+      data: ChallengeCancelledData;
+    });
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -89,7 +98,9 @@ function parseParticipants(value: unknown): GameEventParticipant[] | null {
   return participants;
 }
 
-function parseMatchStarted(data: Record<string, unknown>): MatchStartedData | null {
+function parseMatchStarted(
+  data: Record<string, unknown>,
+): MatchStartedData | null {
   const { matchId, mode, roomCode } = data;
   if (!isIdentifier(matchId) || !isMatchMode(mode)) return null;
   if (!(roomCode === null || isRoomCode(roomCode))) return null;
@@ -109,7 +120,8 @@ function parseMatchEnded(data: Record<string, unknown>): MatchEndedData | null {
     if (!isPlainObject(entry)) return null;
     const { userId, sideId, outcome, score } = entry;
     if (!isIdentifier(userId) || !isIdentifier(sideId)) return null;
-    if (outcome !== 'win' && outcome !== 'loss' && outcome !== 'draw') return null;
+    if (outcome !== 'win' && outcome !== 'loss' && outcome !== 'draw')
+      return null;
     if (typeof score !== 'number' || !Number.isFinite(score)) return null;
     participants.push({ userId, sideId, outcome, score });
   }
@@ -119,7 +131,12 @@ function parseMatchEnded(data: Record<string, unknown>): MatchEndedData | null {
     if (!isPlainObject(data.forfeit)) return null;
     const { winnerSideId, loserSideId, reason } = data.forfeit;
     if (!isIdentifier(winnerSideId) || !isIdentifier(loserSideId)) return null;
-    if (reason !== 'leave' && reason !== 'grace-expired' && reason !== 'surrender') return null;
+    if (
+      reason !== 'leave' &&
+      reason !== 'grace-expired' &&
+      reason !== 'surrender'
+    )
+      return null;
     forfeit = { winnerSideId, loserSideId, reason };
   }
 
@@ -168,11 +185,15 @@ export function parseGameEvent(value: unknown): GameEvent | null {
 
   if (eventType === GAME_EVENT_TYPES.MATCH_STARTED) {
     const data = parseMatchStarted(value.data);
-    return data ? { ...base, eventType: GAME_EVENT_TYPES.MATCH_STARTED, data } : null;
+    return data
+      ? { ...base, eventType: GAME_EVENT_TYPES.MATCH_STARTED, data }
+      : null;
   }
   if (eventType === GAME_EVENT_TYPES.MATCH_ENDED) {
     const data = parseMatchEnded(value.data);
-    return data ? { ...base, eventType: GAME_EVENT_TYPES.MATCH_ENDED, data } : null;
+    return data
+      ? { ...base, eventType: GAME_EVENT_TYPES.MATCH_ENDED, data }
+      : null;
   }
   if (eventType === GAME_EVENT_TYPES.CHALLENGE_CANCELLED) {
     const data = parseChallengeCancelled(value.data);

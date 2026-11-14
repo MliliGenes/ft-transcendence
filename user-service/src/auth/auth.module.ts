@@ -53,7 +53,13 @@ import { MailService } from '../mail/mail.service.js';
     }),
   ],
   controllers: [AuthController, DiscordController, GithubController],
-  providers: [AuthService, AccessTokenGuard, DiscordStrategy, GithubStrategy, MailService],
+  providers: [
+    AuthService,
+    AccessTokenGuard,
+    DiscordStrategy,
+    GithubStrategy,
+    MailService,
+  ],
   exports: [AccessTokenGuard, JwtModule],
 })
 export class AuthModule {}

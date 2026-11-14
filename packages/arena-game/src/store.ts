@@ -1,4 +1,8 @@
-import type { MatchRecord, RevealSnapshot, SubmissionRecord } from "./records.js";
+import type {
+  MatchRecord,
+  RevealSnapshot,
+  SubmissionRecord,
+} from './records.js';
 
 /**
  * Persistence seam: append-only durable history. Completed/failed/superseded
@@ -26,8 +30,12 @@ export interface MatchStore {
 export interface SubmissionStore {
   append(record: SubmissionRecord): Promise<void>;
   update(record: SubmissionRecord): Promise<void>;
-  getBySubmissionId(submissionId: string): Promise<SubmissionRecord | undefined>;
-  getByEvaluationId(evaluationId: string): Promise<SubmissionRecord | undefined>;
+  getBySubmissionId(
+    submissionId: string,
+  ): Promise<SubmissionRecord | undefined>;
+  getByEvaluationId(
+    evaluationId: string,
+  ): Promise<SubmissionRecord | undefined>;
   listRound(matchId: string, roundId: string): Promise<SubmissionRecord[]>;
   /** Non-terminal rows (boot recovery: idempotent judge retry under original ids). */
   listPending(): Promise<SubmissionRecord[]>;
@@ -38,7 +46,7 @@ export interface SubmissionStore {
 export class DuplicateError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "DuplicateError";
+    this.name = 'DuplicateError';
   }
 }
 
@@ -55,12 +63,16 @@ export class MatchRevisionConflictError extends Error {
         ? `match ${matchId} revision conflict (expected ${expectedRevision})`
         : `match ${matchId} revision conflict (expected ${expectedRevision}, found ${actualRevision})`,
     );
-    this.name = "MatchRevisionConflictError";
+    this.name = 'MatchRevisionConflictError';
   }
 }
 
 export interface RevealStore {
-  record(matchId: string, roundId: string, snapshot: RevealSnapshot): Promise<void>;
+  record(
+    matchId: string,
+    roundId: string,
+    snapshot: RevealSnapshot,
+  ): Promise<void>;
   /** Published round reveal, if any (boot recovery: finish an interrupted flip). */
   get(matchId: string, roundId: string): Promise<RevealSnapshot | undefined>;
 }
@@ -69,8 +81,15 @@ export class InMemoryMatchStore implements MatchStore {
   private readonly matches = new Map<string, MatchRecord>();
   async save(match: MatchRecord, expectedRevision?: number): Promise<void> {
     const current = this.matches.get(match.id);
-    if (expectedRevision !== undefined && (!current || current.revision !== expectedRevision)) {
-      throw new MatchRevisionConflictError(match.id, expectedRevision, current?.revision);
+    if (
+      expectedRevision !== undefined &&
+      (!current || current.revision !== expectedRevision)
+    ) {
+      throw new MatchRevisionConflictError(
+        match.id,
+        expectedRevision,
+        current?.revision,
+      );
     }
     const stored = structuredClone(match);
     if (expectedRevision !== undefined && stored.revision <= expectedRevision) {
@@ -86,12 +105,23 @@ export class InMemoryMatchStore implements MatchStore {
     return [...this.matches.keys()];
   }
   async listCompleted(): Promise<MatchRecord[]> {
-    return [...this.matches.values()].filter((match) => match.roundPhase === "MATCH_COMPLETE").map((match) => structuredClone(match));
+    return [...this.matches.values()]
+      .filter((match) => match.roundPhase === 'MATCH_COMPLETE')
+      .map((match) => structuredClone(match));
   }
   async listCompletedForUser(userId: string): Promise<MatchRecord[]> {
     return [...this.matches.values()]
-      .filter((match) => match.roundPhase === "MATCH_COMPLETE" && match.participants.some((participant) => participant.userId === userId))
-      .sort((left, right) => right.startedAt - left.startedAt || left.id.localeCompare(right.id))
+      .filter(
+        (match) =>
+          match.roundPhase === 'MATCH_COMPLETE' &&
+          match.participants.some(
+            (participant) => participant.userId === userId,
+          ),
+      )
+      .sort(
+        (left, right) =>
+          right.startedAt - left.startedAt || left.id.localeCompare(right.id),
+      )
       .map((match) => structuredClone(match));
   }
 }
@@ -107,17 +137,28 @@ export class InMemorySubmissionStore implements SubmissionStore {
     this.bySubmission.set(record.submissionId, record);
     this.byEvaluation.set(record.evaluationId, record);
   }
-  async getBySubmissionId(submissionId: string): Promise<SubmissionRecord | undefined> {
+  async getBySubmissionId(
+    submissionId: string,
+  ): Promise<SubmissionRecord | undefined> {
     return this.bySubmission.get(submissionId);
   }
-  async getByEvaluationId(evaluationId: string): Promise<SubmissionRecord | undefined> {
+  async getByEvaluationId(
+    evaluationId: string,
+  ): Promise<SubmissionRecord | undefined> {
     return this.byEvaluation.get(evaluationId);
   }
-  async listRound(matchId: string, roundId: string): Promise<SubmissionRecord[]> {
-    return [...this.bySubmission.values()].filter((r) => r.matchId === matchId && r.roundId === roundId);
+  async listRound(
+    matchId: string,
+    roundId: string,
+  ): Promise<SubmissionRecord[]> {
+    return [...this.bySubmission.values()].filter(
+      (r) => r.matchId === matchId && r.roundId === roundId,
+    );
   }
   async listPending(): Promise<SubmissionRecord[]> {
-    return [...this.bySubmission.values()].filter((r) => r.status === "pending");
+    return [...this.bySubmission.values()].filter(
+      (r) => r.status === 'pending',
+    );
   }
   async eraseForMatchSides(matchId: string, sideIds: string[]): Promise<void> {
     const erasedSides = new Set(sideIds);
@@ -132,12 +173,20 @@ export class InMemorySubmissionStore implements SubmissionStore {
 
 export class InMemoryRevealStore implements RevealStore {
   private readonly reveals = new Map<string, RevealSnapshot>();
-  async record(matchId: string, roundId: string, snapshot: RevealSnapshot): Promise<void> {
+  async record(
+    matchId: string,
+    roundId: string,
+    snapshot: RevealSnapshot,
+  ): Promise<void> {
     const key = `${matchId}:${roundId}`;
-    if (this.reveals.has(key)) throw new DuplicateError(`reveal already published for round ${roundId}`);
+    if (this.reveals.has(key))
+      throw new DuplicateError(`reveal already published for round ${roundId}`);
     this.reveals.set(key, snapshot);
   }
-  async get(matchId: string, roundId: string): Promise<RevealSnapshot | undefined> {
+  async get(
+    matchId: string,
+    roundId: string,
+  ): Promise<RevealSnapshot | undefined> {
     return this.reveals.get(`${matchId}:${roundId}`);
   }
 }

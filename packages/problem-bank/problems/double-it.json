@@ -18,10 +18,7 @@
       "explanation": "Zero doubled is zero."
     }
   ],
-  "constraints": [
-    "-10^9 <= x <= 10^9",
-    "Input contains a single integer."
-  ],
+  "constraints": ["-10^9 <= x <= 10^9", "Input contains a single integer."],
   "timeLimitMs": 2000,
   "memoryLimitMb": 256,
   "driver": "stdio",

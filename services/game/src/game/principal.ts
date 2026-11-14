@@ -1,5 +1,5 @@
-import { type Request, type Response, type NextFunction } from "express";
-import { verifyAccessToken } from "./jwt-verifier.js";
+import { type Request, type Response, type NextFunction } from 'express';
+import { verifyAccessToken } from './jwt-verifier.js';
 
 /**
  * Trusted-principal middleware (docs/auth-game-contract.md).
@@ -10,26 +10,34 @@ export interface RequestPrincipal {
   userId: string;
 }
 
-declare module "express-serve-static-core" {
+declare module 'express-serve-static-core' {
   interface Request {
     principal?: RequestPrincipal;
   }
 }
 
-export function devPrincipalMiddleware(req: Request, res: Response, next: NextFunction): void {
-  if (process.env.DEV_PRINCIPAL === "true" && req.header("x-dev-user-id")) {
-    req.principal = { userId: req.header("x-dev-user-id")! };
+export function devPrincipalMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (process.env.DEV_PRINCIPAL === 'true' && req.header('x-dev-user-id')) {
+    req.principal = { userId: req.header('x-dev-user-id')! };
     return next();
   }
 
-  const authHeader = req.header("authorization");
-  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : undefined;
-  const cookieHeader = req.header("cookie");
-  const cookieToken = cookieHeader?.match(/(?:^|;\s*)access_token=([^;]+)/)?.[1];
+  const authHeader = req.header('authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : undefined;
+  const cookieHeader = req.header('cookie');
+  const cookieToken = cookieHeader?.match(
+    /(?:^|;\s*)access_token=([^;]+)/,
+  )?.[1];
   const token = bearerToken ?? cookieToken;
 
   if (!token) {
-    res.status(401).json({ error: "authentication required" });
+    res.status(401).json({ error: 'authentication required' });
     return;
   }
 
@@ -43,6 +51,6 @@ export function devPrincipalMiddleware(req: Request, res: Response, next: NextFu
 }
 
 export function requirePrincipal(req: Request): RequestPrincipal {
-  if (!req.principal) throw new Error("missing principal (auth middleware)");
+  if (!req.principal) throw new Error('missing principal (auth middleware)');
   return req.principal;
 }

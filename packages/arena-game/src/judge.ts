@@ -1,17 +1,17 @@
 /** Verdict taxonomy (ticket 06): over-limit conditions are verdicts, never hangs. */
 export type ExecutionStatus =
-  | "accepted"
-  | "compile_error"
-  | "runtime_error"
-  | "time_limit_exceeded"
-  | "memory_limit_exceeded"
-  | "output_limit_exceeded"
-  | "process_limit_exceeded"
-  | "internal_error";
+  | 'accepted'
+  | 'compile_error'
+  | 'runtime_error'
+  | 'time_limit_exceeded'
+  | 'memory_limit_exceeded'
+  | 'output_limit_exceeded'
+  | 'process_limit_exceeded'
+  | 'internal_error';
 
 /** Any completed judge verdict (all statuses except internal_error) is a competitive attempt. */
 export function isCompetitiveVerdict(status: ExecutionStatus): boolean {
-  return status !== "internal_error";
+  return status !== 'internal_error';
 }
 
 export interface VisibleTest {
@@ -51,7 +51,12 @@ export interface SealedGroup {
 export interface SealedGroupResult {
   name: string;
   weight: number;
-  results: Array<{ id: string; passed: boolean; status: ExecutionStatus; runtimeMs: number }>;
+  results: Array<{
+    id: string;
+    passed: boolean;
+    status: ExecutionStatus;
+    runtimeMs: number;
+  }>;
 }
 
 export interface JudgeLimits {
@@ -73,10 +78,12 @@ export const SPIKE_LIMITS: JudgeLimits = {
   runPids: 64,
 };
 
-export type SupportedLanguage = "C++" | "Python" | "C";
+export type SupportedLanguage = 'C++' | 'Python' | 'C';
 
-export function assertSupportedLanguage(language: string): asserts language is SupportedLanguage {
-  if (language !== "C++" && language !== "Python" && language !== "C") {
+export function assertSupportedLanguage(
+  language: string,
+): asserts language is SupportedLanguage {
+  if (language !== 'C++' && language !== 'Python' && language !== 'C') {
     throw new ValidationError(`unsupported language ${language}`);
   }
 }
@@ -87,7 +94,7 @@ export function assertSupportedLanguage(language: string): asserts language is S
  * complete program over stdin. The game resolves driver and entrypoint from
  * bank metadata, defaulting to snippet for Python and stdio otherwise.
  */
-export type DriverKind = "snippet" | "stdio";
+export type DriverKind = 'snippet' | 'stdio';
 
 export interface SealedEvaluationRequest {
   evaluationId: string;
@@ -120,14 +127,16 @@ export interface GameJudge {
     limits: JudgeLimits,
     entrypoint?: string,
   ): Promise<CaseResult[]>;
-  evaluateSealed(request: SealedEvaluationRequest): Promise<{ groups: SealedGroupResult[] }>;
+  evaluateSealed(
+    request: SealedEvaluationRequest,
+  ): Promise<{ groups: SealedGroupResult[] }>;
 }
 
 /** Thrown when the judging platform fails before any competitive verdict. */
 export class JudgeInfraError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "JudgeInfraError";
+    this.name = 'JudgeInfraError';
   }
 }
 
@@ -136,6 +145,6 @@ export class ValidationError extends Error {
   readonly code = 400;
   constructor(message: string) {
     super(message);
-    this.name = "ValidationError";
+    this.name = 'ValidationError';
   }
 }

@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils';
 
 export function NookLogo({ className }: { className?: string }) {
   return (
@@ -6,7 +6,7 @@ export function NookLogo({ className }: { className?: string }) {
       role="img"
       aria-label="Nook"
       className={cn(
-        "inline-block text-[28px] leading-none font-semibold tracking-[-2px] text-foreground",
+        'inline-block text-[28px] leading-none font-semibold tracking-[-2px] text-foreground',
         className,
       )}
     >

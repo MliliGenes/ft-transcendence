@@ -27,17 +27,25 @@ import { GameRoomsClient } from '../dist/chat/game-rooms.client.js';
 import { GameEventsConsumer } from '../dist/events/game-events.consumer.js';
 import { AuthModule } from '../dist/auth/auth.module.js';
 
-
 // Never reset an existing schema: each run owns only this random schema.
 const schema = `chat_game_test_${randomUUID().replaceAll('-', '')}`;
 const url = process.env.TEST_DATABASE_URL;
-if (!url) throw new Error('Set TEST_DATABASE_URL to a local test PostgreSQL database.');
-const pool = new pg.Pool({ connectionString: url, connectionTimeoutMillis: 5000 });
+if (!url)
+  throw new Error('Set TEST_DATABASE_URL to a local test PostgreSQL database.');
+const pool = new pg.Pool({
+  connectionString: url,
+  connectionTimeoutMillis: 5000,
+});
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool, { schema }) });
 const keys = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const signer = new JwtService({
   privateKey: keys.privateKey.export({ type: 'pkcs8', format: 'pem' }),
-  signOptions: { algorithm: 'RS256', issuer: 'user-service', audience: 'ft-transcendence-api', expiresIn: 900 },
+  signOptions: {
+    algorithm: 'RS256',
+    issuer: 'user-service',
+    audience: 'ft-transcendence-api',
+    expiresIn: 900,
+  },
 });
 const alice = '11111111-1111-4111-8111-111111111111';
 const bob = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -172,10 +180,14 @@ async function createGameRoom(userId) {
   await leaveActiveRoom(userId);
   const response = await fetch(`${gameService.url}/lobby/rooms`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${token(userId)}` },
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token(userId)}`,
+    },
     body: JSON.stringify({ mode: '1v1' }),
   });
-  if (!response.ok) throw new Error(`the game service refused the room: ${response.status}`);
+  if (!response.ok)
+    throw new Error(`the game service refused the room: ${response.status}`);
   const body = await response.json();
   return body.room;
 }
@@ -184,26 +196,43 @@ async function createGameRoom(userId) {
 async function joinGameRoom(userId, code) {
   const response = await fetch(`${gameService.url}/lobby/rooms/join`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${token(userId)}` },
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token(userId)}`,
+    },
     body: JSON.stringify({ code }),
   });
-  if (!response.ok) throw new Error(`the game service refused the join: ${response.status}`);
+  if (!response.ok)
+    throw new Error(`the game service refused the join: ${response.status}`);
   return response.json();
 }
 
 describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () => {
   before(async () => {
-    const ddl = execFileSync(process.execPath, [
-      'node_modules/prisma/build/index.js', 'migrate', 'diff',
-      '--from-empty', '--to-schema', 'prisma/schema.prisma', '--script',
-    ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: {
-      ...process.env,
-      POSTGRES_HOST: new URL(url).hostname,
-      POSTGRES_PORT: new URL(url).port || '5432',
-      POSTGRES_USER: decodeURIComponent(new URL(url).username),
-      POSTGRES_PASSWORD: decodeURIComponent(new URL(url).password),
-      POSTGRES_DB: decodeURIComponent(new URL(url).pathname.slice(1)),
-    } });
+    const ddl = execFileSync(
+      process.execPath,
+      [
+        'node_modules/prisma/build/index.js',
+        'migrate',
+        'diff',
+        '--from-empty',
+        '--to-schema',
+        'prisma/schema.prisma',
+        '--script',
+      ],
+      {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          POSTGRES_HOST: new URL(url).hostname,
+          POSTGRES_PORT: new URL(url).port || '5432',
+          POSTGRES_USER: decodeURIComponent(new URL(url).username),
+          POSTGRES_PASSWORD: decodeURIComponent(new URL(url).password),
+          POSTGRES_DB: decodeURIComponent(new URL(url).pathname.slice(1)),
+        },
+      },
+    );
     await pool.query(`CREATE SCHEMA "${schema}"`);
     ownsSchema = true;
     const connection = await pool.connect();
@@ -220,15 +249,24 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       keys.publicKey.export({ type: 'spki', format: 'pem' }),
     );
     const gateway = {
-      broadcastMessageCreated: (userIds, message) => broadcasts.push({ userIds, message }),
+      broadcastMessageCreated: (userIds, message) =>
+        broadcasts.push({ userIds, message }),
       broadcastReadState: () => {},
     };
     const module = await Test.createTestingModule({
       imports: [
-        ConfigModule.forRoot({ ignoreEnvFile: true, load: [() => ({
-          JWT_PUBLIC_KEY: keys.publicKey.export({ type: 'spki', format: 'pem' }),
-          GAME_SERVICE_URL: gameService.url,
-        })] }),
+        ConfigModule.forRoot({
+          ignoreEnvFile: true,
+          load: [
+            () => ({
+              JWT_PUBLIC_KEY: keys.publicKey.export({
+                type: 'spki',
+                format: 'pem',
+              }),
+              GAME_SERVICE_URL: gameService.url,
+            }),
+          ],
+        }),
         AuthModule,
       ],
       controllers: [ChatController],
@@ -240,17 +278,28 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
         { provide: ChatGateway, useValue: gateway },
         { provide: MinioService, useValue: {} },
         { provide: FeedService, useValue: {} },
-        { provide: UserProfilesService, useValue: {
-          ensureCanContact: async () => {},
-          ensureActiveUsers: async (ids) => {
-            const count = await prisma.chatUser.count({ where: { id: { in: ids }, deletedAt: null } });
-            if (count !== new Set(ids).size) throw new Error('Unknown user');
+        {
+          provide: UserProfilesService,
+          useValue: {
+            ensureCanContact: async () => {},
+            ensureActiveUsers: async (ids) => {
+              const count = await prisma.chatUser.count({
+                where: { id: { in: ids }, deletedAt: null },
+              });
+              if (count !== new Set(ids).size) throw new Error('Unknown user');
+            },
           },
-        } },
+        },
       ],
     }).compile();
     app = module.createNestApplication({ logger: false });
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     await app.init();
     notifications = module.get(GameNotificationsService);
   });
@@ -261,9 +310,13 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
     await prisma.gameChallenge.deleteMany();
     await prisma.conversation.deleteMany();
     await prisma.chatUser.deleteMany();
-    await prisma.chatUser.createMany({ data: [alice, bob, stranger].map(id => ({
-      id, username: `test-${id.slice(0, 4)}`, sourceUpdatedAt: new Date(),
-    })) });
+    await prisma.chatUser.createMany({
+      data: [alice, bob, stranger].map((id) => ({
+        id,
+        username: `test-${id.slice(0, 4)}`,
+        sourceUpdatedAt: new Date(),
+      })),
+    });
   });
 
   after(async () => {
@@ -288,7 +341,9 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       .expect(201);
 
     assert.equal(response.body.kind ?? 'USER', 'USER');
-    const link = await prisma.gameChallenge.findUnique({ where: { roomCode: room.code } });
+    const link = await prisma.gameChallenge.findUnique({
+      where: { roomCode: room.code },
+    });
     assert.ok(link, 'the challenge should be linked to the conversation');
     assert.equal(link.conversationId, conversationId);
     assert.equal(link.matchId, null);
@@ -353,7 +408,12 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       })
       .expect(403);
 
-    assert.equal(await prisma.message.count({ where: { conversationId: conversation.body.id } }), 0);
+    assert.equal(
+      await prisma.message.count({
+        where: { conversationId: conversation.body.id },
+      }),
+      0,
+    );
     assert.equal(await prisma.gameChallenge.count(), 0);
   });
 
@@ -385,9 +445,14 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       })
       .expect(409);
 
-    const link = await prisma.gameChallenge.findUnique({ where: { roomCode: room.code } });
+    const link = await prisma.gameChallenge.findUnique({
+      where: { roomCode: room.code },
+    });
     assert.equal(link.conversationId, conversationId);
-    assert.equal(await prisma.message.count({ where: { conversationId: other.body.id } }), 0);
+    assert.equal(
+      await prisma.message.count({ where: { conversationId: other.body.id } }),
+      0,
+    );
   });
 
   it('gives a room code to one conversation when two claim it at once', async () => {
@@ -423,12 +488,20 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
     assert.deepEqual(statuses, [201, 409]);
 
     // Only the winning conversation keeps its message and the binding.
-    const links = await prisma.gameChallenge.findMany({ where: { roomCode: room.code } });
+    const links = await prisma.gameChallenge.findMany({
+      where: { roomCode: room.code },
+    });
     assert.equal(links.length, 1);
     const owner = links[0].conversationId;
     const loser = owner === first ? secondId : first;
-    assert.equal(await prisma.message.count({ where: { conversationId: owner } }), 1);
-    assert.equal(await prisma.message.count({ where: { conversationId: loser } }), 0);
+    assert.equal(
+      await prisma.message.count({ where: { conversationId: owner } }),
+      1,
+    );
+    assert.equal(
+      await prisma.message.count({ where: { conversationId: loser } }),
+      0,
+    );
   });
 
   it('persists one notification for a match start and ignores the replay', async () => {
@@ -440,12 +513,18 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
 
     assert.equal(first.delivered, true);
     assert.equal(replay.delivered, true);
-    const messages = await prisma.message.findMany({ where: { conversationId } });
+    const messages = await prisma.message.findMany({
+      where: { conversationId },
+    });
     assert.equal(messages.length, 1);
     assert.equal(messages[0].authorId, SYSTEM_AUTHOR);
     assert.equal(messages[0].kind, 'SYSTEM');
     assert.match(messages[0].content, /match-started/);
-    assert.equal(broadcasts.length, 1, 'a replay must not be delivered live again');
+    assert.equal(
+      broadcasts.length,
+      1,
+      'a replay must not be delivered live again',
+    );
     assert.deepEqual(broadcasts[0].userIds.sort(), [alice, bob].sort());
   });
 
@@ -455,7 +534,10 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
     await notifications.applyGameEvent(startedEvent());
     await notifications.applyGameEvent(endedEvent());
 
-    const messages = await prisma.message.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } });
+    const messages = await prisma.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'asc' },
+    });
     assert.equal(messages.length, 2);
     assert.match(messages[1].content, /match-result/);
     assert.match(messages[1].content, /300/);
@@ -489,7 +571,11 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       eventId: randomUUID(),
       eventType: 'game.challenge.cancelled',
       occurredAt: new Date().toISOString(),
-      data: { roomCode: ROOM, reason: 'room-closed', participantUserIds: [alice, bob] },
+      data: {
+        roomCode: ROOM,
+        reason: 'room-closed',
+        participantUserIds: [alice, bob],
+      },
     });
     assert.equal(cancelled.delivered, true);
 
@@ -502,16 +588,28 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
           { userId: alice, sideId: 'left', outcome: 'win', score: 0 },
           { userId: bob, sideId: 'right', outcome: 'loss', score: 0 },
         ],
-        forfeit: { winnerSideId: 'left', loserSideId: 'right', reason: 'leave' },
+        forfeit: {
+          winnerSideId: 'left',
+          loserSideId: 'right',
+          reason: 'leave',
+        },
         endedBecause: 'forfeit',
       },
     });
     assert.equal(forfeited.delivered, true);
 
-    const messages = await prisma.message.findMany({ where: { conversationId } });
+    const messages = await prisma.message.findMany({
+      where: { conversationId },
+    });
     assert.equal(messages.length, 3);
-    assert.ok(messages.some((message) => /challenge-cancelled/.test(message.content ?? '')));
-    assert.ok(messages.some((message) => /forfeit/.test(message.content ?? '')));
+    assert.ok(
+      messages.some((message) =>
+        /challenge-cancelled/.test(message.content ?? ''),
+      ),
+    );
+    assert.ok(
+      messages.some((message) => /forfeit/.test(message.content ?? '')),
+    );
     assert.ok(messages.every((message) => message.authorId === SYSTEM_AUTHOR));
   });
 
@@ -521,23 +619,29 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
     await notifications.applyGameEvent(startedEvent());
     await notifications.applyGameEvent(endedEvent());
 
-    const messages = await prisma.message.findMany({ where: { conversationId } });
+    const messages = await prisma.message.findMany({
+      where: { conversationId },
+    });
     for (const message of messages) {
-      assert.doesNotMatch(message.content ?? '', /source|hidden|editor|submission/i);
+      assert.doesNotMatch(
+        message.content ?? '',
+        /source|hidden|editor|submission/i,
+      );
     }
   });
 
   it('delivers an event published by the Game service into the linked conversation', async (t) => {
     if (!process.env.RABBITMQ_HOST) {
-      t.skip('RABBITMQ_HOST is not set; broker round-trip needs the integration environment');
+      t.skip(
+        'RABBITMQ_HOST is not set; broker round-trip needs the integration environment',
+      );
       return;
     }
     const amqp = (await import('amqp-connection-manager')).default;
     // The real publisher of the Game service, so this proves the production
     // envelope and routing key are what the Chat consumer understands.
-    const { GameEventsPublisher } = await import(
-      '../../services/game/dist/game/game-events.publisher.js'
-    );
+    const { GameEventsPublisher } =
+      await import('../../services/game/dist/game/game-events.publisher.js');
     const consumer = new GameEventsConsumer(
       new ConfigService({
         RABBITMQ_HOST: process.env.RABBITMQ_HOST,
@@ -578,7 +682,8 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
           // The channel is being re-established; try again.
         }
         if (attached) break;
-        if (Date.now() > deadline) throw new Error('the game-events consumer did not attach');
+        if (Date.now() > deadline)
+          throw new Error('the game-events consumer did not attach');
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
 
@@ -598,7 +703,8 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
               { userId: bob, sideId: 'right' },
             ],
           });
-          if (!published) await new Promise((resolve) => setTimeout(resolve, 1000));
+          if (!published)
+            await new Promise((resolve) => setTimeout(resolve, 1000));
         }
         assert.equal(published, true, 'the publisher should reach the broker');
       } finally {
@@ -608,12 +714,21 @@ describe('Code Arena notifications in chat (real HTTP, JWT and PostgreSQL)', () 
       const messages = [];
       const until = Date.now() + 15000;
       for (;;) {
-        const found = await prisma.message.findMany({ where: { conversationId } });
-        if (found.length > 0) { messages.push(...found); break; }
+        const found = await prisma.message.findMany({
+          where: { conversationId },
+        });
+        if (found.length > 0) {
+          messages.push(...found);
+          break;
+        }
         if (Date.now() > until) break;
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
-      assert.equal(messages.length, 1, 'the broker event should reach the conversation');
+      assert.equal(
+        messages.length,
+        1,
+        'the broker event should reach the conversation',
+      );
       assert.match(messages[0].content, /match-started/);
     } finally {
       await connection.close().catch(() => {});

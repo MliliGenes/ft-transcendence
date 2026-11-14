@@ -10,6 +10,9 @@ export interface AuthenticatedPrincipal {
 }
 
 /** Dev/test-only fixture. Production plugs the real auth middleware here. */
-export function testPrincipal(userId: string, sessionId = `test-session-${userId}`): AuthenticatedPrincipal {
+export function testPrincipal(
+  userId: string,
+  sessionId = `test-session-${userId}`,
+): AuthenticatedPrincipal {
   return { userId, sessionId };
 }

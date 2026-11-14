@@ -94,11 +94,18 @@ test('account endpoints use the authenticated identity and validate changes', as
   };
   const module = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(RabbitMqEventsService)
-    .useValue({ publishCreated: async () => {}, publishUpdated: async () => {}, publishDeleted: async () => {} })
+    .useValue({
+      publishCreated: async () => {},
+      publishUpdated: async () => {},
+      publishDeleted: async () => {},
+    })
     .overrideProvider(PrismaService)
     .useValue(prisma)
     .overrideProvider(MailService)
-    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
+    .useValue({
+      sendVerificationEmail: async () => {},
+      sendPasswordResetEmail: async () => {},
+    })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({
@@ -326,7 +333,10 @@ test('account search matches public username and display name results with pagin
           ];
         },
         count: async ({ where }) => {
-          assert.deepEqual(where.OR.map((field) => Object.keys(field)[0]), ['username', 'displayName']);
+          assert.deepEqual(
+            where.OR.map((field) => Object.keys(field)[0]),
+            ['username', 'displayName'],
+          );
           return 3;
         },
       },
@@ -334,7 +344,10 @@ test('account search matches public username and display name results with pagin
     .overrideProvider(RabbitMqEventsService)
     .useValue({})
     .overrideProvider(MailService)
-    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
+    .useValue({
+      sendVerificationEmail: async () => {},
+      sendPasswordResetEmail: async () => {},
+    })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({
@@ -367,21 +380,43 @@ test('account search matches public username and display name results with pagin
 
   assert.equal(response.body.users[0].username, 'alice');
   assert.equal(response.body.users[0].displayName, 'A Person');
-  assert.deepEqual({ total: response.body.total, page: response.body.page, limit: response.body.limit, totalPages: response.body.totalPages }, {
-    total: 3,
-    page: 2,
-    limit: 2,
-    totalPages: 2,
-  });
+  assert.deepEqual(
+    {
+      total: response.body.total,
+      page: response.body.page,
+      limit: response.body.limit,
+      totalPages: response.body.totalPages,
+    },
+    {
+      total: 3,
+      page: 2,
+      limit: 2,
+      totalPages: 2,
+    },
+  );
   assert.equal(response.body.users[0].passwordHash, undefined);
   assert.equal(response.body.users[0].email, undefined);
-  await request(app.getHttpServer()).get(`/accounts/search?username=${'a'.repeat(101)}`).expect(400);
-  await request(app.getHttpServer()).get('/accounts/search?username=ali&page=0').expect(400);
-  await request(app.getHttpServer()).get('/accounts/search?username=ali&limit=101').expect(400);
-  await request(app.getHttpServer()).get('/accounts/search?sortBy=email').expect(400);
-  await request(app.getHttpServer()).get('/accounts/search?sortOrder=up').expect(400);
-  await request(app.getHttpServer()).get('/accounts/search?joinedWithin=2d').expect(400);
-  await request(app.getHttpServer()).get('/accounts/search?hasStatus=yes').expect(400);
+  await request(app.getHttpServer())
+    .get(`/accounts/search?username=${'a'.repeat(101)}`)
+    .expect(400);
+  await request(app.getHttpServer())
+    .get('/accounts/search?username=ali&page=0')
+    .expect(400);
+  await request(app.getHttpServer())
+    .get('/accounts/search?username=ali&limit=101')
+    .expect(400);
+  await request(app.getHttpServer())
+    .get('/accounts/search?sortBy=email')
+    .expect(400);
+  await request(app.getHttpServer())
+    .get('/accounts/search?sortOrder=up')
+    .expect(400);
+  await request(app.getHttpServer())
+    .get('/accounts/search?joinedWithin=2d')
+    .expect(400);
+  await request(app.getHttpServer())
+    .get('/accounts/search?hasStatus=yes')
+    .expect(400);
 });
 
 test('account search applies filters and sorting, and browses without a term', async (t) => {
@@ -407,7 +442,10 @@ test('account search applies filters and sorting, and browses without a term', a
     .overrideProvider(RabbitMqEventsService)
     .useValue({})
     .overrideProvider(MailService)
-    .useValue({ sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} })
+    .useValue({
+      sendVerificationEmail: async () => {},
+      sendPasswordResetEmail: async () => {},
+    })
     .overrideProvider(ConfigService)
     .useValue(
       new ConfigService({
@@ -436,23 +474,41 @@ test('account search applies filters and sorting, and browses without a term', a
 
   const before = Date.now();
   await request(app.getHttpServer())
-    .get('/accounts/search?username=ali&sortBy=createdAt&sortOrder=desc&joinedWithin=30d&hasStatus=true&hasBio=false')
+    .get(
+      '/accounts/search?username=ali&sortBy=createdAt&sortOrder=desc&joinedWithin=30d&hasStatus=true&hasBio=false',
+    )
     .expect(200);
   const filtered = calls.at(-1);
   assert.deepEqual(filtered.orderBy, [{ createdAt: 'desc' }, { id: 'asc' }]);
-  const [termCondition, joinedCondition, statusCondition, bioCondition] = filtered.where.AND;
-  assert.deepEqual(termCondition.OR.map((field) => Object.keys(field)[0]), ['username', 'displayName']);
+  const [termCondition, joinedCondition, statusCondition, bioCondition] =
+    filtered.where.AND;
+  assert.deepEqual(
+    termCondition.OR.map((field) => Object.keys(field)[0]),
+    ['username', 'displayName'],
+  );
   const since = joinedCondition.createdAt.gte.getTime();
-  assert.ok(since <= before - 30 * 86_400_000 + 5_000 && since >= before - 30 * 86_400_000 - 5_000);
-  assert.deepEqual(statusCondition, { NOT: [{ statusText: null }, { statusText: '' }] });
+  assert.ok(
+    since <= before - 30 * 86_400_000 + 5_000 &&
+      since >= before - 30 * 86_400_000 - 5_000,
+  );
+  assert.deepEqual(statusCondition, {
+    NOT: [{ statusText: null }, { statusText: '' }],
+  });
   assert.deepEqual(bioCondition, { OR: [{ bio: null }, { bio: '' }] });
 
-  await request(app.getHttpServer()).get('/accounts/search?sortBy=displayName').expect(200);
+  await request(app.getHttpServer())
+    .get('/accounts/search?sortBy=displayName')
+    .expect(200);
   const browse = calls.at(-1);
   assert.deepEqual(browse.where, {});
-  assert.deepEqual(browse.orderBy, [{ displayName: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }]);
+  assert.deepEqual(browse.orderBy, [
+    { displayName: { sort: 'asc', nulls: 'last' } },
+    { id: 'asc' },
+  ]);
 
-  await request(app.getHttpServer()).get('/accounts/search?username=%20').expect(200);
+  await request(app.getHttpServer())
+    .get('/accounts/search?username=%20')
+    .expect(200);
   assert.deepEqual(calls.at(-1).where, {});
 });
 
@@ -463,7 +519,9 @@ test('friendship mutations require the caller to be part of the relationship', a
     },
   });
 
-  const friendships = new (await import('../dist/social/friendships.service.js')).FriendshipsService({
+  const friendships = new (
+    await import('../dist/social/friendships.service.js')
+  ).FriendshipsService({
     friendship: {
       findUnique: async ({ where }) => ({
         id: where.id,
@@ -486,7 +544,10 @@ test('friendship mutations require the caller to be part of the relationship', a
     (error) => error?.name === 'ForbiddenException',
   );
 
-  const pendingDelete = await friendships.deleteFriendship('friend-1', 'user-a');
+  const pendingDelete = await friendships.deleteFriendship(
+    'friend-1',
+    'user-a',
+  );
   assert.equal(pendingDelete.id, 'friend-1');
 
   const acceptedFriendship = {
@@ -496,7 +557,9 @@ test('friendship mutations require the caller to be part of the relationship', a
     status: 'ACCEPTED',
   };
 
-  const deleteAllowedService = new (await import('../dist/social/friendships.service.js')).FriendshipsService({
+  const deleteAllowedService = new (
+    await import('../dist/social/friendships.service.js')
+  ).FriendshipsService({
     friendship: {
       findUnique: async ({ where }) => {
         if (where.id === 'friend-2') return acceptedFriendship;
@@ -511,7 +574,10 @@ test('friendship mutations require the caller to be part of the relationship', a
     },
   });
 
-  const acceptedDelete = await deleteAllowedService.deleteFriendship('friend-2', 'user-a');
+  const acceptedDelete = await deleteAllowedService.deleteFriendship(
+    'friend-2',
+    'user-a',
+  );
   assert.equal(acceptedDelete.id, 'friend-2');
 
   await service.updateMe('verified-user-id', {
@@ -525,21 +591,28 @@ test('friendship mutations require the caller to be part of the relationship', a
 });
 
 test('friendship creation rejects self requests and handles existing relationships', async () => {
-  const { FriendshipsService } = await import('../dist/social/friendships.service.js');
+  const { FriendshipsService } =
+    await import('../dist/social/friendships.service.js');
   const updates = [];
   const relationships = new Map([
-    ['user-a:user-b', {
-      id: 'friend-1',
-      requesterId: 'user-a',
-      addresseeId: 'user-b',
-      status: 'PENDING',
-    }],
-    ['user-c:user-d', {
-      id: 'friend-2',
-      requesterId: 'user-c',
-      addresseeId: 'user-d',
-      status: 'ACCEPTED',
-    }],
+    [
+      'user-a:user-b',
+      {
+        id: 'friend-1',
+        requesterId: 'user-a',
+        addresseeId: 'user-b',
+        status: 'PENDING',
+      },
+    ],
+    [
+      'user-c:user-d',
+      {
+        id: 'friend-2',
+        requesterId: 'user-c',
+        addresseeId: 'user-d',
+        status: 'ACCEPTED',
+      },
+    ],
   ]);
   let targetExists = true;
   let targetBlocked = false;
@@ -547,9 +620,11 @@ test('friendship creation rejects self requests and handles existing relationshi
     friendship: {
       findFirst: async ({ where }) => {
         const [first, second] = where.OR;
-        return relationships.get(`${first.requesterId}:${first.addresseeId}`)
-          ?? relationships.get(`${second.requesterId}:${second.addresseeId}`)
-          ?? null;
+        return (
+          relationships.get(`${first.requesterId}:${first.addresseeId}`) ??
+          relationships.get(`${second.requesterId}:${second.addresseeId}`) ??
+          null
+        );
       },
       update: async ({ where, data }) => {
         updates.push({ where, data });
@@ -562,16 +637,22 @@ test('friendship creation rejects self requests and handles existing relationshi
     $transaction: async (work) =>
       work({
         $queryRaw: async () => [],
-        block: { findFirst: async () => targetBlocked ? { id: 'block-ab' } : null },
+        block: {
+          findFirst: async () => (targetBlocked ? { id: 'block-ab' } : null),
+        },
         user: {
           findUnique: async () => (targetExists ? { id: 'user-a' } : null),
         },
         friendship: {
           findFirst: async ({ where }) => {
             const [first, second] = where.OR;
-            return relationships.get(`${first.requesterId}:${first.addresseeId}`)
-              ?? relationships.get(`${second.requesterId}:${second.addresseeId}`)
-              ?? null;
+            return (
+              relationships.get(`${first.requesterId}:${first.addresseeId}`) ??
+              relationships.get(
+                `${second.requesterId}:${second.addresseeId}`,
+              ) ??
+              null
+            );
           },
           create: async () => {
             throw new Error('create should not be called for guarded requests');
@@ -612,7 +693,8 @@ test('friendship creation rejects self requests and handles existing relationshi
 });
 
 test('friends expose the relationship ID for removal from either side', async () => {
-  const { FriendshipsService } = await import('../dist/social/friendships.service.js');
+  const { FriendshipsService } =
+    await import('../dist/social/friendships.service.js');
   const alice = { id: 'user-a', username: 'alice' };
   const bob = { id: 'user-b', username: 'bob' };
   const service = new FriendshipsService({
@@ -621,10 +703,22 @@ test('friends expose the relationship ID for removal from either side', async ()
         assert.equal(where.status, 'ACCEPTED');
         assert.equal(select.id, true);
         assert.equal(select.requester.select.passwordHash, undefined);
-        return [{ id: 'relationship-ab', requesterId: alice.id, addresseeId: bob.id, requester: alice, addressee: bob }];
+        return [
+          {
+            id: 'relationship-ab',
+            requesterId: alice.id,
+            addresseeId: bob.id,
+            requester: alice,
+            addressee: bob,
+          },
+        ];
       },
     },
   });
-  assert.deepEqual(await service.getFriendships(alice.id), [{ ...bob, friendshipId: 'relationship-ab' }]);
-  assert.deepEqual(await service.getFriendships(bob.id), [{ ...alice, friendshipId: 'relationship-ab' }]);
+  assert.deepEqual(await service.getFriendships(alice.id), [
+    { ...bob, friendshipId: 'relationship-ab' },
+  ]);
+  assert.deepEqual(await service.getFriendships(bob.id), [
+    { ...alice, friendshipId: 'relationship-ab' },
+  ]);
 });

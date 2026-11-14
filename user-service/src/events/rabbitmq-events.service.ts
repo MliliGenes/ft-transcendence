@@ -36,8 +36,12 @@ export class RabbitMqEventsService implements OnModuleInit, OnModuleDestroy {
       `amqp://${this.config.getOrThrow<string>('RABBITMQ_HOST')}`,
     );
     brokerUrl.port = this.config.get<string>('RABBITMQ_PORT', '5672');
-    brokerUrl.username = this.config.getOrThrow<string>('RABBITMQ_DEFAULT_USER');
-    brokerUrl.password = this.config.getOrThrow<string>('RABBITMQ_DEFAULT_PASS');
+    brokerUrl.username = this.config.getOrThrow<string>(
+      'RABBITMQ_DEFAULT_USER',
+    );
+    brokerUrl.password = this.config.getOrThrow<string>(
+      'RABBITMQ_DEFAULT_PASS',
+    );
 
     this.connection = amqp.connect(brokerUrl.toString(), {
       heartbeatIntervalInSeconds: 30,
@@ -102,8 +106,7 @@ export class RabbitMqEventsService implements OnModuleInit, OnModuleDestroy {
 
   private publishProfile(
     eventType:
-      | typeof USER_EVENT_TYPES.CREATED
-      | typeof USER_EVENT_TYPES.UPDATED,
+      typeof USER_EVENT_TYPES.CREATED | typeof USER_EVENT_TYPES.UPDATED,
     user: UserProfileSnapshot,
   ): Promise<boolean> {
     return this.publish({

@@ -1,102 +1,126 @@
-import { describe, expect, it } from "vitest";
-import { MatchSocketPresence, type MatchSocketPresenceTarget } from "./match-socket-presence.js";
+import { describe, expect, it } from 'vitest';
+import {
+  MatchSocketPresence,
+  type MatchSocketPresenceTarget,
+} from './match-socket-presence.js';
 
 type SidePresenceCall = {
-  kind: "side";
+  kind: 'side';
   matchId: string;
   side: string;
-  presence: "online" | "offline";
+  presence: 'online' | 'offline';
 };
 
 type MemberPresenceCall = {
-  kind: "member";
+  kind: 'member';
   matchId: string;
   userId: string;
-  presence: "online" | "offline";
+  presence: 'online' | 'offline';
 };
 
 class RecordingPresenceTarget implements MatchSocketPresenceTarget {
   readonly calls: Array<SidePresenceCall | MemberPresenceCall> = [];
-  readonly modes = new Map<string, "1v1" | "2v2">();
+  readonly modes = new Map<string, '1v1' | '2v2'>();
   readonly sides = new Map<string, string>();
 
   async participantSide(userId: string, matchId: string): Promise<string> {
     const side = this.sides.get(`${matchId}:${userId}`);
-    if (!side) throw new Error("unknown participant");
+    if (!side) throw new Error('unknown participant');
     return side;
   }
 
-  async modeOf(matchId: string): Promise<"1v1" | "2v2"> {
-    return this.modes.get(matchId) ?? "1v1";
+  async modeOf(matchId: string): Promise<'1v1' | '2v2'> {
+    return this.modes.get(matchId) ?? '1v1';
   }
 
-  async setPresence(matchId: string, side: string, presence: "online" | "offline"): Promise<void> {
-    this.calls.push({ kind: "side", matchId, side, presence });
+  async setPresence(
+    matchId: string,
+    side: string,
+    presence: 'online' | 'offline',
+  ): Promise<void> {
+    this.calls.push({ kind: 'side', matchId, side, presence });
   }
 
-  async setMemberPresence(matchId: string, userId: string, presence: "online" | "offline"): Promise<void> {
-    this.calls.push({ kind: "member", matchId, userId, presence });
+  async setMemberPresence(
+    matchId: string,
+    userId: string,
+    presence: 'online' | 'offline',
+  ): Promise<void> {
+    this.calls.push({ kind: 'member', matchId, userId, presence });
   }
 }
 
-function addParticipant(target: RecordingPresenceTarget, matchId: string, userId: string, side: string): void {
+function addParticipant(
+  target: RecordingPresenceTarget,
+  matchId: string,
+  userId: string,
+  side: string,
+): void {
   target.sides.set(`${matchId}:${userId}`, side);
 }
 
-describe("MatchSocketPresence", () => {
-  it("marks a 1v1 side online on the first socket and offline on the last socket", async () => {
+describe('MatchSocketPresence', () => {
+  it('marks a 1v1 side online on the first socket and offline on the last socket', async () => {
     const target = new RecordingPresenceTarget();
     const presence = new MatchSocketPresence(target);
-    target.modes.set("match-1", "1v1");
-    addParticipant(target, "match-1", "alice", "left");
+    target.modes.set('match-1', '1v1');
+    addParticipant(target, 'match-1', 'alice', 'left');
 
-    await expect(presence.noteSocketOpen("alice", "match-1", "socket-1")).resolves.toBe("left");
-    await presence.noteSocketOpen("alice", "match-1", "socket-2");
-    await presence.noteSocketClosed("alice", "match-1", "socket-1");
-
-    expect(target.calls).toEqual([{ kind: "side", matchId: "match-1", side: "left", presence: "online" }]);
-
-    await presence.noteSocketClosed("alice", "match-1", "socket-2");
+    await expect(
+      presence.noteSocketOpen('alice', 'match-1', 'socket-1'),
+    ).resolves.toBe('left');
+    await presence.noteSocketOpen('alice', 'match-1', 'socket-2');
+    await presence.noteSocketClosed('alice', 'match-1', 'socket-1');
 
     expect(target.calls).toEqual([
-      { kind: "side", matchId: "match-1", side: "left", presence: "online" },
-      { kind: "side", matchId: "match-1", side: "left", presence: "offline" },
+      { kind: 'side', matchId: 'match-1', side: 'left', presence: 'online' },
+    ]);
+
+    await presence.noteSocketClosed('alice', 'match-1', 'socket-2');
+
+    expect(target.calls).toEqual([
+      { kind: 'side', matchId: 'match-1', side: 'left', presence: 'online' },
+      { kind: 'side', matchId: 'match-1', side: 'left', presence: 'offline' },
     ]);
   });
 
-  it("ignores unknown and duplicate socket closes", async () => {
+  it('ignores unknown and duplicate socket closes', async () => {
     const target = new RecordingPresenceTarget();
     const presence = new MatchSocketPresence(target);
-    target.modes.set("match-1", "1v1");
-    addParticipant(target, "match-1", "alice", "left");
+    target.modes.set('match-1', '1v1');
+    addParticipant(target, 'match-1', 'alice', 'left');
 
-    await presence.noteSocketClosed("alice", "match-1", "unknown");
-    await presence.noteSocketOpen("alice", "match-1", "socket-1");
-    await presence.noteSocketClosed("alice", "match-1", "socket-1");
-    await presence.noteSocketClosed("alice", "match-1", "socket-1");
+    await presence.noteSocketClosed('alice', 'match-1', 'unknown');
+    await presence.noteSocketOpen('alice', 'match-1', 'socket-1');
+    await presence.noteSocketClosed('alice', 'match-1', 'socket-1');
+    await presence.noteSocketClosed('alice', 'match-1', 'socket-1');
 
     expect(target.calls).toEqual([
-      { kind: "side", matchId: "match-1", side: "left", presence: "online" },
-      { kind: "side", matchId: "match-1", side: "left", presence: "offline" },
+      { kind: 'side', matchId: 'match-1', side: 'left', presence: 'online' },
+      { kind: 'side', matchId: 'match-1', side: 'left', presence: 'offline' },
     ]);
   });
 
-  it("does not let a delayed close mark a replacement socket offline", async () => {
+  it('does not let a delayed close mark a replacement socket offline', async () => {
     const target = new RecordingPresenceTarget();
     const presence = new MatchSocketPresence(target);
-    target.modes.set("match-1", "1v1");
-    addParticipant(target, "match-1", "alice", "left");
+    target.modes.set('match-1', '1v1');
+    addParticipant(target, 'match-1', 'alice', 'left');
 
-    await presence.noteSocketOpen("alice", "match-1", "old-socket");
+    await presence.noteSocketOpen('alice', 'match-1', 'old-socket');
 
     let releaseOfflineWrite!: () => void;
-    const offlineWriteBlocked = new Promise<void>((resolve) => { releaseOfflineWrite = resolve; });
+    const offlineWriteBlocked = new Promise<void>((resolve) => {
+      releaseOfflineWrite = resolve;
+    });
     let signalOfflineWriteStarted!: () => void;
-    const offlineWriteStarted = new Promise<void>((resolve) => { signalOfflineWriteStarted = resolve; });
+    const offlineWriteStarted = new Promise<void>((resolve) => {
+      signalOfflineWriteStarted = resolve;
+    });
     let onlineWriteStarted = false;
     const originalSetPresence = target.setPresence.bind(target);
     target.setPresence = async (matchId, side, state) => {
-      if (state === "offline") {
+      if (state === 'offline') {
         signalOfflineWriteStarted();
         await offlineWriteBlocked;
       } else {
@@ -105,32 +129,51 @@ describe("MatchSocketPresence", () => {
       await originalSetPresence(matchId, side, state);
     };
 
-    const closing = presence.noteSocketClosed("alice", "match-1", "old-socket");
+    const closing = presence.noteSocketClosed('alice', 'match-1', 'old-socket');
     await offlineWriteStarted;
-    const replacing = presence.noteSocketOpen("alice", "match-1", "replacement-socket");
+    const replacing = presence.noteSocketOpen(
+      'alice',
+      'match-1',
+      'replacement-socket',
+    );
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     releaseOfflineWrite();
     await closing;
     await replacing;
 
-    expect(target.calls.at(-1)).toEqual({ kind: "side", matchId: "match-1", side: "left", presence: "online" });
+    expect(target.calls.at(-1)).toEqual({
+      kind: 'side',
+      matchId: 'match-1',
+      side: 'left',
+      presence: 'online',
+    });
   });
 
-  it("tracks 2v2 presence independently for members sharing one side", async () => {
+  it('tracks 2v2 presence independently for members sharing one side', async () => {
     const target = new RecordingPresenceTarget();
     const presence = new MatchSocketPresence(target);
-    target.modes.set("match-2", "2v2");
-    addParticipant(target, "match-2", "alice", "left");
-    addParticipant(target, "match-2", "bob", "left");
+    target.modes.set('match-2', '2v2');
+    addParticipant(target, 'match-2', 'alice', 'left');
+    addParticipant(target, 'match-2', 'bob', 'left');
 
-    await presence.noteSocketOpen("alice", "match-2", "alice-socket");
-    await presence.noteSocketOpen("bob", "match-2", "bob-socket");
-    await presence.noteSocketClosed("alice", "match-2", "alice-socket");
+    await presence.noteSocketOpen('alice', 'match-2', 'alice-socket');
+    await presence.noteSocketOpen('bob', 'match-2', 'bob-socket');
+    await presence.noteSocketClosed('alice', 'match-2', 'alice-socket');
 
     expect(target.calls).toEqual([
-      { kind: "member", matchId: "match-2", userId: "alice", presence: "online" },
-      { kind: "member", matchId: "match-2", userId: "bob", presence: "online" },
-      { kind: "member", matchId: "match-2", userId: "alice", presence: "offline" },
+      {
+        kind: 'member',
+        matchId: 'match-2',
+        userId: 'alice',
+        presence: 'online',
+      },
+      { kind: 'member', matchId: 'match-2', userId: 'bob', presence: 'online' },
+      {
+        kind: 'member',
+        matchId: 'match-2',
+        userId: 'alice',
+        presence: 'offline',
+      },
     ]);
   });
 });

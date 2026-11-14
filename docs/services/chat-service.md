@@ -6,35 +6,35 @@ Related documents: [user-chat integration](../integrations/user-chat.md) (identi
 
 ## Source map
 
-| Source | Responsibility |
-| --- | --- |
-| `src/main.ts`, `src/app.module.ts` | Bootstrap, global validation, module wiring |
-| `src/auth/` | JWT verification and `AuthGuard` |
-| `src/chat/chat.controller.ts`, `chat.service.ts` | DMs, messages, read state, attachment URLs |
-| `src/chat/ensure-active-user.guard.ts` | Makes sure the caller has an active `ChatUser` row |
-| `src/chat/user-profiles.service.ts` | Profile fallback and block checks over HTTP |
-| `src/chat/groups/` | Groups, members, roles, channels |
-| `src/chat/gateway/chat.gateway.ts` | Socket.IO connection, rooms, broadcasts |
-| `src/chat/presence/` | In-memory online status and its audience |
-| `src/chat/game-notifications.service.ts` | Code Arena lifecycle notifications written from game events |
-| `src/chat/game-rooms.client.ts` | Checks Code Arena room membership with the Game service |
-| `src/events/` | RabbitMQ consumers for user events and game events |
-| `src/feed/` | Global feed group, membership, per-user posts |
-| `src/minio/` | MinIO clients, signed URLs, object checks |
-| `prisma/schema.prisma` | Data model |
+| Source                                           | Responsibility                                              |
+| ------------------------------------------------ | ----------------------------------------------------------- |
+| `src/main.ts`, `src/app.module.ts`               | Bootstrap, global validation, module wiring                 |
+| `src/auth/`                                      | JWT verification and `AuthGuard`                            |
+| `src/chat/chat.controller.ts`, `chat.service.ts` | DMs, messages, read state, attachment URLs                  |
+| `src/chat/ensure-active-user.guard.ts`           | Makes sure the caller has an active `ChatUser` row          |
+| `src/chat/user-profiles.service.ts`              | Profile fallback and block checks over HTTP                 |
+| `src/chat/groups/`                               | Groups, members, roles, channels                            |
+| `src/chat/gateway/chat.gateway.ts`               | Socket.IO connection, rooms, broadcasts                     |
+| `src/chat/presence/`                             | In-memory online status and its audience                    |
+| `src/chat/game-notifications.service.ts`         | Code Arena lifecycle notifications written from game events |
+| `src/chat/game-rooms.client.ts`                  | Checks Code Arena room membership with the Game service     |
+| `src/events/`                                    | RabbitMQ consumers for user events and game events          |
+| `src/feed/`                                      | Global feed group, membership, per-user posts               |
+| `src/minio/`                                     | MinIO clients, signed URLs, object checks                   |
+| `prisma/schema.prisma`                           | Data model                                                  |
 
 ## Data model
 
-| Model | Purpose |
-| --- | --- |
-| `ChatUser` | Local copy of a public profile. `id` is the user-service UUID. Holds `sourceUpdatedAt` and `deletedAt`. |
-| `Group` | Name, description, rules |
-| `GroupMember` | Membership with a per-group `ADMIN` or `MEMBER` role |
-| `Conversation` | `DM` (two sorted user IDs) or `CHANNEL` (`groupId`, `name`, `topic`) |
-| `Message` | Content up to 2000 characters, `attachments String[]`, `createdAt`, `editedAt`, `deletedAt`, `clientRequestId`, `requestHash`, `version`, and `kind` (`USER` or `SYSTEM`) |
-| `ConversationReadState` | One row per conversation and user, with `lastReadMessageId` |
-| `GameChallenge` | Links a Code Arena room code to the conversation that carries the invitation, plus the match it started |
-| `Reaction` | Schema only, no API yet |
+| Model                   | Purpose                                                                                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ChatUser`              | Local copy of a public profile. `id` is the user-service UUID. Holds `sourceUpdatedAt` and `deletedAt`.                                                                   |
+| `Group`                 | Name, description, rules                                                                                                                                                  |
+| `GroupMember`           | Membership with a per-group `ADMIN` or `MEMBER` role                                                                                                                      |
+| `Conversation`          | `DM` (two sorted user IDs) or `CHANNEL` (`groupId`, `name`, `topic`)                                                                                                      |
+| `Message`               | Content up to 2000 characters, `attachments String[]`, `createdAt`, `editedAt`, `deletedAt`, `clientRequestId`, `requestHash`, `version`, and `kind` (`USER` or `SYSTEM`) |
+| `ConversationReadState` | One row per conversation and user, with `lastReadMessageId`                                                                                                               |
+| `GameChallenge`         | Links a Code Arena room code to the conversation that carries the invitation, plus the match it started                                                                   |
+| `Reaction`              | Schema only, no API yet                                                                                                                                                   |
 
 There are no foreign keys across databases. `ChatUser` is the boundary with user-service.
 
@@ -60,26 +60,26 @@ Chat does not issue or refresh tokens. Missing, invalid or expired tokens return
 
 Paths are as the service sees them. Through the gateway, `/chat/...` becomes `/api/chat/...`.
 
-| Route | Result |
-| --- | --- |
-| `POST /chat/conversations/dm` | Existing or new DM with `userId` |
-| `GET /chat/conversations` | Caller's DMs with `lastReadMessageId` and `unreadCount` |
-| `POST /chat/conversations/:id/messages` | Send, with `content`, `clientRequestId`, optional `attachments` (max 5) and optional `gameChallenge: { roomCode }` |
-| `GET /chat/conversations/:id/messages` | History, newest first, `limit` 1-100 (default 50), `before` |
-| `PATCH /chat/conversations/:id/read-state` | Save the read marker |
-| `PATCH /chat/messages/:id` | Edit own message |
-| `DELETE /chat/messages/:id` | Soft-delete own message |
-| `POST /chat/conversations/:id/attachments/upload-url` | Signed upload policy |
-| `GET /chat/conversations/:id/attachments/preview-url`, `/download-url` | Signed read URLs |
-| `GET /chat/feed` | Feed `groupId` and `channelId`, joins the caller |
-| `GET /chat/feed/users/:userId/posts` | One author's feed posts |
-| `POST`, `GET /chat/groups` | Create, list own groups |
-| `GET`, `PATCH`, `DELETE /chat/groups/:groupId` | Read, edit, delete |
-| `GET`, `POST /chat/groups/:groupId/members` | List, add |
-| `PATCH /chat/groups/:groupId/members/:userId/role` | Change role |
-| `DELETE /chat/groups/:groupId/members/me`, `/:userId` | Leave, remove |
-| `POST`, `GET /chat/groups/:groupId/channels` | Create, list with unread counts |
-| `GET`, `PATCH`, `DELETE /chat/groups/:groupId/channels/:channelId` | Read, edit, delete |
+| Route                                                                  | Result                                                                                                             |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `POST /chat/conversations/dm`                                          | Existing or new DM with `userId`                                                                                   |
+| `GET /chat/conversations`                                              | Caller's DMs with `lastReadMessageId` and `unreadCount`                                                            |
+| `POST /chat/conversations/:id/messages`                                | Send, with `content`, `clientRequestId`, optional `attachments` (max 5) and optional `gameChallenge: { roomCode }` |
+| `GET /chat/conversations/:id/messages`                                 | History, newest first, `limit` 1-100 (default 50), `before`                                                        |
+| `PATCH /chat/conversations/:id/read-state`                             | Save the read marker                                                                                               |
+| `PATCH /chat/messages/:id`                                             | Edit own message                                                                                                   |
+| `DELETE /chat/messages/:id`                                            | Soft-delete own message                                                                                            |
+| `POST /chat/conversations/:id/attachments/upload-url`                  | Signed upload policy                                                                                               |
+| `GET /chat/conversations/:id/attachments/preview-url`, `/download-url` | Signed read URLs                                                                                                   |
+| `GET /chat/feed`                                                       | Feed `groupId` and `channelId`, joins the caller                                                                   |
+| `GET /chat/feed/users/:userId/posts`                                   | One author's feed posts                                                                                            |
+| `POST`, `GET /chat/groups`                                             | Create, list own groups                                                                                            |
+| `GET`, `PATCH`, `DELETE /chat/groups/:groupId`                         | Read, edit, delete                                                                                                 |
+| `GET`, `POST /chat/groups/:groupId/members`                            | List, add                                                                                                          |
+| `PATCH /chat/groups/:groupId/members/:userId/role`                     | Change role                                                                                                        |
+| `DELETE /chat/groups/:groupId/members/me`, `/:userId`                  | Leave, remove                                                                                                      |
+| `POST`, `GET /chat/groups/:groupId/channels`                           | Create, list with unread counts                                                                                    |
+| `GET`, `PATCH`, `DELETE /chat/groups/:groupId/channels/:channelId`     | Read, edit, delete                                                                                                 |
 
 ## Messages
 
@@ -87,11 +87,11 @@ Paths are as the service sees them. Through the gateway, `/chat/...` becomes `/a
 
 The client generates one `clientRequestId` per logical send. The server computes `requestHash` as the SHA-256 of `[conversationId, content, attachments, gameChallenge.roomCode ?? null]`.
 
-| Request | Result |
-| --- | --- |
-| New `(authorId, clientRequestId)` | Save and broadcast `message:created` |
-| Same identity and same hash | Return the stored message, no new broadcast |
-| Same identity, different hash | `409 Conflict` |
+| Request                           | Result                                      |
+| --------------------------------- | ------------------------------------------- |
+| New `(authorId, clientRequestId)` | Save and broadcast `message:created`        |
+| Same identity and same hash       | Return the stored message, no new broadcast |
+| Same identity, different hash     | `409 Conflict`                              |
 
 ### History
 
@@ -147,11 +147,11 @@ If the Game service cannot answer, the request fails with `503` and nothing is w
 
 ### Events that Chat consumes
 
-| Event | Routing key | Meaning |
-| --- | --- | --- |
-| Match started | `game.match.started` | The room started a match. Carries `matchId`, `mode`, `roomCode` and the participants. |
-| Match ended | `game.match.ended` | The match reached a result. Carries per-participant `outcome` and public `score`, plus the forfeit record when there is one. |
-| Challenge cancelled | `game.challenge.cancelled` | The challenge will not produce a match: the owner withdrew the room, or the invite window closed. |
+| Event               | Routing key                | Meaning                                                                                                                      |
+| ------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Match started       | `game.match.started`       | The room started a match. Carries `matchId`, `mode`, `roomCode` and the participants.                                        |
+| Match ended         | `game.match.ended`         | The match reached a result. Carries per-participant `outcome` and public `score`, plus the forfeit record when there is one. |
+| Challenge cancelled | `game.challenge.cancelled` | The challenge will not produce a match: the owner withdrew the room, or the invite window closed.                            |
 
 Chat validates every payload (`src/events/game-event.ts`); anything that does not match the contract is discarded. The payload never contains source code, editor state or hidden test data.
 
@@ -171,11 +171,11 @@ The client parses this shape (`client/lib/arena/game-notifications.ts`) and rend
 
 Before anything is written, Chat re-checks the link:
 
-| Check | Result when it fails |
-| --- | --- |
-| The room code or match id is linked to a conversation | The event is ignored; no message is written |
+| Check                                                           | Result when it fails                         |
+| --------------------------------------------------------------- | -------------------------------------------- |
+| The room code or match id is linked to a conversation           | The event is ignored; no message is written  |
 | Every participant of the event is a member of that conversation | The event is rejected; no message is written |
-| The link does not already point at a different match | The event is rejected |
+| The link does not already point at a different match            | The event is rejected                        |
 
 Members of the linked conversation are the recipients, so the notification lands with the intended participants and with nobody else.
 
@@ -190,7 +190,7 @@ This was also shown live: on 2026-11-11 two independent browser clients received
 - Notifications follow the conversation, so a member who blocked the other party still cannot read the conversation: the block check in `getAccessibleConversation` runs for DM reads and sends.
 - Matches started from the matchmaking queue have no linked conversation and are not announced in chat; they are announced in the game itself.
 - The Game service and Chat service never read each other's database.
-- The Game service publishes its events without blocking gameplay and in order, so a broker outage cannot delay a match and a start is never announced after its result. Delivery is **best effort**: the Game service has no transactional outbox, so an event the broker never confirms after the bounded retries is lost, and a Game service restart does not replay past events. Events that *were* published are durable, so the broker keeps them while Chat is down. An expiry the broker did not confirm is not remembered, so the next sweep publishes it again.
+- The Game service publishes its events without blocking gameplay and in order, so a broker outage cannot delay a match and a start is never announced after its result. Delivery is **best effort**: the Game service has no transactional outbox, so an event the broker never confirms after the bounded retries is lost, and a Game service restart does not replay past events. Events that _were_ published are durable, so the broker keeps them while Chat is down. An expiry the broker did not confirm is not remembered, so the next sweep publishes it again.
 
 ## Groups and channels
 
@@ -207,21 +207,21 @@ The namespace is `/chat`. Browsers connect through the gateway with the transpor
 
 ```js
 const socket = io(`${window.location.origin}/chat`, {
-  path: "/api/chat/socket.io/",
+  path: '/api/chat/socket.io/',
   auth: { token: accessToken },
 });
 ```
 
 The gateway applies the same token rules as HTTP and joins the socket to the private room `user:<sub>`. Clients cannot choose a room.
 
-| Event | Direction | Payload |
-| --- | --- | --- |
-| `message:created` | Server to client | Full stored message with `author` |
-| `typing:changed` | Client to server | `{ conversationId, typing }`; the server broadcasts `{ conversationId, userId, typing }` to the other current conversation members |
-| `read:updated` | Server to client | `{ conversationId, userId, messageId, readAt }` |
-| `presence:snapshot` | Server to client | `{ users: [{ userId, status }] }` |
-| `presence:changed` | Server to client | `{ userId, status }` |
-| `presence:activity` | Client to server | None |
+| Event               | Direction        | Payload                                                                                                                            |
+| ------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `message:created`   | Server to client | Full stored message with `author`                                                                                                  |
+| `typing:changed`    | Client to server | `{ conversationId, typing }`; the server broadcasts `{ conversationId, userId, typing }` to the other current conversation members |
+| `read:updated`      | Server to client | `{ conversationId, userId, messageId, readAt }`                                                                                    |
+| `presence:snapshot` | Server to client | `{ users: [{ userId, status }] }`                                                                                                  |
+| `presence:changed`  | Server to client | `{ userId, status }`                                                                                                               |
+| `presence:activity` | Client to server | None                                                                                                                               |
 
 `message:created` goes to both DM participants, or to every current member of the channel's group, including the sender so their other tabs update. Read markers are saved over HTTP and then broadcast live to conversation members. Typing updates are checked against current conversation membership before they are sent to the other members. Delivery is best effort; REST remains the way to write messages, and clients refetch history to catch up after reconnecting.
 
@@ -245,15 +245,15 @@ Nest errors normally use this JSON shape:
 
 ## Configuration
 
-| Setting | Meaning |
-| --- | --- |
-| `PORT` | Listening port, 3000 in Compose |
-| `POSTGRES_*` | Chat's own database |
-| `JWT_PUBLIC_KEY` | Public half of user-service's signing key |
-| `USER_SERVICE_URL` | Internal URL for profile and block checks |
-| `GAME_SERVICE_URL` | Internal URL of the Game service, used to check Code Arena room membership |
-| `RABBITMQ_*` | Broker connection |
-| `MINIO_*`, `MINIO_PUBLIC_*` | Storage. See [chat-storage](../integrations/chat-storage.md). |
+| Setting                     | Meaning                                                                    |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `PORT`                      | Listening port, 3000 in Compose                                            |
+| `POSTGRES_*`                | Chat's own database                                                        |
+| `JWT_PUBLIC_KEY`            | Public half of user-service's signing key                                  |
+| `USER_SERVICE_URL`          | Internal URL for profile and block checks                                  |
+| `GAME_SERVICE_URL`          | Internal URL of the Game service, used to check Code Arena room membership |
+| `RABBITMQ_*`                | Broker connection                                                          |
+| `MINIO_*`, `MINIO_PUBLIC_*` | Storage. See [chat-storage](../integrations/chat-storage.md).              |
 
 ## Commands and tests
 

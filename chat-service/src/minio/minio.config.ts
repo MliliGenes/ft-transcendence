@@ -38,15 +38,12 @@ function clientOptions(
 }
 
 export function minioClientOptions(config: ConfigService): ClientOptions {
-  return clientOptions(
-    config,
-    'MINIO_ENDPOINT',
-    'MINIO_PORT',
-    'MINIO_USE_SSL',
-  );
+  return clientOptions(config, 'MINIO_ENDPOINT', 'MINIO_PORT', 'MINIO_USE_SSL');
 }
 
-export function minioPresignClientOptions(config: ConfigService): ClientOptions {
+export function minioPresignClientOptions(
+  config: ConfigService,
+): ClientOptions {
   return clientOptions(
     config,
     'MINIO_PUBLIC_ENDPOINT',

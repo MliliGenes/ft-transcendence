@@ -1,4 +1,4 @@
-import type { ArenaConnectionOptions, ArenaSnapshot } from "./types";
+import type { ArenaConnectionOptions, ArenaSnapshot } from './types';
 
 export interface RunReceipt {
   ok: true;
@@ -10,7 +10,8 @@ export interface SubmitReceipt {
 }
 
 /** Client transport connectivity, separate from game status (ticket 11 §14). */
-export type ConnectionState = "connecting" | "connected" | "reconnecting" | "offline";
+export type ConnectionState =
+  'connecting' | 'connected' | 'reconnecting' | 'offline';
 
 /**
  * Development-only controls exposed by fixture transports. Production UI code
@@ -87,7 +88,11 @@ export interface ArenaTransport {
   setLanguage(language: string): Promise<void>;
   run(input: { code: string; language: string }): Promise<RunReceipt>;
   /** 2v2 team submit: callers pass the approved docRevision; server re-checks. */
-  submit(input: { code: string; language: string; documentRevision?: number }): Promise<SubmitReceipt>;
+  submit(input: {
+    code: string;
+    language: string;
+    documentRevision?: number;
+  }): Promise<SubmitReceipt>;
   setReady(value: boolean): Promise<void>;
   advance(): Promise<void>;
   /** Deliberate leave → immediate forfeit (§15). Never socket loss. */

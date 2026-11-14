@@ -20,6 +20,7 @@
     "test": "node scripts/checks/arena-tests.mjs",
     "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present",
     "lint": "node scripts/checks/verify.mjs --lint",
+    "format": "npm exec --prefix user-service -- prettier --write .",
     "build": "npm run build:packages && npm run build --workspace arena-game && npm run build --workspace arena-judge-worker",
     "certs": "bash scripts/gen-dev-certs.sh",
     "play": "bash scripts/play.sh",

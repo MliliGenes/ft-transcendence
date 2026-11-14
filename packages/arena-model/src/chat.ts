@@ -1,21 +1,24 @@
 export const TEAM_PINGS = [
-  "CHECK_EDGE_CASE",
-  "RUN_THIS_INPUT",
-  "REVIEW_COMPLEXITY",
-  "READY",
+  'CHECK_EDGE_CASE',
+  'RUN_THIS_INPUT',
+  'REVIEW_COMPLEXITY',
+  'READY',
 ] as const;
 
 export type TeamPing = (typeof TEAM_PINGS)[number];
 
 export const TEAM_PING_LABELS: Record<TeamPing, string> = {
-  CHECK_EDGE_CASE: "Check edge case",
-  RUN_THIS_INPUT: "Run this input",
-  REVIEW_COMPLEXITY: "Review complexity",
-  READY: "Ready?",
+  CHECK_EDGE_CASE: 'Check edge case',
+  RUN_THIS_INPUT: 'Run this input',
+  REVIEW_COMPLEXITY: 'Review complexity',
+  READY: 'Ready?',
 };
 
 export function isTeamPing(value: unknown): value is TeamPing {
-  return typeof value === "string" && (TEAM_PINGS as readonly string[]).includes(value);
+  return (
+    typeof value === 'string' &&
+    (TEAM_PINGS as readonly string[]).includes(value)
+  );
 }
 
 export interface TeamChatMessage {
@@ -25,7 +28,7 @@ export interface TeamChatMessage {
   senderUserId: string;
   text: string;
   timestamp: number;
-  type: "text";
+  type: 'text';
 }
 
 export interface TeamChatPing {
@@ -35,7 +38,7 @@ export interface TeamChatPing {
   senderUserId: string;
   ping: TeamPing;
   timestamp: number;
-  type: "ping";
+  type: 'ping';
 }
 
 export type TeamChatEntry = TeamChatMessage | TeamChatPing;

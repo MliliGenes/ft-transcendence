@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID } from 'node:crypto';
 import {
   ConnectedSocket,
   MessageBody,
@@ -7,16 +7,20 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
-} from "@nestjs/websockets";
-import type { Namespace, Socket } from "socket.io";
+} from '@nestjs/websockets';
+import type { Namespace, Socket } from 'socket.io';
 import {
   isTeamPing,
   type TeamChatEntry,
   type TeamChatMessage,
   type TeamChatPing,
-} from "arena-model";
-import { GameService } from "./game.service.js";
-import { attachSocketPrincipal, principalFromHandshake, socketPrincipal } from "./socket-auth.js";
+} from 'arena-model';
+import { GameService } from './game.service.js';
+import {
+  attachSocketPrincipal,
+  principalFromHandshake,
+  socketPrincipal,
+} from './socket-auth.js';
 
 const MAX_HISTORY_PER_ROOM = 25;
 const MAX_TEXT_LENGTH = 500;
@@ -37,32 +41,40 @@ const PING_RATE_LIMIT = 3;
  * Chat and pings NEVER mutate ArenaEngine state, NEVER touch Y.Doc or Yjs awareness,
  * NEVER increment DocumentRevision, and NEVER toggle game readiness.
  */
-@WebSocketGateway({ namespace: "/chat", cors: { origin: true } })
-export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+@WebSocketGateway({ namespace: '/chat', cors: { origin: true } })
+export class TeamChatGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server!: Namespace;
 
   /** Ephemeral in-memory session history per team room (not durable DB storage). */
   private readonly history = new Map<string, TeamChatEntry[]>();
   /** Client message ID idempotency cache per room:user (lost-ack retry deduplication). */
-  private readonly clientMsgAcks = new Map<string, { id: string; timestamp: number }>();
+  private readonly clientMsgAcks = new Map<
+    string,
+    { id: string; timestamp: number }
+  >();
   /** Spam prevention / rate limit timestamps per socket ID. */
   private readonly msgTimestamps = new Map<string, number[]>();
   private readonly pingTimestamps = new Map<string, number[]>();
 
   constructor(private readonly game: GameService) {
-    this.game.registerActiveSocketEnumerator(() => [...(this.server?.sockets.values() ?? [])]
-      .flatMap((socket) => {
+    this.game.registerActiveSocketEnumerator(() =>
+      [...(this.server?.sockets.values() ?? [])].flatMap((socket) => {
         const userId = socketPrincipal(socket)?.userId;
         return userId ? [userId] : [];
-      }));
+      }),
+    );
     this.game.onAccountDeleted((userId) => {
       for (const [roomId, history] of this.history) {
-        const retained = history.filter((entry) => entry.senderUserId !== userId);
+        const retained = history.filter(
+          (entry) => entry.senderUserId !== userId,
+        );
         if (retained.length === history.length) continue;
         if (retained.length === 0) this.history.delete(roomId);
         else this.history.set(roomId, retained);
-        this.server?.to(roomId).emit("history", retained);
+        this.server?.to(roomId).emit('history', retained);
       }
       for (const socket of this.server?.sockets.values() ?? []) {
         if (socketPrincipal(socket)?.userId === userId) socket.disconnect(true);
@@ -73,7 +85,12 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
     });
   }
 
-  private checkRateLimit(map: Map<string, number[]>, id: string, windowMs: number, maxAllowed: number): boolean {
+  private checkRateLimit(
+    map: Map<string, number[]>,
+    id: string,
+    windowMs: number,
+    maxAllowed: number,
+  ): boolean {
     const now = Date.now();
     const timestamps = map.get(id) ?? [];
     const valid = timestamps.filter((t) => now - t < windowMs);
@@ -101,7 +118,9 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   async handleConnection(client: Socket): Promise<void> {
     try {
-      const principal = principalFromHandshake(client, { matchIdRequired: true });
+      const principal = principalFromHandshake(client, {
+        matchIdRequired: true,
+      });
       const { userId, matchId } = principal;
       await this.game.assertAccountActive(userId);
       // Authoritative game resolution: strangers (NotMemberError) and 1v1 (IllegalStateError) fail closed
@@ -112,10 +131,10 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
       client.data.roomId = context.roomId;
 
       await client.join(context.roomId);
-      client.emit("authorized", context);
+      client.emit('authorized', context);
 
       const recent = this.getRecentHistory(context.roomId);
-      client.emit("history", recent);
+      client.emit('history', recent);
     } catch {
       client.disconnect(true);
     }
@@ -126,7 +145,7 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.pingTimestamps.delete(client.id);
   }
 
-  @SubscribeMessage("message")
+  @SubscribeMessage('message')
   async onMessage(
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { text: unknown; clientMessageId?: unknown },
@@ -136,12 +155,15 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
     const principal = socketPrincipal(client, { matchIdRequired: true });
 
     if (!principal || !sideId || !roomId) {
-      return { ok: false, error: "unauthorized" };
+      return { ok: false, error: 'unauthorized' };
     }
     const { userId, matchId } = principal;
 
     const rawClientMsgId = body?.clientMessageId;
-    const clientMessageId = typeof rawClientMsgId === "string" ? rawClientMsgId.trim().slice(0, 64) : undefined;
+    const clientMessageId =
+      typeof rawClientMsgId === 'string'
+        ? rawClientMsgId.trim().slice(0, 64)
+        : undefined;
     if (clientMessageId) {
       const ackKey = `${roomId}:${userId}:${clientMessageId}`;
       const existing = this.clientMsgAcks.get(ackKey);
@@ -150,8 +172,15 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
       }
     }
 
-    if (!this.checkRateLimit(this.msgTimestamps, client.id, MSG_RATE_WINDOW_MS, MSG_RATE_LIMIT)) {
-      return { ok: false, error: "rate limit exceeded: too many messages" };
+    if (
+      !this.checkRateLimit(
+        this.msgTimestamps,
+        client.id,
+        MSG_RATE_WINDOW_MS,
+        MSG_RATE_LIMIT,
+      )
+    ) {
+      return { ok: false, error: 'rate limit exceeded: too many messages' };
     }
 
     // Verify match lifecycle: reject new messages once MATCH_COMPLETE
@@ -159,22 +188,25 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
       const context = await this.game.resolveTeamChatContext(userId, matchId);
       await this.game.assertAccountActive(userId);
       if (!context.active) {
-        return { ok: false, error: "chat is disabled after match complete" };
+        return { ok: false, error: 'chat is disabled after match complete' };
       }
     } catch {
-      return { ok: false, error: "match unavailable" };
+      return { ok: false, error: 'match unavailable' };
     }
 
-    if (!body || typeof body.text !== "string") {
-      return { ok: false, error: "invalid message payload" };
+    if (!body || typeof body.text !== 'string') {
+      return { ok: false, error: 'invalid message payload' };
     }
 
     const trimmed = body.text.trim();
     if (!trimmed) {
-      return { ok: false, error: "empty message" };
+      return { ok: false, error: 'empty message' };
     }
     if (trimmed.length > MAX_TEXT_LENGTH) {
-      return { ok: false, error: `message exceeds ${MAX_TEXT_LENGTH} characters` };
+      return {
+        ok: false,
+        error: `message exceeds ${MAX_TEXT_LENGTH} characters`,
+      };
     }
 
     // Sender identity and side are authoritatively derived from the socket session, never trusted from client
@@ -185,7 +217,7 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
       senderUserId: userId,
       text: trimmed,
       timestamp: Date.now(),
-      type: "text",
+      type: 'text',
     };
 
     if (clientMessageId) {
@@ -198,11 +230,11 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
 
     this.recordHistory(roomId, msg);
-    this.server?.to(roomId).emit("message", msg);
+    this.server?.to(roomId).emit('message', msg);
     return { ok: true, id: msg.id };
   }
 
-  @SubscribeMessage("ping")
+  @SubscribeMessage('ping')
   async onPing(
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { ping: unknown },
@@ -212,26 +244,33 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
     const principal = socketPrincipal(client, { matchIdRequired: true });
 
     if (!principal || !sideId || !roomId) {
-      return { ok: false, error: "unauthorized" };
+      return { ok: false, error: 'unauthorized' };
     }
     const { userId, matchId } = principal;
 
-    if (!this.checkRateLimit(this.pingTimestamps, client.id, PING_RATE_WINDOW_MS, PING_RATE_LIMIT)) {
-      return { ok: false, error: "rate limit exceeded: too many pings" };
+    if (
+      !this.checkRateLimit(
+        this.pingTimestamps,
+        client.id,
+        PING_RATE_WINDOW_MS,
+        PING_RATE_LIMIT,
+      )
+    ) {
+      return { ok: false, error: 'rate limit exceeded: too many pings' };
     }
 
     try {
       const context = await this.game.resolveTeamChatContext(userId, matchId);
       await this.game.assertAccountActive(userId);
       if (!context.active) {
-        return { ok: false, error: "match is complete; pings disabled" };
+        return { ok: false, error: 'match is complete; pings disabled' };
       }
     } catch {
-      return { ok: false, error: "match unavailable" };
+      return { ok: false, error: 'match unavailable' };
     }
 
     if (!body || !isTeamPing(body.ping)) {
-      return { ok: false, error: "invalid ping type" };
+      return { ok: false, error: 'invalid ping type' };
     }
 
     // Ping payload contains only safe, necessary context; NO test suites, NO scores
@@ -242,11 +281,11 @@ export class TeamChatGateway implements OnGatewayConnection, OnGatewayDisconnect
       senderUserId: userId,
       ping: body.ping,
       timestamp: Date.now(),
-      type: "ping",
+      type: 'ping',
     };
 
     this.recordHistory(roomId, pingMsg);
-    this.server?.to(roomId).emit("ping", pingMsg);
+    this.server?.to(roomId).emit('ping', pingMsg);
     return { ok: true, id: pingMsg.id };
   }
 }

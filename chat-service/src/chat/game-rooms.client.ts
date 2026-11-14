@@ -1,4 +1,8 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 type RoomLookupResponse = {
@@ -53,7 +57,9 @@ export class GameRoomsClient {
     authorization: string,
   ): Promise<boolean> {
     if (!this.baseUrl) {
-      throw new ServiceUnavailableException('The game service is not configured');
+      throw new ServiceUnavailableException(
+        'The game service is not configured',
+      );
     }
     const lookup = await this.request<RoomLookupResponse>(
       `/lobby/rooms/lookup/${encodeURIComponent(roomCode)}`,
@@ -71,7 +77,10 @@ export class GameRoomsClient {
     return room.room?.ownerUserId === userId;
   }
 
-  private async request<T>(path: string, authorization: string): Promise<T | null> {
+  private async request<T>(
+    path: string,
+    authorization: string,
+  ): Promise<T | null> {
     let response: Response;
     try {
       response = await fetch(new URL(path, this.baseUrl!), {
@@ -84,7 +93,9 @@ export class GameRoomsClient {
     }
     if (response.status === 403 || response.status === 404) return null;
     if (!response.ok) {
-      this.logger.warn(`The game service answered ${path} with ${response.status}`);
+      this.logger.warn(
+        `The game service answered ${path} with ${response.status}`,
+      );
       throw new ServiceUnavailableException('The game service is unavailable');
     }
     return (await response.json().catch(() => null)) as T;

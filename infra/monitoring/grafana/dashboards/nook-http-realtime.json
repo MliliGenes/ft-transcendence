@@ -2,9 +2,7 @@
   "uid": "nook-http-realtime",
   "title": "Nook / HTTP & Realtime",
   "description": "Gateway and service availability. Request and Socket.IO metrics arrive in phase B.",
-  "tags": [
-    "nook"
-  ],
+  "tags": ["nook"],
   "editable": false,
   "schemaVersion": 39,
   "version": 1,

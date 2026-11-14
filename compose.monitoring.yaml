@@ -5,8 +5,8 @@
 x-logging: &logging
   driver: json-file
   options:
-    max-size: "10m"
-    max-file: "3"
+    max-size: '10m'
+    max-file: '3'
 
 services:
   grafana:
@@ -15,16 +15,16 @@ services:
     env_file: ./envs/grafana.env
     environment:
       GF_SERVER_ROOT_URL: https://localhost/grafana/
-      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
-      GF_AUTH_ANONYMOUS_ENABLED: "false"
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_USERS_ALLOW_ORG_CREATE: "false"
-      GF_SECURITY_COOKIE_SECURE: "true"
-      GF_SECURITY_DISABLE_GRAVATAR: "true"
-      GF_ANALYTICS_REPORTING_ENABLED: "false"
-      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
-      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
-      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_SERVER_SERVE_FROM_SUB_PATH: 'true'
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_USERS_ALLOW_ORG_CREATE: 'false'
+      GF_SECURITY_COOKIE_SECURE: 'true'
+      GF_SECURITY_DISABLE_GRAVATAR: 'true'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
+      GF_NEWS_NEWS_FEED_ENABLED: 'false'
     volumes:
       - grafana-data:/var/lib/grafana
       - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -33,7 +33,11 @@ services:
       - prometheus
       - loki
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1"]
+      test:
+        [
+          'CMD-SHELL',
+          'wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1',
+        ]
       interval: 15s
       timeout: 5s
       start_period: 30s
@@ -53,7 +57,11 @@ services:
       - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9090/-/healthy || exit 1"]
+      test:
+        [
+          'CMD-SHELL',
+          'wget -q -O /dev/null http://127.0.0.1:9090/-/healthy || exit 1',
+        ]
       interval: 15s
       timeout: 5s
       start_period: 20s
@@ -63,7 +71,7 @@ services:
   loki:
     image: grafana/loki:3.5.3
     restart: unless-stopped
-    command: ["-config.file=/etc/loki/loki.yaml"]
+    command: ['-config.file=/etc/loki/loki.yaml']
     volumes:
       - loki-data:/loki
       - ./infra/monitoring/loki/loki.yaml:/etc/loki/loki.yaml:ro
@@ -118,11 +126,11 @@ services:
     image: tecnativa/docker-socket-proxy:v0.4.1
     restart: unless-stopped
     environment:
-      CONTAINERS: "1"
-      NETWORKS: "1"
-      EVENTS: "1"
-      INFO: "0"
-      POST: "0"
+      CONTAINERS: '1'
+      NETWORKS: '1'
+      EVENTS: '1'
+      INFO: '0'
+      POST: '0'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:

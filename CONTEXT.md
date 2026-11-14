@@ -1,6 +1,7 @@
 # Context: Code Arena in Nook
 
 ## Overview
+
 Code Arena is a competitive coding game integrated into the Nook platform for `ft_transcendence`. Two players (1v1 duel) or two two-player teams (2v2 collaboration) solve a sequence of programming problems under time pressure. In 2v2, teammates edit code collaboratively in real time via Yjs CRDTs. Solutions are tested locally against visible example cases, then submitted to an isolated sandbox judge worker evaluating a hidden test suite.
 
 The game is hosted inside Nook's web client under the `/play` route and follows the Nook Design System (`NOOK_DESIGN_SYSTEM.json`) and `next-frontend` standards.

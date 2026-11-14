@@ -3,7 +3,7 @@
 COMPOSE ?= docker compose
 SERVICE ?=
 
-.PHONY: help config build up start stop down restart rebuild ps logs check backup-up backup-down clean destroy prune
+.PHONY: help config build up start stop down restart rebuild ps logs format backup-up backup-down clean destroy prune
 
 help:
 	@echo "Nook project commands:"
@@ -16,7 +16,7 @@ help:
 	@echo "  make rebuild      Rebuild and recreate the project"
 	@echo "  make ps           Show service status"
 	@echo "  make logs [SERVICE=client]  Follow project or service logs"
-	@echo "  make check        Run the full project verification gate"
+	@echo "  make format       Format supported repository files"
 	@echo "  make backup-up    Start optional database backup services"
 	@echo "  make backup-down  Stop optional database backup services"
 	@echo "  make clean        Alias for make down"
@@ -60,8 +60,8 @@ ps:
 logs:
 	$(COMPOSE) logs --follow $(SERVICE)
 
-check:
-	npm run check
+format:
+	npm run format
 
 backup-up:
 	$(COMPOSE) --profile database-only-backups up -d user-db-backup chat-db-backup game-db-backup

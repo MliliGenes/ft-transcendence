@@ -19,20 +19,20 @@ This document consolidates product context. It does not replace the authoritativ
 
 ## 3. Confirmed decisions
 
-| Topic | Decision |
-| --- | --- |
-| Name | **Nook**; selected after exploring alternatives |
-| First audience | **1337/42 school community** |
-| Delivery priority | **42 submission first** |
-| Product structure | Separate Feed, Chat, Play, and Profile spaces, each with a suitable layout |
-| Publishing | Posts, articles, links, and supporting files; low emphasis on video |
-| Chat direction | Lightweight Discord with DMs and groups containing channels |
-| Rich messaging | File attachments and audio/voice notes are part of the desired experience |
-| Group identity | Nicknames and titles alongside channels |
-| Personal expression | Customizable profiles with avatar, banner, gradients, display-name fonts, and optional gaming interests |
-| Game direction | **Code Arena is the first playable game** in this repository. The current release has one playable game; adding more games is a future product decision. |
-| Reuse | Chat capabilities should later support multiple interfaces, including embedded in-game chat |
-| Team planning | Separate backlog cards for the major areas, with comments and proposals from teammates |
+| Topic               | Decision                                                                                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name                | **Nook**; selected after exploring alternatives                                                                                                          |
+| First audience      | **1337/42 school community**                                                                                                                             |
+| Delivery priority   | **42 submission first**                                                                                                                                  |
+| Product structure   | Separate Feed, Chat, Play, and Profile spaces, each with a suitable layout                                                                               |
+| Publishing          | Posts, articles, links, and supporting files; low emphasis on video                                                                                      |
+| Chat direction      | Lightweight Discord with DMs and groups containing channels                                                                                              |
+| Rich messaging      | File attachments and audio/voice notes are part of the desired experience                                                                                |
+| Group identity      | Nicknames and titles alongside channels                                                                                                                  |
+| Personal expression | Customizable profiles with avatar, banner, gradients, display-name fonts, and optional gaming interests                                                  |
+| Game direction      | **Code Arena is the first playable game** in this repository. The current release has one playable game; adding more games is a future product decision. |
+| Reuse               | Chat capabilities should later support multiple interfaces, including embedded in-game chat                                                              |
+| Team planning       | Separate backlog cards for the major areas, with comments and proposals from teammates                                                                   |
 
 Name/domain availability has not been checked. Earlier references to Lamma or an unnamed platform are historical proposals; Nook is the current chosen name.
 
@@ -137,21 +137,21 @@ Manual game shelves are different from live platform activity. External game det
 
 ## 6. Shared concepts and rules
 
-| Concept | Meaning across Nook |
-| --- | --- |
-| Account | One stable identity across all spaces |
-| Display name | Customizable presentation of that identity |
-| Follow | One-way subscription to someone's content |
-| Friendship | Mutual social relationship |
-| Group | Persistent social space with members and channels |
-| Channel | A conversation area within a group |
-| Match team | Players assigned together for one match |
-| Cosmetic title | Appearance/personality; grants no permissions |
-| Permission role | Determines management actions |
-| Post/article | Published content with an audience and discussion |
-| Message | Content within a particular conversation |
-| Activity | Presence or session information with visibility controls |
-| Notification | An event linking to its relevant destination |
+| Concept         | Meaning across Nook                                      |
+| --------------- | -------------------------------------------------------- |
+| Account         | One stable identity across all spaces                    |
+| Display name    | Customizable presentation of that identity               |
+| Follow          | One-way subscription to someone's content                |
+| Friendship      | Mutual social relationship                               |
+| Group           | Persistent social space with members and channels        |
+| Channel         | A conversation area within a group                       |
+| Match team      | Players assigned together for one match                  |
+| Cosmetic title  | Appearance/personality; grants no permissions            |
+| Permission role | Determines management actions                            |
+| Post/article    | Published content with an audience and discussion        |
+| Message         | Content within a particular conversation                 |
+| Activity        | Presence or session information with visibility controls |
+| Notification    | An event linking to its relevant destination             |
 
 Cross-space proposals to preserve coherence:
 
@@ -204,18 +204,18 @@ The supplied `42-subject-compliance.md` references ft_transcendence v21.2 as aut
 
 ### Existing planned module set
 
-| Planned module | Matrix points |
-| --- | ---: |
-| Frontend/backend frameworks | 2 |
-| Real-time features | 2 |
-| User interaction | 2 |
-| Standard user management/authentication | 2 |
-| Complete web-based game | 2 |
-| Remote players | 2 |
-| More-than-two-player multiplayer | 2 |
-| Backend microservices | 2 |
-| OAuth 2.0 | 1 |
-| Total planned | 17 |
+| Planned module                          | Matrix points |
+| --------------------------------------- | ------------: |
+| Frontend/backend frameworks             |             2 |
+| Real-time features                      |             2 |
+| User interaction                        |             2 |
+| Standard user management/authentication |             2 |
+| Complete web-based game                 |             2 |
+| Remote players                          |             2 |
+| More-than-two-player multiplayer        |             2 |
+| Backend microservices                   |             2 |
+| OAuth 2.0                               |             1 |
+| Total planned                           |            17 |
 
 The matrix states a 14-point minimum and that only completed modules count. It does not prove these modules are implemented. Feed, richer profiles, audio, AI opponents, and tournaments must not be assigned extra points without checking the original subject.
 
@@ -236,16 +236,16 @@ This order is a proposal. Group/channel scope and Feed depth for submission stil
 
 The team has split the story into these cards:
 
-| Card | Main responsibility |
-| --- | --- |
-| Product Idea | Audience, purpose, scope, and overall experience |
-| Feed | Publishing, following, and discussions |
-| Chat | DMs, groups, channels, and rich messaging |
-| Play | Games, lobbies, matches, and tournaments |
-| Profile | Personal identity, expression, and visibility |
-| Shared platform behavior | Relationships, permissions, navigation, and cross-space interactions |
-| Notifications | Events, preferences, inbox behavior, and destinations |
-| Additional feature candidates | Optional ideas awaiting prioritization |
+| Card                          | Main responsibility                                                  |
+| ----------------------------- | -------------------------------------------------------------------- |
+| Product Idea                  | Audience, purpose, scope, and overall experience                     |
+| Feed                          | Publishing, following, and discussions                               |
+| Chat                          | DMs, groups, channels, and rich messaging                            |
+| Play                          | Games, lobbies, matches, and tournaments                             |
+| Profile                       | Personal identity, expression, and visibility                        |
+| Shared platform behavior      | Relationships, permissions, navigation, and cross-space interactions |
+| Notifications                 | Events, preferences, inbox behavior, and destinations                |
+| Additional feature candidates | Optional ideas awaiting prioritization                               |
 
 For implementation tasks, record the user outcome, release priority, owner, dependencies, unresolved rules, and observable completion criteria. Assign cross-space behavior to one primary owner with a named collaborating area.
 
@@ -259,18 +259,18 @@ These images are mood and presentation references. Their decorative text, statis
 
 ## 12. Questions to settle next
 
-| Priority | Decision | Why it matters |
-| --- | --- | --- |
-| 1 | What is the first game, and what is its smallest complete multiplayer mode? | Determines gameplay work and module evidence |
-| 1 | What is the submission date, who is building, and what already works? | Determines an achievable release boundary |
-| 1 | Which social features must ship for submission? | Prevents the product wishlist from becoming the deadline scope |
-| 2 | Is access school-only, or is the school merely the first audience? | Changes signup, discovery, and visibility |
-| 2 | What does a new student see with no follows, friends, or groups? | Determines whether the first visit is useful |
-| 2 | What are the default audiences for profiles and posts? | Shapes data access and sharing |
-| 2 | What group powers/history access do new members receive? | Shapes membership and channel behavior |
-| 2 | How do blocking, deletion, and content retention work? | Avoids contradictory behavior across spaces |
-| 3 | Which uploads, size limits, and recording durations are supported? | Defines rich-message scope |
-| 3 | How do tournament registration, no-shows, and disconnections resolve? | Required before implementing brackets as a complete feature |
+| Priority | Decision                                                                    | Why it matters                                                 |
+| -------- | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 1        | What is the first game, and what is its smallest complete multiplayer mode? | Determines gameplay work and module evidence                   |
+| 1        | What is the submission date, who is building, and what already works?       | Determines an achievable release boundary                      |
+| 1        | Which social features must ship for submission?                             | Prevents the product wishlist from becoming the deadline scope |
+| 2        | Is access school-only, or is the school merely the first audience?          | Changes signup, discovery, and visibility                      |
+| 2        | What does a new student see with no follows, friends, or groups?            | Determines whether the first visit is useful                   |
+| 2        | What are the default audiences for profiles and posts?                      | Shapes data access and sharing                                 |
+| 2        | What group powers/history access do new members receive?                    | Shapes membership and channel behavior                         |
+| 2        | How do blocking, deletion, and content retention work?                      | Avoids contradictory behavior across spaces                    |
+| 3        | Which uploads, size limits, and recording durations are supported?          | Defines rich-message scope                                     |
+| 3        | How do tournament registration, no-shows, and disconnections resolve?       | Required before implementing brackets as a complete feature    |
 
 ### Questions that challenge the concept
 

@@ -19,11 +19,10 @@ import { Module } from '@nestjs/common';
             issuer: 'user-service',
             audience: 'ft-transcendence-api',
           },
-        }
-      }
+        };
+      },
     }),
   ],
   exports: [JwtModule],
 })
-        
 export class AuthModule {}

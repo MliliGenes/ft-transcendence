@@ -35,9 +35,7 @@
       "post": {
         "operationId": "postAuthRegister",
         "summary": "Register",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "### Register\n\n  `POST /auth/register`\n\n  Request:\n\n  ```json\n  {\n    \"username\": \"player1\",\n    \"email\": \"user@example.com\",\n    \"password\": \"correct horse battery staple\"\n  }\n  ```\n\n  Validation:\n\n  - `username`: 3-30 characters\n  - `email`: valid email address\n  - New registrations always receive `USER`. A supplied `role` is rejected with 400.\n  - `password`: 8-32 characters and no more than 72 UTF-8 bytes\n\n  Responses:\n\n  - `201 Created`: user and token pair\n  - `400 Bad Request`: invalid body\n  - `409 Conflict`: email or username is already in use",
         "security": [],
         "responses": {
@@ -119,11 +117,7 @@
                   }
                 },
                 "additionalProperties": false,
-                "required": [
-                  "username",
-                  "email",
-                  "password"
-                ]
+                "required": ["username", "email", "password"]
               },
               "example": {
                 "username": "player1",
@@ -139,9 +133,7 @@
       "post": {
         "operationId": "postAuthLogin",
         "summary": "Login",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "### Login\n\n  `POST /auth/login`\n\n  Request:\n\n  ```json\n  {\n    \"email\": \"user@example.com\",\n    \"password\": \"correct horse battery staple\"\n  }\n  ```\n\n  Responses:\n\n  - `200 OK`: user and token pair\n  - `400 Bad Request`: invalid body\n  - `401 Unauthorized`: invalid credentials",
         "security": [],
         "responses": {
@@ -220,10 +212,7 @@
                   }
                 },
                 "additionalProperties": false,
-                "required": [
-                  "email",
-                  "password"
-                ]
+                "required": ["email", "password"]
               },
               "example": {
                 "email": "user@example.com",
@@ -238,9 +227,7 @@
       "get": {
         "operationId": "getAuthDiscord",
         "summary": "Discord Login",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "### Discord Login\n\n  `GET /auth/discord` starts authorization with a `302` redirect to Discord.\n\n  `GET /auth/discord/callback` receives Discord's authorization code and state,\n  checks the temporary browser cookie, and returns the user and token pair with\n  `200 OK` for JSON clients. Browser requests accepting `text/html` redirect to\n  `AUTH_FRONTEND_URL` (default `http://localhost:5173`) with our tokens in the URL\n  fragment. Neither endpoint requires an existing application access token or a\n  JSON body. Start the flow in a browser; Discord supplies the callback parameters.\n\n  See [Discord OAuth login](#discord-oauth-login) for configuration, account rules,\n  and error responses, or [the strategy walkthrough](DISCORD_AUTH.md) for a\n  step-by-step explanation of the implementation.",
         "security": [],
         "responses": {
@@ -260,9 +247,7 @@
       "get": {
         "operationId": "getAuthDiscordCallback",
         "summary": "Discord Login",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "### Discord Login\n\n  `GET /auth/discord` starts authorization with a `302` redirect to Discord.\n\n  `GET /auth/discord/callback` receives Discord's authorization code and state,\n  checks the temporary browser cookie, and returns the user and token pair with\n  `200 OK` for JSON clients. Browser requests accepting `text/html` redirect to\n  `AUTH_FRONTEND_URL` (default `http://localhost:5173`) with our tokens in the URL\n  fragment. Neither endpoint requires an existing application access token or a\n  JSON body. Start the flow in a browser; Discord supplies the callback parameters.\n\n  See [Discord OAuth login](#discord-oauth-login) for configuration, account rules,\n  and error responses, or [the strategy walkthrough](DISCORD_AUTH.md) for a\n  step-by-step explanation of the implementation.",
         "security": [],
         "responses": {
@@ -341,9 +326,7 @@
       "post": {
         "operationId": "postAuthDiscordLink",
         "summary": "Link Discord to the signed-in account",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "### Link Discord to the signed-in account\n\n  `POST /auth/discord/link` requires `Authorization: Bearer <accessToken>` and no\n  body. It returns `200` with `{ \"authorizationUrl\": \"https://discord.com/oauth2/authorize?...\" }`\n  and sets a temporary HttpOnly browser cookie. Navigate to that URL in the same\n  browser. The account comes only from the validated access token.\n\n  `GET /auth/discord/link/callback` receives Discord's `code` and `state`. It does\n  not require a Bearer header: the single-use state and browser cookie bind the\n  callback to the user who started linking. It returns `200` JSON:\n\n  ```json\n  { \"provider\": \"DISCORD\", \"providerUserId\": \"123456789012345678\" }\n  ```\n\n  Browser login and linking failures redirect to the frontend with safe\n  `oauthError` and `oauthFlow` fragment values for display. JSON requests retain\n  their normal error status and body.\n\n  For browser requests accepting `text/html`, success redirects to\n  `AUTH_FRONTEND_URL#providerLinked=discord`. Linking issues no new tokens; keep the\n  existing local session. It preserves email, verification, username, password,\n  role, and avatar. Discord email does not need to match the local email or be\n  verified because this flow attaches a proven provider identity to an already\n  authenticated local account. It requests only Discord's `identify` scope.\n\n  - `401`: missing/invalid access token at start, deleted local account, or invalid,\n    expired, mismatched, denied, or reused callback authorization.\n  - `409`: Discord belongs to another user, or the current user already linked a\n    different Discord account. Each user can have one identity per provider.\n  - Linking the same identity again with a fresh authorization is idempotent.\n  - `502` / `503`: provider failure / configuration error, as with Discord login.\n\n  `DELETE /auth/discord/link` requires `Authorization: Bearer <accessToken>` and\n  returns `204 No Content`. It removes the Discord identity from the current\n  account. A passwordless account cannot unlink its only provider until it sets a\n  password or connects another sign-in method.\n\n  Register **both** callback URLs in the Discord developer portal. Then run\n  `npx prisma migrate deploy` and `npx prisma generate` before restarting the service.\n  The migration adds the linking state owner/purpose and provider uniqueness constraint.\n\n  Start linking from the frontend with a request, then a browser navigation:\n\n  ```js\n  const response = await fetch(`${API_URL}/auth/discord/link`, {\n    method: 'POST',\n    headers: { Authorization: `Bearer ${accessToken}` },\n    credentials: 'include', // Save the temporary linking cookie across the ports.\n  });\n  const result = await response.json();\n  if (!response.ok) throw new Error(result.message);\n  window.location.assign(result.authorizationUrl);\n  ```\n\n  Use the same hostname for frontend, API, and callbacks during local testing\n  (all `localhost`, or all `127.0.0.1`). The API allows credentialed requests from\n  the two configured Vite origins. Do not put an access token or local user ID in\n  the authorization URL. Login and linking have separate cookies and purposes;\n  their callbacks are not interchangeable. Each purpose permits only the latest\n  attempt started in that browser to complete.",
         "security": [
           {
@@ -383,9 +366,7 @@
       "delete": {
         "operationId": "deleteAuthDiscordLink",
         "summary": "Link Discord to the signed-in account",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "### Link Discord to the signed-in account\n\n  `POST /auth/discord/link` requires `Authorization: Bearer <accessToken>` and no\n  body. It returns `200` with `{ \"authorizationUrl\": \"https://discord.com/oauth2/authorize?...\" }`\n  and sets a temporary HttpOnly browser cookie. Navigate to that URL in the same\n  browser. The account comes only from the validated access token.\n\n  `GET /auth/discord/link/callback` receives Discord's `code` and `state`. It does\n  not require a Bearer header: the single-use state and browser cookie bind the\n  callback to the user who started linking. It returns `200` JSON:\n\n  ```json\n  { \"provider\": \"DISCORD\", \"providerUserId\": \"123456789012345678\" }\n  ```\n\n  Browser login and linking failures redirect to the frontend with safe\n  `oauthError` and `oauthFlow` fragment values for display. JSON requests retain\n  their normal error status and body.\n\n  For browser requests accepting `text/html`, success redirects to\n  `AUTH_FRONTEND_URL#providerLinked=discord`. Linking issues no new tokens; keep the\n  existing local session. It preserves email, verification, username, password,\n  role, and avatar. Discord email does not need to match the local email or be\n  verified because this flow attaches a proven provider identity to an already\n  authenticated local account. It requests only Discord's `identify` scope.\n\n  - `401`: missing/invalid access token at start, deleted local account, or invalid,\n    expired, mismatched, denied, or reused callback authorization.\n  - `409`: Discord belongs to another user, or the current user already linked a\n    different Discord account. Each user can have one identity per provider.\n  - Linking the same identity again with a fresh authorization is idempotent.\n  - `502` / `503`: provider failure / configuration error, as with Discord login.\n\n  `DELETE /auth/discord/link` requires `Authorization: Bearer <accessToken>` and\n  returns `204 No Content`. It removes the Discord identity from the current\n  account. A passwordless account cannot unlink its only provider until it sets a\n  password or connects another sign-in method.\n\n  Register **both** callback URLs in the Discord developer portal. Then run\n  `npx prisma migrate deploy` and `npx prisma generate` before restarting the service.\n  The migration adds the linking state owner/purpose and provider uniqueness constraint.\n\n  Start linking from the frontend with a request, then a browser navigation:\n\n  ```js\n  const response = await fetch(`${API_URL}/auth/discord/link`, {\n    method: 'POST',\n    headers: { Authorization: `Bearer ${accessToken}` },\n    credentials: 'include', // Save the temporary linking cookie across the ports.\n  });\n  const result = await response.json();\n  if (!response.ok) throw new Error(result.message);\n  window.location.assign(result.authorizationUrl);\n  ```\n\n  Use the same hostname for frontend, API, and callbacks during local testing\n  (all `localhost`, or all `127.0.0.1`). The API allows credentialed requests from\n  the two configured Vite origins. Do not put an access token or local user ID in\n  the authorization URL. Login and linking have separate cookies and purposes;\n  their callbacks are not interchangeable. Each purpose permits only the latest\n  attempt started in that browser to complete.",
         "security": [
           {
@@ -406,9 +387,7 @@
       "get": {
         "operationId": "getAuthDiscordLinkCallback",
         "summary": "Link Discord to the signed-in account",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "### Link Discord to the signed-in account\n\n  `POST /auth/discord/link` requires `Authorization: Bearer <accessToken>` and no\n  body. It returns `200` with `{ \"authorizationUrl\": \"https://discord.com/oauth2/authorize?...\" }`\n  and sets a temporary HttpOnly browser cookie. Navigate to that URL in the same\n  browser. The account comes only from the validated access token.\n\n  `GET /auth/discord/link/callback` receives Discord's `code` and `state`. It does\n  not require a Bearer header: the single-use state and browser cookie bind the\n  callback to the user who started linking. It returns `200` JSON:\n\n  ```json\n  { \"provider\": \"DISCORD\", \"providerUserId\": \"123456789012345678\" }\n  ```\n\n  Browser login and linking failures redirect to the frontend with safe\n  `oauthError` and `oauthFlow` fragment values for display. JSON requests retain\n  their normal error status and body.\n\n  For browser requests accepting `text/html`, success redirects to\n  `AUTH_FRONTEND_URL#providerLinked=discord`. Linking issues no new tokens; keep the\n  existing local session. It preserves email, verification, username, password,\n  role, and avatar. Discord email does not need to match the local email or be\n  verified because this flow attaches a proven provider identity to an already\n  authenticated local account. It requests only Discord's `identify` scope.\n\n  - `401`: missing/invalid access token at start, deleted local account, or invalid,\n    expired, mismatched, denied, or reused callback authorization.\n  - `409`: Discord belongs to another user, or the current user already linked a\n    different Discord account. Each user can have one identity per provider.\n  - Linking the same identity again with a fresh authorization is idempotent.\n  - `502` / `503`: provider failure / configuration error, as with Discord login.\n\n  `DELETE /auth/discord/link` requires `Authorization: Bearer <accessToken>` and\n  returns `204 No Content`. It removes the Discord identity from the current\n  account. A passwordless account cannot unlink its only provider until it sets a\n  password or connects another sign-in method.\n\n  Register **both** callback URLs in the Discord developer portal. Then run\n  `npx prisma migrate deploy` and `npx prisma generate` before restarting the service.\n  The migration adds the linking state owner/purpose and provider uniqueness constraint.\n\n  Start linking from the frontend with a request, then a browser navigation:\n\n  ```js\n  const response = await fetch(`${API_URL}/auth/discord/link`, {\n    method: 'POST',\n    headers: { Authorization: `Bearer ${accessToken}` },\n    credentials: 'include', // Save the temporary linking cookie across the ports.\n  });\n  const result = await response.json();\n  if (!response.ok) throw new Error(result.message);\n  window.location.assign(result.authorizationUrl);\n  ```\n\n  Use the same hostname for frontend, API, and callbacks during local testing\n  (all `localhost`, or all `127.0.0.1`). The API allows credentialed requests from\n  the two configured Vite origins. Do not put an access token or local user ID in\n  the authorization URL. Login and linking have separate cookies and purposes;\n  their callbacks are not interchangeable. Each purpose permits only the latest\n  attempt started in that browser to complete.",
         "security": [],
         "responses": {
@@ -456,9 +435,7 @@
       "post": {
         "operationId": "postAuthRefresh",
         "summary": "Refresh Tokens",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "### Refresh Tokens\n\n  `POST /auth/refresh`\n\n  No access token is required. Send the refresh token in the body:\n\n  ```json\n  {\n    \"refreshToken\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc.<43-character-base64url-secret>\"\n  }\n  ```\n\n  A successful request revokes the submitted refresh token, creates a new refresh token, and returns a new token pair.\n\n  Responses:\n\n  - `200 OK`: new user and token pair\n  - `400 Bad Request`: malformed body or token\n  - `401 Unauthorized`: unknown, expired, revoked, or incorrect refresh token",
         "security": [],
         "responses": {
@@ -534,9 +511,7 @@
                   }
                 },
                 "additionalProperties": false,
-                "required": [
-                  "refreshToken"
-                ]
+                "required": ["refreshToken"]
               },
               "example": {
                 "refreshToken": "2f1c2d1e-3c5a-4d6a-8b1c-123456789abc.<43-character-base64url-secret>"
@@ -550,9 +525,7 @@
       "post": {
         "operationId": "postAuthLogout",
         "summary": "Logout",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "### Logout\n\n  `POST /auth/logout`\n\n  Send the refresh token that should be revoked:\n\n  ```json\n  {\n    \"refreshToken\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc.<43-character-base64url-secret>\"\n  }\n  ```\n\n  The endpoint returns success without revealing whether the token was already invalid. The client should discard both the access and refresh tokens locally.\n\n  Responses:\n\n  - `204 No Content`: logout request accepted\n  - `400 Bad Request`: malformed body or token",
         "security": [],
         "responses": {
@@ -575,9 +548,7 @@
                   }
                 },
                 "additionalProperties": false,
-                "required": [
-                  "refreshToken"
-                ]
+                "required": ["refreshToken"]
               },
               "example": {
                 "refreshToken": "2f1c2d1e-3c5a-4d6a-8b1c-123456789abc.<43-character-base64url-secret>"
@@ -591,9 +562,7 @@
       "get": {
         "operationId": "getAuthVerifyEmailToken",
         "summary": "Verify Email",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "### Verify Email\n\n  `GET /auth/verify-email/:token`\n\n  No access token is required. The email links to\n  `AUTH_FRONTEND_URL/verify-email?token=<token>`; the frontend submits that token\n  to this endpoint. Verification tokens expire after two hours and are single-use.\n\n  Responses:\n\n  - `200 OK`: `{ \"verified\": true }`\n  - `401 Unauthorized`: malformed, unknown, expired, already used, or incorrect verification token",
         "security": [],
         "responses": {
@@ -706,9 +675,7 @@
       "post": {
         "operationId": "postAuthPasswordResetRequest",
         "summary": "Request Password Reset",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "### Request Password Reset\n\n  `POST /auth/password-reset/request`\n\n  No access token is required. Request:\n\n  ```json\n  {\n    \"email\": \"user@example.com\"\n  }\n  ```\n\n  `email` must be a valid email address. The service deletes the user's previous\n  unused password reset tokens and creates a new token that expires after two\n  hours. Used tokens remain as history. The email links to\n  `AUTH_FRONTEND_URL/reset-password?token=<token>`.\n\n  To request another email, call this endpoint again. If sending fails, the newly\n  created unused token is deleted; the user can retry the request. A newer token\n  created by another request is preserved.\n\n  Responses:\n\n  - `200 OK`: `{ \"requested\": true }`\n  - `400 Bad Request`: invalid body or email\n  - `404 Not Found`: no account with that email\n  - `500 Internal Server Error`: email delivery or other server failure",
         "security": [],
         "responses": {
@@ -752,9 +719,7 @@
                   }
                 },
                 "additionalProperties": false,
-                "required": [
-                  "email"
-                ]
+                "required": ["email"]
               },
               "example": {
                 "email": "user@example.com"
@@ -768,9 +733,7 @@
       "post": {
         "operationId": "postAuthPasswordResetConfirm",
         "summary": "Confirm Password Reset",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "### Confirm Password Reset\n\n  `POST /auth/password-reset/confirm`\n\n  No access token is required. Request:\n\n  ```json\n  {\n    \"token\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc.<43-character-base64url-secret>\",\n    \"newPassword\": \"correct horse battery staple\"\n  }\n  ```\n\n  Validation:\n\n  - `token`: UUID v4 record ID and a 43-character base64url secret, separated by a dot\n  - `newPassword`: 8-32 characters and no more than 72 UTF-8 bytes\n\n  A successful reset atomically updates the password, marks the submitted token\n  as used, deletes the user's other unused password reset tokens, and revokes all\n  their active refresh tokens. Used reset tokens remain as history. Email\n  verification tokens and other users' tokens are preserved. Existing access\n  tokens remain valid until expiry; no new login tokens are issued. The client\n  should clear its stored session and ask the user to sign in again.\n\n  Responses:\n\n  - `200 OK`: `{ \"confirmed\": true }`\n  - `400 Bad Request`: invalid body, token format, or password\n  - `401 Unauthorized`: unknown, expired, already used, incorrect, or wrong-purpose token\n\n  Both password reset endpoints and email verification return `Cache-Control: no-store`.",
         "security": [],
         "responses": {
@@ -814,10 +777,7 @@
                   }
                 },
                 "additionalProperties": false,
-                "required": [
-                  "token",
-                  "newPassword"
-                ]
+                "required": ["token", "newPassword"]
               },
               "example": {
                 "token": "2f1c2d1e-3c5a-4d6a-8b1c-123456789abc.<43-character-base64url-secret>",
@@ -832,9 +792,7 @@
       "get": {
         "operationId": "getAccounts",
         "summary": "List Users",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "### List Users\n\n  `GET /accounts?page=1&limit=10`\n\n  Public endpoint; no access token required.\n\n  Pagination parameters:\n\n  - `page`: integer from 1 to 1,000,000; defaults to `1`\n  - `limit`: integer from 1 to 100; defaults to `10`\n\n  Response (`200 OK`):\n\n  ```json\n  {\n    \"users\": [\n      {\n        \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n        \"username\": \"player1\",\n        \"displayName\": \"Player One\",\n        \"avatarUrl\": null,\n        \"bannerUrl\": null,\n        \"bio\": null,\n        \"statusText\": null,\n        \"statusIcon\": null,\n        \"createdAt\": \"2026-09-29T12:00:00.000Z\"\n      }\n    ],\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 10,\n    \"totalPages\": 1\n  }\n  ```\n\n  Invalid query parameters return `400 Bad Request`.",
         "security": [],
         "responses": {
@@ -860,39 +818,24 @@
                             "type": "string"
                           },
                           "avatarUrl": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "bannerUrl": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "createdAt": {
                             "type": "string"
                           },
                           "bio": {
-                            "type": [
-                              "string",
-                              "null"
-                            ],
+                            "type": ["string", "null"],
                             "maxLength": 190
                           },
                           "statusText": {
-                            "type": [
-                              "string",
-                              "null"
-                            ],
+                            "type": ["string", "null"],
                             "maxLength": 100
                           },
                           "statusIcon": {
-                            "type": [
-                              "string",
-                              "null"
-                            ],
+                            "type": ["string", "null"],
                             "maxLength": 50,
                             "enum": [
                               "IconCode",
@@ -971,9 +914,7 @@
       "get": {
         "operationId": "getAccountsMe",
         "summary": "Current Account",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "### Current Account\n\n  `GET /accounts/me`\n\n  Requires an access token:\n\n  ```http\n  Authorization: Bearer <accessToken>\n  ```\n\n  Response (`200 OK`):\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"email\": \"user@example.com\",\n    \"username\": \"player1\",\n    \"firstName\": \"Ada\",\n    \"lastName\": \"Lovelace\",\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": \"/accounts/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/avatar\",\n    \"bannerUrl\": null,\n    \"bio\": null,\n    \"statusText\": null,\n    \"statusIcon\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Other responses:\n\n  - `401 Unauthorized`: missing, invalid, or expired access token\n  - `404 Not Found`: authenticated user no longer exists",
         "security": [
           {
@@ -1010,16 +951,10 @@
                       "type": "string"
                     },
                     "bannerUrl": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "emailVerifiedAt": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "createdAt": {
                       "type": "string"
@@ -1040,24 +975,15 @@
                       "type": "boolean"
                     },
                     "bio": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 190
                     },
                     "statusText": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 100
                     },
                     "statusIcon": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 50,
                       "enum": [
                         "IconCode",
@@ -1104,9 +1030,7 @@
       "patch": {
         "operationId": "patchAccountsMe",
         "summary": "Update Current Account",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "### Update Current Account\n\n  `PATCH /accounts/me`\n\n  Requires an access token. Send only the fields to change; omitted fields remain unchanged. Nullable profile fields can be cleared with `null`.\n\n  Request:\n\n  ```json\n  {\n    \"username\": \"new-player-name\",\n    \"email\": \"new@example.com\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"bio\": \"Building small things on the web.\",\n    \"statusText\": \"Taking a coffee break\",\n    \"statusIcon\": \"IconCoffee\"\n  }\n  ```\n\n  Validation:\n\n  - `username`: optional, 3-30 characters\n  - `email`: optional, valid email address\n  - `firstName`, `lastName`, `displayName`: optional string or `null`, 1-50 characters when present\n  - `bio`: optional string or `null`, at most 190 characters\n  - `statusText`: optional string or `null`, at most 100 characters; it persists until edited or cleared\n  - `statusIcon`: optional approved Tabler export name or `null`: `IconCode`, `IconCoffee`, `IconMoon`, `IconMusic`, or `IconDeviceGamepad2`\n  - At least one field must be provided.\n  - Role, image URLs, password, verification fields, and IDs cannot be changed here. Unknown fields are rejected even when included alongside valid fields. The target account comes from the verified JWT, not the body.\n\n  Supplying a different email clears `emailVerifiedAt`. Sending the same email, or omitting it, preserves verification. Both self-service and admin updates follow this rule. The service does not send a new verification link after an email change, and login remains available without verification; login uses the updated address.\n\n  Responses:\n\n  - `200 OK`: updated private account\n  - `400 Bad Request`: invalid, empty, or protected-field body\n  - `401 Unauthorized`: missing, invalid, or expired access token\n  - `404 Not Found`: account does not exist\n  - `409 Conflict`: email or username is already in use",
         "security": [
           {
@@ -1143,16 +1067,10 @@
                       "type": "string"
                     },
                     "bannerUrl": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "emailVerifiedAt": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "createdAt": {
                       "type": "string"
@@ -1173,24 +1091,15 @@
                       "type": "boolean"
                     },
                     "bio": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 190
                     },
                     "statusText": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 100
                     },
                     "statusIcon": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 50,
                       "enum": [
                         "IconCode",
@@ -1256,33 +1165,21 @@
                     "type": "string"
                   },
                   "lastName": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "displayName": {
                     "type": "string"
                   },
                   "bio": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "maxLength": 190
                   },
                   "statusText": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "maxLength": 100
                   },
                   "statusIcon": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "maxLength": 50,
                     "enum": [
                       "IconCode",
@@ -1314,9 +1211,7 @@
       "delete": {
         "operationId": "deleteAccountsMe",
         "summary": "Delete Current Account",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "### Delete Current Account\n\n  `DELETE /accounts/me`\n\n  Requires an access token. Deletes the account and its refresh tokens and linked authentication providers. Images, two-factor settings, and recovery codes are also deleted through database cascades. Superadmins must use the superadmin deletion endpoint instead (403 here).\n\n  Responses:\n\n  - `204 No Content`: account deleted\n  - `403 Forbidden`: superadmin attempting self-service deletion\n  - `401 Unauthorized`: missing, invalid, or expired access token\n  - `404 Not Found`: account does not exist",
         "security": [
           {
@@ -1343,9 +1238,7 @@
       "put": {
         "operationId": "putAccountsMeAvatar",
         "summary": "Upload Avatar",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "### Upload Avatar\n\n  `PUT /accounts/me/avatar`\n\n  Requires an access token. Use `multipart/form-data` with exactly one file field named `file`.\n\n  ```bash\n  curl -X PUT http://localhost:3000/accounts/me/avatar \\\n    -H \"Authorization: Bearer <accessToken>\" \\\n    -F \"file=@avatar.png\"\n  ```\n\n  Accepted input formats are JPEG, PNG, and WebP. Animated images are rejected. Input is limited to 1 MiB and 20 megapixels. Images are auto-oriented, center-cropped/resized to `256x256`, and converted to WebP. The stored result is also capped at 1 MiB. Uploading again replaces the avatar.\n\n  Response (`200 OK`): updated private account.\n\n  Other responses:\n\n  - `400 Bad Request`: missing, malformed, unsupported, animated, or over-pixel-limit image\n  - `401 Unauthorized`: missing, invalid, or expired access token\n  - `404 Not Found`: account does not exist\n  - `413 Payload Too Large`: upload or processed image exceeds 1 MiB",
         "security": [
           {
@@ -1375,9 +1268,7 @@
             "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "file"
-                ],
+                "required": ["file"],
                 "additionalProperties": false,
                 "properties": {
                   "file": {
@@ -1393,9 +1284,7 @@
       "delete": {
         "operationId": "deleteAccountsMeAvatar",
         "summary": "Remove avatar",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "Removes only the authenticated user's avatar. No request body is needed. Deletes the stored image and sets avatarUrl to null in one transaction, leaving the other image unchanged. Repeated removal succeeds even when the image is already absent. The public image endpoint returns 404 until another image is uploaded. Publishes a user-profile update to other services.",
         "security": [
           {
@@ -1438,9 +1327,7 @@
       "put": {
         "operationId": "putAccountsMeBanner",
         "summary": "Upload Banner",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "### Upload Banner\n\n  `PUT /accounts/me/banner`\n\n  Requires an access token. Use the same multipart format as avatar upload, with a file field named `file`.\n\n  Input is limited to 5 MiB and 20 megapixels. Images are center-cropped/resized to `1500x500` and converted to WebP. The stored result is also capped at 5 MiB. Uploading again replaces the banner.\n\n  Response (`200 OK`): updated private account.\n\n  Other responses are the same as avatar upload, with `413 Payload Too Large` applying to the 5 MiB banner limit.",
         "security": [
           {
@@ -1470,9 +1357,7 @@
             "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "file"
-                ],
+                "required": ["file"],
                 "additionalProperties": false,
                 "properties": {
                   "file": {
@@ -1488,9 +1373,7 @@
       "delete": {
         "operationId": "deleteAccountsMeBanner",
         "summary": "Remove banner",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "Removes only the authenticated user's banner. No request body is needed. Deletes the stored image and sets bannerUrl to null in one transaction, leaving the other image unchanged. Repeated removal succeeds even when the image is already absent. The public image endpoint returns 404 until another image is uploaded.",
         "security": [
           {
@@ -1533,9 +1416,7 @@
       "get": {
         "operationId": "getAccountsIdAvatar",
         "summary": "Public Avatar Image",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "### Public Avatar Image\n\n  `GET /accounts/:id/avatar`\n\n  Public endpoint; no access token is required. `:id` must be a UUID.\n\n  Returns the stored image bytes with `Content-Type: image/webp`, `Content-Disposition: inline`, `Cache-Control: no-store`, and `X-Content-Type-Options: nosniff`.\n\n  Responses:\n\n  - `200 OK`: image bytes\n  - `400 Bad Request`: invalid UUID\n  - `404 Not Found`: image does not exist",
         "security": [],
         "responses": {
@@ -1574,9 +1455,7 @@
       "get": {
         "operationId": "getAccountsIdBanner",
         "summary": "Public Banner Image",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "### Public Banner Image\n\n  `GET /accounts/:id/banner`\n\n  Public endpoint with the same behavior and response headers as the avatar route.\n\n  Responses:\n\n  - `200 OK`: image bytes\n  - `400 Bad Request`: invalid UUID\n  - `404 Not Found`: image does not exist",
         "security": [],
         "responses": {
@@ -1615,9 +1494,7 @@
       "get": {
         "operationId": "getAccountsId",
         "summary": "User by ID",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "### User by ID\n\n  `GET /accounts/:id`\n\n  `:id` must be a UUID.\n\n  Public endpoint. Response (`200 OK`): the same public profile fields as each entry in `GET /accounts`: `id`, `username`, `displayName`, `avatarUrl`, `bannerUrl`, `status`, and `createdAt`. Email, first/last names, verification fields, timestamps other than `createdAt`, and authentication data are excluded.\n\n  Other responses:\n\n  - `400 Bad Request`: invalid UUID\n  - `404 Not Found`: user does not exist\n\n  The former `/auth/users`, `/auth/user/:id`, and `/auth/user/me` routes have been removed. Auth exposes register, login, refresh, logout, email verification, password reset, and Discord OAuth login/link flows.",
         "security": [],
         "responses": {
@@ -1638,39 +1515,24 @@
                       "type": "string"
                     },
                     "avatarUrl": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "bannerUrl": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "createdAt": {
                       "type": "string"
                     },
                     "bio": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 190
                     },
                     "statusText": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 100
                     },
                     "statusIcon": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 50,
                       "enum": [
                         "IconCode",
@@ -1718,9 +1580,7 @@
       "post": {
         "operationId": "postAuthGithubLink",
         "summary": "Link GitHub to the signed-in account",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "GitHub exposes the equivalent login and linking flow. It obtains primary verified email through user:email scope.\n\n### Link GitHub to the signed-in account\n\n  `POST /auth/github/link` requires `Authorization: Bearer <accessToken>` and no\n  body. It returns `200` with `{ \"authorizationUrl\": \"https://github.com/oauth2/authorize?...\" }`\n  and sets a temporary HttpOnly browser cookie. Navigate to that URL in the same\n  browser. The account comes only from the validated access token.\n\n  `GET /auth/github/link/callback` receives GitHub's `code` and `state`. It does\n  not require a Bearer header: the single-use state and browser cookie bind the\n  callback to the user who started linking. It returns `200` JSON:\n\n  ```json\n  { \"provider\": \"GITHUB\", \"providerUserId\": \"123456789012345678\" }\n  ```\n\n  Browser login and linking failures redirect to the frontend with safe\n  `oauthError` and `oauthFlow` fragment values for display. JSON requests retain\n  their normal error status and body.\n\n  For browser requests accepting `text/html`, success redirects to\n  `AUTH_FRONTEND_URL#providerLinked=github`. Linking issues no new tokens; keep the\n  existing local session. It preserves email, verification, username, password,\n  role, and avatar. GitHub email does not need to match the local email or be\n  verified because this flow attaches a proven provider identity to an already\n  authenticated local account. It requests only GitHub's `identify` scope.\n\n  - `401`: missing/invalid access token at start, deleted local account, or invalid,\n    expired, mismatched, denied, or reused callback authorization.\n  - `409`: GitHub belongs to another user, or the current user already linked a\n    different GitHub account. Each user can have one identity per provider.\n  - Linking the same identity again with a fresh authorization is idempotent.\n  - `502` / `503`: provider failure / configuration error, as with GitHub login.\n\n  `DELETE /auth/github/link` requires `Authorization: Bearer <accessToken>` and\n  returns `204 No Content`. It removes the GitHub identity from the current\n  account. A passwordless account cannot unlink its only provider until it sets a\n  password or connects another sign-in method.\n\n  Register **both** callback URLs in the GitHub developer portal. Then run\n  `npx prisma migrate deploy` and `npx prisma generate` before restarting the service.\n  The migration adds the linking state owner/purpose and provider uniqueness constraint.\n\n  Start linking from the frontend with a request, then a browser navigation:\n\n  ```js\n  const response = await fetch(`${API_URL}/auth/github/link`, {\n    method: 'POST',\n    headers: { Authorization: `Bearer ${accessToken}` },\n    credentials: 'include', // Save the temporary linking cookie across the ports.\n  });\n  const result = await response.json();\n  if (!response.ok) throw new Error(result.message);\n  window.location.assign(result.authorizationUrl);\n  ```\n\n  Use the same hostname for frontend, API, and callbacks during local testing\n  (all `localhost`, or all `127.0.0.1`). The API allows credentialed requests from\n  the two configured Vite origins. Do not put an access token or local user ID in\n  the authorization URL. Login and linking have separate cookies and purposes;\n  their callbacks are not interchangeable. Each purpose permits only the latest\n  attempt started in that browser to complete.",
         "security": [
           {
@@ -1760,9 +1620,7 @@
       "delete": {
         "operationId": "deleteAuthGithubLink",
         "summary": "Link GitHub to the signed-in account",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "GitHub exposes the equivalent login and linking flow. It obtains primary verified email through user:email scope.\n\n### Link GitHub to the signed-in account\n\n  `POST /auth/github/link` requires `Authorization: Bearer <accessToken>` and no\n  body. It returns `200` with `{ \"authorizationUrl\": \"https://github.com/oauth2/authorize?...\" }`\n  and sets a temporary HttpOnly browser cookie. Navigate to that URL in the same\n  browser. The account comes only from the validated access token.\n\n  `GET /auth/github/link/callback` receives GitHub's `code` and `state`. It does\n  not require a Bearer header: the single-use state and browser cookie bind the\n  callback to the user who started linking. It returns `200` JSON:\n\n  ```json\n  { \"provider\": \"GITHUB\", \"providerUserId\": \"123456789012345678\" }\n  ```\n\n  Browser login and linking failures redirect to the frontend with safe\n  `oauthError` and `oauthFlow` fragment values for display. JSON requests retain\n  their normal error status and body.\n\n  For browser requests accepting `text/html`, success redirects to\n  `AUTH_FRONTEND_URL#providerLinked=github`. Linking issues no new tokens; keep the\n  existing local session. It preserves email, verification, username, password,\n  role, and avatar. GitHub email does not need to match the local email or be\n  verified because this flow attaches a proven provider identity to an already\n  authenticated local account. It requests only GitHub's `identify` scope.\n\n  - `401`: missing/invalid access token at start, deleted local account, or invalid,\n    expired, mismatched, denied, or reused callback authorization.\n  - `409`: GitHub belongs to another user, or the current user already linked a\n    different GitHub account. Each user can have one identity per provider.\n  - Linking the same identity again with a fresh authorization is idempotent.\n  - `502` / `503`: provider failure / configuration error, as with GitHub login.\n\n  `DELETE /auth/github/link` requires `Authorization: Bearer <accessToken>` and\n  returns `204 No Content`. It removes the GitHub identity from the current\n  account. A passwordless account cannot unlink its only provider until it sets a\n  password or connects another sign-in method.\n\n  Register **both** callback URLs in the GitHub developer portal. Then run\n  `npx prisma migrate deploy` and `npx prisma generate` before restarting the service.\n  The migration adds the linking state owner/purpose and provider uniqueness constraint.\n\n  Start linking from the frontend with a request, then a browser navigation:\n\n  ```js\n  const response = await fetch(`${API_URL}/auth/github/link`, {\n    method: 'POST',\n    headers: { Authorization: `Bearer ${accessToken}` },\n    credentials: 'include', // Save the temporary linking cookie across the ports.\n  });\n  const result = await response.json();\n  if (!response.ok) throw new Error(result.message);\n  window.location.assign(result.authorizationUrl);\n  ```\n\n  Use the same hostname for frontend, API, and callbacks during local testing\n  (all `localhost`, or all `127.0.0.1`). The API allows credentialed requests from\n  the two configured Vite origins. Do not put an access token or local user ID in\n  the authorization URL. Login and linking have separate cookies and purposes;\n  their callbacks are not interchangeable. Each purpose permits only the latest\n  attempt started in that browser to complete.",
         "security": [
           {
@@ -1783,9 +1641,7 @@
       "get": {
         "operationId": "getSuperadminStats",
         "summary": "Dashboard response example",
-        "tags": [
-          "Superadmin"
-        ],
+        "tags": ["Superadmin"],
         "description": "## Superadmin API\n\n  Every endpoint requires `Authorization: Bearer <accessToken>` and the current\n  `SUPERADMIN` database role. Missing/invalid credentials return 401; ordinary\n  users receive 403. Responses use `Cache-Control: no-store`.\n\n  | Method | Endpoint                     | Action                            |\n  | ------ | ---------------------------- | --------------------------------- |\n  | GET    | `/superadmin/stats`          | Dashboard counters                |\n  | GET    | `/superadmin/users`          | Filtered, sorted, paginated users |\n  | GET    | `/superadmin/users/:id`      | User details                      |\n  | POST   | `/superadmin/users`          | Create a user (201)               |\n  | PATCH  | `/superadmin/users/:id`      | Edit allowed profile fields       |\n  | PATCH  | `/superadmin/users/:id/role` | Change role                       |\n  | DELETE | `/superadmin/users/:id`      | Permanently delete user (204)     |\n\n  Stats return `totalUsers`, `regularUsers`, `superadmins`, `newUsersLast7Days`,\n  `newUsersLast30Days`, and `asOf`. Registration counts use rolling 7/30-day windows\n  ending at `asOf`, counting currently existing accounts. They are not login/activity\n  counts. Ban statistics and live presence are not implemented.\n\n  ### Search and filters\n\n  Example:\n\n  ```http\n  GET /superadmin/users?search=alex&role=USER&sortBy=username&sortOrder=asc&page=1&limit=20\n  ```\n\n  - `search`: up to 100 characters; case-insensitive substring of username, email,\n    or display name. Send plain text, not surrounding `%` characters. User-supplied\n    `%`, `_`, and backslashes are escaped to match literally.\n  - `role`: `USER` or `SUPERADMIN`.\n  - `createdFrom`, `createdTo`: inclusive ISO date/time bounds. Date-only values\n    mean midnight UTC; use full timestamps when including an entire final day.\n    Reversed ranges return 400.\n  - `sortBy`: `createdAt` (default), `updatedAt`, `username`, `email`, or `role`.\n  - `sortOrder`: `asc` or `desc` (default). User ID breaks ties consistently.\n  - `page`: 1-1,000,000 (default 1); `limit`: 1-100 (default 10).\n\n  Returns `{ users, total, page, limit, totalPages }`. The total uses the same\n  filters as the list. List entries and detail responses include id, username,\n  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,\n  emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,\n  and two-factor secrets are never included.\n\n  ### Create, edit, and delete\n\n  Create body:\n\n  ```json\n  {\n    \"username\": \"new_player\",\n    \"email\": \"player@example.com\",\n    \"password\": \"long-password\",\n    \"role\": \"USER\"\n  }\n  ```\n\n  Role is optional and defaults to USER. Password validation matches registration.\n  Creation hashes the password but does not issue tokens or create a login session.\n\n  Profile PATCH accepts username, email, firstName, lastName, and displayName.\n  Omitted fields stay unchanged; optional names can be cleared with null. Email\n  changes clear verification, while resubmitting the same email preserves it.\n  Password, role, URLs, and verification timestamps are rejected here.\n\n  Role PATCH accepts `{ \"role\": \"SUPERADMIN\" }` or `{ \"role\": \"USER\" }`.\n  Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing\n  user returns 404.\n\n  Deletion removes refresh tokens and provider records; images, two-factor settings,\n  and recovery codes cascade. The last superadmin cannot be deleted or demoted\n  (409). Admin mutations share a PostgreSQL transaction advisory lock so competing\n  requests cannot both remove the final admins; the caller's role is rechecked\n  inside that transaction. Superadmins must use this guarded deletion endpoint,\n  not `DELETE /accounts/me`, to preserve that protection.\n\n  No accounts are automatically promoted. To promote an existing testing account, run\n  `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.\n  The script reads the database settings from `.env`, preserves the password, and is\n  safe to rerun. Register the account first if it does not exist. The role guard\n  checks the database, so an existing valid access token works immediately. Ban/unban,\n  MQ notifications, and the admin dashboard frontend are deferred.\n\n  ### Dashboard response example\n\n  `GET /superadmin/stats` returns 200:\n\n  ```json\n  {\n    \"totalUsers\": 12,\n    \"regularUsers\": 11,\n    \"superadmins\": 1,\n    \"newUsersLast7Days\": 3,\n    \"newUsersLast30Days\": 8,\n    \"asOf\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  ### User details and edit examples\n\n  `GET /superadmin/users/:id` returns the same full admin user shape as\n  list entries. Create, profile edit, and role edit also return this shape:\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"username\": \"player1\",\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": null,\n    \"bannerUrl\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Profile update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"displayName\":\"New display name\",\"lastName\":null}\n  ```\n\n  Role update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/role\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"role\":\"SUPERADMIN\"}\n  ```\n\n  Delete uses the same user URL with DELETE and no body; success returns 204 with\n  an empty response. Deleting or demoting the last superadmin returns 409.\n  An admin may delete/demote themselves through these endpoints if another\n  superadmin remains. Subsequent admin requests check the current database role.\n  Private account responses and superadmin user responses include role.\n  Registration/login and public account responses do not.\n\n  ### Testing the superadmin endpoints\n\n  1. Register a testing account using the normal registration endpoint.\n  2. Run `npm run bootstrap:superadmin -- existing-user@example.com` locally.\n  3. Use that account's valid access token in Postman's Bearer Token authorization.\n  4. Try GET stats, then search/list, then user details and edits.\n  5. Use a separate USER account to verify the admin endpoints return 403.\n\n  The bootstrap command changes only the role and update timestamp. It does not\n  create an account, reset a password, or issue tokens. It matches the supplied\n  email exactly after trimming surrounding spaces.",
         "security": [
           {
@@ -1844,9 +1700,7 @@
       "get": {
         "operationId": "getSuperadminUsersId",
         "summary": "User details and edit examples",
-        "tags": [
-          "Superadmin"
-        ],
+        "tags": ["Superadmin"],
         "description": "## Superadmin API\n\n  Every endpoint requires `Authorization: Bearer <accessToken>` and the current\n  `SUPERADMIN` database role. Missing/invalid credentials return 401; ordinary\n  users receive 403. Responses use `Cache-Control: no-store`.\n\n  | Method | Endpoint                     | Action                            |\n  | ------ | ---------------------------- | --------------------------------- |\n  | GET    | `/superadmin/stats`          | Dashboard counters                |\n  | GET    | `/superadmin/users`          | Filtered, sorted, paginated users |\n  | GET    | `/superadmin/users/:id`      | User details                      |\n  | POST   | `/superadmin/users`          | Create a user (201)               |\n  | PATCH  | `/superadmin/users/:id`      | Edit allowed profile fields       |\n  | PATCH  | `/superadmin/users/:id/role` | Change role                       |\n  | DELETE | `/superadmin/users/:id`      | Permanently delete user (204)     |\n\n  Stats return `totalUsers`, `regularUsers`, `superadmins`, `newUsersLast7Days`,\n  `newUsersLast30Days`, and `asOf`. Registration counts use rolling 7/30-day windows\n  ending at `asOf`, counting currently existing accounts. They are not login/activity\n  counts. Ban statistics and live presence are not implemented.\n\n  ### Search and filters\n\n  Example:\n\n  ```http\n  GET /superadmin/users?search=alex&role=USER&sortBy=username&sortOrder=asc&page=1&limit=20\n  ```\n\n  - `search`: up to 100 characters; case-insensitive substring of username, email,\n    or display name. Send plain text, not surrounding `%` characters. User-supplied\n    `%`, `_`, and backslashes are escaped to match literally.\n  - `role`: `USER` or `SUPERADMIN`.\n  - `createdFrom`, `createdTo`: inclusive ISO date/time bounds. Date-only values\n    mean midnight UTC; use full timestamps when including an entire final day.\n    Reversed ranges return 400.\n  - `sortBy`: `createdAt` (default), `updatedAt`, `username`, `email`, or `role`.\n  - `sortOrder`: `asc` or `desc` (default). User ID breaks ties consistently.\n  - `page`: 1-1,000,000 (default 1); `limit`: 1-100 (default 10).\n\n  Returns `{ users, total, page, limit, totalPages }`. The total uses the same\n  filters as the list. List entries and detail responses include id, username,\n  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,\n  emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,\n  and two-factor secrets are never included.\n\n  ### Create, edit, and delete\n\n  Create body:\n\n  ```json\n  {\n    \"username\": \"new_player\",\n    \"email\": \"player@example.com\",\n    \"password\": \"long-password\",\n    \"role\": \"USER\"\n  }\n  ```\n\n  Role is optional and defaults to USER. Password validation matches registration.\n  Creation hashes the password but does not issue tokens or create a login session.\n\n  Profile PATCH accepts username, email, firstName, lastName, and displayName.\n  Omitted fields stay unchanged; optional names can be cleared with null. Email\n  changes clear verification, while resubmitting the same email preserves it.\n  Password, role, URLs, and verification timestamps are rejected here.\n\n  Role PATCH accepts `{ \"role\": \"SUPERADMIN\" }` or `{ \"role\": \"USER\" }`.\n  Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing\n  user returns 404.\n\n  Deletion removes refresh tokens and provider records; images, two-factor settings,\n  and recovery codes cascade. The last superadmin cannot be deleted or demoted\n  (409). Admin mutations share a PostgreSQL transaction advisory lock so competing\n  requests cannot both remove the final admins; the caller's role is rechecked\n  inside that transaction. Superadmins must use this guarded deletion endpoint,\n  not `DELETE /accounts/me`, to preserve that protection.\n\n  No accounts are automatically promoted. To promote an existing testing account, run\n  `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.\n  The script reads the database settings from `.env`, preserves the password, and is\n  safe to rerun. Register the account first if it does not exist. The role guard\n  checks the database, so an existing valid access token works immediately. Ban/unban,\n  MQ notifications, and the admin dashboard frontend are deferred.\n\n  ### Dashboard response example\n\n  `GET /superadmin/stats` returns 200:\n\n  ```json\n  {\n    \"totalUsers\": 12,\n    \"regularUsers\": 11,\n    \"superadmins\": 1,\n    \"newUsersLast7Days\": 3,\n    \"newUsersLast30Days\": 8,\n    \"asOf\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  ### User details and edit examples\n\n  `GET /superadmin/users/:id` returns the same full admin user shape as\n  list entries. Create, profile edit, and role edit also return this shape:\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"username\": \"player1\",\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": null,\n    \"bannerUrl\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Profile update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"displayName\":\"New display name\",\"lastName\":null}\n  ```\n\n  Role update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/role\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"role\":\"SUPERADMIN\"}\n  ```\n\n  Delete uses the same user URL with DELETE and no body; success returns 204 with\n  an empty response. Deleting or demoting the last superadmin returns 409.\n  An admin may delete/demote themselves through these endpoints if another\n  superadmin remains. Subsequent admin requests check the current database role.\n  Private account responses and superadmin user responses include role.\n  Registration/login and public account responses do not.\n\n  ### Testing the superadmin endpoints\n\n  1. Register a testing account using the normal registration endpoint.\n  2. Run `npm run bootstrap:superadmin -- existing-user@example.com` locally.\n  3. Use that account's valid access token in Postman's Bearer Token authorization.\n  4. Try GET stats, then search/list, then user details and edits.\n  5. Use a separate USER account to verify the admin endpoints return 403.\n\n  The bootstrap command changes only the role and update timestamp. It does not\n  create an account, reset a password, or issue tokens. It matches the supplied\n  email exactly after trimming surrounding spaces.",
         "security": [
           {
@@ -1877,31 +1731,19 @@
                       "type": "string"
                     },
                     "lastName": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "displayName": {
                       "type": "string"
                     },
                     "avatarUrl": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "bannerUrl": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "emailVerifiedAt": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "createdAt": {
                       "type": "string"
@@ -1910,24 +1752,15 @@
                       "type": "string"
                     },
                     "bio": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 190
                     },
                     "statusText": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 100
                     },
                     "statusIcon": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 50,
                       "enum": [
                         "IconCode",
@@ -1988,9 +1821,7 @@
       "patch": {
         "operationId": "patchSuperadminUsersId",
         "summary": "Edit allowed profile fields",
-        "tags": [
-          "Superadmin"
-        ],
+        "tags": ["Superadmin"],
         "description": "## Superadmin API\n\n  Every endpoint requires `Authorization: Bearer <accessToken>` and the current\n  `SUPERADMIN` database role. Missing/invalid credentials return 401; ordinary\n  users receive 403. Responses use `Cache-Control: no-store`.\n\n  | Method | Endpoint                     | Action                            |\n  | ------ | ---------------------------- | --------------------------------- |\n  | GET    | `/superadmin/stats`          | Dashboard counters                |\n  | GET    | `/superadmin/users`          | Filtered, sorted, paginated users |\n  | GET    | `/superadmin/users/:id`      | User details                      |\n  | POST   | `/superadmin/users`          | Create a user (201)               |\n  | PATCH  | `/superadmin/users/:id`      | Edit allowed profile fields       |\n  | PATCH  | `/superadmin/users/:id/role` | Change role                       |\n  | DELETE | `/superadmin/users/:id`      | Permanently delete user (204)     |\n\n  Stats return `totalUsers`, `regularUsers`, `superadmins`, `newUsersLast7Days`,\n  `newUsersLast30Days`, and `asOf`. Registration counts use rolling 7/30-day windows\n  ending at `asOf`, counting currently existing accounts. They are not login/activity\n  counts. Ban statistics and live presence are not implemented.\n\n  ### Search and filters\n\n  Example:\n\n  ```http\n  GET /superadmin/users?search=alex&role=USER&sortBy=username&sortOrder=asc&page=1&limit=20\n  ```\n\n  - `search`: up to 100 characters; case-insensitive substring of username, email,\n    or display name. Send plain text, not surrounding `%` characters. User-supplied\n    `%`, `_`, and backslashes are escaped to match literally.\n  - `role`: `USER` or `SUPERADMIN`.\n  - `createdFrom`, `createdTo`: inclusive ISO date/time bounds. Date-only values\n    mean midnight UTC; use full timestamps when including an entire final day.\n    Reversed ranges return 400.\n  - `sortBy`: `createdAt` (default), `updatedAt`, `username`, `email`, or `role`.\n  - `sortOrder`: `asc` or `desc` (default). User ID breaks ties consistently.\n  - `page`: 1-1,000,000 (default 1); `limit`: 1-100 (default 10).\n\n  Returns `{ users, total, page, limit, totalPages }`. The total uses the same\n  filters as the list. List entries and detail responses include id, username,\n  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,\n  emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,\n  and two-factor secrets are never included.\n\n  ### Create, edit, and delete\n\n  Create body:\n\n  ```json\n  {\n    \"username\": \"new_player\",\n    \"email\": \"player@example.com\",\n    \"password\": \"long-password\",\n    \"role\": \"USER\"\n  }\n  ```\n\n  Role is optional and defaults to USER. Password validation matches registration.\n  Creation hashes the password but does not issue tokens or create a login session.\n\n  Profile PATCH accepts username, email, firstName, lastName, displayName, bio, statusText, and statusIcon.\n  Omitted fields stay unchanged; optional names can be cleared with null. Email\n  changes clear verification, while resubmitting the same email preserves it.\n  Password, role, URLs, and verification timestamps are rejected here.\n\n  Role PATCH accepts `{ \"role\": \"SUPERADMIN\" }` or `{ \"role\": \"USER\" }`.\n  Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing\n  user returns 404.\n\n  Deletion removes refresh tokens and provider records; images, two-factor settings,\n  and recovery codes cascade. The last superadmin cannot be deleted or demoted\n  (409). Admin mutations share a PostgreSQL transaction advisory lock so competing\n  requests cannot both remove the final admins; the caller's role is rechecked\n  inside that transaction. Superadmins must use this guarded deletion endpoint,\n  not `DELETE /accounts/me`, to preserve that protection.\n\n  No accounts are automatically promoted. To promote an existing testing account, run\n  `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.\n  The script reads the database settings from `.env`, preserves the password, and is\n  safe to rerun. Register the account first if it does not exist. The role guard\n  checks the database, so an existing valid access token works immediately. Ban/unban,\n  MQ notifications, and the admin dashboard frontend are deferred.\n\n  ### Dashboard response example\n\n  `GET /superadmin/stats` returns 200:\n\n  ```json\n  {\n    \"totalUsers\": 12,\n    \"regularUsers\": 11,\n    \"superadmins\": 1,\n    \"newUsersLast7Days\": 3,\n    \"newUsersLast30Days\": 8,\n    \"asOf\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  ### User details and edit examples\n\n  `GET /superadmin/users/:id` returns the same full admin user shape as\n  list entries. Create, profile edit, and role edit also return this shape:\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"username\": \"player1\",\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": null,\n    \"bannerUrl\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Profile update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"displayName\":\"New display name\",\"lastName\":null}\n  ```\n\n  Role update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/role\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"role\":\"SUPERADMIN\"}\n  ```\n\n  Delete uses the same user URL with DELETE and no body; success returns 204 with\n  an empty response. Deleting or demoting the last superadmin returns 409.\n  An admin may delete/demote themselves through these endpoints if another\n  superadmin remains. Subsequent admin requests check the current database role.\n  Private account responses and superadmin user responses include role.\n  Registration/login and public account responses do not.\n\n  ### Testing the superadmin endpoints\n\n  1. Register a testing account using the normal registration endpoint.\n  2. Run `npm run bootstrap:superadmin -- existing-user@example.com` locally.\n  3. Use that account's valid access token in Postman's Bearer Token authorization.\n  4. Try GET stats, then search/list, then user details and edits.\n  5. Use a separate USER account to verify the admin endpoints return 403.\n\n  The bootstrap command changes only the role and update timestamp. It does not\n  create an account, reset a password, or issue tokens. It matches the supplied\n  email exactly after trimming surrounding spaces.",
         "security": [
           {
@@ -2021,31 +1852,19 @@
                       "type": "string"
                     },
                     "lastName": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "displayName": {
                       "type": "string"
                     },
                     "avatarUrl": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "bannerUrl": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "emailVerifiedAt": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "createdAt": {
                       "type": "string"
@@ -2054,24 +1873,15 @@
                       "type": "string"
                     },
                     "bio": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 190
                     },
                     "statusText": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 100
                     },
                     "statusIcon": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "maxLength": 50,
                       "enum": [
                         "IconCode",
@@ -2148,10 +1958,7 @@
                     "type": "string"
                   },
                   "lastName": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "displayName": {
                     "type": "string"
@@ -2174,9 +1981,7 @@
       "delete": {
         "operationId": "deleteSuperadminUsersId",
         "summary": "Permanently delete user (204)",
-        "tags": [
-          "Superadmin"
-        ],
+        "tags": ["Superadmin"],
         "description": "## Superadmin API\n\n  Every endpoint requires `Authorization: Bearer <accessToken>` and the current\n  `SUPERADMIN` database role. Missing/invalid credentials return 401; ordinary\n  users receive 403. Responses use `Cache-Control: no-store`.\n\n  | Method | Endpoint                     | Action                            |\n  | ------ | ---------------------------- | --------------------------------- |\n  | GET    | `/superadmin/stats`          | Dashboard counters                |\n  | GET    | `/superadmin/users`          | Filtered, sorted, paginated users |\n  | GET    | `/superadmin/users/:id`      | User details                      |\n  | POST   | `/superadmin/users`          | Create a user (201)               |\n  | PATCH  | `/superadmin/users/:id`      | Edit allowed profile fields       |\n  | PATCH  | `/superadmin/users/:id/role` | Change role                       |\n  | DELETE | `/superadmin/users/:id`      | Permanently delete user (204)     |\n\n  Stats return `totalUsers`, `regularUsers`, `superadmins`, `newUsersLast7Days`,\n  `newUsersLast30Days`, and `asOf`. Registration counts use rolling 7/30-day windows\n  ending at `asOf`, counting currently existing accounts. They are not login/activity\n  counts. Ban statistics and live presence are not implemented.\n\n  ### Search and filters\n\n  Example:\n\n  ```http\n  GET /superadmin/users?search=alex&role=USER&sortBy=username&sortOrder=asc&page=1&limit=20\n  ```\n\n  - `search`: up to 100 characters; case-insensitive substring of username, email,\n    or display name. Send plain text, not surrounding `%` characters. User-supplied\n    `%`, `_`, and backslashes are escaped to match literally.\n  - `role`: `USER` or `SUPERADMIN`.\n  - `createdFrom`, `createdTo`: inclusive ISO date/time bounds. Date-only values\n    mean midnight UTC; use full timestamps when including an entire final day.\n    Reversed ranges return 400.\n  - `sortBy`: `createdAt` (default), `updatedAt`, `username`, `email`, or `role`.\n  - `sortOrder`: `asc` or `desc` (default). User ID breaks ties consistently.\n  - `page`: 1-1,000,000 (default 1); `limit`: 1-100 (default 10).\n\n  Returns `{ users, total, page, limit, totalPages }`. The total uses the same\n  filters as the list. List entries and detail responses include id, username,\n  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,\n  emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,\n  and two-factor secrets are never included.\n\n  ### Create, edit, and delete\n\n  Create body:\n\n  ```json\n  {\n    \"username\": \"new_player\",\n    \"email\": \"player@example.com\",\n    \"password\": \"long-password\",\n    \"role\": \"USER\"\n  }\n  ```\n\n  Role is optional and defaults to USER. Password validation matches registration.\n  Creation hashes the password but does not issue tokens or create a login session.\n\n  Profile PATCH accepts username, email, firstName, lastName, and displayName.\n  Omitted fields stay unchanged; optional names can be cleared with null. Email\n  changes clear verification, while resubmitting the same email preserves it.\n  Password, role, URLs, and verification timestamps are rejected here.\n\n  Role PATCH accepts `{ \"role\": \"SUPERADMIN\" }` or `{ \"role\": \"USER\" }`.\n  Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing\n  user returns 404.\n\n  Deletion removes refresh tokens and provider records; images, two-factor settings,\n  and recovery codes cascade. The last superadmin cannot be deleted or demoted\n  (409). Admin mutations share a PostgreSQL transaction advisory lock so competing\n  requests cannot both remove the final admins; the caller's role is rechecked\n  inside that transaction. Superadmins must use this guarded deletion endpoint,\n  not `DELETE /accounts/me`, to preserve that protection.\n\n  No accounts are automatically promoted. To promote an existing testing account, run\n  `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.\n  The script reads the database settings from `.env`, preserves the password, and is\n  safe to rerun. Register the account first if it does not exist. The role guard\n  checks the database, so an existing valid access token works immediately. Ban/unban,\n  MQ notifications, and the admin dashboard frontend are deferred.\n\n  ### Dashboard response example\n\n  `GET /superadmin/stats` returns 200:\n\n  ```json\n  {\n    \"totalUsers\": 12,\n    \"regularUsers\": 11,\n    \"superadmins\": 1,\n    \"newUsersLast7Days\": 3,\n    \"newUsersLast30Days\": 8,\n    \"asOf\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  ### User details and edit examples\n\n  `GET /superadmin/users/:id` returns the same full admin user shape as\n  list entries. Create, profile edit, and role edit also return this shape:\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"username\": \"player1\",\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": null,\n    \"bannerUrl\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Profile update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"displayName\":\"New display name\",\"lastName\":null}\n  ```\n\n  Role update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/role\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"role\":\"SUPERADMIN\"}\n  ```\n\n  Delete uses the same user URL with DELETE and no body; success returns 204 with\n  an empty response. Deleting or demoting the last superadmin returns 409.\n  An admin may delete/demote themselves through these endpoints if another\n  superadmin remains. Subsequent admin requests check the current database role.\n  Private account responses and superadmin user responses include role.\n  Registration/login and public account responses do not.\n\n  ### Testing the superadmin endpoints\n\n  1. Register a testing account using the normal registration endpoint.\n  2. Run `npm run bootstrap:superadmin -- existing-user@example.com` locally.\n  3. Use that account's valid access token in Postman's Bearer Token authorization.\n  4. Try GET stats, then search/list, then user details and edits.\n  5. Use a separate USER account to verify the admin endpoints return 403.\n\n  The bootstrap command changes only the role and update timestamp. It does not\n  create an account, reset a password, or issue tokens. It matches the supplied\n  email exactly after trimming surrounding spaces.",
         "security": [
           {
@@ -2220,9 +2025,7 @@
       "get": {
         "operationId": "getSuperadminUsers",
         "summary": "Filtered, sorted, paginated users",
-        "tags": [
-          "Superadmin"
-        ],
+        "tags": ["Superadmin"],
         "description": "## Superadmin API\n\n  Every endpoint requires `Authorization: Bearer <accessToken>` and the current\n  `SUPERADMIN` database role. Missing/invalid credentials return 401; ordinary\n  users receive 403. Responses use `Cache-Control: no-store`.\n\n  | Method | Endpoint                     | Action                            |\n  | ------ | ---------------------------- | --------------------------------- |\n  | GET    | `/superadmin/stats`          | Dashboard counters                |\n  | GET    | `/superadmin/users`          | Filtered, sorted, paginated users |\n  | GET    | `/superadmin/users/:id`      | User details                      |\n  | POST   | `/superadmin/users`          | Create a user (201)               |\n  | PATCH  | `/superadmin/users/:id`      | Edit allowed profile fields       |\n  | PATCH  | `/superadmin/users/:id/role` | Change role                       |\n  | DELETE | `/superadmin/users/:id`      | Permanently delete user (204)     |\n\n  Stats return `totalUsers`, `regularUsers`, `superadmins`, `newUsersLast7Days`,\n  `newUsersLast30Days`, and `asOf`. Registration counts use rolling 7/30-day windows\n  ending at `asOf`, counting currently existing accounts. They are not login/activity\n  counts. Ban statistics and live presence are not implemented.\n\n  ### Search and filters\n\n  Example:\n\n  ```http\n  GET /superadmin/users?search=alex&role=USER&sortBy=username&sortOrder=asc&page=1&limit=20\n  ```\n\n  - `search`: up to 100 characters; case-insensitive substring of username, email,\n    or display name. Send plain text, not surrounding `%` characters. User-supplied\n    `%`, `_`, and backslashes are escaped to match literally.\n  - `role`: `USER` or `SUPERADMIN`.\n  - `createdFrom`, `createdTo`: inclusive ISO date/time bounds. Date-only values\n    mean midnight UTC; use full timestamps when including an entire final day.\n    Reversed ranges return 400.\n  - `sortBy`: `createdAt` (default), `updatedAt`, `username`, `email`, or `role`.\n  - `sortOrder`: `asc` or `desc` (default). User ID breaks ties consistently.\n  - `page`: 1-1,000,000 (default 1); `limit`: 1-100 (default 10).\n\n  Returns `{ users, total, page, limit, totalPages }`. The total uses the same\n  filters as the list. List entries and detail responses include id, username,\n  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,\n  bio, statusText, statusIcon, emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,\n  and two-factor secrets are never included.\n\n  ### Create, edit, and delete\n\n  Create body:\n\n  ```json\n  {\n    \"username\": \"new_player\",\n    \"email\": \"player@example.com\",\n    \"password\": \"long-password\",\n    \"role\": \"USER\"\n  }\n  ```\n\n  Role is optional and defaults to USER. Password validation matches registration.\n  Creation hashes the password but does not issue tokens or create a login session.\n\n  Profile PATCH accepts username, email, firstName, lastName, and displayName.\n  Omitted fields stay unchanged; optional names can be cleared with null. Email\n  changes clear verification, while resubmitting the same email preserves it.\n  Password, role, URLs, and verification timestamps are rejected here.\n\n  Role PATCH accepts `{ \"role\": \"SUPERADMIN\" }` or `{ \"role\": \"USER\" }`.\n  Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing\n  user returns 404.\n\n  Deletion removes refresh tokens and provider records; images, two-factor settings,\n  and recovery codes cascade. The last superadmin cannot be deleted or demoted\n  (409). Admin mutations share a PostgreSQL transaction advisory lock so competing\n  requests cannot both remove the final admins; the caller's role is rechecked\n  inside that transaction. Superadmins must use this guarded deletion endpoint,\n  not `DELETE /accounts/me`, to preserve that protection.\n\n  No accounts are automatically promoted. To promote an existing testing account, run\n  `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.\n  The script reads the database settings from `.env`, preserves the password, and is\n  safe to rerun. Register the account first if it does not exist. The role guard\n  checks the database, so an existing valid access token works immediately. Ban/unban,\n  MQ notifications, and the admin dashboard frontend are deferred.\n\n  ### Dashboard response example\n\n  `GET /superadmin/stats` returns 200:\n\n  ```json\n  {\n    \"totalUsers\": 12,\n    \"regularUsers\": 11,\n    \"superadmins\": 1,\n    \"newUsersLast7Days\": 3,\n    \"newUsersLast30Days\": 8,\n    \"asOf\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  ### User details and edit examples\n\n  `GET /superadmin/users/:id` returns the same full admin user shape as\n  list entries. Create, profile edit, and role edit also return this shape:\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"username\": \"player1\",\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": null,\n    \"bannerUrl\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Profile update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"displayName\":\"New display name\",\"lastName\":null}\n  ```\n\n  Role update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/role\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"role\":\"SUPERADMIN\"}\n  ```\n\n  Delete uses the same user URL with DELETE and no body; success returns 204 with\n  an empty response. Deleting or demoting the last superadmin returns 409.\n  An admin may delete/demote themselves through these endpoints if another\n  superadmin remains. Subsequent admin requests check the current database role.\n  Private account responses and superadmin user responses include role.\n  Registration/login and public account responses do not.\n\n  ### Testing the superadmin endpoints\n\n  1. Register a testing account using the normal registration endpoint.\n  2. Run `npm run bootstrap:superadmin -- existing-user@example.com` locally.\n  3. Use that account's valid access token in Postman's Bearer Token authorization.\n  4. Try GET stats, then search/list, then user details and edits.\n  5. Use a separate USER account to verify the admin endpoints return 403.\n\n  The bootstrap command changes only the role and update timestamp. It does not\n  create an account, reset a password, or issue tokens. It matches the supplied\n  email exactly after trimming surrounding spaces.",
         "security": [
           {
@@ -2258,31 +2061,19 @@
                             "type": "string"
                           },
                           "lastName": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "displayName": {
                             "type": "string"
                           },
                           "avatarUrl": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "bannerUrl": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "emailVerifiedAt": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "createdAt": {
                             "type": "string"
@@ -2291,24 +2082,15 @@
                             "type": "string"
                           },
                           "bio": {
-                            "type": [
-                              "string",
-                              "null"
-                            ],
+                            "type": ["string", "null"],
                             "maxLength": 190
                           },
                           "statusText": {
-                            "type": [
-                              "string",
-                              "null"
-                            ],
+                            "type": ["string", "null"],
                             "maxLength": 100
                           },
                           "statusIcon": {
-                            "type": [
-                              "string",
-                              "null"
-                            ],
+                            "type": ["string", "null"],
                             "maxLength": 50,
                             "enum": [
                               "IconCode",
@@ -2400,9 +2182,7 @@
       "post": {
         "operationId": "postSuperadminUsers",
         "summary": "Create a user (201)",
-        "tags": [
-          "Superadmin"
-        ],
+        "tags": ["Superadmin"],
         "description": "## Superadmin API\n\n  Every endpoint requires `Authorization: Bearer <accessToken>` and the current\n  `SUPERADMIN` database role. Missing/invalid credentials return 401; ordinary\n  users receive 403. Responses use `Cache-Control: no-store`.\n\n  | Method | Endpoint                     | Action                            |\n  | ------ | ---------------------------- | --------------------------------- |\n  | GET    | `/superadmin/stats`          | Dashboard counters                |\n  | GET    | `/superadmin/users`          | Filtered, sorted, paginated users |\n  | GET    | `/superadmin/users/:id`      | User details                      |\n  | POST   | `/superadmin/users`          | Create a user (201)               |\n  | PATCH  | `/superadmin/users/:id`      | Edit allowed profile fields       |\n  | PATCH  | `/superadmin/users/:id/role` | Change role                       |\n  | DELETE | `/superadmin/users/:id`      | Permanently delete user (204)     |\n\n  Stats return `totalUsers`, `regularUsers`, `superadmins`, `newUsersLast7Days`,\n  `newUsersLast30Days`, and `asOf`. Registration counts use rolling 7/30-day windows\n  ending at `asOf`, counting currently existing accounts. They are not login/activity\n  counts. Ban statistics and live presence are not implemented.\n\n  ### Search and filters\n\n  Example:\n\n  ```http\n  GET /superadmin/users?search=alex&role=USER&sortBy=username&sortOrder=asc&page=1&limit=20\n  ```\n\n  - `search`: up to 100 characters; case-insensitive substring of username, email,\n    or display name. Send plain text, not surrounding `%` characters. User-supplied\n    `%`, `_`, and backslashes are escaped to match literally.\n  - `role`: `USER` or `SUPERADMIN`.\n  - `createdFrom`, `createdTo`: inclusive ISO date/time bounds. Date-only values\n    mean midnight UTC; use full timestamps when including an entire final day.\n    Reversed ranges return 400.\n  - `sortBy`: `createdAt` (default), `updatedAt`, `username`, `email`, or `role`.\n  - `sortOrder`: `asc` or `desc` (default). User ID breaks ties consistently.\n  - `page`: 1-1,000,000 (default 1); `limit`: 1-100 (default 10).\n\n  Returns `{ users, total, page, limit, totalPages }`. The total uses the same\n  filters as the list. List entries and detail responses include id, username,\n  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,\n  emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,\n  and two-factor secrets are never included.\n\n  ### Create, edit, and delete\n\n  Create body:\n\n  ```json\n  {\n    \"username\": \"new_player\",\n    \"email\": \"player@example.com\",\n    \"password\": \"long-password\",\n    \"role\": \"USER\"\n  }\n  ```\n\n  Role is optional and defaults to USER. Password validation matches registration.\n  Creation hashes the password but does not issue tokens or create a login session.\n\n  Profile PATCH accepts username, email, firstName, lastName, and displayName.\n  Omitted fields stay unchanged; optional names can be cleared with null. Email\n  changes clear verification, while resubmitting the same email preserves it.\n  Password, role, URLs, and verification timestamps are rejected here.\n\n  Role PATCH accepts `{ \"role\": \"SUPERADMIN\" }` or `{ \"role\": \"USER\" }`.\n  Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing\n  user returns 404.\n\n  Deletion removes refresh tokens and provider records; images, two-factor settings,\n  and recovery codes cascade. The last superadmin cannot be deleted or demoted\n  (409). Admin mutations share a PostgreSQL transaction advisory lock so competing\n  requests cannot both remove the final admins; the caller's role is rechecked\n  inside that transaction. Superadmins must use this guarded deletion endpoint,\n  not `DELETE /accounts/me`, to preserve that protection.\n\n  No accounts are automatically promoted. To promote an existing testing account, run\n  `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.\n  The script reads the database settings from `.env`, preserves the password, and is\n  safe to rerun. Register the account first if it does not exist. The role guard\n  checks the database, so an existing valid access token works immediately. Ban/unban,\n  MQ notifications, and the admin dashboard frontend are deferred.\n\n  ### Dashboard response example\n\n  `GET /superadmin/stats` returns 200:\n\n  ```json\n  {\n    \"totalUsers\": 12,\n    \"regularUsers\": 11,\n    \"superadmins\": 1,\n    \"newUsersLast7Days\": 3,\n    \"newUsersLast30Days\": 8,\n    \"asOf\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  ### User details and edit examples\n\n  `GET /superadmin/users/:id` returns the same full admin user shape as\n  list entries. Create, profile edit, and role edit also return this shape:\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"username\": \"player1\",\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": null,\n    \"bannerUrl\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Profile update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"displayName\":\"New display name\",\"lastName\":null}\n  ```\n\n  Role update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/role\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"role\":\"SUPERADMIN\"}\n  ```\n\n  Delete uses the same user URL with DELETE and no body; success returns 204 with\n  an empty response. Deleting or demoting the last superadmin returns 409.\n  An admin may delete/demote themselves through these endpoints if another\n  superadmin remains. Subsequent admin requests check the current database role.\n  Private account responses and superadmin user responses include role.\n  Registration/login and public account responses do not.\n\n  ### Testing the superadmin endpoints\n\n  1. Register a testing account using the normal registration endpoint.\n  2. Run `npm run bootstrap:superadmin -- existing-user@example.com` locally.\n  3. Use that account's valid access token in Postman's Bearer Token authorization.\n  4. Try GET stats, then search/list, then user details and edits.\n  5. Use a separate USER account to verify the admin endpoints return 403.\n\n  The bootstrap command changes only the role and update timestamp. It does not\n  create an account, reset a password, or issue tokens. It matches the supplied\n  email exactly after trimming surrounding spaces.",
         "security": [
           {
@@ -2433,31 +2213,19 @@
                       "type": "string"
                     },
                     "lastName": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "displayName": {
                       "type": "string"
                     },
                     "avatarUrl": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "bannerUrl": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "emailVerifiedAt": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "createdAt": {
                       "type": "string"
@@ -2518,11 +2286,7 @@
                   }
                 },
                 "additionalProperties": false,
-                "required": [
-                  "username",
-                  "email",
-                  "password"
-                ]
+                "required": ["username", "email", "password"]
               },
               "example": {
                 "username": "new_player",
@@ -2539,9 +2303,7 @@
       "patch": {
         "operationId": "patchSuperadminUsersIdRole",
         "summary": "Change role",
-        "tags": [
-          "Superadmin"
-        ],
+        "tags": ["Superadmin"],
         "description": "## Superadmin API\n\n  Every endpoint requires `Authorization: Bearer <accessToken>` and the current\n  `SUPERADMIN` database role. Missing/invalid credentials return 401; ordinary\n  users receive 403. Responses use `Cache-Control: no-store`.\n\n  | Method | Endpoint                     | Action                            |\n  | ------ | ---------------------------- | --------------------------------- |\n  | GET    | `/superadmin/stats`          | Dashboard counters                |\n  | GET    | `/superadmin/users`          | Filtered, sorted, paginated users |\n  | GET    | `/superadmin/users/:id`      | User details                      |\n  | POST   | `/superadmin/users`          | Create a user (201)               |\n  | PATCH  | `/superadmin/users/:id`      | Edit allowed profile fields       |\n  | PATCH  | `/superadmin/users/:id/role` | Change role                       |\n  | DELETE | `/superadmin/users/:id`      | Permanently delete user (204)     |\n\n  Stats return `totalUsers`, `regularUsers`, `superadmins`, `newUsersLast7Days`,\n  `newUsersLast30Days`, and `asOf`. Registration counts use rolling 7/30-day windows\n  ending at `asOf`, counting currently existing accounts. They are not login/activity\n  counts. Ban statistics and live presence are not implemented.\n\n  ### Search and filters\n\n  Example:\n\n  ```http\n  GET /superadmin/users?search=alex&role=USER&sortBy=username&sortOrder=asc&page=1&limit=20\n  ```\n\n  - `search`: up to 100 characters; case-insensitive substring of username, email,\n    or display name. Send plain text, not surrounding `%` characters. User-supplied\n    `%`, `_`, and backslashes are escaped to match literally.\n  - `role`: `USER` or `SUPERADMIN`.\n  - `createdFrom`, `createdTo`: inclusive ISO date/time bounds. Date-only values\n    mean midnight UTC; use full timestamps when including an entire final day.\n    Reversed ranges return 400.\n  - `sortBy`: `createdAt` (default), `updatedAt`, `username`, `email`, or `role`.\n  - `sortOrder`: `asc` or `desc` (default). User ID breaks ties consistently.\n  - `page`: 1-1,000,000 (default 1); `limit`: 1-100 (default 10).\n\n  Returns `{ users, total, page, limit, totalPages }`. The total uses the same\n  filters as the list. List entries and detail responses include id, username,\n  email, role, firstName, lastName, displayName, avatarUrl, bannerUrl,\n  emailVerifiedAt, createdAt, and updatedAt. Password hashes, tokens, image bytes,\n  and two-factor secrets are never included.\n\n  ### Create, edit, and delete\n\n  Create body:\n\n  ```json\n  {\n    \"username\": \"new_player\",\n    \"email\": \"player@example.com\",\n    \"password\": \"long-password\",\n    \"role\": \"USER\"\n  }\n  ```\n\n  Role is optional and defaults to USER. Password validation matches registration.\n  Creation hashes the password but does not issue tokens or create a login session.\n\n  Profile PATCH accepts username, email, firstName, lastName, and displayName.\n  Omitted fields stay unchanged; optional names can be cleared with null. Email\n  changes clear verification, while resubmitting the same email preserves it.\n  Password, role, URLs, and verification timestamps are rejected here.\n\n  Role PATCH accepts `{ \"role\": \"SUPERADMIN\" }` or `{ \"role\": \"USER\" }`.\n  Duplicate email/username returns 409; invalid bodies/UUIDs return 400; a missing\n  user returns 404.\n\n  Deletion removes refresh tokens and provider records; images, two-factor settings,\n  and recovery codes cascade. The last superadmin cannot be deleted or demoted\n  (409). Admin mutations share a PostgreSQL transaction advisory lock so competing\n  requests cannot both remove the final admins; the caller's role is rechecked\n  inside that transaction. Superadmins must use this guarded deletion endpoint,\n  not `DELETE /accounts/me`, to preserve that protection.\n\n  No accounts are automatically promoted. To promote an existing testing account, run\n  `npm run bootstrap:superadmin -- existing-user@example.com` from the service directory.\n  The script reads the database settings from `.env`, preserves the password, and is\n  safe to rerun. Register the account first if it does not exist. The role guard\n  checks the database, so an existing valid access token works immediately. Ban/unban,\n  MQ notifications, and the admin dashboard frontend are deferred.\n\n  ### Dashboard response example\n\n  `GET /superadmin/stats` returns 200:\n\n  ```json\n  {\n    \"totalUsers\": 12,\n    \"regularUsers\": 11,\n    \"superadmins\": 1,\n    \"newUsersLast7Days\": 3,\n    \"newUsersLast30Days\": 8,\n    \"asOf\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  ### User details and edit examples\n\n  `GET /superadmin/users/:id` returns the same full admin user shape as\n  list entries. Create, profile edit, and role edit also return this shape:\n\n  ```json\n  {\n    \"id\": \"2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\",\n    \"username\": \"player1\",\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\",\n    \"firstName\": \"Ada\",\n    \"lastName\": null,\n    \"displayName\": \"Ada\",\n    \"avatarUrl\": null,\n    \"bannerUrl\": null,\n    \"emailVerifiedAt\": null,\n    \"createdAt\": \"2026-09-29T12:00:00.000Z\",\n    \"updatedAt\": \"2026-09-29T12:00:00.000Z\"\n  }\n  ```\n\n  Profile update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"displayName\":\"New display name\",\"lastName\":null}\n  ```\n\n  Role update (200):\n\n  ```http\n  PATCH /superadmin/users/2f1c2d1e-3c5a-4d6a-8b1c-123456789abc/role\n  Authorization: Bearer <superadmin-access-token>\n  Content-Type: application/json\n\n  {\"role\":\"SUPERADMIN\"}\n  ```\n\n  Delete uses the same user URL with DELETE and no body; success returns 204 with\n  an empty response. Deleting or demoting the last superadmin returns 409.\n  An admin may delete/demote themselves through these endpoints if another\n  superadmin remains. Subsequent admin requests check the current database role.\n  Private account responses and superadmin user responses include role.\n  Registration/login and public account responses do not.\n\n  ### Testing the superadmin endpoints\n\n  1. Register a testing account using the normal registration endpoint.\n  2. Run `npm run bootstrap:superadmin -- existing-user@example.com` locally.\n  3. Use that account's valid access token in Postman's Bearer Token authorization.\n  4. Try GET stats, then search/list, then user details and edits.\n  5. Use a separate USER account to verify the admin endpoints return 403.\n\n  The bootstrap command changes only the role and update timestamp. It does not\n  create an account, reset a password, or issue tokens. It matches the supplied\n  email exactly after trimming surrounding spaces.",
         "security": [
           {
@@ -2572,31 +2334,19 @@
                       "type": "string"
                     },
                     "lastName": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "displayName": {
                       "type": "string"
                     },
                     "avatarUrl": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "bannerUrl": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "emailVerifiedAt": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "createdAt": {
                       "type": "string"
@@ -2662,9 +2412,7 @@
                   }
                 },
                 "additionalProperties": false,
-                "required": [
-                  "role"
-                ]
+                "required": ["role"]
               },
               "example": {
                 "role": "SUPERADMIN"
@@ -2678,9 +2426,7 @@
       "get": {
         "operationId": "getAuthGithub",
         "summary": "GitHub Login",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "GitHub exposes the equivalent login and linking flow. It obtains primary verified email through user:email scope.\n\n### GitHub Login\n\n  `GET /auth/github` starts authorization with a `302` redirect to GitHub.\n\n  `GET /auth/github/callback` receives GitHub's authorization code and state,\n  checks the temporary browser cookie, and returns the user and token pair with\n  `200 OK` for JSON clients. Browser requests accepting `text/html` redirect to\n  `AUTH_FRONTEND_URL` (default `http://localhost:5173`) with our tokens in the URL\n  fragment. Neither endpoint requires an existing application access token or a\n  JSON body. Start the flow in a browser; GitHub supplies the callback parameters.\n\n  See [GitHub OAuth login](#github-oauth-login) for configuration, account rules,\n  and error responses, or [the strategy walkthrough](GITHUB_AUTH.md) for a\n  step-by-step explanation of the implementation.",
         "security": [],
         "responses": {
@@ -2700,9 +2446,7 @@
       "get": {
         "operationId": "getAuthGithubCallback",
         "summary": "GitHub Login",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "GitHub exposes the equivalent login and linking flow. It obtains primary verified email through user:email scope.\n\n### GitHub Login\n\n  `GET /auth/github` starts authorization with a `302` redirect to GitHub.\n\n  `GET /auth/github/callback` receives GitHub's authorization code and state,\n  checks the temporary browser cookie, and returns the user and token pair with\n  `200 OK` for JSON clients. Browser requests accepting `text/html` redirect to\n  `AUTH_FRONTEND_URL` (default `http://localhost:5173`) with our tokens in the URL\n  fragment. Neither endpoint requires an existing application access token or a\n  JSON body. Start the flow in a browser; GitHub supplies the callback parameters.\n\n  See [GitHub OAuth login](#github-oauth-login) for configuration, account rules,\n  and error responses, or [the strategy walkthrough](GITHUB_AUTH.md) for a\n  step-by-step explanation of the implementation.",
         "security": [],
         "responses": {
@@ -2781,9 +2525,7 @@
       "get": {
         "operationId": "getAuthGithubLinkCallback",
         "summary": "Link GitHub to the signed-in account",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "GitHub exposes the equivalent login and linking flow. It obtains primary verified email through user:email scope.\n\n### Link GitHub to the signed-in account\n\n  `POST /auth/github/link` requires `Authorization: Bearer <accessToken>` and no\n  body. It returns `200` with `{ \"authorizationUrl\": \"https://github.com/oauth2/authorize?...\" }`\n  and sets a temporary HttpOnly browser cookie. Navigate to that URL in the same\n  browser. The account comes only from the validated access token.\n\n  `GET /auth/github/link/callback` receives GitHub's `code` and `state`. It does\n  not require a Bearer header: the single-use state and browser cookie bind the\n  callback to the user who started linking. It returns `200` JSON:\n\n  ```json\n  { \"provider\": \"GITHUB\", \"providerUserId\": \"123456789012345678\" }\n  ```\n\n  Browser login and linking failures redirect to the frontend with safe\n  `oauthError` and `oauthFlow` fragment values for display. JSON requests retain\n  their normal error status and body.\n\n  For browser requests accepting `text/html`, success redirects to\n  `AUTH_FRONTEND_URL#providerLinked=github`. Linking issues no new tokens; keep the\n  existing local session. It preserves email, verification, username, password,\n  role, and avatar. GitHub email does not need to match the local email or be\n  verified because this flow attaches a proven provider identity to an already\n  authenticated local account. It requests only GitHub's `identify` scope.\n\n  - `401`: missing/invalid access token at start, deleted local account, or invalid,\n    expired, mismatched, denied, or reused callback authorization.\n  - `409`: GitHub belongs to another user, or the current user already linked a\n    different GitHub account. Each user can have one identity per provider.\n  - Linking the same identity again with a fresh authorization is idempotent.\n  - `502` / `503`: provider failure / configuration error, as with GitHub login.\n\n  `DELETE /auth/github/link` requires `Authorization: Bearer <accessToken>` and\n  returns `204 No Content`. It removes the GitHub identity from the current\n  account. A passwordless account cannot unlink its only provider until it sets a\n  password or connects another sign-in method.\n\n  Register **both** callback URLs in the GitHub developer portal. Then run\n  `npx prisma migrate deploy` and `npx prisma generate` before restarting the service.\n  The migration adds the linking state owner/purpose and provider uniqueness constraint.\n\n  Start linking from the frontend with a request, then a browser navigation:\n\n  ```js\n  const response = await fetch(`${API_URL}/auth/github/link`, {\n    method: 'POST',\n    headers: { Authorization: `Bearer ${accessToken}` },\n    credentials: 'include', // Save the temporary linking cookie across the ports.\n  });\n  const result = await response.json();\n  if (!response.ok) throw new Error(result.message);\n  window.location.assign(result.authorizationUrl);\n  ```\n\n  Use the same hostname for frontend, API, and callbacks during local testing\n  (all `localhost`, or all `127.0.0.1`). The API allows credentialed requests from\n  the two configured Vite origins. Do not put an access token or local user ID in\n  the authorization URL. Login and linking have separate cookies and purposes;\n  their callbacks are not interchangeable. Each purpose permits only the latest\n  attempt started in that browser to complete.",
         "security": [],
         "responses": {
@@ -2831,9 +2573,7 @@
       "get": {
         "operationId": "getServiceMessage",
         "summary": "Get service message",
-        "tags": [
-          "Service"
-        ],
+        "tags": ["Service"],
         "description": "Static response; does not check database or provider health.",
         "security": [],
         "responses": {
@@ -2862,9 +2602,7 @@
       "get": {
         "operationId": "searchAccounts",
         "summary": "Search accounts by username or display name",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "Public case-insensitive substring search over username and display name. The username query is trimmed and must be 1-100 characters. Results are paginated and ordered by username then ID.",
         "security": [],
         "responses": {
@@ -2881,59 +2619,44 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                      "id": {
-                        "type": "string"
-                      },
-                      "username": {
-                        "type": "string"
-                      },
-                      "displayName": {
-                        "type": "string"
-                      },
-                      "avatarUrl": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "bannerUrl": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "createdAt": {
-                        "type": "string"
-                      },
-                      "bio": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
-                        "maxLength": 190
-                      },
-                      "statusText": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
-                        "maxLength": 100
-                      },
-                      "statusIcon": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
-                        "maxLength": 50,
-                        "enum": [
-                          "IconCode",
-                          "IconCoffee",
-                          "IconMoon",
-                          "IconMusic",
-                          "IconDeviceGamepad2",
-                          null
-                        ]
-                      }
+                          "id": {
+                            "type": "string"
+                          },
+                          "username": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "avatarUrl": {
+                            "type": ["string", "null"]
+                          },
+                          "bannerUrl": {
+                            "type": ["string", "null"]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "bio": {
+                            "type": ["string", "null"],
+                            "maxLength": 190
+                          },
+                          "statusText": {
+                            "type": ["string", "null"],
+                            "maxLength": 100
+                          },
+                          "statusIcon": {
+                            "type": ["string", "null"],
+                            "maxLength": 50,
+                            "enum": [
+                              "IconCode",
+                              "IconCoffee",
+                              "IconMoon",
+                              "IconMusic",
+                              "IconDeviceGamepad2",
+                              null
+                            ]
+                          }
                         }
                       }
                     },
@@ -2966,13 +2689,23 @@
             "name": "page",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer", "minimum": 1, "maximum": 1000000, "default": 1 }
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000,
+              "default": 1
+            }
           },
           {
             "name": "limit",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 10 }
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
           }
         ]
       }
@@ -2981,9 +2714,7 @@
       "post": {
         "operationId": "setInitialPassword",
         "summary": "Set initial password",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "Passwordless accounts only; existing password or concurrent change returns 409.",
         "security": [
           {
@@ -3014,9 +2745,7 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": [
-                  "newPassword"
-                ],
+                "required": ["newPassword"],
                 "properties": {
                   "newPassword": {
                     "type": "string",
@@ -3036,9 +2765,7 @@
       "patch": {
         "operationId": "changePassword",
         "summary": "Change password",
-        "tags": [
-          "Accounts"
-        ],
+        "tags": ["Accounts"],
         "description": "Requires correct old password (403 if incorrect); passwordless account or concurrent change returns 409. Neither password endpoint revokes refresh tokens. Both use Cache-Control: no-store.",
         "security": [
           {
@@ -3072,10 +2799,7 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": [
-                  "newPassword",
-                  "oldPassword"
-                ],
+                "required": ["newPassword", "oldPassword"],
                 "properties": {
                   "newPassword": {
                     "type": "string",
@@ -3103,9 +2827,7 @@
       "post": {
         "operationId": "createFriendship",
         "summary": "Send friendship request",
-        "tags": [
-          "Social"
-        ],
+        "tags": ["Social"],
         "description": "No request body. id is the recipient user UUID. Self-request returns 400; missing recipient returns 404; any existing request in either direction, including DECLINED, returns 409. Locks both user rows in sorted order to serialize creation.",
         "security": [
           {
@@ -3143,11 +2865,7 @@
                     },
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "PENDING",
-                        "ACCEPTED",
-                        "DECLINED"
-                      ]
+                      "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                     },
                     "createdAt": {
                       "type": "string",
@@ -3172,22 +2890,13 @@
                           "type": "string"
                         },
                         "displayName": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "avatarUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "bannerUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         }
                       }
                     },
@@ -3210,22 +2919,13 @@
                           "type": "string"
                         },
                         "displayName": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "avatarUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "bannerUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         }
                       }
                     }
@@ -3264,9 +2964,7 @@
       "get": {
         "operationId": "listFriends",
         "summary": "List accepted friends",
-        "tags": [
-          "Social"
-        ],
+        "tags": ["Social"],
         "description": "No pagination or guaranteed ordering. Returns a plain JSON array.",
         "security": [
           {
@@ -3299,30 +2997,17 @@
                         "type": "string"
                       },
                       "displayName": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
+                        "type": ["string", "null"]
                       },
                       "avatarUrl": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
+                        "type": ["string", "null"]
                       },
                       "bannerUrl": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
+                        "type": ["string", "null"]
                       },
                       "status": {
                         "type": "string",
-                        "enum": [
-                          "PENDING",
-                          "ACCEPTED",
-                          "DECLINED"
-                        ]
+                        "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                       }
                     }
                   }
@@ -3340,9 +3025,7 @@
       "get": {
         "operationId": "listIncomingRequests",
         "summary": "List pending incoming requests",
-        "tags": [
-          "Social"
-        ],
+        "tags": ["Social"],
         "description": "No pagination or guaranteed ordering. Returns a plain JSON array.",
         "security": [
           {
@@ -3382,11 +3065,7 @@
                       },
                       "status": {
                         "type": "string",
-                        "enum": [
-                          "PENDING",
-                          "ACCEPTED",
-                          "DECLINED"
-                        ]
+                        "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                       },
                       "createdAt": {
                         "type": "string",
@@ -3411,30 +3090,17 @@
                             "type": "string"
                           },
                           "displayName": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "avatarUrl": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "bannerUrl": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "status": {
                             "type": "string",
-                            "enum": [
-                              "PENDING",
-                              "ACCEPTED",
-                              "DECLINED"
-                            ]
+                            "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                           }
                         }
                       },
@@ -3457,30 +3123,17 @@
                             "type": "string"
                           },
                           "displayName": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "avatarUrl": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "bannerUrl": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "status": {
                             "type": "string",
-                            "enum": [
-                              "PENDING",
-                              "ACCEPTED",
-                              "DECLINED"
-                            ]
+                            "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                           }
                         }
                       }
@@ -3500,9 +3153,7 @@
       "get": {
         "operationId": "listSentRequests",
         "summary": "List pending outgoing requests",
-        "tags": [
-          "Social"
-        ],
+        "tags": ["Social"],
         "description": "No pagination or guaranteed ordering. Returns a plain JSON array.",
         "security": [
           {
@@ -3542,11 +3193,7 @@
                       },
                       "status": {
                         "type": "string",
-                        "enum": [
-                          "PENDING",
-                          "ACCEPTED",
-                          "DECLINED"
-                        ]
+                        "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                       },
                       "createdAt": {
                         "type": "string",
@@ -3571,30 +3218,17 @@
                             "type": "string"
                           },
                           "displayName": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "avatarUrl": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "bannerUrl": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "status": {
                             "type": "string",
-                            "enum": [
-                              "PENDING",
-                              "ACCEPTED",
-                              "DECLINED"
-                            ]
+                            "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                           }
                         }
                       },
@@ -3617,30 +3251,17 @@
                             "type": "string"
                           },
                           "displayName": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "avatarUrl": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "bannerUrl": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "status": {
                             "type": "string",
-                            "enum": [
-                              "PENDING",
-                              "ACCEPTED",
-                              "DECLINED"
-                            ]
+                            "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                           }
                         }
                       }
@@ -3660,9 +3281,7 @@
       "patch": {
         "operationId": "acceptFriendship",
         "summary": "Accept friendship request",
-        "tags": [
-          "Social"
-        ],
+        "tags": ["Social"],
         "description": "No body. Only addressee can respond (403 otherwise). Missing friendship returns 404. Request must still be PENDING (400 otherwise). Returns updated friendship.",
         "security": [
           {
@@ -3700,11 +3319,7 @@
                     },
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "PENDING",
-                        "ACCEPTED",
-                        "DECLINED"
-                      ]
+                      "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                     },
                     "createdAt": {
                       "type": "string",
@@ -3729,30 +3344,17 @@
                           "type": "string"
                         },
                         "displayName": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "avatarUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "bannerUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "status": {
                           "type": "string",
-                          "enum": [
-                            "PENDING",
-                            "ACCEPTED",
-                            "DECLINED"
-                          ]
+                          "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                         }
                       }
                     },
@@ -3775,30 +3377,17 @@
                           "type": "string"
                         },
                         "displayName": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "avatarUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "bannerUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "status": {
                           "type": "string",
-                          "enum": [
-                            "PENDING",
-                            "ACCEPTED",
-                            "DECLINED"
-                          ]
+                          "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                         }
                       }
                     }
@@ -3837,9 +3426,7 @@
       "patch": {
         "operationId": "rejectFriendship",
         "summary": "Reject friendship request",
-        "tags": [
-          "Social"
-        ],
+        "tags": ["Social"],
         "description": "No body. Only addressee can respond (403 otherwise). Missing friendship returns 404. Request must still be PENDING (400 otherwise). Returns updated friendship.",
         "security": [
           {
@@ -3877,11 +3464,7 @@
                     },
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "PENDING",
-                        "ACCEPTED",
-                        "DECLINED"
-                      ]
+                      "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                     },
                     "createdAt": {
                       "type": "string",
@@ -3906,30 +3489,17 @@
                           "type": "string"
                         },
                         "displayName": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "avatarUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "bannerUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "status": {
                           "type": "string",
-                          "enum": [
-                            "PENDING",
-                            "ACCEPTED",
-                            "DECLINED"
-                          ]
+                          "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                         }
                       }
                     },
@@ -3952,30 +3522,17 @@
                           "type": "string"
                         },
                         "displayName": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "avatarUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "bannerUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "status": {
                           "type": "string",
-                          "enum": [
-                            "PENDING",
-                            "ACCEPTED",
-                            "DECLINED"
-                          ]
+                          "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                         }
                       }
                     }
@@ -4014,9 +3571,7 @@
       "delete": {
         "operationId": "deleteFriendship",
         "summary": "Delete friendship or request",
-        "tags": [
-          "Social"
-        ],
+        "tags": ["Social"],
         "description": "No body. Either participant can delete; nonparticipants receive 403. Returns deleted friendship JSON, rather than an empty response.",
         "security": [
           {
@@ -4054,11 +3609,7 @@
                     },
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "PENDING",
-                        "ACCEPTED",
-                        "DECLINED"
-                      ]
+                      "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                     },
                     "createdAt": {
                       "type": "string",
@@ -4083,30 +3634,17 @@
                           "type": "string"
                         },
                         "displayName": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "avatarUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "bannerUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "status": {
                           "type": "string",
-                          "enum": [
-                            "PENDING",
-                            "ACCEPTED",
-                            "DECLINED"
-                          ]
+                          "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                         }
                       }
                     },
@@ -4129,30 +3667,17 @@
                           "type": "string"
                         },
                         "displayName": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "avatarUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "bannerUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "status": {
                           "type": "string",
-                          "enum": [
-                            "PENDING",
-                            "ACCEPTED",
-                            "DECLINED"
-                          ]
+                          "enum": ["PENDING", "ACCEPTED", "DECLINED"]
                         }
                       }
                     }
@@ -4245,10 +3770,7 @@
     "schemas": {
       "ImageRemovalError": {
         "type": "object",
-        "required": [
-          "statusCode",
-          "message"
-        ],
+        "required": ["statusCode", "message"],
         "properties": {
           "statusCode": {
             "type": "integer"

@@ -22,12 +22,12 @@ Sending, history, pagination, idempotent retries, attachments, edits, deletes an
 
 `src/feed/feed.constants.ts` holds two fixed UUIDs, one for the group ("Nook Feed") and one for its `general` channel.
 
-| Step | Where | When |
-| --- | --- | --- |
-| Create group and channel | `FeedService.ensureFeed` | App bootstrap, and before any join. A failure is not cached, so it retries. |
-| Add existing users | `FeedService.backfillMembers` | App bootstrap, in batches of 1000 |
-| Add new users | `UserEventsConsumer.applyEvent` | On `user.created` and `user.updated` |
-| Add the current caller | `GET /chat/feed` and `GET /chat/feed/users/:userId/posts` | Lazy safety net |
+| Step                     | Where                                                     | When                                                                        |
+| ------------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Create group and channel | `FeedService.ensureFeed`                                  | App bootstrap, and before any join. A failure is not cached, so it retries. |
+| Add existing users       | `FeedService.backfillMembers`                             | App bootstrap, in batches of 1000                                           |
+| Add new users            | `UserEventsConsumer.applyEvent`                           | On `user.created` and `user.updated`                                        |
+| Add the current caller   | `GET /chat/feed` and `GET /chat/feed/users/:userId/posts` | Lazy safety net                                                             |
 
 The consumer can start before bootstrap finishes, so every join waits for the feed rows to exist. Otherwise an early event would fail on the foreign key and requeue. Deleted users are not joined. A failure during bootstrap is logged and does not stop chat.
 
@@ -39,12 +39,12 @@ The consumer can start before bootstrap finishes, so every join waits for the fe
 
 ## Client
 
-| File | Role |
-| --- | --- |
-| `components/app/feed/feed-view.tsx` | `/feed` page, history, socket, "Load older posts" |
-| `components/app/feed/feed-composer.tsx` | Text, photo and video upload, progress, Ctrl+Enter |
-| `components/app/feed/post-card.tsx` | One post as a card, with edit and delete for the author |
-| `components/app/feed/profile-posts.tsx` | The Posts tab on a profile |
+| File                                    | Role                                                    |
+| --------------------------------------- | ------------------------------------------------------- |
+| `components/app/feed/feed-view.tsx`     | `/feed` page, history, socket, "Load older posts"       |
+| `components/app/feed/feed-composer.tsx` | Text, photo and video upload, progress, Ctrl+Enter      |
+| `components/app/feed/post-card.tsx`     | One post as a card, with edit and delete for the author |
+| `components/app/feed/profile-posts.tsx` | The Posts tab on a profile                              |
 
 The feed shares its query key shape with the chat workspace.
 

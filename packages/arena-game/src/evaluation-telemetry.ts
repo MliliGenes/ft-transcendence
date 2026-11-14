@@ -1,4 +1,5 @@
-export type EvaluationTelemetryOutcome = "completed" | "failed" | "infrastructure_error";
+export type EvaluationTelemetryOutcome =
+  'completed' | 'failed' | 'infrastructure_error';
 
 export interface EvaluationTelemetryObservation {
   evaluationId: string;
@@ -53,10 +54,13 @@ export class InMemoryEvaluationTelemetry implements EvaluationTelemetry {
       current.evaluations += 1;
       current.queueWaitMs += observation.queueWaitMs;
       current.executionMs += observation.executionMs;
-      if (observation.outcome === "infrastructure_error") current.infrastructureErrors += 1;
+      if (observation.outcome === 'infrastructure_error')
+        current.infrastructureErrors += 1;
     }
     return {
-      observations: this.observations.map((observation) => ({ ...observation })),
+      observations: this.observations.map((observation) => ({
+        ...observation,
+      })),
       providers: structuredClone(providers),
     };
   }

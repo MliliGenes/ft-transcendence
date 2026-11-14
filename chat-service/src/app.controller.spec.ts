@@ -18,7 +18,8 @@ describe('AppController', () => {
   describe('root', () => {
     it('returns the service status message', () => {
       expect(appController.getHello()).toEqual({
-        message: 'AM I THE BEST CAUSE I AM SAAD OR AM I SAD CAUSE I AM THE BEST?',
+        message:
+          'AM I THE BEST CAUSE I AM SAAD OR AM I SAD CAUSE I AM THE BEST?',
       });
     });
   });

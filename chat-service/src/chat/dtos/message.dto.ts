@@ -24,9 +24,7 @@ export class GameChallengeDto {
 }
 
 export class SendMessageDto {
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim() : value,
-  )
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @Length(1, 2000)
   content!: string;

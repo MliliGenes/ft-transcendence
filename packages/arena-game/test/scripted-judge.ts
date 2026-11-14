@@ -9,7 +9,7 @@ import {
   type SealedGroupResult,
   type SupportedLanguage,
   type VisibleTest,
-} from "../src/judge.js";
+} from '../src/judge.js';
 
 export type ScriptPlan =
   | { score: 100 | 0 }
@@ -35,7 +35,7 @@ export class ScriptedJudge implements GameJudge {
   evalCalls = 0;
   lastRunTests: VisibleTest[] = [];
   lastRunEntrypoint: string | undefined;
-  lastSealedGroups: SealedEvaluationRequest["groups"] = [];
+  lastSealedGroups: SealedEvaluationRequest['groups'] = [];
 
   constructor(plan: ScriptPlan[] = [{ score: 100 }]) {
     this.plan = [...plan];
@@ -59,13 +59,13 @@ export class ScriptedJudge implements GameJudge {
 
   releaseRun(): void {
     const resume = this.runGate.shift();
-    if (!resume) throw new Error("no parked run");
+    if (!resume) throw new Error('no parked run');
     resume();
   }
 
   release(v: ScriptPlan): void {
     const settle = this.parked.shift();
-    if (!settle) throw new Error("nothing parked");
+    if (!settle) throw new Error('nothing parked');
     settle(v);
   }
 
@@ -103,30 +103,54 @@ export class ScriptedJudge implements GameJudge {
     if (this.queuedRunStatus) {
       const status = this.queuedRunStatus;
       this.queuedRunStatus = null;
-      return tests.map((t, i) => ({ id: t.id, passed: false, status, output: "", runtimeMs: 1 + i }));
+      return tests.map((t, i) => ({
+        id: t.id,
+        passed: false,
+        status,
+        output: '',
+        runtimeMs: 1 + i,
+      }));
     }
-    return tests.map((t, i) => ({ id: t.id, passed: true, status: "accepted" as const, output: t.expected, runtimeMs: 1 + i }));
+    return tests.map((t, i) => ({
+      id: t.id,
+      passed: true,
+      status: 'accepted' as const,
+      output: t.expected,
+      runtimeMs: 1 + i,
+    }));
   }
 
-  async evaluateSealed(request: SealedEvaluationRequest): Promise<{ groups: SealedGroupResult[] }> {
+  async evaluateSealed(
+    request: SealedEvaluationRequest,
+  ): Promise<{ groups: SealedGroupResult[] }> {
     this.evalCalls += 1;
     this.lastSealedGroups = request.groups;
     const next = this.plan.shift() ?? { score: 100 };
-    if (typeof next === "object" && "defer" in next) {
-      const v = await new Promise<ScriptPlan>((resolve) => this.parked.push(resolve));
+    if (typeof next === 'object' && 'defer' in next) {
+      const v = await new Promise<ScriptPlan>((resolve) =>
+        this.parked.push(resolve),
+      );
       return this.apply(request, v);
     }
     return this.apply(request, next);
   }
 
-  private apply(request: SealedEvaluationRequest, next: ScriptPlan): { groups: SealedGroupResult[] } {
-    if ("infra" in next) throw new JudgeInfraError(next.infra);
-    if ("verdict" in next) {
+  private apply(
+    request: SealedEvaluationRequest,
+    next: ScriptPlan,
+  ): { groups: SealedGroupResult[] } {
+    if ('infra' in next) throw new JudgeInfraError(next.infra);
+    if ('verdict' in next) {
       return {
         groups: request.groups.map((g) => ({
           name: g.name,
           weight: g.weight,
-          results: g.tests.map((t) => ({ id: t.id, passed: false, status: next.verdict, runtimeMs: 1 })),
+          results: g.tests.map((t) => ({
+            id: t.id,
+            passed: false,
+            status: next.verdict,
+            runtimeMs: 1,
+          })),
         })),
       };
     }
@@ -134,15 +158,17 @@ export class ScriptedJudge implements GameJudge {
     // computed by the engine through arena-model, never here.
     const total = request.groups.reduce((s, g) => s + g.tests.length, 0);
     const flags: boolean[] =
-      "passes" in next
+      'passes' in next
         ? next.passes
-        : "score" in next
+        : 'score' in next
           ? request.groups.flatMap((g) => g.tests.map(() => next.score === 100))
           : (() => {
-              throw new Error("parked plan reached apply without release");
+              throw new Error('parked plan reached apply without release');
             })();
     if (flags.length !== total) {
-      throw new Error(`pass pattern length ${flags.length} mismatches ${total} tests`);
+      throw new Error(
+        `pass pattern length ${flags.length} mismatches ${total} tests`,
+      );
     }
     let i = 0;
     return {
@@ -151,7 +177,12 @@ export class ScriptedJudge implements GameJudge {
         weight: g.weight,
         results: g.tests.map((t) => {
           const passed = flags[i++]!;
-          return { id: t.id, passed, status: "accepted" as const, runtimeMs: 1 };
+          return {
+            id: t.id,
+            passed,
+            status: 'accepted' as const,
+            runtimeMs: 1,
+          };
         }),
       })),
     };

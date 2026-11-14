@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
 import {
   environmentManager,
   QueryClient,
   QueryClientProvider,
-} from "@tanstack/react-query";
-import type { ReactNode } from "react";
-import { ThemeProvider } from "next-themes";
-import { AuthProvider } from "@/components/auth/auth-provider";
-import { OAuthReturnHandler } from "@/components/auth/oauth-return-handler";
+} from '@tanstack/react-query';
+import type { ReactNode } from 'react';
+import { ThemeProvider } from 'next-themes';
+import { AuthProvider } from '@/components/auth/auth-provider';
+import { OAuthReturnHandler } from '@/components/auth/oauth-return-handler';
 
 function makeQueryClient() {
   return new QueryClient({
@@ -30,7 +30,12 @@ function getQueryClient() {
 
 export default function Providers({ children }: { children: ReactNode }) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
       <QueryClientProvider client={getQueryClient()}>
         <AuthProvider>
           <OAuthReturnHandler />

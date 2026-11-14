@@ -1,6 +1,6 @@
-import type { TeamChatClient } from "./chat";
-import type { CollabClient } from "./collab";
-import type { ArenaConnectionOptions } from "./types";
+import type { TeamChatClient } from './chat';
+import type { CollabClient } from './collab';
+import type { ArenaConnectionOptions } from './types';
 
 export type LiveClientConfig = ArenaConnectionOptions;
 
@@ -43,13 +43,13 @@ interface ScopeIdentity {
 
 const defaultFactories: SidecarFactories = {
   createCollab: async (config) => {
-    const { CollabClient } = await import("./collab");
+    const { CollabClient } = await import('./collab');
     const client = new CollabClient({ ...config, displayName: config.userId });
     await client.connect();
     return client;
   },
   createChat: async (config) => {
-    const { TeamChatClient } = await import("./chat");
+    const { TeamChatClient } = await import('./chat');
     const client = new TeamChatClient(config);
     await client.connect();
     return client;
@@ -57,7 +57,13 @@ const defaultFactories: SidecarFactories = {
 };
 
 function configKey(config: LiveClientConfig): string {
-  return JSON.stringify([config.baseUrl, config.userId, config.matchId, config.token, config.socketPath]);
+  return JSON.stringify([
+    config.baseUrl,
+    config.userId,
+    config.matchId,
+    config.token,
+    config.socketPath,
+  ]);
 }
 
 function disconnect(client: DisposableClient): void {
@@ -69,14 +75,19 @@ function disconnect(client: DisposableClient): void {
 }
 
 function sameScope(left: ScopeIdentity, right: ScopeIdentity): boolean {
-  return Object.is(left.transportKey, right.transportKey) && left.matchId === right.matchId;
+  return (
+    Object.is(left.transportKey, right.transportKey) &&
+    left.matchId === right.matchId
+  );
 }
 
 function matchId(scope: SidecarScope): string | null {
   return scope.chatConfig?.matchId ?? scope.collabConfig?.matchId ?? null;
 }
 
-export function createArenaSidecarLifecycle(factories: SidecarFactories = defaultFactories): ArenaSidecarLifecycle {
+export function createArenaSidecarLifecycle(
+  factories: SidecarFactories = defaultFactories,
+): ArenaSidecarLifecycle {
   let disposed = false;
   let requestVersion = 0;
   let identity: ScopeIdentity | null = null;
@@ -160,7 +171,10 @@ export function createArenaSidecarLifecycle(factories: SidecarFactories = defaul
     return pending;
   }
 
-  function ensureCollab(config: LiveClientConfig, key: string): Promise<CollabClient | null> {
+  function ensureCollab(
+    config: LiveClientConfig,
+    key: string,
+  ): Promise<CollabClient | null> {
     if (collab && collabKey === key) return Promise.resolve(collab);
     if (collabPending?.key === key) return collabPending.promise;
     const pending = start(factories.createCollab, config, key);
@@ -168,7 +182,10 @@ export function createArenaSidecarLifecycle(factories: SidecarFactories = defaul
     return pending.promise;
   }
 
-  function ensureChat(config: LiveClientConfig, key: string): Promise<TeamChatClient | null> {
+  function ensureChat(
+    config: LiveClientConfig,
+    key: string,
+  ): Promise<TeamChatClient | null> {
     if (chat && chatKey === key) return Promise.resolve(chat);
     if (chatPending?.key === key) return chatPending.promise;
     const pending = start(factories.createChat, config, key);
@@ -179,7 +196,10 @@ export function createArenaSidecarLifecycle(factories: SidecarFactories = defaul
   async function sync(scope: SidecarScope): Promise<SidecarState | null> {
     disposed = false;
     const version = ++requestVersion;
-    const nextIdentity = { transportKey: scope.transportKey, matchId: matchId(scope) } satisfies ScopeIdentity;
+    const nextIdentity = {
+      transportKey: scope.transportKey,
+      matchId: matchId(scope),
+    } satisfies ScopeIdentity;
 
     if (!identity || !sameScope(identity, nextIdentity)) {
       clearCollab();
@@ -187,19 +207,28 @@ export function createArenaSidecarLifecycle(factories: SidecarFactories = defaul
       identity = nextIdentity;
     }
 
-    const desiredCollabKey = scope.collabConfig ? `${scope.round}:${configKey(scope.collabConfig)}` : null;
+    const desiredCollabKey = scope.collabConfig
+      ? `${scope.round}:${configKey(scope.collabConfig)}`
+      : null;
     if (collabKey !== desiredCollabKey) clearCollab();
 
-    const desiredChatKey = scope.chatConfig ? configKey(scope.chatConfig) : null;
+    const desiredChatKey = scope.chatConfig
+      ? configKey(scope.chatConfig)
+      : null;
     if (chatKey !== desiredChatKey) clearChat();
 
     const collabPromise = scope.collabConfig
       ? ensureCollab(scope.collabConfig, desiredCollabKey!)
       : Promise.resolve(null);
-    const chatPromise = scope.chatConfig ? ensureChat(scope.chatConfig, desiredChatKey!) : Promise.resolve(null);
+    const chatPromise = scope.chatConfig
+      ? ensureChat(scope.chatConfig, desiredChatKey!)
+      : Promise.resolve(null);
 
     try {
-      const [nextCollab, nextChat] = await Promise.all([collabPromise, chatPromise]);
+      const [nextCollab, nextChat] = await Promise.all([
+        collabPromise,
+        chatPromise,
+      ]);
       if (version !== requestVersion || disposed) return null;
 
       if (nextCollab) {

@@ -1,8 +1,14 @@
-"use client";
+'use client';
 
-import { ErrorPage, errorDigest } from "@/components/error-page";
+import { ErrorPage, errorDigest } from '@/components/error-page';
 
-export default function AppError({ error, retry }: { error: unknown; retry: () => void }) {
+export default function AppError({
+  error,
+  retry,
+}: {
+  error: unknown;
+  retry: () => void;
+}) {
   return (
     <ErrorPage
       code="500"

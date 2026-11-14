@@ -10,16 +10,16 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "{{ $labels.service }} is not responding"
-          description: "The health probe for {{ $labels.service }} has failed for over a minute."
+          summary: '{{ $labels.service }} is not responding'
+          description: 'The health probe for {{ $labels.service }} has failed for over a minute.'
 
       - alert: ContainerRestarting
         expr: changes(container_start_time_seconds{container_label_com_docker_compose_service!=""}[15m]) > 3
         labels:
           severity: warning
         annotations:
-          summary: "{{ $labels.container_label_com_docker_compose_service }} keeps restarting"
-          description: "The container restarted more than 3 times in 15 minutes."
+          summary: '{{ $labels.container_label_com_docker_compose_service }} keeps restarting'
+          description: 'The container restarted more than 3 times in 15 minutes.'
 
   - name: resources
     rules:
@@ -41,8 +41,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "{{ $labels.container_label_com_docker_compose_service }} memory is high"
-          description: "Working-set memory has stayed above the threshold for 5 minutes."
+          summary: '{{ $labels.container_label_com_docker_compose_service }} memory is high'
+          description: 'Working-set memory has stayed above the threshold for 5 minutes.'
 
   - name: databases
     rules:
@@ -52,8 +52,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "PostgreSQL {{ $labels.database }} is unreachable"
-          description: "The exporter cannot connect to {{ $labels.database }}."
+          summary: 'PostgreSQL {{ $labels.database }} is unreachable'
+          description: 'The exporter cannot connect to {{ $labels.database }}.'
 
       - alert: PostgresTooManyConnections
         expr: |
@@ -63,8 +63,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "PostgreSQL {{ $labels.database }} is near its connection limit"
-          description: "More than 80% of max_connections have been in use for 5 minutes."
+          summary: 'PostgreSQL {{ $labels.database }} is near its connection limit'
+          description: 'More than 80% of max_connections have been in use for 5 minutes.'
 
   - name: broker
     rules:
@@ -74,8 +74,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "RabbitMQ queue {{ $labels.queue }} is backing up"
-          description: "More than 100 messages have been waiting for 5 minutes; a consumer may be down."
+          summary: 'RabbitMQ queue {{ $labels.queue }} is backing up'
+          description: 'More than 100 messages have been waiting for 5 minutes; a consumer may be down.'
 
       - alert: RabbitMQUnackedHigh
         expr: sum by (queue) (rabbitmq_detailed_queue_messages_unacked) > 50
@@ -83,5 +83,5 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "RabbitMQ queue {{ $labels.queue }} has many unacknowledged messages"
-          description: "Messages were delivered but not acknowledged for 5 minutes; a consumer may be stuck."
+          summary: 'RabbitMQ queue {{ $labels.queue }} has many unacknowledged messages'
+          description: 'Messages were delivered but not acknowledged for 5 minutes; a consumer may be stuck.'

@@ -67,7 +67,9 @@ export class ChatService {
       ([key]) => key.toLowerCase() === 'content-type',
     )?.[1];
     const safeContentType =
-      typeof contentType === 'string' ? contentType.split(';')[0].trim().toLowerCase() : '';
+      typeof contentType === 'string'
+        ? contentType.split(';')[0].trim().toLowerCase()
+        : '';
     return {
       contentType: safeContentType || 'application/octet-stream',
       previewUrl: safeContentType
@@ -91,7 +93,11 @@ export class ChatService {
     }
     await this.getAccessibleConversation(userId, conversationId, authorization);
     const message = await this.prisma.message.findFirst({
-      where: { conversationId, deletedAt: null, attachments: { has: objectKey } },
+      where: {
+        conversationId,
+        deletedAt: null,
+        attachments: { has: objectKey },
+      },
       select: { id: true },
     });
     if (!message) throw new NotFoundException('Attachment not found');
@@ -128,7 +134,12 @@ export class ChatService {
       ...(_query.before ? { cursor: { id: _query.before }, skip: 1 } : {}),
       include: {
         author: {
-          select: { id: true, username: true, displayName: true, avatarUrl: true },
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+          },
         },
       },
     });
@@ -193,7 +204,10 @@ export class ChatService {
       throw new BadRequestException('Cannot create a DM with yourself.');
     }
 
-    await this.userProfiles.ensureCanContact(otherUserId.toLowerCase(), authorization);
+    await this.userProfiles.ensureCanContact(
+      otherUserId.toLowerCase(),
+      authorization,
+    );
     await this.userProfiles.ensureActiveUsers([otherUserId.toLowerCase()]);
 
     const existingConversation = await this.prisma.conversation.findUnique({
@@ -227,10 +241,20 @@ export class ChatService {
       },
       include: {
         dmUserA: {
-          select: { id: true, username: true, displayName: true, avatarUrl: true },
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+          },
         },
         dmUserB: {
-          select: { id: true, username: true, displayName: true, avatarUrl: true },
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+          },
         },
         readStates: {
           where: { userId },
@@ -240,9 +264,7 @@ export class ChatService {
     });
 
     const lastReadMessageIds = conversations.flatMap(({ readStates }) =>
-      readStates[0]?.lastReadMessageId
-        ? [readStates[0].lastReadMessageId]
-        : [],
+      readStates[0]?.lastReadMessageId ? [readStates[0].lastReadMessageId] : [],
     );
 
     const lastReadMessages = await this.prisma.message.findMany({
@@ -314,7 +336,12 @@ export class ChatService {
       },
       include: {
         author: {
-          select: { id: true, username: true, displayName: true, avatarUrl: true },
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+          },
         },
       },
     });
@@ -343,11 +370,7 @@ export class ChatService {
       // The Game service owns the room and its membership, so it decides
       // whether this caller may announce this room here. Nothing is written
       // before that answer, so a refusal leaves no message and no link.
-      await this.assertChallengeAuthorized(
-        userId,
-        roomCode,
-        authorization,
-      );
+      await this.assertChallengeAuthorized(userId, roomCode, authorization);
     }
 
     const messageData = {
@@ -364,16 +387,17 @@ export class ChatService {
     // transaction: a room code that another conversation owns is a conflict,
     // and this message is rolled back with it.
     const newMessage = roomCode
-      ? await this.createChallengeMessage(
-          messageData,
-          roomCode,
-          conversationId,
-        )
+      ? await this.createChallengeMessage(messageData, roomCode, conversationId)
       : await this.prisma.message.create({
           data: messageData,
           include: {
             author: {
-              select: { id: true, username: true, displayName: true, avatarUrl: true },
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatarUrl: true,
+              },
             },
           },
         });
@@ -383,7 +407,9 @@ export class ChatService {
         ? [conversation.dmUserAId, conversation.dmUserBId].filter(
             (id): id is string => id !== null,
           )
-        : (conversation.group?.members.map(({ userId: memberId }) => memberId) ?? []);
+        : (conversation.group?.members.map(
+            ({ userId: memberId }) => memberId,
+          ) ?? []);
 
     this.chatGateway.broadcastMessageCreated(recipientIds, newMessage);
 
@@ -410,9 +436,7 @@ export class ChatService {
       authorization,
     );
     if (!allowed) {
-      throw new ForbiddenException(
-        'You may not announce that Code Arena room',
-      );
+      throw new ForbiddenException('You may not announce that Code Arena room');
     }
   }
 
@@ -439,7 +463,12 @@ export class ChatService {
           data: messageData,
           include: {
             author: {
-              select: { id: true, username: true, displayName: true, avatarUrl: true },
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatarUrl: true,
+              },
             },
           },
         });
@@ -510,19 +539,14 @@ export class ChatService {
           ? conversation.dmUserBId
           : conversation.dmUserAId;
       if (!otherUserId) throw new NotFoundException('Conversation not found');
-      if (!authorization)
-        throw new NotFoundException('Conversation not found');
+      if (!authorization) throw new NotFoundException('Conversation not found');
       await this.userProfiles.ensureCanContact(otherUserId, authorization);
     }
 
     return conversation;
   }
 
-  async editMessage(
-    userId: string,
-    messageId: string,
-    body: EditMessageDto,
-  ) {
+  async editMessage(userId: string, messageId: string, body: EditMessageDto) {
     const result = await this.prisma.message.updateMany({
       where: {
         id: messageId,
@@ -544,7 +568,12 @@ export class ChatService {
       where: { id: messageId },
       include: {
         author: {
-          select: { id: true, username: true, displayName: true, avatarUrl: true },
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+          },
         },
       },
     });

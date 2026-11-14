@@ -25,9 +25,16 @@ import { RabbitMqEventsService } from '../events/rabbitmq-events.service.js';
 import type { UpdateAccountDto } from './dto/update-account.dto.js';
 
 import type { PaginationDto } from './dto/pagination.dto.js';
-import type { AccountSearchDto, JoinedWithin } from './dto/account-search.dto.js';
+import type {
+  AccountSearchDto,
+  JoinedWithin,
+} from './dto/account-search.dto.js';
 
-const JOINED_WITHIN_DAYS: Record<JoinedWithin, number> = { '7d': 7, '30d': 30, '365d': 365 };
+const JOINED_WITHIN_DAYS: Record<JoinedWithin, number> = {
+  '7d': 7,
+  '30d': 30,
+  '365d': 365,
+};
 
 // Public profile fields shared with other services; private details stay in /me.
 const publicProfileSelect = {
@@ -133,14 +140,22 @@ export class AccountsService {
     }
     if (joinedWithin) {
       const days = JOINED_WITHIN_DAYS[joinedWithin];
-      conditions.push({ createdAt: { gte: new Date(Date.now() - days * 86_400_000) } });
+      conditions.push({
+        createdAt: { gte: new Date(Date.now() - days * 86_400_000) },
+      });
     }
-    if (hasStatus === true) conditions.push({ NOT: [{ statusText: null }, { statusText: '' }] });
-    if (hasStatus === false) conditions.push({ OR: [{ statusText: null }, { statusText: '' }] });
+    if (hasStatus === true)
+      conditions.push({ NOT: [{ statusText: null }, { statusText: '' }] });
+    if (hasStatus === false)
+      conditions.push({ OR: [{ statusText: null }, { statusText: '' }] });
     if (hasBio === true) conditions.push({ NOT: [{ bio: null }, { bio: '' }] });
     if (hasBio === false) conditions.push({ OR: [{ bio: null }, { bio: '' }] });
     const where: Prisma.UserWhereInput =
-      conditions.length === 0 ? {} : conditions.length === 1 ? conditions[0] : { AND: conditions };
+      conditions.length === 0
+        ? {}
+        : conditions.length === 1
+          ? conditions[0]
+          : { AND: conditions };
 
     // displayName is optional, so put members without one at the end.
     const primarySort: Prisma.UserOrderByWithRelationInput =

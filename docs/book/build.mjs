@@ -23,8 +23,18 @@ mkdirSync(DIST, { recursive: true });
 const rd = (p) => readFileSync(join(ROOT, p), 'utf8');
 const rdJson = (p) => JSON.parse(rd(p));
 const esc = (s) =>
-  String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const git = (a) => { try { return execSync(`git ${a}`, { cwd: ROOT }).toString().trim(); } catch { return 'unknown'; } };
+  String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+const git = (a) => {
+  try {
+    return execSync(`git ${a}`, { cwd: ROOT }).toString().trim();
+  } catch {
+    return 'unknown';
+  }
+};
 
 // ---------------------------------------------------------------- markdown
 let docDir = ROOT;
@@ -34,12 +44,17 @@ marked.use({
     // Relative links point at files that do not exist in a PDF: keep the text only.
     link({ href, title, tokens }) {
       const text = this.parser.parseInline(tokens);
-      return /^https?:/.test(href) ? `<a href="${esc(href)}">${text}</a>` : text;
+      return /^https?:/.test(href)
+        ? `<a href="${esc(href)}">${text}</a>`
+        : text;
     },
     image({ href, text }) {
-      if (/^https?:/.test(href)) return `<img src="${esc(href)}" alt="${esc(text)}">`;
+      if (/^https?:/.test(href))
+        return `<img src="${esc(href)}" alt="${esc(text)}">`;
       const p = resolve(docDir, decodeURI(href));
-      return existsSync(p) ? `<img src="${pathToFileURL(p).href}" alt="${esc(text)}">` : '';
+      return existsSync(p)
+        ? `<img src="${pathToFileURL(p).href}" alt="${esc(text)}">`
+        : '';
     },
   },
 });
@@ -101,13 +116,17 @@ function part(title, intro = '') {
   const id = `p${++seq}`;
   toc.push({ level: 1, id, title });
   curPart = { id, title, chapters: [] };
-  parts.push(`<section class="part"><h1 id="${id}">${esc(title)}</h1><p class="part-intro">${esc(intro)}</p></section>`);
+  parts.push(
+    `<section class="part"><h1 id="${id}">${esc(title)}</h1><p class="part-intro">${esc(intro)}</p></section>`,
+  );
 }
 function chapter(title, html) {
   const id = `c${++seq}`;
   chapterNo += 1;
   toc.push({ level: 2, id, title: `${chapterNo}. ${title}` });
-  parts.push(`<section class="chapter"><h2 id="${id}"><span class="no">${chapterNo}</span>${esc(title)}</h2>${html}</section>`);
+  parts.push(
+    `<section class="chapter"><h2 id="${id}"><span class="no">${chapterNo}</span>${esc(title)}</h2>${html}</section>`,
+  );
 }
 const docChapter = (title, file, transform = (t) => t) =>
   chapter(title, mdToHtml(bodyOf(transform(rd(file))), file));
@@ -127,9 +146,12 @@ const chatApi = rdJson('docs/api/chat-service.openapi.json');
 const HEAD = git('rev-parse --short HEAD');
 const BRANCH = git('rev-parse --abbrev-ref HEAD');
 const uaSourceCommit = uaMeta.gitCommitHash || '';
-const uaMatchesHead = Boolean(uaSourceCommit)
-  && (uaSourceCommit.startsWith(HEAD) || HEAD.startsWith(uaSourceCommit));
-const uaFreshness = uaMatchesHead ? 'current at repository HEAD' : 'stale snapshot';
+const uaMatchesHead =
+  Boolean(uaSourceCommit) &&
+  (uaSourceCommit.startsWith(HEAD) || HEAD.startsWith(uaSourceCommit));
+const uaFreshness = uaMatchesHead
+  ? 'current at repository HEAD'
+  : 'stale snapshot';
 const origin = git('remote get-url origin')
   .replace(/^git@github\.com:/, 'https://github.com/')
   .replace(/^ssh:\/\/git@github\.com\//, 'https://github.com/')
@@ -145,7 +167,8 @@ const excluded = (p = '') => /\.scratch|\.keys|next-env\.d\.ts|\.pem$/.test(p);
 const uaNodes = ua.nodes.filter((n) => !excluded(n.filePath));
 const uaById = new Map(uaNodes.map((n) => [n.id, n]));
 // Some generated summaries are letter-spaced noise ("c ha t s er vi ce"); skip those.
-const goodSummary = (s) => s && !/\b\w \w \w \w/.test(s) && !/\b[a-z] [a-z]{1,2} [a-z]/.test(s);
+const goodSummary = (s) =>
+  s && !/\b\w \w \w \w/.test(s) && !/\b[a-z] [a-z]{1,2} [a-z]/.test(s);
 
 // ===================================================================== cover
 const cover = `
@@ -165,22 +188,33 @@ const cover = `
 </section>`;
 
 // ================================================================ PART I
-part('Part I: Product and Project', 'What Nook is, who it is for, how the work is planned, and how to run it.');
+part(
+  'Part I: Product and Project',
+  'What Nook is, who it is for, how the work is planned, and how to run it.',
+);
 docChapter('Repository overview', 'README.md');
 docChapter('Product context', 'docs/project/PROJECT_CONTEXT.md');
 docChapter('Roadmap and module plan', 'docs/project/POINTS_ROADMAP.md');
-docChapter('Running the stack with Docker Compose', 'docs/services/infrastructure.md', (t) => section(t, 'Running the stack'));
+docChapter(
+  'Running the stack with Docker Compose',
+  'docs/services/infrastructure.md',
+  (t) => section(t, 'Running the stack'),
+);
 docChapter('Environment configuration', 'envs/README.md');
 
 // ============================================================== PART II
-part('Part II: Architecture', 'How the system is put together, seen through the compose files, the knowledge graph and the code graph.');
+part(
+  'Part II: Architecture',
+  'How the system is put together, seen through the compose files, the knowledge graph and the code graph.',
+);
 
 // ---- system diagram
 function box(x, y, w, h, title, sub, cls) {
   return `<g class="bx ${cls}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="9"/><text x="${x + w / 2}" y="${y + h / 2 - (sub ? 2 : -5)}" class="t">${esc(title)}</text>${sub ? `<text x="${x + w / 2}" y="${y + h / 2 + 14}" class="s">${esc(sub)}</text>` : ''}</g>`;
 }
 function arrow(x1, y1, x2, y2, label = '', dash = false, t = 0.62) {
-  const lx = x1 + (x2 - x1) * t, ly = y1 + (y2 - y1) * t;
+  const lx = x1 + (x2 - x1) * t,
+    ly = y1 + (y2 - y1) * t;
   return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="ar${dash ? ' dash' : ''}" marker-end="url(#ah)"/>${label ? `<text x="${lx}" y="${ly - 5}" class="lb" text-anchor="middle">${esc(label)}</text>` : ''}`;
 }
 const diagram = `
@@ -227,27 +261,94 @@ const arch = `
 ${diagram}
 <p class="cap">Figure 1. Runtime topology. Solid arrows are request paths. Dashed arrows show provisioning, observability, asynchronous events, and private judge traffic. Game match events flow through RabbitMQ to Chat; submitted code runs in isolated sandbox containers.</p>
 <h3>Request routing at the gateway</h3>
-${table(['Public path', 'Upstream', 'Notes'], [
-  ['<code>/api/</code>', 'user-service:3000', 'Auth, accounts, social, admin. Rate limited per route (login 10/min, register 3/min, password reset 3 and 5/min).'],
-  ['<code>/api/chat/</code>', 'chat-service:3000', 'REST for DMs, groups and channels. Mapped onto <code>/chat/</code> internally.'],
-  ['<code>/api/chat/socket.io/</code>, <code>/socket.io/</code>', 'chat-service:3000', 'WebSocket upgrade for realtime messages and presence.'],
-  ['<code>/api/game/</code>', 'game-service:3000', 'Authenticated REST for matchmaking, rooms, matches, history, stats and leaderboard.'],
-  ['<code>/api/game/socket.io/</code>', 'game-service:3000', 'Canonical Socket.IO transport for lobby, match, collaboration and team chat namespaces.'],
-  ['<code>/grafana/</code>', 'grafana:3000', 'Only Grafana is exposed; Prometheus, Loki, Alloy and cAdvisor have no public route.'],
-  ['<code>/</code>', 'client:3000', 'The Next.js web client.'],
-  ['<code>:9443</code>', 'minio:9000', 'TLS front for presigned MinIO URLs, bound to loopback in the default compose file.'],
-])}
+${table(
+  ['Public path', 'Upstream', 'Notes'],
+  [
+    [
+      '<code>/api/</code>',
+      'user-service:3000',
+      'Auth, accounts, social, admin. Rate limited per route (login 10/min, register 3/min, password reset 3 and 5/min).',
+    ],
+    [
+      '<code>/api/chat/</code>',
+      'chat-service:3000',
+      'REST for DMs, groups and channels. Mapped onto <code>/chat/</code> internally.',
+    ],
+    [
+      '<code>/api/chat/socket.io/</code>, <code>/socket.io/</code>',
+      'chat-service:3000',
+      'WebSocket upgrade for realtime messages and presence.',
+    ],
+    [
+      '<code>/api/game/</code>',
+      'game-service:3000',
+      'Authenticated REST for matchmaking, rooms, matches, history, stats and leaderboard.',
+    ],
+    [
+      '<code>/api/game/socket.io/</code>',
+      'game-service:3000',
+      'Canonical Socket.IO transport for lobby, match, collaboration and team chat namespaces.',
+    ],
+    [
+      '<code>/grafana/</code>',
+      'grafana:3000',
+      'Only Grafana is exposed; Prometheus, Loki, Alloy and cAdvisor have no public route.',
+    ],
+    ['<code>/</code>', 'client:3000', 'The Next.js web client.'],
+    [
+      '<code>:9443</code>',
+      'minio:9000',
+      'TLS front for presigned MinIO URLs, bound to loopback in the default compose file.',
+    ],
+  ],
+)}
 <h3>Responsibilities</h3>
-${table(['Component', 'Responsibility', 'Owns'], [
-  ['User service', 'Registration, login, JWT (RS256) issue and refresh, OAuth providers, profiles, friendships and blocks, admin tools, account search', 'user-db, uploaded account images'],
-  ['Chat service', 'Direct messages, groups and channels, read state, reactions, presence, attachments; verifies the User service JWT but never issues tokens', 'chat-db, MinIO bucket <code>chat-attachments</code>'],
-  ['Game service', 'Matchmaking, private rooms, matches, rounds, submissions, collaboration, match results and lifecycle events', 'game-db'],
-  ['Judge worker', 'Executes coding submissions in bounded, resource-limited, no-network containers', 'ephemeral judge jobs'],
-  ['RabbitMQ', 'Carries User lifecycle events and Game match events to Chat; gameplay does not wait for Chat delivery', 'durable event queues'],
-  ['MinIO', 'S3-compatible object storage for chat attachments, reached with direct browser uploads through presigned POST policies and GET URLs', 'volumes/minio'],
-  ['minio-init', 'Idempotent bootstrap: creates the bucket and a bucket-scoped service account so a fresh volume works without console steps', 'nothing (exits)'],
-  ['Monitoring stack', 'Prometheus, Loki, Alloy, cAdvisor and Grafana for metrics, logs and dashboards', 'metrics and log storage'],
-], 'firstcol')}
+${table(
+  ['Component', 'Responsibility', 'Owns'],
+  [
+    [
+      'User service',
+      'Registration, login, JWT (RS256) issue and refresh, OAuth providers, profiles, friendships and blocks, admin tools, account search',
+      'user-db, uploaded account images',
+    ],
+    [
+      'Chat service',
+      'Direct messages, groups and channels, read state, reactions, presence, attachments; verifies the User service JWT but never issues tokens',
+      'chat-db, MinIO bucket <code>chat-attachments</code>',
+    ],
+    [
+      'Game service',
+      'Matchmaking, private rooms, matches, rounds, submissions, collaboration, match results and lifecycle events',
+      'game-db',
+    ],
+    [
+      'Judge worker',
+      'Executes coding submissions in bounded, resource-limited, no-network containers',
+      'ephemeral judge jobs',
+    ],
+    [
+      'RabbitMQ',
+      'Carries User lifecycle events and Game match events to Chat; gameplay does not wait for Chat delivery',
+      'durable event queues',
+    ],
+    [
+      'MinIO',
+      'S3-compatible object storage for chat attachments, reached with direct browser uploads through presigned POST policies and GET URLs',
+      'volumes/minio',
+    ],
+    [
+      'minio-init',
+      'Idempotent bootstrap: creates the bucket and a bucket-scoped service account so a fresh volume works without console steps',
+      'nothing (exits)',
+    ],
+    [
+      'Monitoring stack',
+      'Prometheus, Loki, Alloy, cAdvisor and Grafana for metrics, logs and dashboards',
+      'metrics and log storage',
+    ],
+  ],
+  'firstcol',
+)}
 <h3>Two storage addresses for MinIO</h3>
 <p>Chat holds two MinIO clients. The internal one (<code>MINIO_ENDPOINT=minio:9000</code>, plain HTTP inside the compose network) performs server-side operations such as <code>statObject</code> and bucket checks. The public one (<code>MINIO_PUBLIC_ENDPOINT</code>, TLS) only signs URLs handed to the browser. Because a SigV4 signature covers the host, the host in a presigned URL must be one the browser can actually reach and that Nginx forwards with the original <code>Host</code> header. This is the first thing to check when a browser reports a 403 or never reaches Nginx from another device.</p>`;
 chapter('System architecture', arch);
@@ -258,7 +359,14 @@ chapter('System architecture', arch);
     const ns = l.nodeIds.map((id) => uaById.get(id)).filter(Boolean);
     const types = {};
     ns.forEach((n) => (types[n.type] = (types[n.type] || 0) + 1));
-    return [`<b>${esc(l.name)}</b>`, esc(l.description), String(ns.length), Object.entries(types).map(([k, v]) => `${v} ${k}`).join(', ')];
+    return [
+      `<b>${esc(l.name)}</b>`,
+      esc(l.description),
+      String(ns.length),
+      Object.entries(types)
+        .map(([k, v]) => `${v} ${k}`)
+        .join(', '),
+    ];
   });
   const byType = {};
   uaNodes.forEach((n) => (byType[n.type] = (byType[n.type] || 0) + 1));
@@ -270,8 +378,20 @@ ${uaMatchesHead ? '' : `<p><b>Freshness:</b> This is a historical snapshot that 
 ${table(['Layer', 'What belongs here', 'Files', 'Composition'], rows)}
 <h3>Node and edge inventory</h3>
 <div class="two">
-${table(['Node type', 'Count'], Object.entries(byType).sort((a, b) => b[1] - a[1]).map(([k, v]) => [esc(k), String(v)]), 'narrow')}
-${table(['Edge type', 'Count'], Object.entries(byEdge).sort((a, b) => b[1] - a[1]).map(([k, v]) => [esc(k), String(v)]), 'narrow')}
+${table(
+  ['Node type', 'Count'],
+  Object.entries(byType)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => [esc(k), String(v)]),
+  'narrow',
+)}
+${table(
+  ['Edge type', 'Count'],
+  Object.entries(byEdge)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => [esc(k), String(v)]),
+  'narrow',
+)}
 </div>`;
   chapter('Architectural layers', html);
 }
@@ -283,11 +403,16 @@ ${table(['Edge type', 'Count'], Object.entries(byEdge).sort((a, b) => b[1] - a[1
     .map((t) => {
       const files = t.nodeIds.map((id) => uaById.get(id)).filter(Boolean);
       return `<div class="step"><h3>Step ${t.order}. ${esc(t.title)}</h3><p>${esc(t.description)}</p>${
-        files.length ? `<p class="files">${files.map((f) => `<code>${esc(f.filePath)}</code>`).join(' ')}</p>` : ''
+        files.length
+          ? `<p class="files">${files.map((f) => `<code>${esc(f.filePath)}</code>`).join(' ')}</p>`
+          : ''
       }</div>`;
     })
     .join('');
-  chapter('Guided tour of the codebase', `<p>The suggested reading order produced by the knowledge-graph analysis, from product context to the runtime stack, the User, Chat and Game services, the client and the tests.</p>${html}`);
+  chapter(
+    'Guided tour of the codebase',
+    `<p>The suggested reading order produced by the knowledge-graph analysis, from product context to the runtime stack, the User, Chat and Game services, the client and the tests.</p>${html}`,
+  );
 }
 
 // ---- graphify analysis
@@ -304,7 +429,8 @@ ${table(['Edge type', 'Count'], Object.entries(byEdge).sort((a, b) => b[1] - a[1
     const s = svcOf(l.source_file);
     if (!bySvc[s]) return;
     if (l.relation === 'calls') bySvc[s].calls++;
-    if (l.relation === 'imports' || l.relation === 'imports_from') bySvc[s].imports++;
+    if (l.relation === 'imports' || l.relation === 'imports_from')
+      bySvc[s].imports++;
   });
   const rel = {};
   links.forEach((l) => (rel[l.relation] = (rel[l.relation] || 0) + 1));
@@ -315,26 +441,47 @@ ${table(['Edge type', 'Count'], Object.entries(byEdge).sort((a, b) => b[1] - a[1
   nodes.forEach((n) => {
     const k = n.community;
     if (k == null) return;
-    const c = commSizes.get(k) || { id: k, name: n.community_name, size: 0, labels: [], files: {} };
+    const c = commSizes.get(k) || {
+      id: k,
+      name: n.community_name,
+      size: 0,
+      labels: [],
+      files: {},
+    };
     c.size++;
-    if (c.labels.length < 7 && !/^(dependencies|scripts|compilerOptions|devDependencies)$/.test(n.label)) c.labels.push(n.label);
+    if (
+      c.labels.length < 7 &&
+      !/^(dependencies|scripts|compilerOptions|devDependencies)$/.test(n.label)
+    )
+      c.labels.push(n.label);
     const d = (n.source_file || '').split('/').slice(0, 3).join('/');
     c.files[d] = (c.files[d] || 0) + 1;
     commSizes.set(k, c);
   });
-  const top = [...commSizes.values()].sort((a, b) => b.size - a.size).slice(0, 30);
+  const top = [...commSizes.values()]
+    .sort((a, b) => b.size - a.size)
+    .slice(0, 30);
 
   // The report title carries the date of the graph run this chapter describes.
-  const graphDate = (ggReport.match(/^#\s+Graph Report[^\n]*\((\d{4}-\d{2}-\d{2})\)/m) || [])[1] || '';
-  const refreshWhen = graphDate ? `on <b>${esc(graphDate)}</b>` : 'in the most recent local run';
+  const graphDate =
+    (ggReport.match(/^#\s+Graph Report[^\n]*\((\d{4}-\d{2}-\d{2})\)/m) ||
+      [])[1] || '';
+  const refreshWhen = graphDate
+    ? `on <b>${esc(graphDate)}</b>`
+    : 'in the most recent local run';
   // Community names live in the saved label store; a community missing from it is
   // listed under its hub's name instead of a saved label.
-  const labelStore = existsSync(join(ROOT, 'graphify-out/.graphify_labels.json'))
+  const labelStore = existsSync(
+    join(ROOT, 'graphify-out/.graphify_labels.json'),
+  )
     ? rdJson('graphify-out/.graphify_labels.json')
     : null;
   // Missing labels say nothing about how the graph was produced, so this only
   // reports what the saved label store covers for the current snapshot.
-  const labelCoverage = graphifyLabelCoverageSentence([...commSizes.keys()], labelStore);
+  const labelCoverage = graphifyLabelCoverageSentence(
+    [...commSizes.keys()],
+    labelStore,
+  );
 
   const summary = section(ggReport, 'Summary');
   const html = `
@@ -342,34 +489,69 @@ ${table(['Edge type', 'Count'], Object.entries(byEdge).sort((a, b) => b[1] - a[1
 <h3>Graph summary</h3>
 ${mdToHtml(summary)}
 <h3>Footprint per top-level folder</h3>
-${table(['Folder', 'Nodes', 'Call edges', 'Import edges'], Object.entries(bySvc).sort((a, b) => b[1].nodes - a[1].nodes).map(([k, v]) => [`<code>${esc(k)}</code>`, String(v.nodes), String(v.calls), String(v.imports)]), 'narrow')}
+${table(
+  ['Folder', 'Nodes', 'Call edges', 'Import edges'],
+  Object.entries(bySvc)
+    .sort((a, b) => b[1].nodes - a[1].nodes)
+    .map(([k, v]) => [
+      `<code>${esc(k)}</code>`,
+      String(v.nodes),
+      String(v.calls),
+      String(v.imports),
+    ]),
+  'narrow',
+)}
 <h3>Relationship types</h3>
 <div class="two">
-${table(['Relation', 'Edges'], Object.entries(rel).sort((a, b) => b[1] - a[1]).map(([k, v]) => [esc(k), String(v)]), 'narrow')}
-${table(['Confidence', 'Edges'], Object.entries(conf).sort((a, b) => b[1] - a[1]).map(([k, v]) => [esc(k), String(v)]), 'narrow')}
+${table(
+  ['Relation', 'Edges'],
+  Object.entries(rel)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => [esc(k), String(v)]),
+  'narrow',
+)}
+${table(
+  ['Confidence', 'Edges'],
+  Object.entries(conf)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => [esc(k), String(v)]),
+  'narrow',
+)}
 </div>
 <h3>Core abstractions (god nodes)</h3>
 <p>The most connected nodes are the abstractions the rest of the code leans on. In Nook they are the shared <code>Button</code> UI primitive, the chat workspace component, the <code>useAuth</code> hook, and <code>AuthService</code> on the backend.</p>
 ${mdToHtml(section(ggReport, 'God Nodes (most connected - your core abstractions)'))}
 <h3>Surprising connections</h3>
 <p>Cross-boundary links that the extractor inferred, mostly between documentation and the code it describes.</p>
-${mdToHtml(section(ggReport, 'Surprising Connections (you probably didn\'t know these)'))}
+${mdToHtml(section(ggReport, "Surprising Connections (you probably didn't know these)"))}
 <h3>Import cycles</h3>
 ${mdToHtml(section(ggReport, 'Import Cycles'))}
 <h3>The 30 largest communities</h3>
 <p>Communities are clusters of tightly related code. Their labels summarize the member nodes; cohesion is not shown here (see the full report in <code>graphify-out/GRAPH_REPORT.md</code>).</p>
-${table(['#', 'Community (hub)', 'Members', 'Main folders', 'Sample members'], top.map((c, i) => [
-  String(i + 1), `<b>${esc(c.name)}</b>`, String(c.size),
-  Object.entries(c.files).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([d]) => `<code>${esc(d || '-')}</code>`).join('<br>'),
-  esc(c.labels.join(', ')),
-]))}
+${table(
+  ['#', 'Community (hub)', 'Members', 'Main folders', 'Sample members'],
+  top.map((c, i) => [
+    String(i + 1),
+    `<b>${esc(c.name)}</b>`,
+    String(c.size),
+    Object.entries(c.files)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([d]) => `<code>${esc(d || '-')}</code>`)
+      .join('<br>'),
+    esc(c.labels.join(', ')),
+  ]),
+)}
 <h3>Knowledge gaps</h3>
 ${mdToHtml(section(ggReport, 'Knowledge Gaps'))}`;
   chapter('Code graph analysis (graphify)', html);
 }
 
 // ============================================================= PART III
-part('Part III: Services and Integrations', 'One chapter per service, then one per place where services meet.');
+part(
+  'Part III: Services and Integrations',
+  'One chapter per service, then one per place where services meet.',
+);
 docChapter('User service', 'docs/services/user-service.md');
 docChapter('Chat service', 'docs/services/chat-service.md');
 
@@ -386,7 +568,9 @@ docChapter('Chat service', 'docs/services/chat-service.md');
   const gallery = mock
     .map(([f, t]) => {
       const p = join(ROOT, 'docs/client/ui-mockups', f);
-      return existsSync(p) ? `<figure><img src="${pathToFileURL(p).href}" alt="${esc(t)}"><figcaption>${esc(t)}</figcaption></figure>` : '';
+      return existsSync(p)
+        ? `<figure><img src="${pathToFileURL(p).href}" alt="${esc(t)}"><figcaption>${esc(t)}</figcaption></figure>`
+        : '';
     })
     .join('');
   const html =
@@ -394,10 +578,23 @@ docChapter('Chat service', 'docs/services/chat-service.md');
     `<h3>UI mockups</h3><div class="gallery">${gallery}</div>`;
   chapter('Web client (Next.js)', html);
 }
-docChapter('Infrastructure: gateway, broker, storage and monitoring', 'docs/services/infrastructure.md', (t) => dropSection(t, 'Running the stack'));
-docChapter('User and chat integration (RabbitMQ, JWT, block checks)', 'docs/integrations/user-chat.md');
-docChapter('Chat and storage integration (MinIO, presigned URLs)', 'docs/integrations/chat-storage.md');
-docChapter('Client and backend integration', 'docs/integrations/client-backend.md');
+docChapter(
+  'Infrastructure: gateway, broker, storage and monitoring',
+  'docs/services/infrastructure.md',
+  (t) => dropSection(t, 'Running the stack'),
+);
+docChapter(
+  'User and chat integration (RabbitMQ, JWT, block checks)',
+  'docs/integrations/user-chat.md',
+);
+docChapter(
+  'Chat and storage integration (MinIO, presigned URLs)',
+  'docs/integrations/chat-storage.md',
+);
+docChapter(
+  'Client and backend integration',
+  'docs/integrations/client-backend.md',
+);
 docChapter('Feed integration', 'docs/integrations/feed.md');
 
 // ---- Code Arena and the live acceptance evidence
@@ -406,12 +603,20 @@ docChapter('Feed integration', 'docs/integrations/feed.md');
   const spec = rd(specPath);
   const evidencePath = 'docs/evidence/g06-live-demo/README.md';
   const evidence = rd(evidencePath);
-  const screenshotRows = [...evidence.matchAll(/^\|\s*`([^`]+\.png)`\s*\|\s*(.+?)\s*\|$/gm)]
-    .map(([, filename, caption], index) => ({ filename, caption, index: index + 1 }));
-  if (!screenshotRows.length) throw new Error(`No screenshot entries found in ${evidencePath}`);
+  const screenshotRows = [
+    ...evidence.matchAll(/^\|\s*`([^`]+\.png)`\s*\|\s*(.+?)\s*\|$/gm),
+  ].map(([, filename, caption], index) => ({
+    filename,
+    caption,
+    index: index + 1,
+  }));
+  if (!screenshotRows.length)
+    throw new Error(`No screenshot entries found in ${evidencePath}`);
   const evidenceDir = dirname(join(ROOT, evidencePath));
   const screenshotCount = screenshotRows.length;
-  const screenshotByName = new Map(screenshotRows.map((row) => [row.filename, row]));
+  const screenshotByName = new Map(
+    screenshotRows.map((row) => [row.filename, row]),
+  );
   const selectedBookEvidence = [
     '03-owner-invitation-sent.png',
     '04-rival-sees-invitation.png',
@@ -424,28 +629,46 @@ docChapter('Feed integration', 'docs/integrations/feed.md');
   const includedEvidence = new Set();
   const evidenceFigure = (filename) => {
     const row = screenshotByName.get(filename);
-    if (!row) throw new Error(`Missing screenshot entry in ${evidencePath}: ${filename}`);
-    if (!expectedBookEvidence.has(filename)) throw new Error(`Setup-only screenshot does not belong in the Code Arena chapter: ${filename}`);
-    if (includedEvidence.has(filename)) throw new Error(`Screenshot used more than once in the Code Arena chapter: ${filename}`);
+    if (!row)
+      throw new Error(
+        `Missing screenshot entry in ${evidencePath}: ${filename}`,
+      );
+    if (!expectedBookEvidence.has(filename))
+      throw new Error(
+        `Setup-only screenshot does not belong in the Code Arena chapter: ${filename}`,
+      );
+    if (includedEvidence.has(filename))
+      throw new Error(
+        `Screenshot used more than once in the Code Arena chapter: ${filename}`,
+      );
     includedEvidence.add(filename);
     const imagePath = join(evidenceDir, filename);
-    if (!existsSync(imagePath)) throw new Error(`Missing G06 screenshot: ${imagePath}`);
+    if (!existsSync(imagePath))
+      throw new Error(`Missing G06 screenshot: ${imagePath}`);
     assertUniqueFigureImage(imagePath);
     const caption = row.caption.replace(/\*\*(.*?)\*\*/g, '$1');
     const description = `Live demo screenshot ${row.index}: ${caption}`;
     return `<figure><img src="${pathToFileURL(imagePath).href}" alt="${esc(description)}"><figcaption><b>${String(row.index).padStart(2, '0')}</b> ${esc(caption)}</figcaption></figure>`;
   };
-  const evidenceGallery = (filenames) => `<div class="gallery">${filenames.map(evidenceFigure).join('')}</div>`;
+  const evidenceGallery = (filenames) =>
+    `<div class="gallery">${filenames.map(evidenceFigure).join('')}</div>`;
   const figureImages = new Map();
   function assertUniqueFigureImage(imagePath) {
-    const digest = createHash('sha256').update(readFileSync(imagePath)).digest('hex');
+    const digest = createHash('sha256')
+      .update(readFileSync(imagePath))
+      .digest('hex');
     const previous = figureImages.get(digest);
-    if (previous) throw new Error(`Duplicate image used in Code Arena chapter: ${previous} and ${imagePath}`);
+    if (previous)
+      throw new Error(
+        `Duplicate image used in Code Arena chapter: ${previous} and ${imagePath}`,
+      );
     figureImages.set(digest, imagePath);
   }
-  const localFigure = (imagePath, alt, caption, className = '') => existsSync(imagePath)
-    ? (assertUniqueFigureImage(imagePath), `<figure${className ? ` class="${esc(className)}"` : ''}><img src="${pathToFileURL(imagePath).href}" alt="${esc(alt)}"><figcaption>${esc(caption)}</figcaption></figure>`)
-    : '';
+  const localFigure = (imagePath, alt, caption, className = '') =>
+    existsSync(imagePath)
+      ? (assertUniqueFigureImage(imagePath),
+        `<figure${className ? ` class="${esc(className)}"` : ''}><img src="${pathToFileURL(imagePath).href}" alt="${esc(alt)}"><figcaption>${esc(caption)}</figcaption></figure>`)
+      : '';
   const screenshotLink = screenshotUrl
     ? `<a href="${esc(screenshotUrl)}">Download the ${screenshotCount}-page screenshot proof</a>`
     : `<code>docs/evidence/g06-live-demo/screenshots.pdf</code> (${screenshotCount}-page screenshot proof)`;
@@ -454,10 +677,13 @@ docChapter('Feed integration', 'docs/integrations/feed.md');
   const leaderboardPath = 'docs/book/assets/aimane-yousr-leaderboard-dark.png';
   const playPagePath = 'docs/book/assets/code-arena-play-dark.png';
   const lobbyPath = 'docs/book/assets/code-arena-lobby-two-player-dark.png';
-  const readyPath = 'docs/book/assets/code-arena-lobby-ready-two-player-dark.png';
+  const readyPath =
+    'docs/book/assets/code-arena-lobby-ready-two-player-dark.png';
   const editorPath = 'docs/book/assets/code-arena-editor-dark.png';
-  const scoreRevealPath = 'docs/book/assets/code-arena-round-score-reveal-dark.png';
-  const collaborationPath = 'docs/book/assets/code-arena-2v2-collaboration-dark.png';
+  const scoreRevealPath =
+    'docs/book/assets/code-arena-round-score-reveal-dark.png';
+  const collaborationPath =
+    'docs/book/assets/code-arena-2v2-collaboration-dark.png';
   const forfeitPath = 'docs/book/assets/code-arena-forfeit-result-dark.png';
   const ownerProfileImage = join(ROOT, ownerProfilePath);
   const ownerGamesImage = join(ROOT, ownerGamesPath);
@@ -473,35 +699,51 @@ docChapter('Feed integration', 'docs/integrations/feed.md');
     {
       path: 'docs/book/assets/code-arena-lobby-ready-2v2-live-dark.png',
       alt: 'Dark-mode Code Arena 2v2 match lobby with all four seats filled: Team Alpha 2 of 2 and Team Beta 2 of 2, with all four players marked Ready',
-      caption: 'Ready lobby before the match starts: both 2v2 teams are full (2/2) and all four players have marked Ready',
+      caption:
+        'Ready lobby before the match starts: both 2v2 teams are full (2/2) and all four players have marked Ready',
     },
     {
       path: 'docs/book/assets/code-arena-live-2v2-alpha1-dark.png',
       alt: 'Live dark-mode 2v2 Code Arena view from Alpha1: the shared team solution in the editor, with the teammate and opposing-team panels beside it',
-      caption: 'Alpha1 teammate view: the Alpha team’s shared document carries the synchronized solution',
+      caption:
+        'Alpha1 teammate view: the Alpha team’s shared document carries the synchronized solution',
     },
     {
       path: 'docs/book/assets/code-arena-live-2v2-alpha2-dark.png',
       alt: 'Live dark-mode 2v2 Code Arena view from Alpha2: the same shared team solution, with both visible test cases passing',
-      caption: 'Alpha2 teammate view: the same synchronized solution, with both visible test cases passing',
+      caption:
+        'Alpha2 teammate view: the same synchronized solution, with both visible test cases passing',
     },
     {
       path: 'docs/book/assets/code-arena-live-2v2-beta1-dark.png',
       alt: 'Live dark-mode 2v2 Code Arena view from Beta1: the opposing team’s own independent solution in its editor',
-      caption: 'Beta1 opposing-team view: the rival team works in its own document, isolated from the Alpha shared editor',
+      caption:
+        'Beta1 opposing-team view: the rival team works in its own document, isolated from the Alpha shared editor',
     },
     {
       path: 'docs/book/assets/code-arena-live-2v2-beta2-dark.png',
       alt: 'Live dark-mode 2v2 Code Arena view from Beta2: the opposing team’s own independent solution in its editor',
-      caption: 'Beta2 opposing-team view: the second Beta client sees the same independent Beta document',
+      caption:
+        'Beta2 opposing-team view: the second Beta client sees the same independent Beta document',
     },
   ];
   const liveTwoVTwoFigures = liveTwoVTwoCaptures.map((capture) =>
-    localFigure(join(ROOT, capture.path), capture.alt, capture.caption, 'wide'));
+    localFigure(join(ROOT, capture.path), capture.alt, capture.caption, 'wide'),
+  );
   const profileGallery = `<div class="gallery">${[
-    localFigure(ownerProfileImage, 'Aimane Yousr Nook profile in dark mode with Code Arena actions', 'Aimane Yousr — Nook profile'),
-    localFigure(ownerGamesImage, 'Nook Games profile with Code Arena match record, badges, and recent results', 'Games tab with progression, achievements, and recent matches'),
-  ].filter(Boolean).join('')}</div>`;
+    localFigure(
+      ownerProfileImage,
+      'Aimane Yousr Nook profile in dark mode with Code Arena actions',
+      'Aimane Yousr — Nook profile',
+    ),
+    localFigure(
+      ownerGamesImage,
+      'Nook Games profile with Code Arena match record, badges, and recent results',
+      'Games tab with progression, achievements, and recent matches',
+    ),
+  ]
+    .filter(Boolean)
+    .join('')}</div>`;
   const playGallery = `<div class="gallery">${localFigure(playPageImage, 'Nook Code Arena Play page with create and join controls', 'Play page: create a duel or team lobby, join by code, and review active sessions', 'wide')}</div>`;
   const leaderboardGallery = `<div class="gallery">${localFigure(leaderboardImage, 'Nook Code Arena leaderboard with the project profile row', 'Leaderboard: player rank, match count, wins, and win rate', 'wide')}</div>`;
   const lobbyGallery = `<div class="gallery">${localFigure(lobbyImage, 'Aimane and Arena Guest in the same dark-mode private Code Arena 1v1 lobby', 'Live 1v1 lobby: both players occupy a team seat before readiness', 'wide')}</div>`;
@@ -509,24 +751,60 @@ docChapter('Feed integration', 'docs/integrations/feed.md');
   const editorGallery = `<div class="gallery">${localFigure(editorImage, 'Aimane writing a C++ solution in a live dark-mode Code Arena match', 'Live coding: problem statement, examples, language controls, shared timer, editor, and case panel', 'wide')}</div>`;
   const scoreRevealGallery = `<div class="gallery">${localFigure(scoreRevealImage, 'Dark-mode Code Arena Round 1 of 3 score reveal after both visible cases passed, showing 100 points earned and a cumulative score of 100–100', 'Round 1 judge result: both visible cases pass and hidden-test weights add 100 points, so the cumulative score stands at 100–100 at that point — this is not a final match score', 'wide')}</div>`;
   const collaborationGallery = `<div class="gallery">${[
-    localFigure(collaborationImage, 'Aimane in a live dark-mode 2v2 Code Arena workspace with a shared editor, teammates, and team chat', '2v2 collaboration: the active team workspace combines a shared editor, teammate status, and match-scoped chat', 'wide'),
+    localFigure(
+      collaborationImage,
+      'Aimane in a live dark-mode 2v2 Code Arena workspace with a shared editor, teammates, and team chat',
+      '2v2 collaboration: the active team workspace combines a shared editor, teammate status, and match-scoped chat',
+      'wide',
+    ),
     ...liveTwoVTwoFigures,
   ].join('')}</div>`;
   const forfeitGallery = `<div class="gallery">${localFigure(forfeitImage, 'Aimane sees a dark-mode Code Arena match result after the opponent forfeits', 'Forfeit result: the live match ends and records the winner', 'wide')}</div>`;
-  const behaviorParagraphs = section(spec, 'Product behavior').trim().split(/\n\s*\n/);
-  if (behaviorParagraphs.length !== 6) throw new Error('Unexpected Code Arena product behavior structure; update the book figure placement.');
-  const [overview, scoring, collaboration, profileDetails, invitations, lifecycle] = behaviorParagraphs;
-  const matchSentenceStart = overview.indexOf(' A match has three coding rounds');
-  if (matchSentenceStart < 0) throw new Error('Could not locate the Code Arena match-flow sentence for the editor screenshot.');
+  const behaviorParagraphs = section(spec, 'Product behavior')
+    .trim()
+    .split(/\n\s*\n/);
+  if (behaviorParagraphs.length !== 6)
+    throw new Error(
+      'Unexpected Code Arena product behavior structure; update the book figure placement.',
+    );
+  const [
+    overview,
+    scoring,
+    collaboration,
+    profileDetails,
+    invitations,
+    lifecycle,
+  ] = behaviorParagraphs;
+  const matchSentenceStart = overview.indexOf(
+    ' A match has three coding rounds',
+  );
+  if (matchSentenceStart < 0)
+    throw new Error(
+      'Could not locate the Code Arena match-flow sentence for the editor screenshot.',
+    );
   const discoveryText = overview.slice(0, matchSentenceStart).trim();
   const matchAndProblems = overview.slice(matchSentenceStart + 1).trim();
-  const defaultProblemStart = matchAndProblems.indexOf(' Default matchmaking currently selects');
-  if (defaultProblemStart < 0) throw new Error('Could not locate the seeded-problem sentence in Code Arena product behavior.');
+  const defaultProblemStart = matchAndProblems.indexOf(
+    ' Default matchmaking currently selects',
+  );
+  if (defaultProblemStart < 0)
+    throw new Error(
+      'Could not locate the seeded-problem sentence in Code Arena product behavior.',
+    );
   const matchText = matchAndProblems.slice(0, defaultProblemStart).trim();
-  const defaultProblemText = matchAndProblems.slice(defaultProblemStart + 1).trim();
-  const invitationBindingStart = lifecycle.indexOf('The invitation message carries');
-  if (invitationBindingStart < 0) throw new Error('Could not locate the invitation-binding text after Code Arena lifecycle notifications.');
-  const lifecycleNotifications = lifecycle.slice(0, invitationBindingStart).trim();
+  const defaultProblemText = matchAndProblems
+    .slice(defaultProblemStart + 1)
+    .trim();
+  const invitationBindingStart = lifecycle.indexOf(
+    'The invitation message carries',
+  );
+  if (invitationBindingStart < 0)
+    throw new Error(
+      'Could not locate the invitation-binding text after Code Arena lifecycle notifications.',
+    );
+  const lifecycleNotifications = lifecycle
+    .slice(0, invitationBindingStart)
+    .trim();
   const lifecycleRoomBinding = lifecycle.slice(invitationBindingStart).trim();
   const productBehaviorHtml = [
     mdToHtml(discoveryText, specPath),
@@ -543,7 +821,10 @@ docChapter('Feed integration', 'docs/integrations/feed.md');
     profileGallery,
     leaderboardGallery,
     mdToHtml(invitations, specPath),
-    evidenceGallery(['03-owner-invitation-sent.png', '04-rival-sees-invitation.png']),
+    evidenceGallery([
+      '03-owner-invitation-sent.png',
+      '04-rival-sees-invitation.png',
+    ]),
     mdToHtml(lifecycleNotifications, specPath),
     evidenceFigure('09-owner-chat-match-started.png'),
     mdToHtml(lifecycleRoomBinding, specPath),
@@ -576,20 +857,31 @@ ${mdToHtml(section(evidence, 'What was demonstrated'), evidencePath)}
 ${mdToHtml(section(evidence, 'What this does and does not prove'), evidencePath)}
 <p>${screenshotLink}. This chapter places ${figureImages.size} distinct images beside their matching topics: dark-mode product and coding views from Aimane’s account, the live four-client 2v2 viewport captures, plus selected two-client invitation and lifecycle evidence. It leaves out setup-only screens, repeated views of the same state, and screenshots that show an empty lobby. The complete 21-image run and its limits are documented in <code>docs/evidence/g06-live-demo/README.md</code>.</p>`;
   if (includedEvidence.size !== expectedBookEvidence.size) {
-    const unplaced = [...expectedBookEvidence].filter((filename) => !includedEvidence.has(filename));
-    throw new Error(`G06 screenshots not placed in their matching sections: ${unplaced.join(', ')}`);
+    const unplaced = [...expectedBookEvidence].filter(
+      (filename) => !includedEvidence.has(filename),
+    );
+    throw new Error(
+      `G06 screenshots not placed in their matching sections: ${unplaced.join(', ')}`,
+    );
   }
   chapter('Code Arena: Game service integration and evidence', html);
 }
 
 // ============================================================== PART IV
-part('Part IV: API Reference', 'User and Chat HTTP routes from the OpenAPI contracts, plus the Game HTTP and Socket.IO contract summarized in Part III.');
+part(
+  'Part IV: API Reference',
+  'User and Chat HTTP routes from the OpenAPI contracts, plus the Game HTTP and Socket.IO contract summarized in Part III.',
+);
 
 // ---- OpenAPI renderer
 function resolveRef(spec, node) {
-  let n = node, guard = 0;
+  let n = node,
+    guard = 0;
   while (n && n.$ref && guard++ < 10) {
-    n = n.$ref.replace(/^#\//, '').split('/').reduce((a, k) => a?.[k], spec);
+    n = n.$ref
+      .replace(/^#\//, '')
+      .split('/')
+      .reduce((a, k) => a?.[k], spec);
   }
   return n;
 }
@@ -601,46 +893,77 @@ function typeOf(spec, s) {
   if (s.anyOf) return s.anyOf.map((o) => typeOf(spec, o)).join(' | ');
   const bits = [s.type || (s.properties ? 'object' : 'any')];
   if (s.format) bits.push(s.format);
-  if (s.minLength != null || s.maxLength != null) bits.push(`${s.minLength ?? 0}..${s.maxLength ?? ''}`);
-  if (s.minimum != null || s.maximum != null) bits.push(`${s.minimum ?? ''}..${s.maximum ?? ''}`);
+  if (s.minLength != null || s.maxLength != null)
+    bits.push(`${s.minLength ?? 0}..${s.maxLength ?? ''}`);
+  if (s.minimum != null || s.maximum != null)
+    bits.push(`${s.minimum ?? ''}..${s.maximum ?? ''}`);
   return bits.join(' ');
 }
 function flatten(spec, schema, prefix = '', depth = 0, seen = new Set()) {
   let s = resolveRef(spec, schema);
   if (!s) return [];
-  if (s.allOf) s = s.allOf.reduce((acc, p) => {
-    const r = resolveRef(spec, p) || {};
-    return { ...acc, ...r, properties: { ...(acc.properties || {}), ...(r.properties || {}) }, required: [...(acc.required || []), ...(r.required || [])] };
-  }, {});
-  if (s.type === 'array') return flatten(spec, s.items, `${prefix}[]`, depth, seen);
+  if (s.allOf)
+    s = s.allOf.reduce((acc, p) => {
+      const r = resolveRef(spec, p) || {};
+      return {
+        ...acc,
+        ...r,
+        properties: { ...(acc.properties || {}), ...(r.properties || {}) },
+        required: [...(acc.required || []), ...(r.required || [])],
+      };
+    }, {});
+  if (s.type === 'array')
+    return flatten(spec, s.items, `${prefix}[]`, depth, seen);
   if (!s.properties) return [];
   const req = new Set(s.required || []);
   const rows = [];
   for (const [k, v] of Object.entries(s.properties)) {
     const rv = resolveRef(spec, v) || {};
-    rows.push({ name: prefix ? `${prefix}.${k}` : k, type: typeOf(spec, v), req: req.has(k), desc: rv.description || '' });
+    rows.push({
+      name: prefix ? `${prefix}.${k}` : k,
+      type: typeOf(spec, v),
+      req: req.has(k),
+      desc: rv.description || '',
+    });
     const refKey = v.$ref;
-    if (depth < 2 && (rv.properties || rv.type === 'array') && !(refKey && seen.has(refKey))) {
-      const s2 = new Set(seen); if (refKey) s2.add(refKey);
-      rows.push(...flatten(spec, v, prefix ? `${prefix}.${k}` : k, depth + 1, s2));
+    if (
+      depth < 2 &&
+      (rv.properties || rv.type === 'array') &&
+      !(refKey && seen.has(refKey))
+    ) {
+      const s2 = new Set(seen);
+      if (refKey) s2.add(refKey);
+      rows.push(
+        ...flatten(spec, v, prefix ? `${prefix}.${k}` : k, depth + 1, s2),
+      );
     }
   }
   return rows;
 }
 const dedent = (t = '') => {
   const lines = t.replace(/\r/g, '').split('\n');
-  const ind = Math.min(...lines.filter((l) => l.trim()).map((l) => l.match(/^ */)[0].length), 1e9);
+  const ind = Math.min(
+    ...lines.filter((l) => l.trim()).map((l) => l.match(/^ */)[0].length),
+    1e9,
+  );
   return lines.map((l) => l.slice(ind === 1e9 ? 0 : ind)).join('\n');
 };
 function describe(op, method, path) {
   let d = dedent(op.description || '');
   const L = d.split('\n');
   // Drop the leading "### Title" and "`METHOD /path`" lines already shown in the heading.
-  while (L.length && (/^\s*$/.test(L[0]) || /^#{1,6}\s/.test(L[0]) || /^`[A-Z]+ \/[^`]*`\s*$/.test(L[0].trim()))) L.shift();
+  while (
+    L.length &&
+    (/^\s*$/.test(L[0]) ||
+      /^#{1,6}\s/.test(L[0]) ||
+      /^`[A-Z]+ \/[^`]*`\s*$/.test(L[0].trim()))
+  )
+    L.shift();
   return shiftHeadings(L.join('\n'), 3).replace(/^#{4,6} /gm, '##### ');
 }
 function renderApi(spec, title) {
-  const globalSec = spec.security && spec.security.length ? 'Bearer JWT' : 'Public';
+  const globalSec =
+    spec.security && spec.security.length ? 'Bearer JWT' : 'Public';
   const ops = [];
   for (const [path, item] of Object.entries(spec.paths)) {
     for (const [method, op] of Object.entries(item)) {
@@ -649,12 +972,25 @@ function renderApi(spec, title) {
     }
   }
   const tagOrder = [...(spec.tags || []).map((t) => t.name)];
-  ops.forEach((o) => { if (!tagOrder.includes(o.tag)) tagOrder.push(o.tag); });
-  const auth = (op) => (op.security === undefined ? globalSec : op.security.length ? 'Bearer JWT' : 'Public');
+  ops.forEach((o) => {
+    if (!tagOrder.includes(o.tag)) tagOrder.push(o.tag);
+  });
+  const auth = (op) =>
+    op.security === undefined
+      ? globalSec
+      : op.security.length
+        ? 'Bearer JWT'
+        : 'Public';
 
-  const index = table(['Method', 'Path', 'Summary', 'Auth'], ops.map((o) => [
-    `<span class="m ${o.method}">${o.method.toUpperCase()}</span>`, `<code>${esc(o.path)}</code>`, esc(o.op.summary || ''), auth(o.op),
-  ]));
+  const index = table(
+    ['Method', 'Path', 'Summary', 'Auth'],
+    ops.map((o) => [
+      `<span class="m ${o.method}">${o.method.toUpperCase()}</span>`,
+      `<code>${esc(o.path)}</code>`,
+      esc(o.op.summary || ''),
+      auth(o.op),
+    ]),
+  );
 
   let html = `<p>${esc(spec.info.description || '')}</p><p>Version <b>${esc(spec.info.version)}</b>. ${ops.length} operations on ${Object.keys(spec.paths).length} paths.</p>
 <h3>${esc(title)} endpoint index</h3>${index}`;
@@ -664,16 +1000,50 @@ function renderApi(spec, title) {
     const tdesc = (spec.tags || []).find((t) => t.name === tag)?.description;
     html += `<h3 class="tag">${esc(tag)}</h3>${tdesc ? `<p>${esc(tdesc)}</p>` : ''}`;
     for (const { path, method, op } of list) {
-      const params = (op.parameters || []).map((p) => resolveRef(spec, p)).filter(Boolean);
-      const body = resolveRef(spec, op.requestBody)?.content?.['application/json']?.schema;
+      const params = (op.parameters || [])
+        .map((p) => resolveRef(spec, p))
+        .filter(Boolean);
+      const body = resolveRef(spec, op.requestBody)?.content?.[
+        'application/json'
+      ]?.schema;
       const bodyRows = body ? flatten(spec, body) : [];
-      const resp = Object.entries(op.responses || {}).map(([c, r]) => [`<b>${esc(c)}</b>`, esc(resolveRef(spec, r)?.description || '')]);
+      const resp = Object.entries(op.responses || {}).map(([c, r]) => [
+        `<b>${esc(c)}</b>`,
+        esc(resolveRef(spec, r)?.description || ''),
+      ]);
       html += `<div class="op">
 <div class="op-head"><span class="m ${method}">${method.toUpperCase()}</span><code class="path">${esc(path)}</code><span class="auth ${auth(op) === 'Public' ? 'pub' : 'sec'}">${auth(op)}</span></div>
 <h4>${esc(op.summary || path)}</h4>
 ${mdToHtml(describe(op, method, path))}
-${params.length ? `<h5>Parameters</h5>${table(['Name', 'In', 'Required', 'Type', 'Description'], params.map((p) => [`<code>${esc(p.name)}</code>`, esc(p.in), p.required ? 'yes' : 'no', esc(typeOf(spec, p.schema)), esc(p.description || '')]), 'small')}` : ''}
-${bodyRows.length ? `<h5>Request body fields</h5>${table(['Field', 'Type', 'Required', 'Description'], bodyRows.map((r) => [`<code>${esc(r.name)}</code>`, esc(r.type), r.req ? 'yes' : 'no', esc(r.desc)]), 'small')}` : ''}
+${
+  params.length
+    ? `<h5>Parameters</h5>${table(
+        ['Name', 'In', 'Required', 'Type', 'Description'],
+        params.map((p) => [
+          `<code>${esc(p.name)}</code>`,
+          esc(p.in),
+          p.required ? 'yes' : 'no',
+          esc(typeOf(spec, p.schema)),
+          esc(p.description || ''),
+        ]),
+        'small',
+      )}`
+    : ''
+}
+${
+  bodyRows.length
+    ? `<h5>Request body fields</h5>${table(
+        ['Field', 'Type', 'Required', 'Description'],
+        bodyRows.map((r) => [
+          `<code>${esc(r.name)}</code>`,
+          esc(r.type),
+          r.req ? 'yes' : 'no',
+          esc(r.desc),
+        ]),
+        'small',
+      )}`
+    : ''
+}
 ${resp.length ? `<h5>Responses</h5>${table(['Status', 'Meaning'], resp, 'small')}` : ''}
 </div>`;
     }
@@ -692,47 +1062,95 @@ ${mdToHtml(shiftHeadings(section(rd('docs/services/chat-service.md'), 'Error sha
 }
 chapter('User service HTTP API', renderApi(userApi, 'User service'));
 chapter('Chat service HTTP API', renderApi(chatApi, 'Chat service'));
-chapter('Realtime protocol (Socket.IO)', mdToHtml(shiftHeadings(section(rd('docs/services/chat-service.md'), 'Socket.IO'), 2), 'docs/services/chat-service.md') +
-  `<h3>Current limitations</h3>` + mdToHtml(shiftHeadings(section(rd('docs/services/chat-service.md'), 'Current limitations'), 2), 'docs/services/chat-service.md'));
+chapter(
+  'Realtime protocol (Socket.IO)',
+  mdToHtml(
+    shiftHeadings(section(rd('docs/services/chat-service.md'), 'Socket.IO'), 2),
+    'docs/services/chat-service.md',
+  ) +
+    `<h3>Current limitations</h3>` +
+    mdToHtml(
+      shiftHeadings(
+        section(rd('docs/services/chat-service.md'), 'Current limitations'),
+        2,
+      ),
+      'docs/services/chat-service.md',
+    ),
+);
 
 // ============================================================== PART V
-part('Part V: Data Model and Code Map', 'The database schemas and an index of every analysed file, grouped by architectural layer.');
+part(
+  'Part V: Data Model and Code Map',
+  'The database schemas and an index of every analysed file, grouped by architectural layer.',
+);
 {
   const prisma = (p) => `<pre><code>${esc(rd(p))}</code></pre>`;
-  const tables = uaNodes.filter((n) => n.type === 'table' || n.type === 'schema');
-  chapter('Database schemas and ownership',
+  const tables = uaNodes.filter(
+    (n) => n.type === 'table' || n.type === 'schema',
+  );
+  chapter(
+    'Database schemas and ownership',
     `<p>User, Chat and Game each own a separate PostgreSQL database; they never share tables. The Prisma schemas below cover User and Chat. Game persists its own match state and migrations under the Game service. Chat keeps a local <code>ChatUser</code> projection filled from RabbitMQ events and an HTTP fallback, never by reading the User database.</p>
 <h3>User service schema</h3>${prisma('user-service/prisma/schema.prisma')}
 <h3>Chat service schema</h3>${prisma('chat-service/prisma/schema.prisma')}
 <h3>Tables and schemas found by the knowledge graph</h3>
-${table(['Name', 'Defined in', 'Summary'], tables.map((n) => [`<code>${esc(n.name)}</code>`, `<code>${esc(n.filePath)}</code>`, goodSummary(n.summary) ? esc(n.summary) : '']), 'small')}`);
+${table(
+  ['Name', 'Defined in', 'Summary'],
+  tables.map((n) => [
+    `<code>${esc(n.name)}</code>`,
+    `<code>${esc(n.filePath)}</code>`,
+    goodSummary(n.summary) ? esc(n.summary) : '',
+  ]),
+  'small',
+)}`,
+  );
 }
 {
   const layerHtml = ua.layers
     .map((l) => {
-      const ns = l.nodeIds.map((id) => uaById.get(id)).filter(Boolean).sort((a, b) => (a.filePath || '').localeCompare(b.filePath || ''));
+      const ns = l.nodeIds
+        .map((id) => uaById.get(id))
+        .filter(Boolean)
+        .sort((a, b) => (a.filePath || '').localeCompare(b.filePath || ''));
       if (!ns.length) return '';
       return `<h3>${esc(l.name)} <small>(${ns.length} files)</small></h3><p class="muted">${esc(l.description)}</p>${table(
         ['File', 'Type', 'Summary'],
-        ns.map((n) => [`<code>${esc(n.filePath)}</code>`, esc(n.type), goodSummary(n.summary) ? esc(n.summary) : ''])
-        , 'small files')}`;
+        ns.map((n) => [
+          `<code>${esc(n.filePath)}</code>`,
+          esc(n.type),
+          goodSummary(n.summary) ? esc(n.summary) : '',
+        ]),
+        'small files',
+      )}`;
     })
     .join('');
-  chapter('File index by layer', `<p>Summaries come from the Understand-Anything analysis. Entries without a summary are omitted rather than shown with a low-quality description.</p>${layerHtml}`);
+  chapter(
+    'File index by layer',
+    `<p>Summaries come from the Understand-Anything analysis. Entries without a summary are omitted rather than shown with a low-quality description.</p>${layerHtml}`,
+  );
 }
 {
   const eps = uaNodes.filter((n) => n.type === 'endpoint');
-  chapter('Endpoint nodes in the knowledge graph',
+  chapter(
+    'Endpoint nodes in the knowledge graph',
     `<p>Route definitions the analyzer found in the source. For the authoritative contract, see Part IV.</p>${table(
       ['Endpoint', 'Defined in', 'Summary'],
-      eps.map((n) => [`<code>${esc(n.name)}</code>`, `<code>${esc(n.filePath)}</code>`, goodSummary(n.summary) ? esc(n.summary) : '']),
+      eps.map((n) => [
+        `<code>${esc(n.name)}</code>`,
+        `<code>${esc(n.filePath)}</code>`,
+        goodSummary(n.summary) ? esc(n.summary) : '',
+      ]),
       'small',
-    )}`);
+    )}`,
+  );
 }
 
 // ================================================================ assemble
 const tocHtml = `<section class="toc"><h1 class="plain">Contents</h1>${toc
-  .map((t) => `<div class="toc-${t.level}"><a href="#${t.id}">${esc(t.title)}</a></div>`)
+  .map(
+    (t) =>
+      `<div class="toc-${t.level}"><a href="#${t.id}">${esc(t.title)}</a></div>`,
+  )
   .join('')}</section>`;
 
 const css = `
@@ -813,7 +1231,9 @@ h3.tag { background: #eef2ff; border: 0; padding: 5px 10px; border-radius: 6px; 
 const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Nook: The Application Book</title><style>${css}</style></head><body>${cover}${tocHtml}${parts.join('\n')}</body></html>`;
 const htmlPath = join(DIST, 'book.html');
 writeFileSync(htmlPath, html);
-console.log(`HTML written: ${(html.length / 1024).toFixed(0)} KB, ${toc.length} toc entries`);
+console.log(
+  `HTML written: ${(html.length / 1024).toFixed(0)} KB, ${toc.length} toc entries`,
+);
 
 // ================================================================== PDF
 const chromeCandidates = [
@@ -829,10 +1249,17 @@ const chromeCandidates = [
 const executablePath = chromeCandidates.find((p) => existsSync(p));
 if (!executablePath) throw new Error('No Chrome/Edge found. Set CHROME_PATH.');
 
-const browser = await puppeteer.launch({ executablePath, headless: true, args: ['--allow-file-access-from-files'] });
+const browser = await puppeteer.launch({
+  executablePath,
+  headless: true,
+  args: ['--allow-file-access-from-files'],
+});
 try {
   const page = await browser.newPage();
-  await page.goto(pathToFileURL(htmlPath).href, { waitUntil: 'load', timeout: 120000 });
+  await page.goto(pathToFileURL(htmlPath).href, {
+    waitUntil: 'load',
+    timeout: 120000,
+  });
   await page.pdf({
     path: OUT_PDF,
     format: 'A4',

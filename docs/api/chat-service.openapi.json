@@ -56,9 +56,7 @@
       "get": {
         "operationId": "getServiceRoot",
         "summary": "Get service root",
-        "tags": [
-          "Service"
-        ],
+        "tags": ["Service"],
         "security": [],
         "responses": {
           "200": {
@@ -81,9 +79,7 @@
       "post": {
         "operationId": "createOrGetDm",
         "summary": "Create or get a direct conversation",
-        "tags": [
-          "Conversations"
-        ],
+        "tags": ["Conversations"],
         "description": "Creates one canonical DM for the authenticated user and target user, or returns the existing DM. Participant UUIDs are sorted before lookup. Missing local ChatUser profiles are lazily bootstrapped from User service; either user must exist there and must not be locally deleted. Self-DM currently reaches the generic 500 error handler.",
         "requestBody": {
           "required": true,
@@ -149,9 +145,7 @@
       "get": {
         "operationId": "listConversations",
         "summary": "List direct conversations",
-        "tags": [
-          "Conversations"
-        ],
+        "tags": ["Conversations"],
         "description": "Returns conversations where the authenticated user is one of the two DM participants. Each item includes the caller's nullable last-read message ID and a derived unread count. Unread messages are non-deleted messages authored by another user after the marker in (createdAt, id) order; without a marker, all such messages are unread. The response does not include group channels, participant profiles, latest-message summaries, or a guaranteed sort order. Each DM includes public profile summaries for both participants.",
         "responses": {
           "200": {
@@ -197,9 +191,7 @@
       "post": {
         "operationId": "sendMessage",
         "summary": "Send a message",
-        "tags": [
-          "Messages"
-        ],
+        "tags": ["Messages"],
         "description": "Persists a message for an authenticated DM participant or a current member of the group that owns a CHANNEL conversation. The server emits a newly stored message to the DM participants or current group members through their private user rooms. clientRequestId scopes idempotency to the author. The request hash is SHA-256 of the JSON tuple [conversationId, content, attachments, gameChallenge.roomCode or null]. A same-ID request with a different hash returns 409; an identical retry returns the existing message and does not emit again.",
         "requestBody": {
           "required": true,
@@ -270,9 +262,7 @@
       "get": {
         "operationId": "getMessages",
         "summary": "Load message history",
-        "tags": [
-          "Messages"
-        ],
+        "tags": ["Messages"],
         "description": "Returns a raw newest-first message array. The current implementation queries limit + 1 rows for lookahead but does not remove the extra row or return hasMore/nextBefore. The optional before value is a unique Message.id cursor and the cursor row is skipped.",
         "parameters": [
           {
@@ -342,9 +332,7 @@
       "patch": {
         "operationId": "markMessageRead",
         "summary": "Mark a message as read",
-        "tags": [
-          "Read state"
-        ],
+        "tags": ["Read state"],
         "description": "Validates that messageId belongs to the supplied conversation and that the caller is a DM participant or a current member of the owning group, then upserts ConversationReadState by (conversationId, userId). The current implementation permits the marker to move backward.",
         "requestBody": {
           "required": true,
@@ -382,9 +370,7 @@
       "patch": {
         "operationId": "editMessage",
         "summary": "Edit a message",
-        "tags": [
-          "Messages"
-        ],
+        "tags": ["Messages"],
         "description": "Only the original author can edit a non-deleted message. The update replaces content, sets editedAt, and atomically increments version. Missing, deleted, and other users' messages all return 404.",
         "parameters": [
           {
@@ -458,9 +444,7 @@
       "delete": {
         "operationId": "deleteMessage",
         "summary": "Delete a message",
-        "tags": [
-          "Messages"
-        ],
+        "tags": ["Messages"],
         "description": "Soft-deletes a message owned by the authenticated user. Chat clears content, sets deletedAt, and atomically increments version. Missing, already deleted, and other users' messages all return 404.",
         "parameters": [
           {
@@ -497,9 +481,7 @@
       "get": {
         "operationId": "listGroups",
         "summary": "List the caller's groups",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Returns groups where the authenticated active user is a member, including the caller's role and channel summaries.",
         "responses": {
           "200": {
@@ -532,9 +514,7 @@
       "post": {
         "operationId": "createGroup",
         "summary": "Create a group",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Creates a group, makes the caller an ADMIN, and creates its general text channel in one database operation.",
         "requestBody": {
           "required": true,
@@ -593,9 +573,7 @@
       "get": {
         "operationId": "getGroup",
         "summary": "Get group details",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Requires group membership.",
         "responses": {
           "200": {
@@ -625,9 +603,7 @@
       "patch": {
         "operationId": "updateGroup",
         "summary": "Update group details",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Only group admins can update the name, description, or rules. Omitted fields are unchanged; explicit null clears description or rules.",
         "requestBody": {
           "required": true,
@@ -677,9 +653,7 @@
       "delete": {
         "operationId": "deleteGroup",
         "summary": "Delete a group",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Only a group admin can delete the group. Related channels and messages are removed by database cascades.",
         "responses": {
           "204": {
@@ -722,9 +696,7 @@
       "get": {
         "operationId": "listGroupMembers",
         "summary": "List group members",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Requires group membership. Member results contain only public profile fields.",
         "responses": {
           "200": {
@@ -757,9 +729,7 @@
       "post": {
         "operationId": "addGroupMember",
         "summary": "Add a group member",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Only group admins can add an existing active User-service account. New members receive MEMBER role. Invitations are not implemented.",
         "requestBody": {
           "required": true,
@@ -825,9 +795,7 @@
       "delete": {
         "operationId": "leaveGroup",
         "summary": "Leave a group",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Removes the authenticated user from the group. The last admin cannot leave until another member is promoted or the group is deleted.",
         "responses": {
           "204": {
@@ -877,9 +845,7 @@
       "delete": {
         "operationId": "removeGroupMember",
         "summary": "Remove a group member",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Only group admins can remove another member. Removing the last admin is rejected.",
         "responses": {
           "204": {
@@ -932,9 +898,7 @@
       "patch": {
         "operationId": "updateGroupMemberRole",
         "summary": "Change a member role",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Only group admins can set a member role to ADMIN or MEMBER. The last admin cannot be demoted.",
         "requestBody": {
           "required": true,
@@ -997,9 +961,7 @@
       "get": {
         "operationId": "listGroupChannels",
         "summary": "List group channels",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Requires group membership. Each channel includes the caller's lastReadMessageId and the count of non-deleted messages from other members after that marker.",
         "responses": {
           "200": {
@@ -1032,9 +994,7 @@
       "post": {
         "operationId": "createGroupChannel",
         "summary": "Create a channel",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Only group admins can create text channels.",
         "requestBody": {
           "required": true,
@@ -1108,9 +1068,7 @@
       "get": {
         "operationId": "getGroupChannel",
         "summary": "Get channel details",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Requires group membership; the channel must belong to the specified group.",
         "responses": {
           "200": {
@@ -1140,9 +1098,7 @@
       "patch": {
         "operationId": "updateGroupChannel",
         "summary": "Update a channel",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Only group admins can update channel name or topic. Omitted fields are unchanged; explicit null clears topic.",
         "requestBody": {
           "required": true,
@@ -1191,9 +1147,7 @@
       "delete": {
         "operationId": "deleteGroupChannel",
         "summary": "Delete a channel",
-        "tags": [
-          "Groups"
-        ],
+        "tags": ["Groups"],
         "description": "Only group admins can delete a channel. Related messages are removed by database cascades.",
         "responses": {
           "204": {
@@ -1224,9 +1178,7 @@
       "get": {
         "operationId": "getFeed",
         "summary": "Get the global feed location",
-        "tags": [
-          "Feed"
-        ],
+        "tags": ["Feed"],
         "description": "Returns the feed group and channel IDs, and joins the caller to the feed if needed. Posts use the normal message endpoints with this channel ID.",
         "responses": {
           "200": {
@@ -1249,9 +1201,7 @@
       "get": {
         "operationId": "getFeedPosts",
         "summary": "List one user's feed posts",
-        "tags": [
-          "Feed"
-        ],
+        "tags": ["Feed"],
         "description": "Newest-first, non-deleted posts by this author in the feed channel. Returns up to limit + 1 rows, where the extra row signals more results. Joins the caller to the feed so attachment URLs work.",
         "parameters": [
           {
@@ -1297,9 +1247,7 @@
       "post": {
         "operationId": "createAttachmentUploadUrl",
         "summary": "Create a presigned upload policy",
-        "tags": [
-          "Attachments"
-        ],
+        "tags": ["Attachments"],
         "description": "Returns a five-minute POST policy for a server-generated object key. The browser sends the returned fields and the file directly to MinIO as multipart/form-data.",
         "requestBody": {
           "required": true,
@@ -1343,9 +1291,7 @@
       "get": {
         "operationId": "createAttachmentPreviewUrl",
         "summary": "Create an inline preview URL",
-        "tags": [
-          "Attachments"
-        ],
+        "tags": ["Attachments"],
         "description": "Returns a five-minute presigned GET URL for images and videos. Other types return a null previewUrl.",
         "parameters": [
           {
@@ -1391,9 +1337,7 @@
       "get": {
         "operationId": "createAttachmentDownloadUrl",
         "summary": "Create a download URL",
-        "tags": [
-          "Attachments"
-        ],
+        "tags": ["Attachments"],
         "description": "Returns a five-minute presigned GET URL with attachment disposition.",
         "parameters": [
           {
@@ -1414,9 +1358,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "url"
-                  ],
+                  "required": ["url"],
                   "properties": {
                     "url": {
                       "type": "string",
@@ -1516,9 +1458,7 @@
       "RootResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "message"
-        ],
+        "required": ["message"],
         "properties": {
           "message": {
             "type": "string"
@@ -1528,9 +1468,7 @@
       "CreateDmRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "userId"
-        ],
+        "required": ["userId"],
         "properties": {
           "userId": {
             "type": "string",
@@ -1542,10 +1480,7 @@
       "SendMessageRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "content",
-          "clientRequestId"
-        ],
+        "required": ["content", "clientRequestId"],
         "properties": {
           "content": {
             "type": "string",
@@ -1569,9 +1504,7 @@
           "gameChallenge": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "roomCode"
-            ],
+            "required": ["roomCode"],
             "properties": {
               "roomCode": {
                 "type": "string",
@@ -1585,9 +1518,7 @@
       "MarkReadRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "messageId"
-        ],
+        "required": ["messageId"],
         "properties": {
           "messageId": {
             "type": "string",
@@ -1599,9 +1530,7 @@
       "EditMessageRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "content"
-        ],
+        "required": ["content"],
         "properties": {
           "content": {
             "type": "string",
@@ -1632,10 +1561,7 @@
           },
           "kind": {
             "type": "string",
-            "enum": [
-              "DM",
-              "CHANNEL"
-            ]
+            "enum": ["DM", "CHANNEL"]
           },
           "createdAt": {
             "type": "string",
@@ -1648,38 +1574,23 @@
             "readOnly": true
           },
           "dmUserAId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "dmUserBId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "groupId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 80
           },
           "topic": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 500
           }
         }
@@ -1700,10 +1611,7 @@
             ],
             "properties": {
               "lastReadMessageId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "format": "uuid",
                 "description": "The caller's current read marker, or null before any message is marked read"
               },
@@ -1771,17 +1679,11 @@
           },
           "kind": {
             "type": "string",
-            "enum": [
-              "USER",
-              "SYSTEM"
-            ],
+            "enum": ["USER", "SYSTEM"],
             "description": "USER messages are written by account holders; SYSTEM messages are created for service notices such as Code Arena lifecycle events."
           },
           "content": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 2000
           },
           "createdAt": {
@@ -1790,17 +1692,11 @@
             "readOnly": true
           },
           "editedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "deletedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "clientRequestId": {
@@ -1831,10 +1727,7 @@
       },
       "NestError": {
         "type": "object",
-        "required": [
-          "statusCode",
-          "message"
-        ],
+        "required": ["statusCode", "message"],
         "properties": {
           "statusCode": {
             "type": "integer"
@@ -1860,9 +1753,7 @@
       "CreateGroupRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
@@ -1870,17 +1761,11 @@
             "maxLength": 100
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 1000
           },
           "rules": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 4000
           }
         }
@@ -1895,17 +1780,11 @@
             "maxLength": 100
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 1000
           },
           "rules": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 4000
           }
         }
@@ -1913,9 +1792,7 @@
       "AddGroupMemberRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "userId"
-        ],
+        "required": ["userId"],
         "properties": {
           "userId": {
             "type": "string",
@@ -1926,25 +1803,18 @@
       "UpdateGroupMemberRoleRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "role"
-        ],
+        "required": ["role"],
         "properties": {
           "role": {
             "type": "string",
-            "enum": [
-              "ADMIN",
-              "MEMBER"
-            ]
+            "enum": ["ADMIN", "MEMBER"]
           }
         }
       },
       "CreateChannelRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
@@ -1952,10 +1822,7 @@
             "maxLength": 80
           },
           "topic": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 500
           }
         }
@@ -1970,10 +1837,7 @@
             "maxLength": 80
           },
           "topic": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 500
           }
         }
@@ -2000,17 +1864,11 @@
             "maxLength": 100
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 1000
           },
           "rules": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 4000
           },
           "createdAt": {
@@ -2050,16 +1908,10 @@
             "type": "string"
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "rules": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "createdAt": {
             "type": "string",
@@ -2080,13 +1932,7 @@
       "GroupSummary": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "id",
-          "name",
-          "description",
-          "members",
-          "channels"
-        ],
+        "required": ["id", "name", "description", "members", "channels"],
         "properties": {
           "id": {
             "type": "string",
@@ -2096,10 +1942,7 @@
             "type": "string"
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "members": {
             "type": "array",
@@ -2107,16 +1950,11 @@
             "maxItems": 1,
             "items": {
               "type": "object",
-              "required": [
-                "role"
-              ],
+              "required": ["role"],
               "properties": {
                 "role": {
                   "type": "string",
-                  "enum": [
-                    "ADMIN",
-                    "MEMBER"
-                  ]
+                  "enum": ["ADMIN", "MEMBER"]
                 }
               }
             }
@@ -2132,28 +1970,18 @@
       "ChannelSummary": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "id",
-          "name",
-          "topic"
-        ],
+        "required": ["id", "name", "topic"],
         "properties": {
           "id": {
             "type": "string",
             "format": "uuid"
           },
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 80
           },
           "topic": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 500
           }
         }
@@ -2161,13 +1989,7 @@
       "Channel": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "id",
-          "groupId",
-          "name",
-          "topic",
-          "createdAt"
-        ],
+        "required": ["id", "groupId", "name", "topic", "createdAt"],
         "properties": {
           "id": {
             "type": "string",
@@ -2178,17 +2000,11 @@
             "format": "uuid"
           },
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 80
           },
           "topic": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 500
           },
           "createdAt": {
@@ -2219,17 +2035,11 @@
             "format": "uuid"
           },
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 80
           },
           "topic": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 500
           },
           "createdAt": {
@@ -2237,10 +2047,7 @@
             "format": "date-time"
           },
           "lastReadMessageId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "unreadCount": {
@@ -2252,18 +2059,11 @@
       "GroupMember": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "role",
-          "joinedAt",
-          "user"
-        ],
+        "required": ["role", "joinedAt", "user"],
         "properties": {
           "role": {
             "type": "string",
-            "enum": [
-              "ADMIN",
-              "MEMBER"
-            ]
+            "enum": ["ADMIN", "MEMBER"]
           },
           "joinedAt": {
             "type": "string",
@@ -2272,12 +2072,7 @@
           "user": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "id",
-              "username",
-              "displayName",
-              "avatarUrl"
-            ],
+            "required": ["id", "username", "displayName", "avatarUrl"],
             "properties": {
               "id": {
                 "type": "string",
@@ -2287,16 +2082,10 @@
                 "type": "string"
               },
               "displayName": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "avatarUrl": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               }
             }
           }
@@ -2305,12 +2094,7 @@
       "GroupMembership": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "groupId",
-          "userId",
-          "role",
-          "joinedAt"
-        ],
+        "required": ["groupId", "userId", "role", "joinedAt"],
         "properties": {
           "groupId": {
             "type": "string",
@@ -2322,10 +2106,7 @@
           },
           "role": {
             "type": "string",
-            "enum": [
-              "ADMIN",
-              "MEMBER"
-            ]
+            "enum": ["ADMIN", "MEMBER"]
           },
           "joinedAt": {
             "type": "string",
@@ -2336,44 +2117,27 @@
       "ChatProfile": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "id",
-          "username",
-          "displayName",
-          "avatarUrl"
-        ],
+        "required": ["id", "username", "displayName", "avatarUrl"],
         "properties": {
           "id": {
             "type": "string",
             "format": "uuid"
           },
           "username": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "displayName": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "avatarUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uri-reference"
           }
         }
       },
       "FeedInfo": {
         "type": "object",
-        "required": [
-          "groupId",
-          "channelId"
-        ],
+        "required": ["groupId", "channelId"],
         "properties": {
           "groupId": {
             "type": "string",
@@ -2387,9 +2151,7 @@
       },
       "AttachmentUploadRequest": {
         "type": "object",
-        "required": [
-          "contentType"
-        ],
+        "required": ["contentType"],
         "properties": {
           "contentType": {
             "type": "string",
@@ -2426,9 +2188,7 @@
           },
           "method": {
             "type": "string",
-            "enum": [
-              "POST"
-            ]
+            "enum": ["POST"]
           },
           "fields": {
             "type": "object",
@@ -2448,19 +2208,13 @@
       },
       "AttachmentPreview": {
         "type": "object",
-        "required": [
-          "contentType",
-          "previewUrl"
-        ],
+        "required": ["contentType", "previewUrl"],
         "properties": {
           "contentType": {
             "type": "string"
           },
           "previewUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uri",
             "description": "Null for types that cannot be shown inline, such as PDF."
           }
@@ -2477,9 +2231,7 @@
             },
             "example": {
               "statusCode": 400,
-              "message": [
-                "limit must not be greater than 100"
-              ],
+              "message": ["limit must not be greater than 100"],
               "error": "Bad Request"
             }
           }
@@ -2605,7 +2357,10 @@
             "typing": { "type": "boolean" }
           }
         },
-        "acknowledgement": { "type": "object", "properties": { "ok": { "type": "boolean" } } }
+        "acknowledgement": {
+          "type": "object",
+          "properties": { "ok": { "type": "boolean" } }
+        }
       },
       {
         "name": "typing:changed",
@@ -2634,7 +2389,10 @@
                 "required": ["userId", "status"],
                 "properties": {
                   "userId": { "type": "string", "format": "uuid" },
-                  "status": { "type": "string", "enum": ["ONLINE", "AWAY", "OFFLINE"] }
+                  "status": {
+                    "type": "string",
+                    "enum": ["ONLINE", "AWAY", "OFFLINE"]
+                  }
                 }
               }
             }
@@ -2649,14 +2407,20 @@
           "required": ["userId", "status"],
           "properties": {
             "userId": { "type": "string", "format": "uuid" },
-            "status": { "type": "string", "enum": ["ONLINE", "AWAY", "OFFLINE"] }
+            "status": {
+              "type": "string",
+              "enum": ["ONLINE", "AWAY", "OFFLINE"]
+            }
           }
         }
       },
       {
         "name": "presence:activity",
         "direction": "client-to-server",
-        "payload": { "type": "null", "description": "No payload; records activity for the authenticated socket." }
+        "payload": {
+          "type": "null",
+          "description": "No payload; records activity for the authenticated socket."
+        }
       }
     ]
   }

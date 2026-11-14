@@ -1,7 +1,7 @@
-import type { PlayerStatus, Readiness } from "arena-model";
-import { assertSupportedLanguage, type SupportedLanguage } from "./judge.js";
-import { IllegalStateError, NotMemberError } from "./match-authority.js";
-import { collabRoomId, CollabDocs, type CollabRow } from "./collab.js";
+import type { PlayerStatus, Readiness } from 'arena-model';
+import { assertSupportedLanguage, type SupportedLanguage } from './judge.js';
+import { IllegalStateError, NotMemberError } from './match-authority.js';
+import { collabRoomId, CollabDocs, type CollabRow } from './collab.js';
 import type {
   DocumentRevision,
   MatchRecord,
@@ -10,7 +10,7 @@ import type {
   RoundState,
   SideId,
   TeamDocState,
-} from "./records.js";
+} from './records.js';
 
 export interface TeamCollaborationPersistence {
   saveMatch(match: MatchRecord): Promise<void>;
@@ -18,12 +18,19 @@ export interface TeamCollaborationPersistence {
     matchId: string,
     roundId: string,
     sideId: string,
-  ): Promise<{ appRevision: number; language: string; stateB64: string } | undefined>;
-  commitMatchAndTeamDocuments(match: MatchRecord, rows: CollabRow[]): Promise<void>;
+  ): Promise<
+    { appRevision: number; language: string; stateB64: string } | undefined
+  >;
+  commitMatchAndTeamDocuments(
+    match: MatchRecord,
+    rows: CollabRow[],
+  ): Promise<void>;
 }
 
 export interface TeamProblemBank {
-  loadProblem(problemVersionId: string): { starters: Partial<Record<SupportedLanguage, string>> };
+  loadProblem(problemVersionId: string): {
+    starters: Partial<Record<SupportedLanguage, string>>;
+  };
 }
 
 export interface TeamReadinessResult {
@@ -57,7 +64,7 @@ export interface SubmissionDocument {
 
 export interface TeamMemberSnapshot {
   userId: string | null;
-  presence: "online" | "offline";
+  presence: 'online' | 'offline';
   departed: boolean;
   approvalRequired: boolean | null;
   surrenderPending: boolean;
@@ -104,13 +111,20 @@ export class TeamCollaboration {
     this.collab = options.collab ?? new CollabDocs();
   }
 
-  readinessFor(match: MatchRecord, side: SideId, now: number, reconnectGraceMs: number): Readiness {
+  readinessFor(
+    match: MatchRecord,
+    side: SideId,
+    now: number,
+    reconnectGraceMs: number,
+  ): Readiness {
     const members = this.teamMembers(match, side);
     const readiness = this.currentRound(match).readiness ?? {};
-    const required = members.map((member) => this.approvalRequired(match, member.userId, now, reconnectGraceMs));
+    const required = members.map((member) =>
+      this.approvalRequired(match, member.userId, now, reconnectGraceMs),
+    );
     return {
-      you: !required[0] || readiness[members[0]?.userId ?? ""]?.ready === true,
-      mate: !required[1] || readiness[members[1]?.userId ?? ""]?.ready === true,
+      you: !required[0] || readiness[members[0]?.userId ?? '']?.ready === true,
+      mate: !required[1] || readiness[members[1]?.userId ?? '']?.ready === true,
     };
   }
 
@@ -127,10 +141,15 @@ export class TeamCollaboration {
     const doc = round.teamDocs?.[side];
     if (!doc || revision !== doc.revision) return false;
     return this.teamMembers(match, side)
-      .filter((member) => member.userId === userId || this.approvalRequired(match, member.userId, now, reconnectGraceMs))
-      .every((member) =>
-        round.readiness?.[member.userId]?.ready === true &&
-        round.readiness?.[member.userId]?.documentRevision === doc.revision,
+      .filter(
+        (member) =>
+          member.userId === userId ||
+          this.approvalRequired(match, member.userId, now, reconnectGraceMs),
+      )
+      .every(
+        (member) =>
+          round.readiness?.[member.userId]?.ready === true &&
+          round.readiness?.[member.userId]?.documentRevision === doc.revision,
       );
   }
 
@@ -140,7 +159,8 @@ export class TeamCollaboration {
     input: { ready: boolean; documentRevision?: DocumentRevision },
   ): Promise<TeamReadinessResult> {
     this.requireTeamMode(match);
-    if (match.roundPhase !== "CODING") throw new IllegalStateError(`ready rejected in ${match.roundPhase}`);
+    if (match.roundPhase !== 'CODING')
+      throw new IllegalStateError(`ready rejected in ${match.roundPhase}`);
     const { sideId: side } = this.memberOf(match, userId);
     const doc = this.teamDocOf(match, side);
     if (input.ready === true && input.documentRevision !== doc.revision) {
@@ -166,15 +186,20 @@ export class TeamCollaboration {
     input: { roundId: string; updateB64: string },
   ): Promise<TeamUpdateResult> {
     this.requireTeamMode(match);
-    if (match.roundPhase !== "CODING") throw new IllegalStateError(`document change rejected in ${match.roundPhase}`);
+    if (match.roundPhase !== 'CODING')
+      throw new IllegalStateError(
+        `document change rejected in ${match.roundPhase}`,
+      );
     const { sideId: side } = this.memberOf(match, userId);
     const round = this.currentRound(match);
-    if (input.roundId !== round.roundId) throw new IllegalStateError("stale round document (write denied)");
+    if (input.roundId !== round.roundId)
+      throw new IllegalStateError('stale round document (write denied)');
     const doc = this.teamDocOf(match, side);
     const room = collabRoomId(match.id, round.roundId, side);
     await this.ensureLoaded(match, round, side, room);
     const { changed, source } = this.collab.applyUpdate(room, input.updateB64);
-    if (!changed) return { side, revision: doc.revision, changed: false, source };
+    if (!changed)
+      return { side, revision: doc.revision, changed: false, source };
 
     const pre = this.preImage(match, round, side);
     doc.revision += 1;
@@ -206,9 +231,16 @@ export class TeamCollaboration {
     };
   }
 
-  async setLanguage(match: MatchRecord, userId: string, language: string): Promise<{ side: SideId; revision: DocumentRevision } | null> {
-    if (match.mode !== "2v2") return null;
-    if (match.roundPhase !== "CODING") throw new IllegalStateError(`document change rejected in ${match.roundPhase}`);
+  async setLanguage(
+    match: MatchRecord,
+    userId: string,
+    language: string,
+  ): Promise<{ side: SideId; revision: DocumentRevision } | null> {
+    if (match.mode !== '2v2') return null;
+    if (match.roundPhase !== 'CODING')
+      throw new IllegalStateError(
+        `document change rejected in ${match.roundPhase}`,
+      );
     assertSupportedLanguage(language);
     const { sideId: side } = this.memberOf(match, userId);
     const round = this.currentRound(match);
@@ -241,36 +273,61 @@ export class TeamCollaboration {
     this.requireTeamMode(match);
     const round = this.currentRound(match);
     const doc = this.teamDocOf(match, side);
-    if (!this.documentRevisionMatches(match, side, documentRevision, userId, this.clock(), reconnectGraceMs)) {
-      throw new IllegalStateError("submit rejected: stale document revision (re-ready the current revision)");
+    if (
+      !this.documentRevisionMatches(
+        match,
+        side,
+        documentRevision,
+        userId,
+        this.clock(),
+        reconnectGraceMs,
+      )
+    ) {
+      throw new IllegalStateError(
+        'submit rejected: stale document revision (re-ready the current revision)',
+      );
     }
     if (language !== doc.language) {
-      throw new IllegalStateError(`submit language ${language} must match team language ${doc.language}`);
+      throw new IllegalStateError(
+        `submit language ${language} must match team language ${doc.language}`,
+      );
     }
     const room = collabRoomId(match.id, round.roundId, side);
     await this.ensureLoaded(match, round, side, room);
-    return { source: this.collab.getSource(room), documentRevision: doc.revision, language: doc.language };
+    return {
+      source: this.collab.getSource(room),
+      documentRevision: doc.revision,
+      language: doc.language,
+    };
   }
 
   destroyRound(match: MatchRecord, round: RoundState): void {
-    if (match.mode !== "2v2") return;
+    if (match.mode !== '2v2') return;
     for (const side of Object.keys(round.activities)) {
       this.collab.destroy(collabRoomId(match.id, round.roundId, side));
     }
   }
 
   destroySide(match: MatchRecord, side: SideId): void {
-    if (match.mode !== "2v2") return;
+    if (match.mode !== '2v2') return;
     for (const round of match.rounds) {
       this.collab.destroy(collabRoomId(match.id, round.roundId, side));
     }
   }
 
   hasOnlineMember(match: MatchRecord, side: SideId): boolean {
-    return this.teamMembers(match, side).some((member) => match.memberPresence?.[member.userId] === "online");
+    return this.teamMembers(match, side).some(
+      (member) => match.memberPresence?.[member.userId] === 'online',
+    );
   }
 
-  snapshots(match: MatchRecord, round: RoundState, mySide: SideId, now: number, reconnectGraceMs: number): TeamSnapshot[] {
+  snapshots(
+    match: MatchRecord,
+    round: RoundState,
+    mySide: SideId,
+    now: number,
+    reconnectGraceMs: number,
+  ): TeamSnapshot[] {
     return Object.keys(round.activities).map((side) => {
       const own = side === mySide;
       const doc = round.teamDocs?.[side];
@@ -279,15 +336,28 @@ export class TeamCollaboration {
         activity: this.activityOf(round, side),
         submissions: round.attempts[side] ?? 0,
         members: this.teamMembers(match, side).map((participant) => {
-          const record = own ? round.readiness?.[participant.userId] : undefined;
+          const record = own
+            ? round.readiness?.[participant.userId]
+            : undefined;
           return {
             userId: participant.anonymized ? null : participant.userId,
-            presence: match.memberPresence?.[participant.userId] ?? "offline",
-            departed: match.departedMembers?.includes(participant.userId) ?? false,
-            approvalRequired: own ? this.approvalRequired(match, participant.userId, now, reconnectGraceMs) : null,
-            surrenderPending: own && (match.surrenderVotes?.includes(participant.userId) ?? false),
+            presence: match.memberPresence?.[participant.userId] ?? 'offline',
+            departed:
+              match.departedMembers?.includes(participant.userId) ?? false,
+            approvalRequired: own
+              ? this.approvalRequired(
+                  match,
+                  participant.userId,
+                  now,
+                  reconnectGraceMs,
+                )
+              : null,
+            surrenderPending:
+              own &&
+              (match.surrenderVotes?.includes(participant.userId) ?? false),
             ready: record?.ready === true,
-            readyRevision: record?.ready === true ? (record.documentRevision ?? null) : null,
+            readyRevision:
+              record?.ready === true ? (record.documentRevision ?? null) : null,
           };
         }),
         documentRevision: own ? (doc?.revision ?? null) : null,
@@ -297,20 +367,31 @@ export class TeamCollaboration {
   }
 
   private requireTeamMode(match: MatchRecord): void {
-    if (match.mode !== "2v2") throw new IllegalStateError("no shared document in 1v1");
+    if (match.mode !== '2v2')
+      throw new IllegalStateError('no shared document in 1v1');
   }
 
   private memberOf(match: MatchRecord, userId: string): Participant {
-    const participant = match.participants.find((entry) => entry.userId === userId);
-    if (!participant || match.departedMembers?.includes(userId)) throw new NotMemberError(match.id);
+    const participant = match.participants.find(
+      (entry) => entry.userId === userId,
+    );
+    if (!participant || match.departedMembers?.includes(userId))
+      throw new NotMemberError(match.id);
     return participant;
   }
 
   private teamMembers(match: MatchRecord, side: SideId): Participant[] {
-    return match.participants.filter((participant) => participant.sideId === side);
+    return match.participants.filter(
+      (participant) => participant.sideId === side,
+    );
   }
 
-  private approvalRequired(match: MatchRecord, userId: string, now: number, reconnectGraceMs: number): boolean {
+  private approvalRequired(
+    match: MatchRecord,
+    userId: string,
+    now: number,
+    reconnectGraceMs: number,
+  ): boolean {
     if (match.departedMembers?.includes(userId)) return false;
     const offlineSince = match.memberOfflineSinceMs?.[userId];
     return offlineSince === undefined || offlineSince + reconnectGraceMs > now;
@@ -324,21 +405,34 @@ export class TeamCollaboration {
 
   private currentRound(match: MatchRecord): RoundState {
     const round = match.rounds[match.currentRound - 1];
-    if (!round) throw new IllegalStateError(`match ${match.id} has no current round`);
+    if (!round)
+      throw new IllegalStateError(`match ${match.id} has no current round`);
     return round;
   }
 
   private activityOf(round: RoundState, side: SideId): PlayerStatus {
-    return round.activities[side] ?? "coding";
+    return round.activities[side] ?? 'coding';
   }
 
-  private async ensureLoaded(match: MatchRecord, round: RoundState, side: SideId, room: string): Promise<void> {
+  private async ensureLoaded(
+    match: MatchRecord,
+    round: RoundState,
+    side: SideId,
+    room: string,
+  ): Promise<void> {
     if (this.collab.has(room)) return;
     const doc = this.teamDocOf(match, side);
-    const stored = await this.persistence.loadTeamDocument(match.id, round.roundId, side);
+    const stored = await this.persistence.loadTeamDocument(
+      match.id,
+      round.roundId,
+      side,
+    );
     if (stored?.stateB64) {
       this.collab.restoreState(room, stored.stateB64);
-      if (stored.appRevision !== doc.revision || stored.language !== doc.language) {
+      if (
+        stored.appRevision !== doc.revision ||
+        stored.language !== doc.language
+      ) {
         doc.revision = stored.appRevision;
         doc.language = stored.language;
         this.invalidate(match, round, side);
@@ -351,13 +445,21 @@ export class TeamCollaboration {
 
   private starterFor(round: RoundState, language: string): string {
     try {
-      return this.bank.loadProblem(round.problemVersionId).starters[language as SupportedLanguage] ?? "";
+      return (
+        this.bank.loadProblem(round.problemVersionId).starters[
+          language as SupportedLanguage
+        ] ?? ''
+      );
     } catch {
-      return "";
+      return '';
     }
   }
 
-  private invalidate(match: MatchRecord, round: RoundState, side: SideId): void {
+  private invalidate(
+    match: MatchRecord,
+    round: RoundState,
+    side: SideId,
+  ): void {
     round.readiness ??= {};
     for (const member of this.teamMembers(match, side)) {
       round.readiness[member.userId] = {
@@ -373,7 +475,11 @@ export class TeamCollaboration {
     match: MatchRecord,
     round: RoundState,
     side: SideId,
-  ): { revision: DocumentRevision; language: string; readiness: Record<string, MemberReadiness | undefined> } {
+  ): {
+    revision: DocumentRevision;
+    language: string;
+    readiness: Record<string, MemberReadiness | undefined>;
+  } {
     const doc = this.teamDocOf(match, side);
     const readiness: Record<string, MemberReadiness | undefined> = {};
     for (const member of this.teamMembers(match, side)) {
@@ -383,14 +489,20 @@ export class TeamCollaboration {
     return { revision: doc.revision, language: doc.language, readiness };
   }
 
-  private async persist(match: MatchRecord, round: RoundState, side: SideId): Promise<void> {
+  private async persist(
+    match: MatchRecord,
+    round: RoundState,
+    side: SideId,
+  ): Promise<void> {
     const doc = this.teamDocOf(match, side);
     const row: CollabRow = {
       roundId: round.roundId,
       sideId: side,
       appRevision: doc.revision,
       language: doc.language,
-      stateB64: this.collab.encodeState(collabRoomId(match.id, round.roundId, side)),
+      stateB64: this.collab.encodeState(
+        collabRoomId(match.id, round.roundId, side),
+      ),
     };
     await this.persistence.commitMatchAndTeamDocuments(match, [row]);
   }
@@ -400,9 +512,15 @@ export class TeamCollaboration {
     round: RoundState,
     side: SideId,
     room: string,
-    pre: { revision: DocumentRevision; language: string; readiness: Record<string, MemberReadiness | undefined> },
+    pre: {
+      revision: DocumentRevision;
+      language: string;
+      readiness: Record<string, MemberReadiness | undefined>;
+    },
   ): Promise<void> {
-    const stored = await this.persistence.loadTeamDocument(match.id, round.roundId, side).catch(() => undefined);
+    const stored = await this.persistence
+      .loadTeamDocument(match.id, round.roundId, side)
+      .catch(() => undefined);
     if (stored?.stateB64) this.collab.restoreState(room, stored.stateB64);
     else this.collab.destroy(room);
     const doc = this.teamDocOf(match, side);

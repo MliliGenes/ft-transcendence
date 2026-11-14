@@ -1,18 +1,28 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
-import { randomUUID } from "node:crypto";
-import amqp from "amqp-connection-manager";
-import type { AmqpConnectionManager, Channel, ChannelWrapper } from "amqp-connection-manager";
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import amqp from 'amqp-connection-manager';
+import type {
+  AmqpConnectionManager,
+  Channel,
+  ChannelWrapper,
+} from 'amqp-connection-manager';
 import {
   GAME_EVENT_TYPES,
   type ChallengeCancelledData,
   type GameEvent,
   type MatchEndedData,
   type MatchStartedData,
-} from "./game-event.js";
+} from './game-event.js';
 
-const GAME_EVENTS_EXCHANGE = "game.events";
-const CHAT_GAME_EVENTS_QUEUE = "chat.game-events";
-const GAME_EVENTS_ROUTING_KEY = "game.#";
+const GAME_EVENTS_EXCHANGE = 'game.events';
+const CHAT_GAME_EVENTS_QUEUE = 'chat.game-events';
+const GAME_EVENTS_ROUTING_KEY = 'game.#';
 const PUBLISH_TIMEOUT_MS = 5000;
 
 /**
@@ -33,33 +43,45 @@ export class GameEventsPublisher implements OnModuleInit, OnModuleDestroy {
     const username = process.env.RABBITMQ_DEFAULT_USER;
     const password = process.env.RABBITMQ_DEFAULT_PASS;
     if (!host || !username || !password) {
-      this.logger.warn("RabbitMQ game-events publisher disabled because broker configuration is incomplete");
+      this.logger.warn(
+        'RabbitMQ game-events publisher disabled because broker configuration is incomplete',
+      );
       return;
     }
 
     const brokerUrl = new URL(`amqp://${host}`);
-    brokerUrl.port = process.env.RABBITMQ_PORT ?? "5672";
+    brokerUrl.port = process.env.RABBITMQ_PORT ?? '5672';
     brokerUrl.username = username;
     brokerUrl.password = password;
     this.connection = amqp.connect(brokerUrl.toString(), {
       heartbeatIntervalInSeconds: 30,
       reconnectTimeInSeconds: 2,
     });
-    this.connection.on("connectFailed", () => this.logger.warn("RabbitMQ connection failed; reconnecting"));
+    this.connection.on('connectFailed', () =>
+      this.logger.warn('RabbitMQ connection failed; reconnecting'),
+    );
 
     this.channel = this.connection.createChannel({
-      name: "game-events-publisher",
+      name: 'game-events-publisher',
       confirm: true,
       publishTimeout: PUBLISH_TIMEOUT_MS,
       setup: async (channel: Channel) => {
-        await channel.assertExchange(GAME_EVENTS_EXCHANGE, "topic", { durable: true });
+        await channel.assertExchange(GAME_EVENTS_EXCHANGE, 'topic', {
+          durable: true,
+        });
         // The durable queue is declared here so lifecycle events survive a Chat
         // outage instead of being dropped between the two services.
         await channel.assertQueue(CHAT_GAME_EVENTS_QUEUE, { durable: true });
-        await channel.bindQueue(CHAT_GAME_EVENTS_QUEUE, GAME_EVENTS_EXCHANGE, GAME_EVENTS_ROUTING_KEY);
+        await channel.bindQueue(
+          CHAT_GAME_EVENTS_QUEUE,
+          GAME_EVENTS_EXCHANGE,
+          GAME_EVENTS_ROUTING_KEY,
+        );
       },
     });
-    this.channel.on("error", () => this.logger.error("RabbitMQ game-events channel error"));
+    this.channel.on('error', () =>
+      this.logger.error('RabbitMQ game-events channel error'),
+    );
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -76,7 +98,7 @@ export class GameEventsPublisher implements OnModuleInit, OnModuleDestroy {
         Buffer.from(JSON.stringify(event)),
         {
           persistent: true,
-          contentType: "application/json",
+          contentType: 'application/json',
           messageId: event.eventId,
           timestamp: Date.now(),
         },
@@ -105,7 +127,9 @@ export class GameEventsPublisher implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async publishChallengeCancelled(data: ChallengeCancelledData): Promise<boolean> {
+  async publishChallengeCancelled(
+    data: ChallengeCancelledData,
+  ): Promise<boolean> {
     return this.publish({
       eventId: randomUUID(),
       eventType: GAME_EVENT_TYPES.CHALLENGE_CANCELLED,

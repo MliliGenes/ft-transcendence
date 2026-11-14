@@ -11,7 +11,11 @@ const STRANGER = '33333333-3333-4333-8333-333333333333';
 const CONVERSATION = '44444444-4444-4444-8444-444444444444';
 const ROOM = 'AB12CD';
 
-type FakeChallenge = { roomCode: string; conversationId: string; matchId: string | null };
+type FakeChallenge = {
+  roomCode: string;
+  conversationId: string;
+  matchId: string | null;
+};
 type FakeMessage = {
   id: string;
   conversationId: string;
@@ -23,19 +27,34 @@ type FakeMessage = {
 
 function fakePrisma() {
   const challenges = new Map<string, FakeChallenge>();
-  const users = new Map<string, { id: string; username: string | null; displayName: string | null }>([
+  const users = new Map<
+    string,
+    { id: string; username: string | null; displayName: string | null }
+  >([
     [ALICE, { id: ALICE, username: 'alice', displayName: null }],
     [BOB, { id: BOB, username: 'bob', displayName: 'Bob B' }],
   ]);
   const messages: FakeMessage[] = [];
-  const conversations = new Map<string, {
-    id: string;
-    kind: 'DM' | 'CHANNEL';
-    dmUserAId: string | null;
-    dmUserBId: string | null;
-    members: string[];
-  }>([
-    [CONVERSATION, { id: CONVERSATION, kind: 'DM', dmUserAId: ALICE, dmUserBId: BOB, members: [ALICE, BOB] }],
+  const conversations = new Map<
+    string,
+    {
+      id: string;
+      kind: 'DM' | 'CHANNEL';
+      dmUserAId: string | null;
+      dmUserBId: string | null;
+      members: string[];
+    }
+  >([
+    [
+      CONVERSATION,
+      {
+        id: CONVERSATION,
+        kind: 'DM',
+        dmUserAId: ALICE,
+        dmUserBId: BOB,
+        members: [ALICE, BOB],
+      },
+    ],
   ]);
   let sequence = 0;
 
@@ -51,18 +70,34 @@ function fakePrisma() {
         }
         return null;
       }),
-      update: vi.fn(async ({ where, data }: { where: { roomCode: string }; data: { matchId: string } }) => {
-        const challenge = challenges.get(where.roomCode);
-        if (!challenge) throw new Error('challenge not found');
-        challenge.matchId = data.matchId;
-        return { ...challenge };
-      }),
-      upsert: vi.fn(async ({ where, create }: { where: { roomCode: string }; create: FakeChallenge }) => {
-        const existing = challenges.get(where.roomCode);
-        if (existing) return { ...existing };
-        challenges.set(create.roomCode, { ...create });
-        return { ...create };
-      }),
+      update: vi.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: { roomCode: string };
+          data: { matchId: string };
+        }) => {
+          const challenge = challenges.get(where.roomCode);
+          if (!challenge) throw new Error('challenge not found');
+          challenge.matchId = data.matchId;
+          return { ...challenge };
+        },
+      ),
+      upsert: vi.fn(
+        async ({
+          where,
+          create,
+        }: {
+          where: { roomCode: string };
+          create: FakeChallenge;
+        }) => {
+          const existing = challenges.get(where.roomCode);
+          if (existing) return { ...existing };
+          challenges.set(create.roomCode, { ...create });
+          return { ...create };
+        },
+      ),
     },
     conversation: {
       findFirst: vi.fn(async ({ where }: { where: { id: string } }) => {
@@ -72,9 +107,10 @@ function fakePrisma() {
           kind: conversation.kind,
           dmUserAId: conversation.dmUserAId,
           dmUserBId: conversation.dmUserBId,
-          group: conversation.kind === 'CHANNEL'
-            ? { members: conversation.members.map((userId) => ({ userId })) }
-            : null,
+          group:
+            conversation.kind === 'CHANNEL'
+              ? { members: conversation.members.map((userId) => ({ userId })) }
+              : null,
         };
       }),
     },
@@ -84,22 +120,40 @@ function fakePrisma() {
           .filter((id) => users.has(id))
           .map((id) => ({ ...users.get(id)! })),
       ),
-      upsert: vi.fn(async ({ where, create }: { where: { id: string }; create: { id: string; username: string; displayName: string } }) => {
-        if (!users.has(where.id)) {
-          users.set(where.id, { id: where.id, username: create.username, displayName: create.displayName });
-        }
-        return { ...users.get(where.id)! };
-      }),
+      upsert: vi.fn(
+        async ({
+          where,
+          create,
+        }: {
+          where: { id: string };
+          create: { id: string; username: string; displayName: string };
+        }) => {
+          if (!users.has(where.id)) {
+            users.set(where.id, {
+              id: where.id,
+              username: create.username,
+              displayName: create.displayName,
+            });
+          }
+          return { ...users.get(where.id)! };
+        },
+      ),
     },
     message: {
-      findFirst: vi.fn(async ({ where }: { where: { authorId: string; clientRequestId: string } }) => {
-        const found = messages.find(
-          (message) =>
-            message.authorId === where.authorId &&
-            message.clientRequestId === where.clientRequestId,
-        );
-        return found ? { ...found } : null;
-      }),
+      findFirst: vi.fn(
+        async ({
+          where,
+        }: {
+          where: { authorId: string; clientRequestId: string };
+        }) => {
+          const found = messages.find(
+            (message) =>
+              message.authorId === where.authorId &&
+              message.clientRequestId === where.clientRequestId,
+          );
+          return found ? { ...found } : null;
+        },
+      ),
       create: vi.fn(async ({ data }: { data: FakeMessage }) => {
         const duplicate = messages.find(
           (message) =>
@@ -107,13 +161,23 @@ function fakePrisma() {
             message.clientRequestId === data.clientRequestId,
         );
         if (duplicate) {
-          const error = new Error('unique constraint') as Error & { code: string };
+          const error = new Error('unique constraint') as Error & {
+            code: string;
+          };
           error.code = 'P2002';
           throw error;
         }
         const created: FakeMessage = { ...data, id: `message-${++sequence}` };
         messages.push(created);
-        return { ...created, author: { id: SYSTEM_AUTHOR_ID, username: 'code-arena', displayName: 'Code Arena', avatarUrl: null } };
+        return {
+          ...created,
+          author: {
+            id: SYSTEM_AUTHOR_ID,
+            username: 'code-arena',
+            displayName: 'Code Arena',
+            avatarUrl: null,
+          },
+        };
       }),
     },
   };
@@ -122,7 +186,11 @@ function fakePrisma() {
 }
 
 /** The challenge binding the Chat service writes with the invitation. */
-async function linkChallenge(fake: ReturnType<typeof fakePrisma>, roomCode: string, conversationId: string) {
+async function linkChallenge(
+  fake: ReturnType<typeof fakePrisma>,
+  roomCode: string,
+  conversationId: string,
+) {
   await fake.prisma.gameChallenge.upsert({
     where: { roomCode },
     create: { roomCode, conversationId },
@@ -132,7 +200,9 @@ async function linkChallenge(fake: ReturnType<typeof fakePrisma>, roomCode: stri
 
 function build() {
   const fake = fakePrisma();
-  const gateway = { broadcastMessageCreated: vi.fn() } as unknown as ChatGateway;
+  const gateway = {
+    broadcastMessageCreated: vi.fn(),
+  } as unknown as ChatGateway;
   const service = new GameNotificationsService(
     fake.prisma as unknown as PrismaService,
     gateway,
@@ -179,15 +249,39 @@ describe('Game event contract', () => {
 
   it('rejects malformed or forged payloads', () => {
     expect(parseGameEvent(null)).toBeNull();
-    expect(parseGameEvent({ ...matchStarted, eventId: 'not-a-uuid' })).toBeNull();
-    expect(parseGameEvent({ ...matchStarted, data: { ...matchStarted.data, roomCode: 'toolong' } })).toBeNull();
-    expect(parseGameEvent({ ...matchStarted, data: { ...matchStarted.data, mode: '3v3' } })).toBeNull();
-    expect(parseGameEvent({ ...matchStarted, eventType: 'game.match.won' })).toBeNull();
-    expect(parseGameEvent({ ...matchEnded, data: { ...matchEnded.data, participants: [] } })).toBeNull();
+    expect(
+      parseGameEvent({ ...matchStarted, eventId: 'not-a-uuid' }),
+    ).toBeNull();
+    expect(
+      parseGameEvent({
+        ...matchStarted,
+        data: { ...matchStarted.data, roomCode: 'toolong' },
+      }),
+    ).toBeNull();
+    expect(
+      parseGameEvent({
+        ...matchStarted,
+        data: { ...matchStarted.data, mode: '3v3' },
+      }),
+    ).toBeNull();
+    expect(
+      parseGameEvent({ ...matchStarted, eventType: 'game.match.won' }),
+    ).toBeNull();
     expect(
       parseGameEvent({
         ...matchEnded,
-        data: { ...matchEnded.data, participants: [{ userId: ALICE, sideId: 'left', outcome: 'winner', score: 1 }] },
+        data: { ...matchEnded.data, participants: [] },
+      }),
+    ).toBeNull();
+    expect(
+      parseGameEvent({
+        ...matchEnded,
+        data: {
+          ...matchEnded.data,
+          participants: [
+            { userId: ALICE, sideId: 'left', outcome: 'winner', score: 1 },
+          ],
+        },
       }),
     ).toBeNull();
   });
@@ -286,7 +380,11 @@ describe('GameNotificationsService', () => {
           { userId: ALICE, sideId: 'left', outcome: 'win', score: 0 },
           { userId: BOB, sideId: 'right', outcome: 'loss', score: 0 },
         ],
-        forfeit: { winnerSideId: 'left', loserSideId: 'right', reason: 'leave' },
+        forfeit: {
+          winnerSideId: 'left',
+          loserSideId: 'right',
+          reason: 'leave',
+        },
         endedBecause: 'forfeit',
       },
     });
@@ -310,7 +408,11 @@ describe('GameNotificationsService', () => {
           { userId: ALICE, sideId: 'left', outcome: 'win', score: 0 },
           { userId: BOB, sideId: 'right', outcome: 'loss', score: 0 },
         ],
-        forfeit: { winnerSideId: 'left', loserSideId: 'right', reason: 'surrender' },
+        forfeit: {
+          winnerSideId: 'left',
+          loserSideId: 'right',
+          reason: 'surrender',
+        },
         endedBecause: 'forfeit',
       },
     };
@@ -354,7 +456,11 @@ describe('GameNotificationsService', () => {
       eventId: '9f8b1c2d-4444-4444-8444-444444444444',
       eventType: GAME_EVENT_TYPES.CHALLENGE_CANCELLED,
       occurredAt: '2026-11-11T10:40:00.000Z',
-      data: { roomCode: ROOM, reason: 'expired', participantUserIds: [ALICE, BOB] },
+      data: {
+        roomCode: ROOM,
+        reason: 'expired',
+        participantUserIds: [ALICE, BOB],
+      },
     });
 
     expect(outcome.delivered).toBe(true);
@@ -370,7 +476,9 @@ describe('GameNotificationsService', () => {
     await service.applyGameEvent(matchEnded);
 
     for (const message of messages) {
-      expect(message.content).not.toMatch(/source|hidden|editor|submission|problemVersion/i);
+      expect(message.content).not.toMatch(
+        /source|hidden|editor|submission|problemVersion/i,
+      );
     }
   });
 });

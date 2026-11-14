@@ -12,8 +12,20 @@ import { GameNotificationsService } from './game-notifications.service.js';
 import { GameRoomsClient } from './game-rooms.client.js';
 
 @Module({
-  imports: [AuthModule, ChatSharedModule, GroupsModule, PresenceModule, MinioModule, FeedModule],
-  providers: [ChatService, ChatGateway, GameNotificationsService, GameRoomsClient],
+  imports: [
+    AuthModule,
+    ChatSharedModule,
+    GroupsModule,
+    PresenceModule,
+    MinioModule,
+    FeedModule,
+  ],
+  providers: [
+    ChatService,
+    ChatGateway,
+    GameNotificationsService,
+    GameRoomsClient,
+  ],
   exports: [GameNotificationsService],
   controllers: [ChatController],
 })

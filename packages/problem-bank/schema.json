@@ -3,7 +3,19 @@
   "$id": "https://arena.local/schemas/problem.json",
   "title": "Code Arena problem record (ticket 05)",
   "type": "object",
-  "required": ["id", "title", "difficulty", "tags", "description", "examples", "constraints", "starters", "visibleTests", "hiddenGroups", "provenance"],
+  "required": [
+    "id",
+    "title",
+    "difficulty",
+    "tags",
+    "description",
+    "examples",
+    "constraints",
+    "starters",
+    "visibleTests",
+    "hiddenGroups",
+    "provenance"
+  ],
   "properties": {
     "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
     "title": { "type": "string", "minLength": 1 },
@@ -24,7 +36,11 @@
         }
       }
     },
-    "constraints": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "constraints": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
     "timeLimitMs": { "type": "integer", "minimum": 1 },
     "memoryLimitMb": { "type": "integer", "minimum": 1 },
     "starters": {

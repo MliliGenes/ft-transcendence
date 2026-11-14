@@ -37,8 +37,9 @@ describe('ChatGateway typing indicators', () => {
     const { gateway, emit } = gatewayWith(prisma);
     const socket = { data: { userId: alice } } as unknown as Socket;
 
-    await expect(gateway.onTypingChanged(socket, { conversationId, typing: true }))
-      .resolves.toEqual({ ok: true });
+    await expect(
+      gateway.onTypingChanged(socket, { conversationId, typing: true }),
+    ).resolves.toEqual({ ok: true });
 
     expect(gateway.namespace.to).toHaveBeenCalledWith([`user:${bob}`]);
     expect(emit).toHaveBeenCalledWith('typing:changed', {
@@ -55,21 +56,29 @@ describe('ChatGateway typing indicators', () => {
     const { gateway, emit } = gatewayWith(prisma);
     const socket = { data: { userId: alice } } as unknown as Socket;
 
-    await expect(gateway.onTypingChanged(socket, { conversationId, typing: true }))
-      .resolves.toEqual({ ok: false });
+    await expect(
+      gateway.onTypingChanged(socket, { conversationId, typing: true }),
+    ).resolves.toEqual({ ok: false });
 
     expect(gateway.namespace.to).not.toHaveBeenCalled();
     expect(emit).not.toHaveBeenCalled();
   });
 
   it('rejects malformed typing payloads before querying the database', async () => {
-    const prisma = { conversation: { findFirst: vi.fn() } } as unknown as PrismaService;
+    const prisma = {
+      conversation: { findFirst: vi.fn() },
+    } as unknown as PrismaService;
     const { gateway } = gatewayWith(prisma);
 
-    await expect(gateway.onTypingChanged({ data: { userId: alice } } as unknown as Socket, {
-      conversationId: 'not-a-uuid',
-      typing: true,
-    })).resolves.toEqual({ ok: false });
+    await expect(
+      gateway.onTypingChanged(
+        { data: { userId: alice } } as unknown as Socket,
+        {
+          conversationId: 'not-a-uuid',
+          typing: true,
+        },
+      ),
+    ).resolves.toEqual({ ok: false });
 
     expect(prisma.conversation.findFirst).not.toHaveBeenCalled();
   });
@@ -85,7 +94,13 @@ describe('ChatGateway read receipts', () => {
       readAt: '2026-11-10T04:00:00.000Z',
     });
 
-    expect(gateway.namespace.to).toHaveBeenCalledWith([`user:${alice}`, `user:${bob}`]);
-    expect(emit).toHaveBeenCalledWith('read:updated', expect.objectContaining({ conversationId, userId: alice }));
+    expect(gateway.namespace.to).toHaveBeenCalledWith([
+      `user:${alice}`,
+      `user:${bob}`,
+    ]);
+    expect(emit).toHaveBeenCalledWith(
+      'read:updated',
+      expect.objectContaining({ conversationId, userId: alice }),
+    );
   });
 });
