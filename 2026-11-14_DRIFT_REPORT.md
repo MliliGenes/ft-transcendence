@@ -33,7 +33,7 @@
 ## docs/services/infrastructure.md
 - **Game Database Env Clarification:** Table "Environment files" (line 44) stated that User and Chat services load their database settings but did not specify that Game service loads `DATABASE_URL` from `game-service.env`. *Resolution: Clarified database configuration source for Game service.*
 - **Database Backup Commands Omitted Game:** Sections "Start and inspect" (lines 109, 110–111), "Schedule and storage" (lines 122–123), and "Export a copy" (lines 131–132) omitted `game-db-backup` for logs inspection, manual execution, and volume export. *Resolution: Added `game-db-backup` to all command examples.*
-- **Existing Database Monitoring Role Setup:** Section "Existing databases" (lines 280–283) listed `user-db` and `chat-db` but omitted `game-db`. *Resolution: Added command for `game-db`.*
+- **Existing Database Monitoring Role Clarification:** Section "Existing databases" (lines 280–283) instructs operators on running `/docker-entrypoint-initdb.d/10-monitoring-role.sh`. Inspection of `compose.yaml` (lines 86–99) and `infra/postgres/10-monitoring-role.sh` shows that only `user-db` and `chat-db` mount the monitoring script and define `MONITORING_PASSWORD_ENV` for Alloy's PostgreSQL exporter; `game-db` is not wired with the monitoring script, `monitoring.env`, or an exporter login in Compose. *Resolution: Corrected text to specify `user-db` and `chat-db` only, removed invalid `game-db` grant command, and explicitly qualified that `game-db` is not wired for SQL exporter monitoring without modifying `compose.yaml`.*
 
 ## docs/integrations/user-chat.md
 - No drift detected.
@@ -97,7 +97,7 @@
 - No drift detected.
 
 ## docs/api/user-service.openapi.json
-- **Saad Elm Email Verification Resend Endpoint Missing:** Missing endpoint `POST /auth/email-verification/request`. Handler in `user-service/src/auth/auth.controller.ts:109` accepts `RequestEmailVerificationDto` (`email: string`) and returns `{ requested: true }`. *Resolution: Added OpenAPI 3.1 path definition with `operationId: "postAuthEmailVerificationRequest"`, request schema requiring `email`, 200 response `{ "requested": true }`, and 400 Bad Request error response, matching controller and DTO semantics.*
+- **Saad Elm Email Verification Resend Endpoint Missing:** Missing endpoint `POST /auth/email-verification/request`. Handler in `user-service/src/auth/auth.controller.ts:109-117` accepts an inline schema matching `RequestEmailVerificationDto` (`email: string, format: email`, `additionalProperties: false`), sets `@Header('Cache-Control', 'no-store')`, and unconditionally returns `{ requested: true }`. *Resolution: Added OpenAPI 3.1 path definition with `operationId: "postAuthEmailVerificationRequest"`, inline request schema (`email: string, format: email`, `additionalProperties: false`), 200 OK response with `Cache-Control: no-store` header and required `requested` property (`type: boolean, const: true`), and 400 Bad Request response.*
 
 ## packages/problem-bank/README.md
 - No drift detected. Accurately distinguishes legacy `even-ledger` (Python snippet) from active matchmaking `even-ledger-v2` (`stdio` for C++, C, Python).
@@ -115,7 +115,7 @@
 - No drift detected.
 
 ## scripts/play.sh
-- **Obsolete Workspace Reference:** Script is an obsolete standalone development seam referencing absent `arena-frontend` workspace and nonexistent `services/game/dist/main.js`. *Resolution: Added top-of-file header warning directing operators to Docker Compose startup (`docker compose up --build`) in `README.md` and `docs/project/COMPOSE.md`.*
+- **Obsolete Workspace Reference:** Script is an obsolete standalone development seam referencing the absent `arena-frontend` workspace (the compiled backend artifact `services/game/dist/main.js` exists, but the legacy standalone frontend workspace is absent in favor of `client/`). *Resolution: Added top-of-file header warning directing operators to Docker Compose startup (`docker compose up --build`) in `README.md` and `docs/project/COMPOSE.md`.*
 
 ## docs/archive/client-plan.md
 - No drift detected. Explicitly archived historical record.

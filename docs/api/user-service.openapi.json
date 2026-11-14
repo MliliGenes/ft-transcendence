@@ -643,15 +643,29 @@
         "responses": {
           "200": {
             "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "example": "no-store"
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "requested": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "const": true
                     }
-                  }
+                  },
+                  "required": [
+                    "requested"
+                  ],
+                  "additionalProperties": false
                 },
                 "example": {
                   "requested": true

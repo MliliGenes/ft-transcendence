@@ -279,13 +279,14 @@ To demo one, run `docker compose stop chat-service`, wait about 90 seconds, then
 
 ### Existing databases
 
-New databases create the `monitoring` login automatically. For a database that already had data, run this for `user-db`, `chat-db`, and `game-db`:
+New databases create the `monitoring` login automatically. For a database that already had data, run this for `user-db` and `chat-db`:
 
 ```sh
 docker compose exec user-db sh /docker-entrypoint-initdb.d/10-monitoring-role.sh
 docker compose exec chat-db sh /docker-entrypoint-initdb.d/10-monitoring-role.sh
-docker compose exec game-db sh /docker-entrypoint-initdb.d/10-monitoring-role.sh
 ```
+
+*(Note: `game-db` is not wired with the monitoring entrypoint script or `monitoring.env` in `compose.yaml`; it runs standard application storage without Alloy SQL exporter metrics).*
 
 ### Troubleshooting
 
