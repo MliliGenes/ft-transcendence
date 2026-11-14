@@ -16,7 +16,7 @@
 - **Game Route Gateway Omitted in Client Section:** Lines 52–54 stated that browser requests use `/api/` and `/api/chat/`, omitting `/api/game/`. *Resolution: Added `/api/game/` to the browser-facing API path list.*
 
 ## docs/README.md
-- **Drift Report Index Stale:** Section "Engineering checks" (line 57) referenced only the dated 2026-11-12 drift audit without indexing the 2026-11-14 drift report. *Resolution: Updated line 57 to link both `2026-11-12_DRIFT_REPORT.md` and `2026-11-14_DRIFT_REPORT.md`.*
+- **Drift Report Index:** Section "Engineering checks" (line 57) links the active [2026-11-14 documentation drift report](2026-11-14_DRIFT_REPORT.md) (the historical 2026-11-12 drift audit was removed from the active tree in `9f66044` and is preserved in Git history at `c52c1d4`). *Resolution: Updated `docs/README.md` line 57 to link the 2026-11-14 report.*
 
 ## docs/client-console-audit.md
 - No drift detected. Document is an explicitly dated record of the 2026-11-13 console cleanup and preserves its original findings.

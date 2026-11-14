@@ -58,6 +58,10 @@ The bootstrap runs after migrations on every service start, but creates an accou
 
 The consolidated initial migration requires a fresh database. This stack uses a new `volumes/user-db/` directory and does not reuse or reset the previous testing database.
 
+## Reset local data safely
+
+Stop and remove the Compose containers with `docker compose down` before deleting any directory under `volumes/`. These paths are bind mounts; deleting a mounted host directory while its container is running can make the path disappear inside the container. For example, RabbitMQ then cannot create `/var/lib/rabbitmq/.erlang.cookie` and remains unhealthy. Rebuild/start normally with `docker compose up --build -d`; no forced container recreation is needed when the project was brought down first. `docker compose down` preserves bind-mounted data and named volumes. Delete only the service data directories you intend to reset, and use `docker compose down --volumes` only when you also intend to remove named volumes such as monitoring history and backup storage.
+
 ## Monitoring
 
 The monitoring stack (Grafana, Prometheus, Loki, Alloy, cAdvisor) starts with the app. It is defined in `compose.monitoring.yaml` and included by `compose.yaml`. Copy `envs/grafana.env.example` and `envs/monitoring.env.example` before the first start, then open https://localhost/grafana/. See [Monitoring](../services/infrastructure.md).

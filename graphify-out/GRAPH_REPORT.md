@@ -1,166 +1,169 @@
-# Graph Report - nook-client  (2026-11-12)
+# Graph Report - ft-transcendence  (2026-11-14)
 
 ## Corpus Check
-- 514 files · ~410,281 words
+- 524 files · ~976,298 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 49 file(s) not represented in the graph (top: (none) 26, .example 14, .toml 3)
+- Unclassified: 48 file(s) not represented in the graph (top: (none) 25, .example 14, .toml 3)
 
 ## Summary
-- 4885 nodes · 11103 edges · 230 communities (181 shown, 49 thin omitted)
-- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 449 edges (avg confidence: 0.86)
+- 5028 nodes · 11344 edges · 250 communities (206 shown, 44 thin omitted)
+- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 352 edges (avg confidence: 0.83)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1b8ad5fb`
+- Built from commit: `c52c1d41`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- engine.ts
-- ref_nestjs_config
-- accounts.service.ts
+- SubmissionRecord
+- ref_node_assert
+- AuthenticatedRequest
 - SuperadminService
-- SocialController
-- ChatGateway
-- ChatControllerMethods
+- FriendshipsService
+- ref_nestjs_common
+- ChatService
 - Discord OAuth
 - GithubStrategy
 - SendMessageDto
-- AuthProviderMigrations
-- user-service/package.json
-- GroupsController
+- engine.ts
+- devDependencies
+- Request
 - AuthService
 - User Bootstrap Scripts
-- ref_nestjs_common
-- Conversation Schema
-- Arena Workspace Hook
-- User Service Package
+- app/app.module.ts
+- superadmin.service.ts
+- ArenaTransport
+- user-service/package.json
 - chat.module.ts
 - sidebar.tsx
-- MatchRecordState
+- MatchRecord
 - Chat TypeScript Configuration
-- InMemoryCollabPersist
+- ref_vitest
 - User TypeScript Configuration
-- dependencies
-- Minio Module Docs
+- chat-service/package.json
+- ChatGateway
 - arena-editor-collab-lifecycle.test.mjs
-- User Runtime Dependencies
-- SocketGatewayHandlers
-- UserEventConsumer
-- Chat Development Dependencies
+- dependencies
+- socketPrincipal
+- FeedService
+- devDependencies
 - User Scripts and Commands
 - chat-service/tsconfig.build.json
-- RegisterDto
-- ArenaEngineLogic
-- Auth Control Methods
+- auth.service.ts
+- ArenaEngine
+- auth.controller.ts
 - Nook — Project Context
-- Documentation Index
+- docs/README.md
 - useAuth
 - chat-workspace.tsx
-- GroupCreationDtos
-- Socket Adaptation Logic
+- ref_class_validator
+- socket.ts
 - Points Roadmap: Groups First, Frontend Next
 - User Lint Configuration
-- MessageActionsUI
+- details-panel.tsx
 - Chat Nest Build Setup
-- GamePagesUI
+- public-profile.tsx
 - User Nest Build Setup
 - Button
-- LobbyPlayPages
-- AppErrorHandling
+- LobbyClient
+- ThemeSelector
 - Nginx Entrypoint
-- Judge Worker Server
-- InvitationTests
-- chat/client.ts
-- Socket Transport State
+- dependencies
+- ref_node_test
+- search-view.tsx
+- SocketArenaTransport
 - build-dashboards.mjs
 - components.json
 - bootstrap-superadmin-env.mjs
 - RabbitMqEventsService
 - compilerOptions
-- DocumentationBuild
+- build.mjs
 - EGM Drift Report — 2026-11-12
-- ChatServiceModules
-- Minio Client Config
-- MarkdownEditor
+- game-notifications.postgres.test.mjs
+- minio.service.ts
+- client/package.json
 - game.service.ts
-- AccountSearchDtos
-- TestWorkspaceSetup
+- AccountSearchDto
+- ref_node_fs
 - GameDependencies
-- chat-service/src/app.module.ts
-- team-chat.test.ts
-- app/page.tsx
-- ChatUserGuards
+- evaluation-orchestration.ts
+- ref_node_child_process
+- dependencies
+- User and chat integration
 - Local Compose setup
-- GameNotifications
-- PostgresCollabStore
-- ArenaWorkspace.tsx
+- game-notifications.service.ts
+- PostgresStores
+- types.ts
 - emoji-picker.tsx
-- Collaboration Sync
+- CollabDocs
 - user-service/README.md
 - SupportedLanguage
 - Chess Page
 - Database Verification
-- Judge Server Setup
+- http-server.ts
 - secrets.mjs
 - DatabaseConfigSpecs
-- RateLimitingService
-- MatchAuthorityLogic
-- GameGatewayLogic
+- LobbyController
+- MatchPersistence
+- GameService
 - ProfileEditor
 - Auth Checks
-- container-judge.ts
-- EvaluationRegistry
+- judge.ts
+- EvaluationOrchestrator
 - LobbyError
 - user-service/tsconfig.build.json
 - ComposeYamlConfig
 - PackageJsonMeta
 - scripts
-- Judge0 Adapter
+- judge0.ts
 - Container Configuration
 - mail.service.ts
 - Arena Dependencies
-- ref_node_fs
+- generate-jwt-keys.mjs
 - client/README.md
 - Code Arena gameplay review
 - AGENTS.md
-- Game Control Methods
-- Game Event Types
-- EditorAdapter.tsx
-- Collaboration Logic
+- requirePrincipal
+- game-events.publisher.ts
+- properties
+- CollabClient
 - System Startup Guide
-- Mock Game Simulation
-- Job Queue Management
-- IllegalStateError
-- Match Presence Tracking
+- MockGame
+- BoundedJobQueue
+- round-lifecycle.ts
+- MatchSocketPresence
 - game.module.ts
-- next
+- auth-storage.test.mjs
 - Service Dependencies List
-- Chat & Messaging
-- User Block Management
+- Chat service
+- game/user-events.consumer.ts
 - envs/README.md
-- TeamChatContext
+- team-chat.gateway.ts
 - arena-socket-path.test.mjs
-- Rxjs Library
+- PrismaService
 - Judge Worker Package
 - InMemoryLobbyStore
-- Fake Judge Logic
-- judge.ts
-- GameStatsController
+- FakeJudge
+- Judge0Adapter
+- match-statistics.ts
 - init.sh
 - 10-monitoring-role.sh
 - DiscordStrategy
 - Docker Build Context
-- Fixture Data Models
-- Round Phase Transitions
+- fixtures.ts
+- mock-game.ts
 - Arena Harness Package
-- Team Chat Client
-- GameJudge
+- TeamChatClient
+- JudgeInfraError
 - Arena Model Package
 - Health Checks
+- type
 - sidecars.ts
 - Git Analytics Config
-- Architecture Overview
+- properties
+- user-service/src/auth/auth.module.ts
+- Nook
 - GithubStrategy
 - Code Stats
 - Container Configs
@@ -171,25 +174,25 @@
 - providers.tsx
 - Docker Networks
 - Analytics Flags
-- App Features
+- Web client
 - Datasource Config
 - Alert Rules
 - Game TS Config
 - Game DB
 - User DB
 - Monitoring Stack
-- Game Problem Logic
-- MatchMode
+- User service
+- GameJudge
 - Legal Pages
 - Backup Storage Init Container
 - Product Roadmap
 - Nook Config
 - Build TS Config
-- App Modules
+- arena-model/src/index.ts
 - Model TS Config
 - Build Model Config
 - Judge Worker
-- ILobbyStore
+- MatchMode
 - Logging Configuration
 - Prometheus Settings
 - src/lobby.ts
@@ -198,179 +201,198 @@
 - Nook Arena Integration
 - Compiler Options
 - Harness Compiler
-- CollabGateway
+- book/package.json
 - Docker Commands
 - Notification Cleanup
 - Command Verification
 - Verification Plan
 - Build Config
-- Platform Status
+- route.ts
 - Logging Metrics
-- Client Integration
+- Client console cleanup
 - Credential Exposure
 - Integration Spec
-- BACKUP_RECOVERY.md
+- verify-recovery.sh script
 - Docker Logs
 - Architectural Context
 - LobbyStore
-- AccountImagesController
+- accounts.service.ts
 - Theme Tokens
 - Integration Decision
-- game/reconnect.test.ts
+- Project scan map
 - game/team-2v2.test.ts
 - Job Queue
 - ConfirmPasswordResetDto
-- MatchView.tsx
-- @prisma/client@7.10.0
-- prettier@^3.4.2
+- arena/chat.ts
+- devDependencies
+- provenance
+- ArenaSnapshot
+- esc
 - Dev Cert Gen
 - Play Script
 - Judge Worker Entrypoint Script
+- ChatUser
+- UpdateAccountDto
+- ArenaWorkspace
+- TransportSession
+- Nook documentation
+- Code Arena lifecycle notifications
+- schema.json
+- Domain docs
+- Issue tracker: Local Markdown
+- docChapter
+- Complete snapshots and recovery (D04)
+- Messages
+- starters
+- describe
+- renderApi
+- check.mjs
+- tags
+- book-build.test.mjs
+- memoryLimitMb
+- visibleTests
+- triage-labels.md
 
 ## God Nodes (most connected - your core abstractions)
-1. `MatchRecord` - 122 edges
-2. `ArenaEngine` - 86 edges
-3. `GameService` - 82 edges
-4. `Button()` - 82 edges
+1. `MatchRecord` - 125 edges
+2. `ArenaEngine` - 92 edges
+3. `GameService` - 86 edges
+4. `Button()` - 78 edges
 5. `useAuth()` - 58 edges
-6. `next` - 55 edges
-7. `react` - 54 edges
-8. `ChatWorkspace()` - 53 edges
+6. `ChatWorkspace()` - 54 edges
+7. `next` - 54 edges
+8. `react` - 52 edges
 9. `SideId` - 51 edges
 10. `SubmissionRecord` - 48 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Errors` --references--> `AuthRequestError`  [INFERRED]
-  docs/integrations/client-backend.md → client/lib/auth/client.ts
-- `Structure` --references--> `useCurrentAccount()`  [INFERRED]
-  docs/services/client.md → client/hooks/use-current-account.ts
 - `Limits` --references--> `PresenceAudienceService`  [INFERRED]
   docs/integrations/feed.md → chat-service/src/chat/presence/presence-audience.service.ts
+- `4.3 Consumer contract: `chat-service/src/events/user-event.ts`` --references--> `parseUserEvent()`  [INFERRED]
+  docs/integrations/user-chat.md → chat-service/src/events/user-event.ts
+- `10. Evaluation Q&A` --references--> `MessageAttachment()`  [INFERRED]
+  docs/integrations/chat-storage.md → client/components/app/chat/message-list.tsx
 - `Integrations (merging points)` --references--> `ChatUser`  [INFERRED]
   docs/README.md → client/lib/chat/client.ts
-- `1. Why RabbitMQ exists in this project` --references--> `ChatUser`  [INFERRED]
-  docs/integrations/user-chat.md → client/lib/chat/client.ts
+- `Social` --references--> `BlocksService`  [INFERRED]
+  docs/services/user-service.md → user-service/src/social/blocks.service.ts
 
 ## Import Cycles
-- 2-file cycle: `packages/arena-game/src/lobby.ts -> packages/arena-game/src/postgres-store.ts -> packages/arena-game/src/lobby.ts`
+- None detected.
 
-## Communities (230 total, 49 thin omitted)
+## Communities (250 total, 44 thin omitted)
 
-### Community 0 - "engine.ts"
-Cohesion: 0.04
-Nodes (32): b64encode(), COLLAB_TEXT_KEY, CollabPersist, CollabRow, InMemoryCollabPersist, EngineOptions, ExpiredError, MATCH_DURATION_MS (+24 more)
-
-### Community 1 - "ref_nestjs_config"
-Cohesion: 0.13
-Nodes (5): hooks, bcrypt, react-dom, readSession(), mail
-
-### Community 2 - "accounts.service.ts"
-Cohesion: 0.07
-Nodes (15): sharp, AccountsController, accountResponse(), accountSelect, AccountsService, JOINED_WITHIN_DAYS, publicProfileSelect, STATUS_ICON_NAMES (+7 more)
-
-### Community 3 - "SuperadminService"
-Cohesion: 0.11
-Nodes (3): CreateUserDto, SuperadminController, SuperadminService
-
-### Community 4 - "SocialController"
+### Community 0 - "SubmissionRecord"
 Cohesion: 0.06
-Nodes (18): Architecture, Authentication, Commands, Configuration, Current limitations, Data model, Email verification and password reset, Events (+10 more)
+Nodes (10): InMemoryCollabPersist, StoreBackedMatchPersistence, PostgresSubmissionStore, SubmissionRecord, InMemoryRevealStore, InMemorySubmissionStore, SubmissionStore, persistence() (+2 more)
 
-### Community 5 - "ChatGateway"
-Cohesion: 0.05
-Nodes (13): GameRoomsClient, RoomLookupResponse, RoomResponse, ChatGateway, PresenceAudienceService, PresenceChange, PresenceService, PresenceStatus (+5 more)
+### Community 1 - "ref_node_assert"
+Cohesion: 0.16
+Nodes (4): bcrypt, digest(), readSession(), mail
 
-### Community 6 - "ChatControllerMethods"
-Cohesion: 0.05
-Nodes (8): ChatController, ChatService, isUniqueViolation(), CreateAttachmentUploadUrlDto, GetMessagesQueryDto, maxBytesFor(), MinioService, 4.1 Upload and send
+### Community 2 - "AuthenticatedRequest"
+Cohesion: 0.19
+Nodes (4): AccountsController, accountResponse(), UploadedImage, AuthenticatedRequest
 
-### Community 10 - "AuthProviderMigrations"
-Cohesion: 0.13
-Nodes (27): "AuthProvider", AuthProvider_provider_providerUserId_key, AuthProvider_userId_provider_key, "AuthToken", AuthToken_expiresAt_idx, AuthToken_tokenHash_key, AuthToken_userId_purpose_idx, "Friendship" (+19 more)
+### Community 4 - "FriendshipsService"
+Cohesion: 0.09
+Nodes (4): BlocksService, FriendshipsService, GetFriendshipsRequest, SocialController
 
-### Community 11 - "user-service/package.json"
+### Community 5 - "ref_nestjs_common"
 Cohesion: 0.07
-Nodes (28): @types/bcrypt, devDependencies, dotenv@^17.2.3, @nestjs/cli@^12.0.0, @nestjs/mau@^0.2.6, @nestjs/schematics@^12.0.0, oxlint@^1.58.0, prisma@7.10.0 (+20 more)
+Nodes (18): AuthenticatedRequest, EnsureActiveUserGuard, GameRoomsClient, RoomLookupResponse, RoomResponse, GroupDb, PresenceAudienceService, PresenceChange (+10 more)
 
-### Community 12 - "GroupsController"
+### Community 6 - "ChatService"
+Cohesion: 0.07
+Nodes (6): ChatController, ChatService, isUniqueViolation(), EditMessageDto, GetMessagesQueryDto, Block checks
+
+### Community 10 - "engine.ts"
+Cohesion: 0.06
+Nodes (37): COLLAB_TEXT_KEY, CollabPersist, CollabRow, EngineOptions, ExpiredError, MATCH_DURATION_MS, RatePolicy, SealedSnapshot (+29 more)
+
+### Community 11 - "devDependencies"
 Cohesion: 0.11
-Nodes (4): GroupsController, GroupsService, Isolation from normal chat, Request
+Nodes (19): devDependencies, dotenv, @nestjs/cli, @nestjs/mau, @nestjs/schematics, @nestjs/testing, oxlint, prettier (+11 more)
+
+### Community 12 - "Request"
+Cohesion: 0.07
+Nodes (7): CreateChannelDto, CreateGroupDto, UpdateChannelDto, GroupsController, GroupsService, Isolation from normal chat, Request
 
 ### Community 13 - "AuthService"
-Cohesion: 0.15
-Nodes (4): AuthService, RefreshDto, DiscordProfile, GithubProfile
+Cohesion: 0.16
+Nodes (3): AuthService, DiscordProfile, GithubProfile
 
 ### Community 14 - "User Bootstrap Scripts"
 Cohesion: 0.08
 Nodes (26): scripts, bootstrap:superadmin, bootstrap:superadmin:env, build, deploy, format, lint, pretest (+18 more)
 
-### Community 15 - "ref_nestjs_common"
-Cohesion: 0.05
-Nodes (24): AuthenticatedRequest, AccountsModule, AppController, AppModule, AppService, AuthModule, AuthResult, trustedBrowserOrigins() (+16 more)
+### Community 15 - "app/app.module.ts"
+Cohesion: 0.09
+Nodes (9): AccountsModule, AppController, AppModule, AppService, AuthModule, EventsModule, PrismaModule, SocialModule (+1 more)
 
-### Community 16 - "Conversation Schema"
-Cohesion: 0.18
-Nodes (19): "ChatUser", "Conversation", Conversation_dmUserAId_createdAt_id_idx, Conversation_dmUserAId_dmUserBId_key, Conversation_dmUserBId_createdAt_id_idx, Conversation_groupId_createdAt_id_idx, "Group", "GroupMember" (+11 more)
-
-### Community 17 - "Arena Workspace Hook"
+### Community 16 - "superadmin.service.ts"
 Cohesion: 0.12
-Nodes (3): ArenaWorkspaceProps, ArenaTransport, ArenaConnectionOptions
+Nodes (5): CreateUserDto, UpdateRoleDto, UserQueryDto, SuperadminGuard, adminUserSelect
 
-### Community 18 - "User Service Package"
+### Community 17 - "ArenaTransport"
 Cohesion: 0.11
-Nodes (17): author, amqp-connection-manager@^5.0.0, pg@^8.16.3, description, @nestjs/testing@^12.0.1, @types/express@^5.0.0, @types/supertest@^7.0.0, amqp-connection-manager (+9 more)
+Nodes (4): ArenaWorkspaceProps, useArena(), ArenaTransport, ArenaConnectionOptions
+
+### Community 18 - "user-service/package.json"
+Cohesion: 0.05
+Nodes (40): argon2, sharp, @types/bcrypt, author, description, amqp-connection-manager, amqplib, class-transformer (+32 more)
 
 ### Community 19 - "chat.module.ts"
-Cohesion: 0.12
-Nodes (10): AuthModule, ChatModule, ChatSharedModule, EnsureActiveUserGuard, GroupsModule, PresenceModule, EventsModule, FeedModule (+2 more)
+Cohesion: 0.08
+Nodes (11): AppController, AppModule, AppService, AuthModule, ChatModule, ChatSharedModule, GroupsModule, PresenceModule (+3 more)
 
 ### Community 20 - "sidebar.tsx"
-Cohesion: 0.08
-Nodes (33): AppLayout(), SavedSidebarShell(), AppNavigation(), AppShell(), navigation, Separator(), SidebarContent(), SidebarContext (+25 more)
+Cohesion: 0.07
+Nodes (41): AppLayout(), SavedSidebarShell(), AppNavigation(), AppShell(), navigation, Separator(), Sheet(), SheetContent() (+33 more)
 
-### Community 21 - "MatchRecordState"
-Cohesion: 0.08
-Nodes (24): b64decode(), CollabDocs, collabRoomId(), SealedSnapshot, PostgresMatchStore, DocumentRevision, MatchRecord, MemberReadiness (+16 more)
+### Community 21 - "MatchRecord"
+Cohesion: 0.12
+Nodes (13): collabRoomId(), IllegalStateError, MatchRecord, MemberReadiness, Participant, RoundState, SideId, TeamDocState (+5 more)
 
 ### Community 22 - "Chat TypeScript Configuration"
 Cohesion: 0.10
 Nodes (19): compilerOptions, allowSyntheticDefaultImports, declaration, emitDecoratorMetadata, esModuleInterop, experimentalDecorators, incremental, isolatedModules (+11 more)
 
-### Community 23 - "InMemoryCollabPersist"
+### Community 23 - "ref_vitest"
 Cohesion: 0.05
-Nodes (36): ProblemBank, FileBank, assertSupportedLanguage(), ValidationError, GAME_SCHEMA, testPrincipal(), InMemoryMatchStore, C_SOLVE (+28 more)
+Nodes (35): ProblemBank, FileBank, testPrincipal(), InMemoryMatchStore, PG_URL, C_SOLVE, CPP_SOLVE, LIMITS (+27 more)
 
 ### Community 24 - "User TypeScript Configuration"
 Cohesion: 0.10
 Nodes (19): compilerOptions, allowSyntheticDefaultImports, declaration, emitDecoratorMetadata, esModuleInterop, experimentalDecorators, incremental, isolatedModules (+11 more)
 
-### Community 25 - "dependencies"
-Cohesion: 0.06
-Nodes (45): author, dependencies, amqp-connection-manager@^5.0.1, amqplib@^2.2.0, class-transformer@^0.5.1, class-validator@^0.15.1, minio@^8.0.7, @nestjs/common@^12.0.1 (+37 more)
+### Community 25 - "chat-service/package.json"
+Cohesion: 0.05
+Nodes (40): author, description, amqp-connection-manager, amqplib, class-transformer, class-validator, @nestjs/cli, @nestjs/common (+32 more)
 
-### Community 26 - "Minio Module Docs"
-Cohesion: 0.12
-Nodes (14): MinioModule, 10. Evaluation Q&A, 11. Cheat sheet, 1. The problem, 2. Primer, 3. Architecture at a glance, 4.2 Verification at send time (the real security check), 4.3 Preview and download (+6 more)
+### Community 26 - "ChatGateway"
+Cohesion: 0.13
+Nodes (3): ChatGateway, PresenceService, gatewayWith()
 
 ### Community 27 - "arena-editor-collab-lifecycle.test.mjs"
-Cohesion: 0.07
+Cohesion: 0.08
 Nodes (24): cmState, cmView, { CollabClient }, createCollabModule(), createdClients, createEditorModule(), createHarness(), useEffect() (+16 more)
 
-### Community 28 - "User Runtime Dependencies"
-Cohesion: 0.07
-Nodes (27): argon2, nodemailer, dependencies, amqplib@^2.2.0, argon2@^0.45.1, bcrypt@^6.0.0, class-transformer@^0.5.1, class-validator@^0.15.1 (+19 more)
+### Community 28 - "dependencies"
+Cohesion: 0.11
+Nodes (19): dependencies, amqp-connection-manager, amqplib, argon2, bcrypt, class-transformer, class-validator, @nestjs/common (+11 more)
 
-### Community 29 - "SocketGatewayHandlers"
-Cohesion: 0.10
-Nodes (17): ActiveAccountGuard, PrincipalRequest, LobbyGateway, roomChannel(), userChannel(), attachSocketPrincipal(), chooseHandshakeValue(), MatchSocketPrincipal (+9 more)
-
-### Community 30 - "UserEventConsumer"
-Cohesion: 0.09
-Nodes (17): isDate(), parseUserEvent(), USER_EVENT_TYPES, UserEvent, UserProfileData, UserEventsConsumer, FeedService, Client (+9 more)
-
-### Community 31 - "Chat Development Dependencies"
+### Community 29 - "socketPrincipal"
 Cohesion: 0.06
-Nodes (31): devDependencies, @nestjs/cli@^12.0.0, @nestjs/mau@^0.2.6, @nestjs/schematics@^12.0.0, @nestjs/testing@^12.0.1, oxlint@^1.58.0, prettier@^3.4.2, source-map-support@^0.5.21 (+23 more)
+Nodes (17): CollabGateway, GameGateway, roomFor(), LobbyGateway, roomChannel(), userChannel(), attachSocketPrincipal(), chooseHandshakeValue() (+9 more)
+
+### Community 30 - "FeedService"
+Cohesion: 0.10
+Nodes (13): isDate(), parseUserEvent(), USER_EVENT_TYPES, UserEvent, UserProfileData, UserEventsConsumer, FeedService, Client (+5 more)
+
+### Community 31 - "devDependencies"
+Cohesion: 0.12
+Nodes (16): devDependencies, @nestjs/cli, @nestjs/mau, @nestjs/schematics, @nestjs/testing, oxlint, prettier, source-map-support (+8 more)
 
 ### Community 32 - "User Scripts and Commands"
 Cohesion: 0.12
@@ -380,33 +402,37 @@ Nodes (16): scripts, build, deploy, format, lint, prisma:generate, start, start:
 Cohesion: 0.29
 Nodes (6): compilerOptions, rootDir, exclude, extends, include, ./tsconfig.json
 
-### Community 35 - "ArenaEngineLogic"
-Cohesion: 0.11
-Nodes (12): ArenaEngine, driverFor(), NotMemberError, AuthenticatedPrincipal, ForfeitRecord, CollabFixture, setupCollab(), realEngine() (+4 more)
+### Community 34 - "auth.service.ts"
+Cohesion: 0.10
+Nodes (8): AUTH_TOKEN_PATTERN, AuthResult, LoginDto, REFRESH_TOKEN_PATTERN, RefreshDto, RegisterDto, ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS
 
-### Community 36 - "Auth Control Methods"
+### Community 35 - "ArenaEngine"
+Cohesion: 0.11
+Nodes (10): ArenaEngine, driverFor(), AuthenticatedPrincipal, CollabFixture, setupCollab(), realEngine(), createMatch(), twoEngines() (+2 more)
+
+### Community 36 - "auth.controller.ts"
 Cohesion: 0.13
-Nodes (10): AuthController, assertTrustedBrowserOrigin(), LoginDto, RequestPasswordResetDto, clearRefreshCookie(), publicSession(), readRefreshCookie(), REFRESH_COOKIE_NAME (+2 more)
+Nodes (12): AuthController, assertTrustedBrowserOrigin(), trustedBrowserOrigins(), RequestEmailVerificationDto, RequestPasswordResetDto, clearRefreshCookie(), publicSession(), readRefreshCookie() (+4 more)
 
 ### Community 37 - "Nook — Project Context"
 Cohesion: 0.09
 Nodes (22): 10. Backlog organization, 11. Design context, 12. Questions to settle next, 13. Source and decision history, 1. Nook in one paragraph, 2. How to interpret this document, 3. Confirmed decisions, 4. Audience and reason to return (+14 more)
 
 ### Community 39 - "useAuth"
-Cohesion: 0.08
-Nodes (45): metadata, SettingsPage(), ForgotPasswordPage(), metadata, LoginPage(), metadata, metadata, RegisterPage() (+37 more)
+Cohesion: 0.05
+Nodes (67): metadata, metadata, SettingsPage(), ForgotPasswordPage(), metadata, LoginPage(), metadata, metadata (+59 more)
 
 ### Community 40 - "chat-workspace.tsx"
-Cohesion: 0.06
-Nodes (44): ChatContent(), ChatPage(), ChatPageProps, metadata, EmojiPicker(), applyMarkdownFormat(), formats, MarkdownFormat (+36 more)
+Cohesion: 0.07
+Nodes (34): ChatContent(), ChatPage(), ChatPageProps, metadata, EmojiPicker(), applyMarkdownFormat(), formats, MarkdownFormat (+26 more)
 
-### Community 41 - "GroupCreationDtos"
-Cohesion: 0.05
-Nodes (12): ATTACHMENT_CONTENT_TYPES, CreateDmDto, EditMessageDto, MarkReadDto, AddGroupMemberDto, CreateChannelDto, CreateGroupDto, UpdateChannelDto (+4 more)
+### Community 41 - "ref_class_validator"
+Cohesion: 0.07
+Nodes (12): AuthGuard, AccessTokenPayload, CurrentUser, IS_PUBLIC_KEY, ATTACHMENT_CONTENT_TYPES, CreateAttachmentUploadUrlDto, CreateDmDto, MarkReadDto (+4 more)
 
-### Community 42 - "Socket Adaptation Logic"
-Cohesion: 0.16
-Nodes (13): adapt(), adaptFinal(), adaptReveal(), RateLimitError, ServerReveal, ServerSnapshot, SnapshotTrigger, SocketTransportOptions (+5 more)
+### Community 42 - "socket.ts"
+Cohesion: 0.11
+Nodes (15): ArenaHeaderProps, adapt(), adaptFinal(), adaptReveal(), RateLimitError, ServerReveal, shouldApplyUpdate(), SnapshotTrigger (+7 more)
 
 ### Community 43 - "Points Roadmap: Groups First, Frontend Next"
 Cohesion: 0.12
@@ -416,49 +442,45 @@ Nodes (17): Current scoring position, Delivery Roadmap: Nook and Code Arena, Opt
 Cohesion: 0.29
 Nodes (6): env, node, rules, @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, $schema
 
-### Community 45 - "MessageActionsUI"
-Cohesion: 0.09
-Nodes (31): applyToCaches(), DeleteMessageDialog(), failureText(), messageCaches, MessageEditor(), onKeyDown(), save(), dayFormat (+23 more)
+### Community 45 - "details-panel.tsx"
+Cohesion: 0.05
+Nodes (85): PlayLeaderboardPage(), AccountAvatar(), colors, ChatMarkdown(), components, markdownClass, remarkPlugins, DirectDetails() (+77 more)
 
 ### Community 46 - "Chat Nest Build Setup"
 Cohesion: 0.33
 Nodes (5): collection, compilerOptions, deleteOutDir, $schema, sourceRoot
 
-### Community 47 - "GamePagesUI"
-Cohesion: 0.08
-Nodes (51): PlayLeaderboardPage(), instant, metadata, PublicProfilePage(), metadata, ProfilePage(), metadata, SearchPage() (+43 more)
+### Community 47 - "public-profile.tsx"
+Cohesion: 0.10
+Nodes (34): FeedPage(), metadata, instant, metadata, PublicProfilePage(), metadata, ProfilePage(), CodeArenaProfile() (+26 more)
 
 ### Community 48 - "User Nest Build Setup"
 Cohesion: 0.33
 Nodes (5): collection, compilerOptions, deleteOutDir, $schema, sourceRoot
 
 ### Community 49 - "Button"
-Cohesion: 0.14
-Nodes (30): StatusPage(), CreateGroupDialog(), groupDetailKey(), GroupMark(), groupMembersKey(), GroupHome(), rank(), Stat() (+22 more)
+Cohesion: 0.16
+Nodes (25): StatusPage(), CreateGroupDialog(), ConfirmDialog(), ChannelEditor(), ChannelsTab(), errorMessage(), GroupDetailsEditor(), GroupSettingsView() (+17 more)
 
-### Community 50 - "LobbyPlayPages"
+### Community 50 - "LobbyClient"
 Cohesion: 0.06
-Nodes (27): instant, LobbyRoomPage(), metadata, metadata, PlayPage(), LobbyView(), handleLeave(), handleStart() (+19 more)
+Nodes (31): instant, LobbyRoomPage(), metadata, PlayPage(), LobbyView(), handleCopy(), handleLeave(), handleStart() (+23 more)
 
-### Community 51 - "AppErrorHandling"
-Cohesion: 0.09
-Nodes (26): AppError(), AppLoading(), AppNotFound(), metadata, AuthLayout(), RootError(), LegalLayout(), Loading() (+18 more)
+### Community 51 - "ThemeSelector"
+Cohesion: 0.07
+Nodes (41): AppError(), AppLoading(), AppNotFound(), metadata, AuthLayout(), RootError(), LegalLayout(), Loading() (+33 more)
 
-### Community 54 - "Judge Worker Server"
-Cohesion: 0.18
-Nodes (9): JudgeWorkerServerOptions, integerEnv(), requiredEnv(), start(), DockerCommand, DockerImageReadiness, DockerImageReadinessOptions, JudgeReadinessProbe (+1 more)
-
-### Community 55 - "InvitationTests"
-Cohesion: 0.05
-Nodes (22): cancelled, notifications, result, started, MEMBERS, ROOM, FakeSocket, io() (+14 more)
-
-### Community 56 - "chat/client.ts"
+### Community 54 - "dependencies"
 Cohesion: 0.08
-Nodes (32): metadata, VerifyEmailPage(), State, VerifyEmailView(), accountRequest(), accountResponse(), AccountUpdate, ImageKind (+24 more)
+Nodes (24): dependencies, @base-ui/react, boring-avatars, class-variance-authority, cn, @codemirror/commands, @codemirror/lang-cpp, @codemirror/lang-python (+16 more)
 
-### Community 57 - "Socket Transport State"
-Cohesion: 0.12
-Nodes (3): shouldApplyUpdate(), SocketArenaTransport, TransportSession
+### Community 55 - "ref_node_test"
+Cohesion: 0.05
+Nodes (25): cancelled, notifications, result, started, MEMBERS, ROOM, FakeSocket, io() (+17 more)
+
+### Community 56 - "search-view.tsx"
+Cohesion: 0.06
+Nodes (39): instant, MatchPage(), metadata, metadata, SearchPage(), accountName(), DEFAULT_FILTERS, PeopleFilters (+31 more)
 
 ### Community 58 - "build-dashboards.mjs"
 Cohesion: 0.16
@@ -473,96 +495,92 @@ Cohesion: 0.24
 Nodes (5): databaseUrl, dotenv, databaseUrl, args, bootstrapSuperadmin()
 
 ### Community 61 - "RabbitMqEventsService"
-Cohesion: 0.13
-Nodes (5): RabbitMqEventsService, USER_EVENT_TYPES, UserEvent, UserProfileData, UserProfileSnapshot
+Cohesion: 0.16
+Nodes (9): 4.1 Event shapes: `user-service/src/events/user-event.types.ts`, 4.2 Publisher: `user-service/src/events/rabbitmq-events.service.ts`, 4.3 Consumer contract: `chat-service/src/events/user-event.ts`, 4. The code, file by file, RabbitMqEventsService, USER_EVENT_TYPES, UserEvent, UserProfileData (+1 more)
 
 ### Community 62 - "compilerOptions"
 Cohesion: 0.11
 Nodes (18): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+10 more)
 
-### Community 63 - "DocumentationBuild"
-Cohesion: 0.05
-Nodes (52): arrow(), bodyOf(), box(), BRANCH, chapter(), chatApi, chromeCandidates, dedent() (+44 more)
+### Community 63 - "build.mjs"
+Cohesion: 0.08
+Nodes (21): BRANCH, chatApi, chromeCandidates, DIST, excluded(), executablePath, gg, ggReport (+13 more)
 
 ### Community 65 - "EGM Drift Report — 2026-11-12"
 Cohesion: 0.05
 Nodes (37): chat-service/README.md, client/AGENTS.md, client/README.md, CONTEXT.md, docs/adr/0015-code-arena-nook-integration.md, docs/adr/0016-one-game-service-instance.md, docs/api/chat-service.openapi.json, docs/api/user-service.openapi.json (+29 more)
 
-### Community 66 - "ChatServiceModules"
-Cohesion: 0.06
-Nodes (16): keys, pool, prisma, signer, broadcasts, createDm(), createGameRoom(), freePort() (+8 more)
+### Community 66 - "game-notifications.postgres.test.mjs"
+Cohesion: 0.07
+Nodes (17): keys, pool, post(), prisma, signer, broadcasts, createDm(), createGameRoom() (+9 more)
 
-### Community 67 - "Minio Client Config"
-Cohesion: 0.22
-Nodes (13): clientOptions(), minioBucket(), minioClientOptions(), minioPresignClientOptions(), port(), required(), useSsl(), MINIO_CLIENT (+5 more)
+### Community 67 - "minio.service.ts"
+Cohesion: 0.07
+Nodes (30): clientOptions(), minioBucket(), minioClientOptions(), minioPresignClientOptions(), port(), required(), useSsl(), MINIO_CLIENT (+22 more)
 
-### Community 68 - "MarkdownEditor"
-Cohesion: 0.04
-Nodes (66): components, markdownClass, remarkPlugins, eslintConfig, dependencies, @base-ui/react@^1.9.0, boring-avatars@^2.0.4, class-variance-authority@^0.7.1 (+58 more)
+### Community 68 - "client/package.json"
+Cohesion: 0.05
+Nodes (40): AppliedEdit, applyLocalEdit(), ArenaLanguage, collaborativeExtensions(), EditorAdapter, EditorAdapterHandle, EditorAdapterProps, EditorSelection (+32 more)
 
 ### Community 69 - "game.service.ts"
 Cohesion: 0.07
-Nodes (13): LOBBY_PROBLEM_POOL, buildLeaderboard(), calculateProgression(), CodeArenaAchievement, completedAt(), CompletedMatchSummary, LeaderboardEntry, MatchOutcome (+5 more)
+Nodes (3): RateLimitedError, LOBBY_PROBLEM_POOL, selectLobbyProblems()
 
-### Community 70 - "AccountSearchDtos"
-Cohesion: 0.06
-Nodes (7): ACCOUNT_SORT_FIELDS, AccountSearchDto, AccountSortField, JOINED_WITHIN_VALUES, JoinedWithin, PaginationDto, UserQueryDto
-
-### Community 71 - "TestWorkspaceSetup"
-Cohesion: 0.17
-Nodes (21): workspaceTestSteps(), installHooks(), installScanner(), releases, scannerPath, version, integrationEnvironment(), runIntegration() (+13 more)
+### Community 71 - "ref_node_fs"
+Cohesion: 0.09
+Nodes (34): app, loadBankProblem(), BANK_DIR, SCHEMA_REQUIRED, workspaceTestSteps(), main(), REQUIRED_STEPS, validateG06Evidence() (+26 more)
 
 ### Community 72 - "GameDependencies"
-Cohesion: 0.06
-Nodes (47): dependencies, amqp-connection-manager@^5.0.0, amqplib@^2.2.0, arena-game-engine@*, arena-model@*, @nestjs/common@^11.1.0, @nestjs/core@^11.1.0, @nestjs/platform-express@^11.1.0 (+39 more)
+Cohesion: 0.04
+Nodes (47): dependencies, amqp-connection-manager, amqplib, arena-game-engine, arena-model, @nestjs/common, @nestjs/core, @nestjs/platform-express (+39 more)
 
-### Community 73 - "chat-service/src/app.module.ts"
-Cohesion: 0.13
-Nodes (6): AppController, AppModule, AppService, AccessTokenPayload, CurrentUser, IS_PUBLIC_KEY
+### Community 73 - "evaluation-orchestration.ts"
+Cohesion: 0.10
+Nodes (8): EvaluationCompletion, EvaluationIdentity, EvaluationInFlightRegistry, EvaluationRecoveryReport, InFlightEvaluation, CountedResult, SubmissionStatus, SealedVerdict
 
-### Community 74 - "team-chat.test.ts"
-Cohesion: 0.13
-Nodes (10): TeamChatAuthContext, api(), headers(), api(), HAS_PG, headers(), newMatch(), api() (+2 more)
+### Community 74 - "ref_node_child_process"
+Cohesion: 0.07
+Nodes (19): root, scratchDirs, api(), CollabSync, headers(), newTeamMatch(), ownRevision(), api() (+11 more)
 
-### Community 75 - "app/page.tsx"
-Cohesion: 0.25
-Nodes (17): chatPoints, features, feedPoints, Home(), spaces, Presence, StatusDot(), Avatar() (+9 more)
+### Community 75 - "dependencies"
+Cohesion: 0.10
+Nodes (20): dependencies, amqp-connection-manager, amqplib, class-transformer, class-validator, minio, @nestjs/common, @nestjs/config (+12 more)
 
-### Community 76 - "ChatUserGuards"
-Cohesion: 0.08
-Nodes (25): AuthGuard, ChatUser, 10. Hands-on lab (15 minutes, do this before the defense), 11. Evaluation Q&A, 12. Cheat sheet, 13. The other links between the two services, 1. Why RabbitMQ exists in this project, 2. Primer: the five RabbitMQ words you need (+17 more)
+### Community 76 - "User and chat integration"
+Cohesion: 0.22
+Nodes (9): 10. Hands-on lab (15 minutes, do this before the defense), 11. Evaluation Q&A, 12. Cheat sheet, 2. Primer: the five RabbitMQ words you need, 3. The topology in this project, 7. Known limitations (be honest about these in the defense), 8. Infrastructure, 9. Monitoring (+1 more)
 
 ### Community 77 - "Local Compose setup"
 Cohesion: 0.29
 Nodes (7): First startup, Frontend, Local Compose setup, Local HTTPS and OAuth, Monitoring, Network and storage, Plug in another service
 
-### Community 78 - "GameNotifications"
+### Community 78 - "game-notifications.service.ts"
 Cohesion: 0.06
-Nodes (44): formatGameNotification(), GAME_NOTIFICATION_HEADER, GAME_NOTIFICATION_TYPES, GameNotificationType, isRoomCode(), ROOM_CODE_PATTERN, singleLine(), deterministicUuid() (+36 more)
+Nodes (40): formatGameNotification(), GAME_NOTIFICATION_HEADER, GAME_NOTIFICATION_TYPES, GameNotificationType, isRoomCode(), ROOM_CODE_PATTERN, singleLine(), deterministicUuid() (+32 more)
 
-### Community 79 - "PostgresCollabStore"
-Cohesion: 0.11
-Nodes (5): PostgresCollabStore, PostgresEvaluationClaim, PostgresStores, pgUp(), pgUp()
+### Community 79 - "PostgresStores"
+Cohesion: 0.09
+Nodes (9): EvaluationClaim, EvaluationClaimLostError, PostgresCollabStore, PostgresEvaluationClaim, PostgresMatchStore, PostgresStores, saveMatchTx(), pgUp() (+1 more)
 
-### Community 80 - "ArenaWorkspace.tsx"
-Cohesion: 0.07
-Nodes (33): ArenaHeader(), ArenaHeaderProps, formatClock(), ArenaWorkspace(), EditorAdapter, DuelPanel(), DuelPanelProps, PlayerCard() (+25 more)
+### Community 80 - "types.ts"
+Cohesion: 0.13
+Nodes (18): MatchResultProps, ProblemPanel(), ProblemPanelProps, RoundScoreRevealProps, StatusBadge(), TestPanel(), TestPanelProps, ArenaProblem (+10 more)
 
 ### Community 81 - "emoji-picker.tsx"
 Cohesion: 0.24
 Nodes (8): EmojiPanel(), pick(), readRecent(), writeRecent(), allEmojis, Emoji, emojiCategories, EmojiCategory
 
-### Community 82 - "Collaboration Sync"
-Cohesion: 0.31
-Nodes (5): api(), CollabSync, headers(), newTeamMatch(), ownRevision()
+### Community 82 - "CollabDocs"
+Cohesion: 0.12
+Nodes (5): b64decode(), b64encode(), CollabDocs, TeamCollaborationOptions, createCollaboration()
 
 ### Community 83 - "user-service/README.md"
 Cohesion: 0.17
 Nodes (11): Compile and run the project, Deployment, Description, License, Observability, Project setup, Resources, Run tests (+3 more)
 
 ### Community 84 - "SupportedLanguage"
-Cohesion: 0.16
-Nodes (9): ContainerJudge, expectedMatches(), BankProblem, EvaluationProblemBank, EvaluationRunInput, Judge0Adapter, DriverKind, JudgeLimits (+1 more)
+Cohesion: 0.26
+Nodes (9): ContainerJudge, BankProblem, EvaluationRunInput, CaseResult, DriverKind, JudgeLimits, SupportedLanguage, VisibleTest (+1 more)
 
 ### Community 85 - "Chess Page"
 Cohesion: 0.60
@@ -572,41 +590,41 @@ Nodes (3): ChessPage(), metadata, ComingSoon()
 Cohesion: 0.06
 Nodes (33): concurrency, cancel-in-progress, group, POSTGRES_DB, POSTGRES_HOST, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_USER (+25 more)
 
-### Community 87 - "Judge Server Setup"
-Cohesion: 0.23
+### Community 87 - "http-server.ts"
+Cohesion: 0.16
 Nodes (15): authenticated(), BodyTooLargeError, createJudgeWorkerServer(), handleRequest(), errorResponse(), InvalidRequestError, isDriver(), isLanguage() (+7 more)
 
 ### Community 88 - "secrets.mjs"
-Cohesion: 0.24
-Nodes (14): requireScanner(), baseline, checkPaths(), forbiddenPath(), git(), main(), requireBaseline(), runScanner() (+6 more)
+Cohesion: 0.27
+Nodes (15): requireScanner(), baseline, checkPaths(), forbiddenPath(), git(), main(), requireBaseline(), runScanner() (+7 more)
 
 ### Community 89 - "DatabaseConfigSpecs"
 Cohesion: 0.06
 Nodes (32): analytics, reporting_enabled, auth_enabled, common, path_prefix, replication_factor, ring, storage (+24 more)
 
-### Community 91 - "MatchAuthorityLogic"
+### Community 90 - "LobbyController"
 Cohesion: 0.12
-Nodes (6): MatchAuthority, MatchPersistence, assertPersistenceContract(), makeMatch(), makeReveal(), makeSubmission()
+Nodes (5): LobbySideId, PrivateRoom, PrivateRoomMember, RoomWithMembers, LobbyController
 
-### Community 92 - "GameGatewayLogic"
-Cohesion: 0.07
-Nodes (5): GameGateway, roomFor(), GameService, selectLobbyProblems(), userTokenHash()
+### Community 91 - "MatchPersistence"
+Cohesion: 0.10
+Nodes (8): MatchAuthority, NotMemberError, MatchPersistence, assertPersistenceContract(), makeMatch(), makeReveal(), makeSubmission(), PG_CONTRACT_URL
 
 ### Community 93 - "ProfileEditor"
 Cohesion: 0.17
 Nodes (15): EditProfilePage(), metadata, currentValues(), getErrorMessage(), ImagePreview(), ProfileEditor(), saveProfile(), updateField() (+7 more)
 
-### Community 95 - "container-judge.ts"
-Cohesion: 0.13
-Nodes (14): CaseInput, ContainerJudgeOptions, decodeBase64(), DEFAULT_IMAGES, EXECUTION_STATUSES, parseRunnerRecord(), RawExecution, RunnerRecord (+6 more)
+### Community 95 - "judge.ts"
+Cohesion: 0.11
+Nodes (20): CaseInput, ContainerJudgeOptions, decodeBase64(), DEFAULT_IMAGES, EXECUTION_STATUSES, expectedMatches(), parseRunnerRecord(), RawExecution (+12 more)
 
-### Community 96 - "EvaluationRegistry"
-Cohesion: 0.07
-Nodes (17): EvaluationCompletion, EvaluationIdentity, EvaluationInFlightRegistry, EvaluationOrchestrationHost, EvaluationOrchestrator, EvaluationRecoveryReport, InFlightEvaluation, EvaluationProviderTelemetry (+9 more)
+### Community 96 - "EvaluationOrchestrator"
+Cohesion: 0.14
+Nodes (3): EvaluationOrchestrationHost, EvaluationOrchestrator, EvaluationProblemBank
 
 ### Community 97 - "LobbyError"
-Cohesion: 0.20
-Nodes (3): generateInviteCode(), LobbyError, perSideCapacity()
+Cohesion: 0.38
+Nodes (3): capacityFor(), LobbyError, perSideCapacity()
 
 ### Community 98 - "user-service/tsconfig.build.json"
 Cohesion: 0.29
@@ -624,25 +642,25 @@ Nodes (27): description, engines, node, license, name, private, scripts, build (
 Cohesion: 0.33
 Nodes (6): scripts, build, dev, lint, start, test
 
-### Community 102 - "Judge0 Adapter"
-Cohesion: 0.13
-Nodes (6): FetchJudge0HttpClient, Judge0HttpClient, Judge0SubmissionResponse, limits, request, ScriptedJudge0Http
+### Community 102 - "judge0.ts"
+Cohesion: 0.11
+Nodes (11): CaseInput, DEFAULT_LANGUAGE_IDS, FetchJudge0HttpClient, Judge0AdapterOptions, Judge0HttpClient, Judge0SubmissionRequest, Judge0SubmissionResponse, SnippetOutput (+3 more)
 
 ### Community 103 - "Container Configuration"
 Cohesion: 0.09
 Nodes (27): build, logging, env_file, image, logging, volumes, driver, build (+19 more)
 
 ### Community 104 - "mail.service.ts"
-Cohesion: 0.26
-Nodes (5): MailService, actionButton(), layout(), passwordResetEmailTemplate(), verificationEmailTemplate()
+Cohesion: 0.24
+Nodes (6): nodemailer, MailService, actionButton(), layout(), passwordResetEmailTemplate(), verificationEmailTemplate()
 
 ### Community 105 - "Arena Dependencies"
-Cohesion: 0.10
-Nodes (25): dependencies, arena-model@*, pg@^8.13.0, yjs@^13.6.33, description, devDependencies, @types/pg@^8.11.0, typescript@^5.9.2 (+17 more)
+Cohesion: 0.08
+Nodes (25): dependencies, arena-model, pg, yjs, description, devDependencies, @types/pg, typescript (+17 more)
 
-### Community 106 - "ref_node_fs"
-Cohesion: 0.07
-Nodes (19): app, root, ca, loadBankProblem(), BANK_DIR, SCHEMA_REQUIRED, main(), REQUIRED_STEPS (+11 more)
+### Community 106 - "generate-jwt-keys.mjs"
+Cohesion: 0.40
+Nodes (4): directory, { privateKey, publicKey }, privatePath, publicPath
 
 ### Community 107 - "client/README.md"
 Cohesion: 0.40
@@ -652,121 +670,141 @@ Nodes (4): Deploy on Vercel, Learn More, Local development, Production configura
 Cohesion: 0.12
 Nodes (17): Agreed rules, Code Arena gameplay review, Conditional risks outside the first repair, Conflict behavior and regression coverage, Current full verification — 2026-11-12, Documentation drift — resolved, Existing reconnect defect — resolved, Follow-up verification — 2026-11-12 (+9 more)
 
-### Community 111 - "Game Event Types"
-Cohesion: 0.13
+### Community 111 - "game-events.publisher.ts"
+Cohesion: 0.11
 Nodes (12): ChallengeCancelledData, GAME_EVENT_TYPES, GameEvent, GameEventBase, GameEventParticipant, GameEventType, GameMatchMode, MatchEndedData (+4 more)
 
-### Community 112 - "EditorAdapter.tsx"
-Cohesion: 0.15
-Nodes (14): AppliedEdit, applyLocalEdit(), ArenaLanguage, collaborativeExtensions(), EditorAdapter, EditorAdapterHandle, EditorAdapterProps, EditorSelection (+6 more)
+### Community 112 - "properties"
+Cohesion: 0.11
+Nodes (20): type, type, type, properties, type, type, type, expected (+12 more)
 
-### Community 113 - "Collaboration Logic"
+### Community 113 - "CollabClient"
 Cohesion: 0.14
-Nodes (9): b64ToBytes(), bytesToB64(), COLLAB_TEXT_KEY, CollabClient, CollabConnection, CollabSyncPayload, colorForUser(), encodeRemoteCursor() (+1 more)
+Nodes (10): b64ToBytes(), bytesToB64(), COLLAB_TEXT_KEY, CollabClient, CollabConnection, CollabSyncPayload, colorForUser(), encodeRemoteCursor() (+2 more)
 
 ### Community 114 - "System Startup Guide"
 Cohesion: 0.08
 Nodes (24): Adding a service, Alerts, Complete snapshots (recommended), Dashboards, Data, Environment files, Existing databases, Export a copy (+16 more)
 
-### Community 115 - "Mock Game Simulation"
-Cohesion: 0.20
-Nodes (3): MockSession, MockGame, PlayerStatus
+### Community 115 - "MockGame"
+Cohesion: 0.17
+Nodes (6): FixtureProblem, mockSession, MockGame, fullMatch(), PlayerStatus, RoundPhase
 
-### Community 116 - "Job Queue Management"
-Cohesion: 0.12
-Nodes (12): BoundedJobQueue, BoundedJobQueueOptions, Job, JobState, QueueExecutionTimeoutError, QueueFullError, QueueWaitTimeoutError, limits (+4 more)
-
-### Community 117 - "IllegalStateError"
+### Community 116 - "BoundedJobQueue"
 Cohesion: 0.07
-Nodes (24): isCompetitiveVerdict(), IllegalStateError, PostgresRevealStore, GroupResult, RevealSnapshot, RevealInput, RoundAdvance, RoundLifecycle (+16 more)
+Nodes (21): JudgeWorkerServerOptions, BoundedJobQueue, BoundedJobQueueOptions, Job, JobState, QueueExecutionTimeoutError, QueueFullError, QueueWaitTimeoutError (+13 more)
 
-### Community 118 - "Match Presence Tracking"
+### Community 117 - "round-lifecycle.ts"
+Cohesion: 0.10
+Nodes (19): isCompetitiveVerdict(), GroupResult, RoundAdvance, ScoredVerdict, assertRoundScore(), compareSides(), GroupCounts, groupEarnedBp() (+11 more)
+
+### Community 118 - "MatchSocketPresence"
 Cohesion: 0.13
 Nodes (7): MatchSocketPresence, MatchSocketPresenceMode, MatchSocketPresenceState, MatchSocketPresenceTarget, MemberPresenceCall, RecordingPresenceTarget, SidePresenceCall
 
 ### Community 119 - "game.module.ts"
-Cohesion: 0.14
-Nodes (9): EngineErrorFilter, GameModule, { privateKey, publicKey }, publicKeyPem, TokenPayload, verifyAccessToken(), devPrincipalMiddleware(), express-serve-static-core (+1 more)
-
-### Community 120 - "next"
 Cohesion: 0.09
-Nodes (38): FeedPage(), metadata, colors, founded, joinedFormat, CodeArenaProfile(), historyKey(), MatchHistory() (+30 more)
+Nodes (12): AppModule, ActiveAccountGuard, PrincipalRequest, EngineErrorFilter, GameModule, { privateKey, publicKey }, publicKeyPem, TokenPayload (+4 more)
+
+### Community 120 - "auth-storage.test.mjs"
+Cohesion: 0.21
+Nodes (12): AuthRequestError, blockedStorage, arenaCases, arenaPendingCases, lobbyHarness(), rejection, button(), componentHarness() (+4 more)
 
 ### Community 121 - "Service Dependencies List"
 Cohesion: 0.10
 Nodes (22): build, condition, depends_on, env_file, environment, logging, depends_on, chat-service (+14 more)
 
-### Community 122 - "Chat & Messaging"
-Cohesion: 0.10
-Nodes (21): Boundaries, Chat service, Code Arena lifecycle notifications, Commands and tests, Configuration, Correlation checks, Current limitations, Direct messages (+13 more)
+### Community 122 - "Chat service"
+Cohesion: 0.22
+Nodes (9): Chat service, Commands and tests, Configuration, Current limitations, Direct messages, Error shape, Groups and channels, Presence (+1 more)
+
+### Community 123 - "game/user-events.consumer.ts"
+Cohesion: 0.22
+Nodes (3): userTokenHash(), GameUserEventsConsumer, parseDeletedUserId()
 
 ### Community 124 - "envs/README.md"
 Cohesion: 0.40
 Nodes (5): Configure a fresh clone, Environment configuration, File ownership, Internal and public addresses, Placeholder convention
 
-### Community 125 - "TeamChatContext"
-Cohesion: 0.14
-Nodes (8): isTeamPing(), TEAM_PING_LABELS, TEAM_PINGS, TeamChatEntry, TeamChatMessage, TeamChatPing, TeamPing, TeamChatGateway
+### Community 125 - "team-chat.gateway.ts"
+Cohesion: 0.09
+Nodes (12): isTeamPing(), TEAM_PING_LABELS, TEAM_PINGS, TeamChatAuthContext, TeamChatEntry, TeamChatMessage, TeamChatPing, TeamPing (+4 more)
 
 ### Community 126 - "arena-socket-path.test.mjs"
-Cohesion: 0.14
+Cohesion: 0.17
 Nodes (4): FakeSocket, io(), wait(), waitUntil()
 
-### Community 128 - "Judge Worker Package"
+### Community 127 - "PrismaService"
 Cohesion: 0.12
-Nodes (19): dependencies, arena-game-engine@*, devDependencies, @types/node@^22.16.0, typescript@^5.9.2, vitest@^3.2.4, arena-game-engine, @types/node (+11 more)
+Nodes (3): PrismaService, friendshipSelect, friendUserSelect
 
-### Community 130 - "Fake Judge Logic"
-Cohesion: 0.22
-Nodes (8): ADR-0003, FakeJudge, HiddenGroup, HiddenGroupVerdict, JudgeLimits, JudgePort, VisibleCase, VisibleVerdict
+### Community 128 - "Judge Worker Package"
+Cohesion: 0.10
+Nodes (19): dependencies, arena-game-engine, devDependencies, @types/node, typescript, vitest, arena-game-engine, @types/node (+11 more)
 
-### Community 131 - "judge.ts"
-Cohesion: 0.14
-Nodes (16): CaseInput, DEFAULT_LANGUAGE_IDS, Judge0AdapterOptions, Judge0SubmissionRequest, NormalizedCase, SnippetOutput, ExecutionStatus, JudgeExecutionMetrics (+8 more)
+### Community 130 - "FakeJudge"
+Cohesion: 0.20
+Nodes (9): ADR-0003, FakeJudge, DEFAULT_LIMITS, HiddenGroup, HiddenGroupVerdict, JudgeLimits, JudgePort, VisibleCase (+1 more)
+
+### Community 132 - "match-statistics.ts"
+Cohesion: 0.11
+Nodes (13): GameStatsController, buildLeaderboard(), calculateProgression(), CodeArenaAchievement, completedAt(), CompletedMatchSummary, LeaderboardEntry, MatchOutcome (+5 more)
 
 ### Community 136 - "Docker Build Context"
 Cohesion: 0.12
 Nodes (17): context, dockerfile, RABBITMQ_HOST, RABBITMQ_PORT, build, env_file, environment, logging (+9 more)
 
-### Community 137 - "Fixture Data Models"
+### Community 137 - "fixtures.ts"
 Cohesion: 0.16
-Nodes (9): FixtureHiddenGroup, FixtureHiddenTest, FixtureVisibleTest, microProblems(), MockPlayer, mockSession(), SHUTOUT_OPPONENT, SOLVED_CODE (+1 more)
+Nodes (8): FixtureHiddenGroup, FixtureHiddenTest, FixtureVisibleTest, microProblems(), MockPlayer, OpponentRound, SHUTOUT_OPPONENT, SOLVED_CODE
 
-### Community 138 - "Round Phase Transitions"
-Cohesion: 0.18
-Nodes (16): bothReady(), Presence, Readiness, resetReadiness(), RoundPhase, STATUS_LABEL, VisibleTest, VisibleTestStatus (+8 more)
+### Community 138 - "mock-game.ts"
+Cohesion: 0.09
+Nodes (20): MockSide, Reveal, RunRecord, SubmissionRecord, SubmitReceipt, bothReady(), Presence, Readiness (+12 more)
 
 ### Community 139 - "Arena Harness Package"
-Cohesion: 0.14
-Nodes (16): dependencies, arena-model@*, description, devDependencies, typescript@^5.9.2, vitest@^3.2.4, arena-model, typescript (+8 more)
+Cohesion: 0.12
+Nodes (16): dependencies, arena-model, description, devDependencies, typescript, vitest, arena-model, typescript (+8 more)
 
-### Community 140 - "Team Chat Client"
-Cohesion: 0.09
-Nodes (12): TeamChatProps, TEAM_PING_LABELS, TEAM_PINGS, TeamChatAuthContext, TeamChatClient, TeamChatClientOptions, TeamChatEntry, TeamChatMessage (+4 more)
-
-### Community 141 - "GameJudge"
+### Community 140 - "TeamChatClient"
 Cohesion: 0.15
-Nodes (12): EvaluationOrchestratorOptions, CaseResult, GameJudge, isRecord(), parseCaseResult(), parseSealedGroup(), STATUSES, WorkerJudgeAdapter (+4 more)
+Nodes (4): TeamChatProps, TeamChatClient, SidecarFactories, SidecarState
+
+### Community 141 - "JudgeInfraError"
+Cohesion: 0.21
+Nodes (9): JudgeInfraError, SealedEvaluationRequest, SealedGroupResult, isRecord(), parseCaseResult(), parseSealedGroup(), STATUSES, WorkerJudgeAdapter (+1 more)
 
 ### Community 142 - "Arena Model Package"
-Cohesion: 0.14
-Nodes (15): description, devDependencies, typescript@^5.9.2, vitest@^3.2.4, typescript, vitest, main, name (+7 more)
+Cohesion: 0.12
+Nodes (15): description, devDependencies, typescript, vitest, typescript, vitest, main, name (+7 more)
 
 ### Community 143 - "Health Checks"
 Cohesion: 0.47
 Nodes (15): healthcheck, healthcheck, healthcheck, healthcheck, healthcheck, interval, retries, start_period (+7 more)
 
+### Community 144 - "type"
+Cohesion: 0.15
+Nodes (15): items, minItems, type, items, minItems, type, items, minItems (+7 more)
+
 ### Community 145 - "sidecars.ts"
-Cohesion: 0.12
-Nodes (24): ArenaSidecarLifecycle, configKey(), createArenaSidecarLifecycle(), cancelChatPending(), cancelCollabPending(), clearChat(), clearCollab(), dispose() (+16 more)
+Cohesion: 0.13
+Nodes (23): ArenaSidecarLifecycle, configKey(), createArenaSidecarLifecycle(), cancelChatPending(), cancelCollabPending(), clearChat(), clearCollab(), dispose() (+15 more)
 
 ### Community 146 - "Git Analytics Config"
 Cohesion: 0.22
 Nodes (11): clean(), cwd, date(), git(), main(), escapeHtml(), evidenceDirectory, execFileAsync (+3 more)
 
-### Community 149 - "Architecture Overview"
-Cohesion: 0.14
-Nodes (14): 42 curriculum attribution and team, Architecture, Code Arena integration, Data model overview, Description, Git activity report, Instructions: start the local stack, Module evidence and point calculation (+6 more)
+### Community 147 - "properties"
+Cohesion: 0.13
+Nodes (15): minLength, type, enum, pattern, type, properties, description, difficulty (+7 more)
+
+### Community 148 - "user-service/src/auth/auth.module.ts"
+Cohesion: 0.21
+Nodes (3): AccessTokenGuard, record(), record()
+
+### Community 149 - "Nook"
+Cohesion: 0.12
+Nodes (16): Architecture, Code Arena integration, Data model overview, Description, Git activity report, Instructions: start the local stack, Module coverage and tracker, Module evidence and point calculation (+8 more)
 
 ### Community 151 - "Code Stats"
 Cohesion: 0.26
@@ -793,8 +831,8 @@ Cohesion: 0.21
 Nodes (13): depends_on, env_file, healthcheck, image, restart, volumes, interval, retries (+5 more)
 
 ### Community 157 - "providers.tsx"
-Cohesion: 0.22
-Nodes (8): geistMono, inter, metadata, RootLayout(), getQueryClient(), makeQueryClient(), Providers(), AuthProvider()
+Cohesion: 0.11
+Nodes (16): geistMono, inter, metadata, RootLayout(), getQueryClient(), makeQueryClient(), Providers(), AuthProvider() (+8 more)
 
 ### Community 158 - "Docker Networks"
 Cohesion: 0.17
@@ -804,9 +842,9 @@ Nodes (12): environment, image, logging, networks, restart, volumes, CONTAINERS,
 Cohesion: 0.17
 Nodes (12): GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES, GF_ANALYTICS_CHECK_FOR_UPDATES, GF_ANALYTICS_REPORTING_ENABLED, GF_AUTH_ANONYMOUS_ENABLED, GF_NEWS_NEWS_FEED_ENABLED, GF_SECURITY_COOKIE_SECURE, GF_SECURITY_DISABLE_GRAVATAR, GF_SERVER_ROOT_URL (+4 more)
 
-### Community 160 - "App Features"
-Cohesion: 0.17
-Nodes (12): Chat workspace, Code Arena, Commands, Current limitations, Design system, Error and loading pages, How data flows, Profile and status (+4 more)
+### Community 160 - "Web client"
+Cohesion: 0.18
+Nodes (11): Chat workspace, Code Arena, Commands, Current limitations, Design system, Error and loading pages, How data flows, Profile and status (+3 more)
 
 ### Community 161 - "Datasource Config"
 Cohesion: 0.17
@@ -832,13 +870,13 @@ Nodes (11): user-db, user-db-backup, depends_on, env_file, image, logging, profi
 Cohesion: 0.18
 Nodes (10): internal, networks, docker-api, services, volumes, grafana-data, loki-data, prometheus-data (+2 more)
 
-### Community 167 - "Game Problem Logic"
-Cohesion: 0.13
-Nodes (12): FixtureProblem, OpponentRound, DEFAULT_LIMITS, MockSide, Reveal, RunRecord, SubmissionRecord, SubmitReceipt (+4 more)
+### Community 167 - "User service"
+Cohesion: 0.14
+Nodes (14): Architecture, Authentication, Commands, Configuration, Current limitations, Data model, Email verification and password reset, Events (+6 more)
 
-### Community 168 - "MatchMode"
-Cohesion: 0.21
-Nodes (5): capacityFor(), PrivateRoom, QueueEntry, saveMatchTx(), MatchMode
+### Community 168 - "GameJudge"
+Cohesion: 0.17
+Nodes (5): EvaluationOrchestratorOptions, GameJudge, configuredPositiveInteger(), createGameJudge(), JudgeEnvironment
 
 ### Community 169 - "Legal Pages"
 Cohesion: 0.38
@@ -860,9 +898,9 @@ Nodes (9): apiVersion, path, providers, allowUiUpdates, disableDeletion, folder,
 Cohesion: 0.20
 Nodes (9): compilerOptions, declaration, declarationMap, outDir, rootDir, sourceMap, extends, include (+1 more)
 
-### Community 174 - "App Modules"
-Cohesion: 0.18
-Nodes (5): ALL_ROUND_PHASES, AppModule, HealthController, httpReady(), tcp()
+### Community 174 - "arena-model/src/index.ts"
+Cohesion: 0.15
+Nodes (6): ARENA_EVENTS, ArenaEventPayloads, ALL_ROUND_PHASES, HealthController, httpReady(), tcp()
 
 ### Community 175 - "Model TS Config"
 Cohesion: 0.20
@@ -886,7 +924,7 @@ Nodes (8): global, evaluation_interval, scrape_interval, rule_files, scrape_conf
 
 ### Community 181 - "src/lobby.ts"
 Cohesion: 0.18
-Nodes (9): ExpiredRoomCursor, ExpiredRoomPage, LOBBY_SCHEMA, LobbySideId, PrivateRoomMember, PrivateRoomStatus, QueueStatus, RoomWithMembers (+1 more)
+Nodes (8): ExpiredRoomCursor, ExpiredRoomPage, generateInviteCode(), LOBBY_SCHEMA, PrivateRoomStatus, QueueStatus, selectProblems(), GAME_SCHEMA
 
 ### Community 182 - "Minio Init"
 Cohesion: 0.25
@@ -908,6 +946,10 @@ Nodes (7): compilerOptions, module, moduleResolution, skipLibCheck, strict, targ
 Cohesion: 0.25
 Nodes (7): compilerOptions, module, moduleResolution, skipLibCheck, strict, target, include
 
+### Community 187 - "book/package.json"
+Cohesion: 0.17
+Nodes (11): dependencies, marked, puppeteer-core, description, name, private, scripts, build (+3 more)
+
 ### Community 188 - "Docker Commands"
 Cohesion: 0.29
 Nodes (7): command, devices, image, privileged, restart, volumes, cadvisor
@@ -928,17 +970,17 @@ Nodes (6): Completion, Decisions, Local completion evidence, Progress / rulings,
 Cohesion: 0.29
 Nodes (6): compilerOptions, outDir, rootDir, extends, include, ./tsconfig.json
 
-### Community 193 - "Platform Status"
-Cohesion: 0.47
-Nodes (4): checkPlatformHealth(), GET(), PlatformStatus, ServiceStatus
+### Community 193 - "route.ts"
+Cohesion: 0.33
+Nodes (6): checkPlatformHealth(), GET(), PlatformStatus, ServiceStatus, HTTP routes, HTTP routes
 
 ### Community 194 - "Logging Metrics"
 Cohesion: 0.33
 Nodes (6): command, image, logging, restart, volumes, prometheus
 
-### Community 195 - "Client Integration"
-Cohesion: 0.33
-Nodes (6): Client and backend integration, Errors, Paths, Realtime, Session, Where each merging point is documented
+### Community 195 - "Client console cleanup"
+Cohesion: 0.18
+Nodes (8): ArenaPendingAction, Client console cleanup, Follow-up: executable language choices, Remaining conditional console sources, Scope and changes, Verification, Authoritative tie-break winner display, Live Feed carousel verification
 
 ### Community 196 - "Credential Exposure"
 Cohesion: 0.33
@@ -948,9 +990,9 @@ Nodes (6): Credential exposure: operator action required, Decisions, Nook / Aren
 Cohesion: 0.33
 Nodes (6): Code Arena integration specification, HTTP and realtime contracts, Persistence and privacy boundary, Product behavior, Service boundaries, Verification
 
-### Community 198 - "BACKUP_RECOVERY.md"
-Cohesion: 0.18
-Nodes (8): Complete snapshots and recovery (D04), Create and schedule snapshots, Non-destructive verification, Restore during maintenance, Snapshot contents, backup.sh script, restore.sh script, verify-recovery.sh script
+### Community 198 - "verify-recovery.sh script"
+Cohesion: 0.33
+Nodes (3): backup.sh script, restore.sh script, verify-recovery.sh script
 
 ### Community 199 - "Docker Logs"
 Cohesion: 0.40
@@ -960,6 +1002,10 @@ Nodes (5): command, image, restart, volumes, loki
 Cohesion: 0.40
 Nodes (4): Agreed Architectural Decisions (ADR-0015 Summary), Context: Code Arena in Nook, Domain Glossary, Overview
 
+### Community 202 - "accounts.service.ts"
+Cohesion: 0.08
+Nodes (14): AccountImagesController, accountSelect, AccountsService, JOINED_WITHIN_DAYS, publicProfileSelect, ACCOUNT_SORT_FIELDS, AccountSortField, JOINED_WITHIN_VALUES (+6 more)
+
 ### Community 203 - "Theme Tokens"
 Cohesion: 0.67
 Nodes (3): contrast(), design, luminance()
@@ -968,37 +1014,117 @@ Nodes (3): contrast(), design, luminance()
 Cohesion: 0.50
 Nodes (4): 0015. Code Arena Integration into Nook, Consequences and known limits, Context, Decisions
 
-### Community 205 - "game/reconnect.test.ts"
-Cohesion: 0.33
-Nodes (6): api(), HAS_PG, headers(), newMatch(), snapshotOf(), startCoding()
+### Community 205 - "Project scan map"
+Cohesion: 0.20
+Nodes (9): Agent skills, Code-review Easter egg, Domain docs, Graphify navigation, Issue tracker, Project scan map, Review status and verification, Source entry points (+1 more)
 
 ### Community 206 - "game/team-2v2.test.ts"
-Cohesion: 0.33
-Nodes (6): api(), headers(), newTeamMatch(), once(), pushSource(), startCoding()
+Cohesion: 0.36
+Nodes (7): api(), connect(), headers(), newTeamMatch(), once(), pushSource(), startCoding()
 
-### Community 209 - "MatchView.tsx"
-Cohesion: 0.47
-Nodes (4): instant, MatchPage(), metadata, MatchView()
+### Community 209 - "arena/chat.ts"
+Cohesion: 0.20
+Nodes (9): TEAM_PING_LABELS, TEAM_PINGS, TeamChatAuthContext, TeamChatClientOptions, TeamChatEntry, TeamChatMessage, TeamChatPing, TeamChatStatus (+1 more)
+
+### Community 210 - "devDependencies"
+Cohesion: 0.20
+Nodes (10): devDependencies, eslint, eslint-config-next, shadcn, tailwindcss, @tailwindcss/turbopack, @types/node, @types/react (+2 more)
+
+### Community 211 - "provenance"
+Cohesion: 0.20
+Nodes (10): type, enum, created, origin, provenance, source, properties, required (+2 more)
+
+### Community 212 - "ArenaSnapshot"
+Cohesion: 0.31
+Nodes (7): DuelPanel(), DuelPanelProps, PlayerCard(), ServerSnapshot, ArenaSnapshot, PlayerStatus, SideView
+
+### Community 213 - "esc"
+Cohesion: 0.25
+Nodes (8): saveCrop(), arrow(), box(), esc(), image(), link(), part(), table()
+
+### Community 219 - "ChatUser"
+Cohesion: 0.29
+Nodes (8): ChatUser, 13. The other links between the two services, 1. Why RabbitMQ exists in this project, 6. The HTTP fallback, Ownership, Shared JWT, Data model, Source map
+
+### Community 221 - "ArenaWorkspace"
+Cohesion: 0.48
+Nodes (7): ArenaWorkspace(), handleRun(), handleSubmit(), handleSurrender(), handleToggleReady(), performAction(), EditorAdapter
+
+### Community 223 - "Nook documentation"
+Cohesion: 0.33
+Nodes (6): Code Arena and evaluation, Engineering checks, Integrations (merging points), Nook documentation, Reference, Services
+
+### Community 224 - "Code Arena lifecycle notifications"
+Cohesion: 0.33
+Nodes (6): Boundaries, Code Arena lifecycle notifications, Correlation checks, Linking a challenge to a conversation, Replay safety, What is written
+
+### Community 226 - "schema.json"
+Cohesion: 0.33
+Nodes (5): $id, required, $schema, title, type
+
+### Community 227 - "Domain docs"
+Cohesion: 0.40
+Nodes (4): Domain docs, Flag decision conflicts, Read before exploring, Use the project’s vocabulary
+
+### Community 228 - "Issue tracker: Local Markdown"
+Cohesion: 0.40
+Nodes (4): Conventions, Issue tracker: Local Markdown, When a skill says “fetch the relevant ticket”, When a skill says “publish to the issue tracker”
+
+### Community 229 - "docChapter"
+Cohesion: 0.40
+Nodes (5): chapter(), docChapter(), mdToHtml(), rd(), rdJson()
+
+### Community 230 - "Complete snapshots and recovery (D04)"
+Cohesion: 0.40
+Nodes (5): Complete snapshots and recovery (D04), Create and schedule snapshots, Non-destructive verification, Restore during maintenance, Snapshot contents
+
+### Community 231 - "Messages"
+Cohesion: 0.40
+Nodes (5): Editing and deleting, History, Messages, Read state and unread counts, Sending and retries
+
+### Community 232 - "starters"
+Cohesion: 0.40
+Nodes (5): type, starters, additionalProperties, required, type
+
+### Community 233 - "describe"
+Cohesion: 0.50
+Nodes (4): bodyOf(), dedent(), describe(), shiftHeadings()
+
+### Community 234 - "renderApi"
+Cohesion: 1.00
+Nodes (4): flatten(), renderApi(), resolveRef(), typeOf()
+
+### Community 236 - "tags"
+Cohesion: 0.50
+Nodes (4): tags, items, minItems, type
+
+### Community 238 - "memoryLimitMb"
+Cohesion: 0.67
+Nodes (3): minimum, type, memoryLimitMb
+
+### Community 239 - "visibleTests"
+Cohesion: 0.67
+Nodes (3): visibleTests, minItems, type
 
 ## Knowledge Gaps
-- **7 isolated node(s):** `ADR-0003`, `MC_CONFIG_DIR`, `./tsconfig.json`, `./tsconfig.json`, `./tsconfig.json` (+2 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1780 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **49 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **1435 isolated node(s):** `$schema`, `collection`, `sourceRoot`, `deleteOutDir`, `name` (+1430 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2102 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **44 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `react` connect `AppErrorHandling` to `ref_nestjs_config`, `MarkdownEditor`, `useAuth`, `chat-workspace.tsx`, `Legal Pages`, `Team Chat Client`, `MessageActionsUI`, `GamePagesUI`, `ArenaWorkspace.tsx`, `Button`, `emoji-picker.tsx`, `EditorAdapter.tsx`, `sidebar.tsx`, `MatchView.tsx`, `next`, `chat/client.ts`, `providers.tsx`?**
-  _High betweenness centrality (0.070) - this node is a cross-community bridge._
-- **What connects `ADR-0003`, `MC_CONFIG_DIR`, `./tsconfig.json` to the rest of the system?**
-  _7 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `engine.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.03589232303090728 - nodes in this community are weakly interconnected._
-- **Why does `Infrastructure` connect `System Startup Guide` to `Documentation Index`?**
-  _High betweenness centrality (0.029) - this node is a cross-community bridge._
-- **Should `ref_nestjs_config` be split into smaller, more focused modules?**
-  _Cohesion score 0.1309175920514319 - nodes in this community are weakly interconnected._
-- **Why does `bcrypt` connect `ref_nestjs_config` to `accounts.service.ts`, `bootstrap-superadmin-env.mjs`, `ref_nestjs_common`, `User Service Package`, `User Runtime Dependencies`?**
-  _High betweenness centrality (0.026) - this node is a cross-community bridge._
-- **Should `accounts.service.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.0697980684811238 - nodes in this community are weakly interconnected._
+- **Why does `react` connect `useAuth` to `client/package.json`, `chat-workspace.tsx`, `Legal Pages`, `details-panel.tsx`, `public-profile.tsx`, `types.ts`, `Button`, `emoji-picker.tsx`, `ThemeSelector`, `sidebar.tsx`, `ref_node_test`, `search-view.tsx`, `providers.tsx`?**
+  _High betweenness centrality (0.064) - this node is a cross-community bridge._
+- **Why does `GameService` connect `GameService` to `SubmissionRecord`, `ArenaEngine`, `match-statistics.ts`, `game.service.ts`, `engine.ts`, `game-events.publisher.ts`, `PostgresStores`, `MatchMode`, `team-chat.gateway.ts`, `MatchSocketPresence`, `game.module.ts`, `LobbyController`, `game/user-events.consumer.ts`, `socketPrincipal`?**
+  _High betweenness centrality (0.039) - this node is a cross-community bridge._
+- **Why does `bcrypt` connect `ref_node_assert` to `auth.service.ts`, `accounts.service.ts`, `superadmin.service.ts`, `user-service/package.json`, `bootstrap-superadmin-env.mjs`?**
+  _High betweenness centrality (0.031) - this node is a cross-community bridge._
+- **What connects `$schema`, `collection`, `sourceRoot` to the rest of the system?**
+  _1435 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `SubmissionRecord` be split into smaller, more focused modules?**
+  _Cohesion score 0.05974025974025974 - nodes in this community are weakly interconnected._
+- **Should `SuperadminService` be split into smaller, more focused modules?**
+  _Cohesion score 0.12310606060606061 - nodes in this community are weakly interconnected._
+- **Should `FriendshipsService` be split into smaller, more focused modules?**
+  _Cohesion score 0.09191919191919191 - nodes in this community are weakly interconnected._

@@ -54,6 +54,6 @@ One document per service, and one per place where services meet.
 
 [Repeatable verification](project/VERIFICATION.md) is the entry point for the full gate, disposable services, secret hooks and CI.
 
-The dated [2026-11-12 documentation drift audit](../2026-11-12_DRIFT_REPORT.md) and [2026-11-14 documentation drift report](../2026-11-14_DRIFT_REPORT.md) record audit findings and their resolution status.
+The historical 2026-11-12 documentation drift audit (archived in Git history, e.g. commit `c52c1d4`) and the current [2026-11-14 documentation drift report](../2026-11-14_DRIFT_REPORT.md) record audit findings and their resolution status.
 
 The committed code graph lives in `../graphify-out/` and can be refreshed with `graphify update .`. Code extraction is deterministic and local; optional community names use an LLM. The 2026-11-11 missing-label pass used Ollama with local `qwen3.5:4b`, preserved 47 existing labels, and manually clarified two duplicate Docker labels. The Understand-Anything snapshot in `../.ua/` records its source commit in `meta.json`; the handbook flags it as stale when that commit no longer matches `HEAD`.
