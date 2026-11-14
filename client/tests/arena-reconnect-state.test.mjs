@@ -5,6 +5,10 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 
 function loadTypeScript(sourcePath, dependencies = {}, globals = {}) {
+  const resolvedDeps = { ...dependencies };
+  if (sourcePath.includes("socket.ts") && !("../auth/client" in resolvedDeps)) {
+    resolvedDeps["../auth/client"] = loadTypeScript("../lib/auth/client.ts", {}, globals);
+  }
   const source = readFileSync(new URL(sourcePath, import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -14,8 +18,8 @@ function loadTypeScript(sourcePath, dependencies = {}, globals = {}) {
     exports: loadedModule.exports,
     module: loadedModule,
     require(name) {
-      if (!(name in dependencies)) throw new Error(`unexpected import: ${name}`);
-      return dependencies[name];
+      if (!(name in resolvedDeps)) throw new Error(`unexpected import: ${name}`);
+      return resolvedDeps[name];
     },
     fetch: async () => ({ ok: true, json: async () => MATCH_SNAPSHOT }),
     setInterval,

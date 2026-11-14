@@ -1,4 +1,4 @@
-import type { MatchMode, PlayerStatus, Presence, RoundPhase } from "arena-model";
+import type { MatchMode, PlayerStatus, Presence, RevealCause, RoundPhase } from "arena-model";
 import type { ExecutionStatus } from "./judge.js";
 
 export type SideId = string;
@@ -67,6 +67,8 @@ export interface RoundState {
   closing: boolean;
   cutoffPassed: boolean;
   superseded: string[];
+  /** Server-owned coding deadline (ms). Set at first CODING transition; never resets. */
+  codingDeadlineMs?: number | null;
 }
 
 export interface MatchRecord {
@@ -150,4 +152,6 @@ export interface RevealSnapshot {
   groups: Partial<Record<SideId, GroupResult[]>>;
   totals: Partial<Record<SideId, number>>;
   publishedAt: number;
+  cause?: RevealCause;
+  noSubmission?: Partial<Record<SideId, boolean>>;
 }

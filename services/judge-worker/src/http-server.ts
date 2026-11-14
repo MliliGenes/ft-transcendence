@@ -66,15 +66,21 @@ function isStringField(record: Record<string, unknown>, key: string): boolean {
   return typeof record[key] === "string";
 }
 
+function isOptionalEntrypoint(value: Record<string, unknown>): boolean {
+  return value.entrypoint === undefined || value.entrypoint === null || typeof value.entrypoint === "string";
+}
+
 function parseVisibleRequest(value: unknown): {
   language: SupportedLanguage;
   driver: DriverKind;
   source: string;
   tests: VisibleTest[];
   limits: JudgeLimits;
+  entrypoint?: string;
 } {
   if (!isRecord(value) || !isLanguage(value.language) || !isDriver(value.driver)
-    || !isStringField(value, "source") || !isLimits(value.limits) || !Array.isArray(value.tests)) {
+    || !isStringField(value, "source") || !isLimits(value.limits) || !Array.isArray(value.tests)
+    || !isOptionalEntrypoint(value)) {
     throw new InvalidRequestError();
   }
   const tests = value.tests.map((test) => {
@@ -89,6 +95,7 @@ function parseVisibleRequest(value: unknown): {
     source: value.source as string,
     tests,
     limits: value.limits,
+    ...(typeof value.entrypoint === "string" && value.entrypoint.length > 0 ? { entrypoint: value.entrypoint } : {}),
   };
 }
 
@@ -97,7 +104,7 @@ function parseSealedRequest(value: unknown): SealedEvaluationRequest {
     || !isStringField(value, "problemVersionId") || !isStringField(value, "hiddenSuiteId")
     || !isLanguage(value.language) || !isDriver(value.driver) || !isStringField(value, "source")
     || !isLimits(value.limits) || !Array.isArray(value.groups)
-    || (value.entrypoint !== undefined && typeof value.entrypoint !== "string")) {
+    || !isOptionalEntrypoint(value)) {
     throw new InvalidRequestError();
   }
   const groups = value.groups.map((group) => {
@@ -120,7 +127,7 @@ function parseSealedRequest(value: unknown): SealedEvaluationRequest {
     hiddenSuiteId: value.hiddenSuiteId as string,
     language: value.language,
     driver: value.driver,
-    ...(typeof value.entrypoint === "string" ? { entrypoint: value.entrypoint } : {}),
+    ...(typeof value.entrypoint === "string" && value.entrypoint.length > 0 ? { entrypoint: value.entrypoint } : {}),
     source: value.source as string,
     groups,
     limits: value.limits,
@@ -238,7 +245,7 @@ export function createJudgeWorkerServer(options: JudgeWorkerServerOptions): Serv
     if (visible) {
       const input = parseVisibleRequest(body);
       const result = await options.queue.run(() => options.judge.runVisible(
-        input.language, input.driver, input.source, input.tests, input.limits,
+        input.language, input.driver, input.source, input.tests, input.limits, input.entrypoint,
       ));
       respond(response, 200, result);
       return;

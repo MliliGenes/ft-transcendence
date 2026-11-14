@@ -76,6 +76,7 @@ export interface RevealView {
   roundScore: number;
   groups: Array<{ name: string; weight: number; earned: number }>;
   totals: { you: number; opponent: number };
+  noSubmission?: { you: boolean; opponent: boolean };
 }
 
 /** Terminal match result, viewer-relative (score sums + forfeit override). */
@@ -95,6 +96,7 @@ export interface ArenaSnapshot {
   round: number;
   totalRounds: number;
   remainingSeconds: number;
+  roundRemainingSeconds: number | null;
   problem: ArenaProblem;
   language: SupportedLanguage | string;
   tests: TestView[];

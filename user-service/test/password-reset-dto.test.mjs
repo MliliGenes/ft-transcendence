@@ -24,7 +24,12 @@ test('password reset endpoints validate input before calling the service', async
     whitelist: true, forbidNonWhitelisted: true, transform: true,
   }));
   await app.init();
+  // Bind once: SuperTest's per-request listen/close churn resets in-flight sockets.
+  await app.listen(0);
   const server = app.getHttpServer();
+  // The harness owns the listener: SuperTest must not close and restart an
+  // ephemeral port around a request (that churn resets in-flight sockets).
+  assert.ok(server.listening, 'the test server must be bound before the first request');
   const token = `${randomUUID()}.${randomBytes(32).toString('base64url')}`;
   for (const body of [{}, { email: 'invalid' }, { email: 42 }]) {
     await request(server).post('/auth/password-reset/request').send(body).expect(400);

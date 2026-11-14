@@ -56,15 +56,16 @@ export function isEditable(phase: RoundPhase): boolean {
 }
 
 /** Cause gating disclosure of a sealed Round result. */
-export type RevealCause = "REVEAL_CONDITION_MET" | "MATCH_DEADLINE";
+export type RevealCause = "REVEAL_CONDITION_MET" | "MATCH_DEADLINE" | "ROUND_DEADLINE";
 
 /**
  * Normal reveal follows a completed coding Round. A Match deadline can also
- * publish the current Round while it is found, in intro, or coding. Evaluation
+ * publish the current Round while it is found, in intro, or coding. A Round
+ * deadline publishes the round from coding when time expires. Evaluation
  * completion alone never reveals hidden group information.
  */
 export function publishRoundReveal(from: RoundPhase, cause: RevealCause): RoundPhase {
-  if (cause === "REVEAL_CONDITION_MET" && from === "CODING") return "SCORE_REVEAL";
+  if ((cause === "REVEAL_CONDITION_MET" || cause === "ROUND_DEADLINE") && from === "CODING") return "SCORE_REVEAL";
   if (cause === "MATCH_DEADLINE" && (from === "MATCH_FOUND" || from === "ROUND_INTRO" || from === "CODING")) {
     return "SCORE_REVEAL";
   }

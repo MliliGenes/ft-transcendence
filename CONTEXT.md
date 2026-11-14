@@ -23,7 +23,7 @@ The game is hosted inside Nook's web client under the `/play` route and follows 
 6. **Editor & Collaboration**:
    - CodeMirror 6 with Yjs CRDT collaborative binding (`y-codemirror.next`), wrapped in dynamic client components (`ssr: false`) and styled to match Nook's pure-black (`#000000`) and surface (`#121212`) palette with Inter and monospace typography.
 7. **Supported Languages**:
-   - C++, Python, and C, powered by the checked problem bank and sandboxed Docker judge worker.
+   - C++, Python, and C, powered by the checked problem bank and sandboxed Docker judge worker. Snippet execution is available for Python only (supporting bank-declared class `Solution` entrypoints and top-level functions); C++ and C use `stdio` driver execution. Incompatible language/driver requests are rejected before judge dispatch with HTTP 400.
 
 ---
 

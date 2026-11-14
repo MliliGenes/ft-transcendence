@@ -107,7 +107,12 @@ test('avatar and banner uploads', async (t) => {
     }),
   );
   await app.init();
+  // Bind once: SuperTest's per-request listen/close churn resets in-flight sockets.
+  await app.listen(0);
   const server = app.getHttpServer();
+  // The harness owns the listener: SuperTest must not close and restart an
+  // ephemeral port around a request (that churn resets in-flight sockets).
+  assert.ok(server.listening, 'the test server must be bound before the first request');
   const token = await module.get(JwtService).signAsync({ sub: id });
   const input = await sharp({
     create: { width: 600, height: 400, channels: 3, background: 'red' },

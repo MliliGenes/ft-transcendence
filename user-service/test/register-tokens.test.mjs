@@ -69,7 +69,12 @@ test('registration issues tokens and prepares a nested user/session write', asyn
     }),
   );
   await app.init();
+  // Bind once: SuperTest's per-request listen/close churn resets in-flight sockets.
+  await app.listen(0);
   const server = app.getHttpServer();
+  // The harness owns the listener: SuperTest must not close and restart an
+  // ephemeral port around a request (that churn resets in-flight sockets).
+  assert.ok(server.listening, 'the test server must be bound before the first request');
   const dto = {
     username: 'tester',
     email: 'test@example.com',

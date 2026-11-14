@@ -23,8 +23,10 @@ CREATE TABLE IF NOT EXISTS rounds (
   idx INTEGER NOT NULL,
   round_id TEXT NOT NULL UNIQUE,
   problem_version_id TEXT NOT NULL,
+  coding_deadline_ms BIGINT,
   PRIMARY KEY (match_id, idx)
 );
+ALTER TABLE rounds ADD COLUMN IF NOT EXISTS coding_deadline_ms BIGINT;
 CREATE TABLE IF NOT EXISTS round_sides (
   match_id TEXT NOT NULL,
   round_id TEXT NOT NULL REFERENCES rounds(round_id) ON DELETE CASCADE,
@@ -364,9 +366,9 @@ export async function saveMatchTx(client: PoolClient, match: MatchRecord, expect
   for (let idx = 0; idx < storedMatch.rounds.length; idx++) {
     const round = storedMatch.rounds[idx]!;
     await client.query(
-      `INSERT INTO rounds (match_id, idx, round_id, problem_version_id) VALUES ($1, $2, $3, $4)
-       ON CONFLICT (match_id, idx) DO UPDATE SET round_id = EXCLUDED.round_id, problem_version_id = EXCLUDED.problem_version_id`,
-      [storedMatch.id, idx, round.roundId, round.problemVersionId],
+      `INSERT INTO rounds (match_id, idx, round_id, problem_version_id, coding_deadline_ms) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (match_id, idx) DO UPDATE SET round_id = EXCLUDED.round_id, problem_version_id = EXCLUDED.problem_version_id, coding_deadline_ms = EXCLUDED.coding_deadline_ms`,
+      [storedMatch.id, idx, round.roundId, round.problemVersionId, round.codingDeadlineMs ?? null],
     );
     for (const [sideId, activity] of Object.entries(round.activities)) {
       const counted = round.counted[sideId];

@@ -37,7 +37,7 @@ function loadLobbyClient(fetch) {
 }
 
 function response(body, status = 200) {
-  return { ok: status >= 200 && status < 300, json: async () => body };
+  return { ok: status >= 200 && status < 300, status, json: async () => body };
 }
 
 test("lobby resume returns the member's active room without trying to join twice", async () => {
@@ -72,6 +72,35 @@ test("lobby entry still joins by invite code when the user has no matching activ
   assert.deepEqual(requests, [
     { url: "/lobby/active", method: "GET", body: undefined },
     { url: "/lobby/rooms/join", method: "POST", body: JSON.stringify({ code: "AB12CD" }) },
+  ]);
+});
+
+test("an expired lobby token is refreshed before retrying the join", async () => {
+  let currentToken = "old-token";
+  const requests = [];
+  const requestWithSession = async (send) => {
+    try {
+      return await send(currentToken);
+    } catch (error) {
+      if (error.status !== 401) throw error;
+      currentToken = "fresh-token";
+      return send(currentToken);
+    }
+  };
+  const { LobbyClient } = loadLobbyClient(async (url, options = {}) => {
+    const token = options.headers?.authorization?.replace("Bearer ", "") ?? null;
+    requests.push({ url, token });
+    if (token === "old-token") return response({ error: "Access token expired" }, 401);
+    return response({ ok: true, room: ROOM, members: MEMBERS });
+  });
+
+  const client = new LobbyClient("", "player-2", "old-token", undefined, requestWithSession);
+  const result = await client.joinRoom("AB12CD");
+
+  assert.equal(result.room.id, "room-1");
+  assert.deepEqual(requests, [
+    { url: "/lobby/rooms/join", token: "old-token" },
+    { url: "/lobby/rooms/join", token: "fresh-token" },
   ]);
 });
 

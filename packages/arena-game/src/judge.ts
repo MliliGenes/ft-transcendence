@@ -82,11 +82,10 @@ export function assertSupportedLanguage(language: string): asserts language is S
 }
 
 /**
- * Execution driver: "snippet" evaluates bank-style input snippets against the
- * player's single public function (Python); "stdio" feeds raw input bytes to a
- * complete program over stdin. The game resolves the driver from bank metadata;
- * until the bank declares `driver`/`entrypoint` (05 follow-up), the engine uses
- * snippet for Python and stdio otherwise.
+ * Execution driver: "snippet" evaluates bank-style input snippets against a
+ * bank-declared entrypoint (Python); "stdio" feeds raw input bytes to a
+ * complete program over stdin. The game resolves driver and entrypoint from
+ * bank metadata, defaulting to snippet for Python and stdio otherwise.
  */
 export type DriverKind = "snippet" | "stdio";
 
@@ -119,6 +118,7 @@ export interface GameJudge {
     source: string,
     tests: VisibleTest[],
     limits: JudgeLimits,
+    entrypoint?: string,
   ): Promise<CaseResult[]>;
   evaluateSealed(request: SealedEvaluationRequest): Promise<{ groups: SealedGroupResult[] }>;
 }

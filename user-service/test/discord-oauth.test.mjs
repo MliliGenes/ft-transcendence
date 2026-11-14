@@ -1,8 +1,9 @@
 import { MailService } from '../dist/mail/mail.service.js';
 import { RabbitMqEventsService } from '../dist/events/rabbitmq-events.service.js';
 import { readSession } from './helpers/session.mjs';
-﻿import 'reflect-metadata';
+import 'reflect-metadata';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
@@ -36,16 +37,29 @@ test('Discord authorization-code login', async (t) => {
   let lastCreate, dbFailure, raceWinner;
   let expectedRedirect;
   let networkCalls = 0;
-  let remote = {
+  const defaultRemote = () => ({
     id: '223456789012345678',
     username: 'discord_player',
     global_name: 'Discord Player',
     email: 'discord@example.com',
     verified: true,
-  };
+  });
+  let remote = defaultRemote();
   let remoteStatus = 200,
     remoteFailure = false,
     badToken = false;
+  const resetStubState = () => {
+    remoteStatus = 200;
+    remoteFailure = false;
+    badToken = false;
+    dbFailure = undefined;
+    raceWinner = undefined;
+    remote = defaultRemote();
+    config.DISCORD_CLIENT_SECRET = 'test-secret';
+    config.DISCORD_REDIRECT_URI = 'http://localhost:3000/auth/discord/callback';
+    config.NODE_ENV = 'test';
+    expectedRedirect = undefined;
+  };
   const safe = (user) => ({
     id: user.id,
     username: user.username,
@@ -166,7 +180,9 @@ test('Discord authorization-code login', async (t) => {
   const app = module.createNestApplication();
   app.useLogger(false);
   t.after(() => app.close());
+  t.afterEach(() => resetStubState());
   await app.init();
+  await app.listen(0);
   const server = app.getHttpServer();
   await t.test(
     'browser callback errors return safe codes to the frontend',
@@ -212,7 +228,7 @@ test('Discord authorization-code login', async (t) => {
       );
       assert.equal(
         init.body.get('redirect_uri'),
-        expectedRedirect ?? config.DISCORD_REDIRECT_URI,
+        expectedRedirect,
       );
       assert.ok(init.body.get('code'));
       return new Response(
@@ -228,25 +244,31 @@ test('Discord authorization-code login', async (t) => {
     return new Response(JSON.stringify(remote));
   });
   const begin = async () => {
+    expectedRedirect = config.DISCORD_REDIRECT_URI;
     const res = await request(server).get('/auth/discord').expect(302);
     const url = new URL(res.headers.location);
     const state = url.searchParams.get('state');
     const cookie = res.headers['set-cookie'][0].split(';')[0];
     return { res, url, state, cookie };
   };
-  const callback = (flow, query = {}) =>
-    request(server)
+  const callback = (flow, query = {}) => {
+    expectedRedirect = config.DISCORD_REDIRECT_URI;
+    return request(server)
       .get('/auth/discord/callback')
       .set('Cookie', flow.cookie)
       .query({ state: flow.state, code: 'test-code', ...query });
+  };
 
   await t.test(
     'empty config disables only Discord endpoints and does not write state',
     async () => {
-      config.DISCORD_CLIENT_SECRET = '';
-      await request(server).get('/auth/discord').expect(503);
-      assert.equal(states.size, 0);
-      config.DISCORD_CLIENT_SECRET = 'test-secret';
+      try {
+        config.DISCORD_CLIENT_SECRET = '';
+        await request(server).get('/auth/discord').expect(503);
+        assert.equal(states.size, 0);
+      } finally {
+        config.DISCORD_CLIENT_SECRET = 'test-secret';
+      }
     },
   );
   await t.test(
@@ -402,24 +424,38 @@ test('Discord authorization-code login', async (t) => {
     'upstream errors do not leak provider tokens or create sessions',
     async () => {
       const size = sessions.length;
-      for (const status of [400, 401, 403, 429, 500]) {
-        remoteStatus = status;
-        const res = await callback(await begin()).expect(
-          status < 429 ? 401 : 502,
-        );
-        assert.ok(
-          !JSON.stringify(res.body).includes('private-upstream-detail'),
-        );
+      try {
+        for (const status of [400, 401, 403, 429, 500]) {
+          remoteStatus = status;
+          const res = await callback(await begin()).expect(
+            status < 429 ? 401 : 502,
+          );
+          assert.ok(
+            !JSON.stringify(res.body).includes('private-upstream-detail'),
+          );
+        }
+      } finally {
+        remoteStatus = 200;
       }
-      remoteStatus = 200;
-      remoteFailure = true;
-      await callback(await begin()).expect(502);
-      remoteFailure = false;
-      badToken = true;
-      await callback(await begin()).expect(502);
-      badToken = false;
-      remote = { id: 'invalid', username: 'x' };
-      await callback(await begin()).expect(502);
+      try {
+        remoteStatus = 200;
+        remoteFailure = true;
+        await callback(await begin()).expect(502);
+      } finally {
+        remoteFailure = false;
+      }
+      try {
+        badToken = true;
+        await callback(await begin()).expect(502);
+      } finally {
+        badToken = false;
+      }
+      try {
+        remote = { id: 'invalid', username: 'x' };
+        await callback(await begin()).expect(502);
+      } finally {
+        resetStubState();
+      }
       assert.equal(sessions.length, size);
     },
   );
@@ -434,43 +470,51 @@ test('Discord authorization-code login', async (t) => {
         email: 'race@example.com',
         verified: true,
       };
-      dbFailure = new Error('database unavailable');
       const size = sessions.length;
-      await assert.rejects(
-        auth.loginWithDiscord(profile),
-        /database unavailable/,
-      );
-      assert.equal(sessions.length, size);
-      dbFailure = new Prisma.PrismaClientKnownRequestError('duplicate', {
-        code: 'P2002',
-        clientVersion: '7',
-      });
-      await assert.rejects(
-        auth.loginWithDiscord(profile),
-        (error) => error.getStatus() === 409,
-      );
-      raceWinner = {
-        id: randomUUID(),
-        email: profile.email,
-        username: 'winner',
-      };
-      const result = await auth.loginWithDiscord(profile);
-      assert.equal(result.user.id, raceWinner.id);
-      dbFailure = undefined;
-      raceWinner = undefined;
+      try {
+        dbFailure = new Error('database unavailable');
+        await assert.rejects(
+          auth.loginWithDiscord(profile),
+          /database unavailable/,
+        );
+        assert.equal(sessions.length, size);
+        dbFailure = new Prisma.PrismaClientKnownRequestError('duplicate', {
+          code: 'P2002',
+          clientVersion: '7',
+        });
+        await assert.rejects(
+          auth.loginWithDiscord(profile),
+          (error) => error.getStatus() === 409,
+        );
+        raceWinner = {
+          id: randomUUID(),
+          email: profile.email,
+          username: 'winner',
+        };
+        const result = await auth.loginWithDiscord(profile);
+        assert.equal(result.user.id, raceWinner.id);
+      } finally {
+        dbFailure = undefined;
+        raceWinner = undefined;
+      }
     },
   );
   await t.test(
     'secure cookies in HTTPS and HTTP prohibited in production',
     async () => {
-      config.DISCORD_REDIRECT_URI = 'https://example.com/auth/discord/callback';
-      const flow = await begin();
-      assert.match(flow.res.headers['set-cookie'][0], /; Secure/);
-      config.DISCORD_REDIRECT_URI =
-        'http://localhost:3000/auth/discord/callback';
-      config.NODE_ENV = 'production';
-      await request(server).get('/auth/discord').expect(503);
-      config.NODE_ENV = 'test';
+      try {
+        config.DISCORD_REDIRECT_URI = 'https://example.com/auth/discord/callback';
+        const flow = await begin();
+        assert.match(flow.res.headers['set-cookie'][0], /; Secure/);
+        config.DISCORD_REDIRECT_URI =
+          'http://localhost:3000/auth/discord/callback';
+        config.NODE_ENV = 'production';
+        await request(server).get('/auth/discord').expect(503);
+      } finally {
+        config.DISCORD_REDIRECT_URI =
+          'http://localhost:3000/auth/discord/callback';
+        config.NODE_ENV = 'test';
+      }
     },
   );
 
@@ -486,7 +530,9 @@ test('Discord authorization-code login', async (t) => {
   };
   users.set(linkUser.id, linkUser);
   const access = await module.get(JwtService).signAsync({ sub: linkUser.id });
+  const linkRedirectUri = 'http://localhost:3000/auth/discord/link/callback';
   const beginLink = async (token = access, body = {}) => {
+    expectedRedirect = linkRedirectUri;
     const res = await request(server)
       .post('/auth/discord/link')
       .set('Authorization', `Bearer ${token}`)
@@ -500,12 +546,13 @@ test('Discord authorization-code login', async (t) => {
       cookie: res.headers['set-cookie'][0].split(';')[0],
     };
   };
-  const linkCallback = (flow, query = {}) =>
-    request(server)
+  const linkCallback = (flow, query = {}) => {
+    expectedRedirect = linkRedirectUri;
+    return request(server)
       .get('/auth/discord/link/callback')
       .set('Cookie', flow.cookie)
       .query({ state: flow.state, code: 'link-code', ...query });
-  expectedRedirect = 'http://localhost:3000/auth/discord/link/callback';
+  };
 
   await t.test(
     'link start requires authentication and binds the state to the JWT user',
@@ -672,7 +719,6 @@ test('Discord authorization-code login', async (t) => {
   await t.test(
     'linked identity can subsequently sign in to the original local account',
     async () => {
-      expectedRedirect = undefined;
       remote = {
         id: '523456789012345678',
         username: 'discord_name',
@@ -684,6 +730,54 @@ test('Discord authorization-code login', async (t) => {
       assert.equal(
         (await module.get(JwtService).verifyAsync(result.body.accessToken)).sub,
         linkUser.id,
+      );
+    },
+  );
+
+  await t.test(
+    'harness automatically cleans up after a failed subtest preventing cascade',
+    async () => {
+      const fixturePath = new URL(
+        './helpers/discord-teardown.fixture.mjs',
+        import.meta.url,
+      ).pathname;
+
+      // RED run: when automatic harness cleanup (t.afterEach) is disabled, dirty stub state cascades
+      // to subsequent tests causing a 502 Bad Gateway failure.
+      const redResult = spawnSync(
+        process.execPath,
+        ['--test', '--test-isolation=none', fixturePath],
+        {
+          env: { ...process.env, DISABLE_HARNESS_CLEANUP: '1' },
+          encoding: 'utf8',
+        },
+      );
+      assert.equal(redResult.status, 1);
+      assert.match(
+        redResult.stdout,
+        /expected 200 "OK", got 502 "Bad Gateway"/,
+      );
+
+      // GREEN run: when automatic harness cleanup (t.afterEach) is active, the dirty stub state
+      // left by the failed scenario is cleaned up, allowing subsequent scenarios to succeed.
+      const greenResult = spawnSync(
+        process.execPath,
+        ['--test', '--test-isolation=none', fixturePath],
+        {
+          env: { ...process.env, DISABLE_HARNESS_CLEANUP: '0' },
+          encoding: 'utf8',
+        },
+      );
+      assert.match(
+        greenResult.stdout,
+        /✖ upstream failure leaves dirty stub state/,
+      );
+      assert.match(
+        greenResult.stdout,
+        /✔ subsequent scenario should succeed if cleaned up/,
+      );
+      assert.ok(
+        !greenResult.stdout.includes('expected 200 "OK", got 502 "Bad Gateway"'),
       );
     },
   );

@@ -34,6 +34,7 @@ export class ScriptedJudge implements GameJudge {
   runCalls = 0;
   evalCalls = 0;
   lastRunTests: VisibleTest[] = [];
+  lastRunEntrypoint: string | undefined;
   lastSealedGroups: SealedEvaluationRequest["groups"] = [];
 
   constructor(plan: ScriptPlan[] = [{ score: 100 }]) {
@@ -78,9 +79,11 @@ export class ScriptedJudge implements GameJudge {
     _source: string,
     tests: VisibleTest[],
     _limits: JudgeLimits,
+    entrypoint?: string,
   ): Promise<CaseResult[]> {
     this.runCalls += 1;
     this.lastRunTests = tests.map((t) => ({ ...t }));
+    this.lastRunEntrypoint = entrypoint;
     if (this.failRun) {
       const message = this.failRun;
       this.failRun = null;

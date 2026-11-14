@@ -36,7 +36,10 @@ export function ArenaHeader({ snapshot, connection, onLeave }: ArenaHeaderProps)
     }
   }
 
-  const isLowTime = remainingSeconds <= 30 && remainingSeconds > 0 && roundPhase === "CODING";
+  const isCoding = roundPhase === "CODING";
+  const hasRoundTimer = isCoding && snapshot.roundRemainingSeconds != null;
+  const displaySeconds = hasRoundTimer ? snapshot.roundRemainingSeconds! : remainingSeconds;
+  const isLowTime = displaySeconds <= 30 && displaySeconds > 0 && isCoding;
 
   return (
     <header className="flex h-14 w-full shrink-0 items-center justify-between border-b border-border bg-card px-4 text-card-foreground">
@@ -68,10 +71,14 @@ export function ArenaHeader({ snapshot, connection, onLeave }: ArenaHeaderProps)
               ? "border-destructive bg-destructive/10 text-destructive animate-pulse"
               : "border-border bg-background text-foreground"
           }`}
-          aria-label="Remaining match time"
+          aria-label={hasRoundTimer ? "Remaining round coding time" : "Remaining match time"}
+          title={hasRoundTimer ? `Round: ${formatClock(snapshot.roundRemainingSeconds!)} | Match: ${formatClock(remainingSeconds)}` : `Match: ${formatClock(remainingSeconds)}`}
         >
           <IconClock className="size-4 text-muted-foreground" aria-hidden="true" />
-          <span>{formatClock(remainingSeconds)}</span>
+          <span>{formatClock(displaySeconds)}</span>
+          {hasRoundTimer && (
+            <span className="text-[10px] uppercase font-normal text-muted-foreground ml-1">round</span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

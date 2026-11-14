@@ -68,7 +68,7 @@ describe("Match deadline closure", () => {
 
   it("counts a pre-deadline Submit that settles inside reveal grace", async () => {
     const graceMs = 100;
-    const fx = await setup([{ defer: true }], { revealGraceMs: graceMs });
+    const fx = await setup([{ defer: true }], { revealGraceMs: graceMs, roundDurationMs: MATCH_DURATION_MS });
     const submission = fx.engine.submit(fx.left, fx.matchId, { code: SOLVED_PY, language: "Python" });
     await tick();
     fx.advance(MATCH_DURATION_MS);
@@ -134,7 +134,7 @@ describe("Match deadline closure", () => {
 
   it("supersedes a pre-deadline Submit that settles after reveal grace", async () => {
     const graceMs = 30;
-    const fx = await setup([{ defer: true }], { revealGraceMs: graceMs });
+    const fx = await setup([{ defer: true }], { revealGraceMs: graceMs, roundDurationMs: MATCH_DURATION_MS });
     const submission = fx.engine.submit(fx.left, fx.matchId, { code: SOLVED_PY, language: "Python" });
     await tick();
     fx.advance(MATCH_DURATION_MS);
@@ -154,7 +154,7 @@ describe("Match deadline closure", () => {
 
   it("does not wait through grace again when the sweep starts after its deadline", async () => {
     const graceMs = 200;
-    const fx = await setup([{ defer: true }], { revealGraceMs: graceMs });
+    const fx = await setup([{ defer: true }], { revealGraceMs: graceMs, roundDurationMs: MATCH_DURATION_MS });
     const submission = fx.engine.submit(fx.left, fx.matchId, { code: SOLVED_PY, language: "Python" });
     await tick();
     fx.advance(MATCH_DURATION_MS + graceMs + 1);

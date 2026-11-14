@@ -40,24 +40,41 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
 
   const sidecarLifecycleRef = useRef(createArenaSidecarLifecycle());
 
-  // Synchronize 2v2 sidecars (collab and team chat)
+  // Synchronize 2v2 sidecars when the match scope or its credentials change.
+  // Subscribe directly so a token update is observed even though the match
+  // snapshot itself has not changed.
   useEffect(() => {
     const lifecycle = sidecarLifecycleRef.current;
     let active = true;
+    let lastScopeKey: string | null = null;
 
-    lifecycle.sync({
-      transportKey: transport,
-      round: snapshot.round,
-      collabConfig: transport.collabConfig ? transport.collabConfig() : null,
-      chatConfig: transport.chatConfig ? transport.chatConfig() : null,
-    }).then((state) => {
-      if (active && state) setSidecars(state);
-    }).catch(() => {});
+    const sync = () => {
+      const currentSnapshot = transport.snapshot();
+      const collabConfig = transport.collabConfig ? transport.collabConfig() : null;
+      const chatConfig = transport.chatConfig ? transport.chatConfig() : null;
+      const scopeKey = JSON.stringify([currentSnapshot.mode, currentSnapshot.round, collabConfig, chatConfig]);
+      if (scopeKey === lastScopeKey) return;
+      lastScopeKey = scopeKey;
+
+      void lifecycle.sync({
+        transportKey: transport,
+        round: currentSnapshot.round,
+        collabConfig,
+        chatConfig,
+      }).then((state) => {
+        if (active && state) setSidecars(state);
+      }).catch(() => {});
+    };
+
+    sync();
+    const unsubscribe = transport.subscribe(sync);
 
     return () => {
       active = false;
+      unsubscribe();
+      lifecycle.dispose();
     };
-  }, [transport, snapshot.round, snapshot.mode]);
+  }, [transport]);
 
   async function handleRun() {
     setIsRunning(true);
@@ -200,7 +217,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                 onClick={handleSubmit}
                 disabled={isSubmitDisabled}
                 className="h-7 text-xs font-medium"
-                title="Your latest completed submission replaces your team's scored answer. The round reveals and closes after both teams have scored."
+                title="Your latest completed submission replaces your team's scored answer. The round reveals when both sides score or the 10-minute round deadline expires."
               >
                 <IconSend className="size-3.5 mr-1" />
                 <span>{isSubmitting ? "Evaluating…" : "Submit"}</span>
@@ -209,7 +226,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
           </div>
 
           <p className="border-t border-border bg-muted/30 px-3 py-1 text-xs text-muted-foreground" role="status">
-            Your latest completed submission replaces your team&apos;s scored answer. The round reveals and closes after both teams have scored.
+            Your latest completed submission replaces your team&apos;s scored answer. The round reveals when both sides score or the 10-minute round deadline expires.
           </p>
           {snapshot.mode === "2v2" && (
             <p className="border-t border-border bg-muted/30 px-3 py-1 text-xs text-muted-foreground" role="status">

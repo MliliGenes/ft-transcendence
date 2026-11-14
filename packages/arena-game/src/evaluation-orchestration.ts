@@ -321,10 +321,13 @@ export class EvaluationOrchestrator {
         const match = await this.options.persistence.loadMatch(stored.matchId);
         const round = match?.rounds.find((candidate) => candidate.roundId === stored.roundId);
         const matchDeadline = match ? match.startedAt + match.durationMs : undefined;
+        const cutoff = matchDeadline !== undefined
+          ? (round?.codingDeadlineMs != null ? Math.min(round.codingDeadlineMs, matchDeadline) : matchDeadline)
+          : undefined;
         const withinDeadlineGrace =
-          matchDeadline !== undefined &&
-          stored.submittedAt < matchDeadline &&
-          this.options.clock() <= matchDeadline + this.options.deadlineGraceMs;
+          cutoff !== undefined &&
+          stored.submittedAt < cutoff &&
+          this.options.clock() <= cutoff + this.options.deadlineGraceMs;
         const live =
           match &&
           match.roundPhase === "CODING" &&
@@ -473,7 +476,10 @@ export class EvaluationOrchestrator {
     }
     const { score, scoreBp, groups: groupResults, testStatuses: statuses } = scored;
     const matchDeadline = match.startedAt + match.durationMs;
-    const withinDeadlineGrace = stored.submittedAt < matchDeadline && now <= matchDeadline + this.options.deadlineGraceMs;
+    const deadline = round.codingDeadlineMs != null
+      ? Math.min(round.codingDeadlineMs, matchDeadline)
+      : matchDeadline;
+    const withinDeadlineGrace = stored.submittedAt < deadline && now <= deadline + this.options.deadlineGraceMs;
     if (
       match.roundPhase === "CODING" &&
       round.roundId === this.options.host.currentRound(match).roundId &&

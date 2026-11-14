@@ -72,7 +72,9 @@ requests use `/api/` and `/api/chat/` on the current origin. The obsolete
    reset an account that already exists.
 6. Configure any OAuth providers you want to use. Their callback registrations
    must agree with the public URLs in `user-auth.env`, including HTTPS
-   and the `/api` prefix for Compose.
+   and the `/api` prefix for Compose. Local browser login for both Discord and GitHub
+   OAuth was verified functional at `https://localhost:18443` with the local stack
+   when valid client credentials and matching redirect URIs are provided.
 7. Provision the private attachment bucket and a restricted MinIO service account.
    Use that account in `chat-service.env`; keep MinIO root credentials separate.
 8. From the repository root, run `docker compose config --quiet` and then

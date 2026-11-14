@@ -14,6 +14,7 @@ const limits = {
 const visibleRequest = {
   language: "Python",
   driver: "snippet",
+  entrypoint: "solve",
   source: "def solve(value): return value\n",
   tests: [{ id: "visible-1", input: "value = 1", expected: "1" }],
   limits,
@@ -100,6 +101,18 @@ describe("judge worker HTTP API", () => {
     const authorized = await post(url, TOKEN);
     expect(authorized.status).toBe(200);
     expect(calls).toBe(1);
+  });
+
+  it("forwards the visible-test entrypoint to the judge", async () => {
+    let received: unknown;
+    const url = await startServer({ judge: { runVisible: async (...args: unknown[]) => {
+      received = args[5];
+      return [{ id: "visible-1", passed: true, status: "accepted", output: "1", runtimeMs: 1 }];
+    } } });
+
+    const response = await post(url, TOKEN);
+    expect(response.status).toBe(200);
+    expect(received).toBe("solve");
   });
 
   it("rejects oversized request bodies before judge dispatch", async () => {
@@ -189,5 +202,21 @@ describe("judge worker HTTP API", () => {
     expect((await post(url, TOKEN)).status).toBe(504);
     await new Promise((resolve) => setTimeout(resolve, 55));
     expect((await post(url, TOKEN)).status).toBe(200);
+  });
+
+  it("accepts JSON null or omitted entrypoint without 400 rejection", async () => {
+    let capturedEntrypoint: any = "unset";
+    const url = await startServer({
+      judge: {
+        runVisible: async (_lang: any, _driver: any, _source: any, _tests: any, _limits: any, entrypoint?: string) => {
+          capturedEntrypoint = entrypoint;
+          return [{ id: "visible-1", passed: true, status: "accepted", output: "1", runtimeMs: 1 }];
+        },
+      },
+    });
+
+    const response = await post(url, TOKEN, { ...visibleRequest, entrypoint: null });
+    expect(response.status).toBe(200);
+    expect(capturedEntrypoint).toBeUndefined();
   });
 });

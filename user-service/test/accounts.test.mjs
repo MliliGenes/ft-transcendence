@@ -117,7 +117,12 @@ test('account endpoints use the authenticated identity and validate changes', as
     }),
   );
   await app.init();
+  // Bind once: SuperTest's per-request listen/close churn resets in-flight sockets.
+  await app.listen(0);
   const server = app.getHttpServer();
+  // The harness owns the listener: SuperTest must not close and restart an
+  // ephemeral port around a request (that churn resets in-flight sockets).
+  assert.ok(server.listening, 'the test server must be bound before the first request');
   const token = await module.get(JwtService).signAsync({ sub: id });
 
   await t.test(
@@ -349,6 +354,12 @@ test('account search matches public username and display name results with pagin
     }),
   );
   await app.init();
+  // Bind once: SuperTest's per-request listen/close churn resets in-flight sockets.
+  await app.listen(0);
+  assert.ok(
+    app.getHttpServer().listening,
+    'the test server must be bound before the first request',
+  );
 
   const response = await request(app.getHttpServer())
     .get('/accounts/search?username=%20ali%20&page=2&limit=2')
@@ -416,6 +427,12 @@ test('account search applies filters and sorting, and browses without a term', a
     }),
   );
   await app.init();
+  // Bind once: SuperTest's per-request listen/close churn resets in-flight sockets.
+  await app.listen(0);
+  assert.ok(
+    app.getHttpServer().listening,
+    'the test server must be bound before the first request',
+  );
 
   const before = Date.now();
   await request(app.getHttpServer())

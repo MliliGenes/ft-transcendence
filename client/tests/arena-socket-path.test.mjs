@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
+import { mountAuthProvider } from "./helpers/auth-provider-harness.mjs";
 
 test("same-origin lobby sockets use Nginx's Game service path", () => {
   const source = readFileSync(new URL("../lib/arena/lobby.ts", import.meta.url), "utf8");
@@ -29,6 +30,10 @@ test("same-origin lobby sockets use Nginx's Game service path", () => {
 });
 
 function loadTypeScriptModule(relativePath, dependencies = {}, globals = {}) {
+  const resolvedDeps = { ...dependencies };
+  if (relativePath.includes("socket.ts") && !("../auth/client" in resolvedDeps)) {
+    resolvedDeps["../auth/client"] = loadTypeScriptModule("../lib/auth/client.ts", {}, globals);
+  }
   const source = readFileSync(new URL(relativePath, import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -38,8 +43,8 @@ function loadTypeScriptModule(relativePath, dependencies = {}, globals = {}) {
     exports: loadedModule.exports,
     module: loadedModule,
     require(name) {
-      if (!(name in dependencies)) throw new Error(`unexpected import: ${name}`);
-      return dependencies[name];
+      if (!(name in resolvedDeps)) throw new Error(`unexpected import: ${name}`);
+      return resolvedDeps[name];
     },
     setInterval,
     clearInterval,
@@ -69,11 +74,14 @@ class FakeSocket {
   }
 
   disconnect() {
+    this.connected = false;
     return this;
   }
 
   /** Local socket lifecycle event (connect/disconnect): never reaches onAny. */
   fire(event, payload) {
+    if (event === "connect") this.connected = true;
+    if (event === "disconnect") this.connected = false;
     this.handlers.get(event)?.(payload);
   }
 
@@ -175,11 +183,11 @@ test("a burst of match events coalesces into one snapshot request that applies t
     transport.disconnect();
   }
 });
-
-test("a rate-limited snapshot refresh is reported once instead of rejecting unhandled", async () => {
+test("failed snapshot refreshes retain the match, publish a notice without logging, and recover", async () => {
   let socket;
   const warnings = [];
   const errors = [];
+  let status = 200;
 
   const socketModule = loadTypeScriptModule(
     "../lib/arena/socket.ts",
@@ -193,7 +201,7 @@ test("a rate-limited snapshot refresh is reported once instead of rejecting unha
       "./transport": loadTypeScriptModule("../lib/arena/transport.ts"),
     },
     {
-      fetch: async () => ({ ok: false, status: 429, json: async () => ({ error: "too many requests" }) }),
+      fetch: async () => ({ ok: status === 200, status, json: async () => matchSnapshot(1) }),
       console: {
         warn: (...args) => warnings.push(args),
         error: (...args) => errors.push(args),
@@ -210,9 +218,303 @@ test("a rate-limited snapshot refresh is reported once instead of rejecting unha
   try {
     socket.fire("connect");
     await wait(20);
-    assert.equal(warnings.length, 1, "the rate limit is reported");
-    assert.equal(errors.length, 0, "a rate limit is not an unexpected failure");
-    assert.equal(transport.snapshot().revision, -1, "no snapshot is applied when the request is rejected");
+    const baseline = transport.snapshot();
+    const notices = [];
+    transport.subscribe(() => notices.push(transport.snapshot().notice));
+    for (const failureStatus of [429, 503]) {
+      status = failureStatus;
+      socket.fire("connect");
+      assert.ok(await waitUntil(() => transport.snapshot().notice !== null));
+      assert.match(transport.snapshot().notice, /Retrying automatically/);
+      assert.deepEqual(transport.snapshot().problem, baseline.problem, "the last synchronized match is retained");
+      assert.equal(transport.snapshot().revision, baseline.revision);
+      assert.ok(notices.includes(transport.snapshot().notice), "subscribers receive the notice");
+
+      status = 200;
+      socket.fire("connect");
+      assert.ok(await waitUntil(() => transport.snapshot().notice === null), "successful synchronization clears the notice");
+    }
+    assert.equal(warnings.length, 0);
+    assert.equal(errors.length, 0);
+  } finally {
+    transport.disconnect();
+  }
+});
+test("an expired match token is refreshed and reused for the command snapshot", async () => {
+  let socket;
+  let currentToken = "old-token";
+  const requests = [];
+
+  const socketModule = loadTypeScriptModule(
+    "../lib/arena/socket.ts",
+    {
+      "socket.io-client": {
+        io() {
+          socket = new FakeSocket();
+          socket.auth = {};
+          return socket;
+        },
+      },
+      "./transport": loadTypeScriptModule("../lib/arena/transport.ts"),
+    },
+    {
+      fetch: async (url, init = {}) => {
+        const path = new URL(url).pathname.split("/matches/match-1")[1];
+        const token = init.headers?.authorization?.replace("Bearer ", "") ?? null;
+        requests.push({ path, token });
+        if (path === "/start-round" && token === "old-token") {
+          return { ok: false, status: 401, json: async () => ({ error: "expired" }) };
+        }
+        if (path === "/snapshot") {
+          return { ok: true, json: async () => matchSnapshot(1) };
+        }
+        return { ok: true, json: async () => ({ ok: true }) };
+      },
+    },
+  );
+
+  const requestWithSession = async (send) => {
+    try {
+      return await send(currentToken);
+    } catch (error) {
+      if (error.status !== 401) throw error;
+      currentToken = "fresh-token";
+      return send(currentToken);
+    }
+  };
+  const transport = new socketModule.SocketArenaTransport({
+    baseUrl: "http://game.test",
+    userId: "player-1",
+    matchId: "match-1",
+    token: "old-token",
+    requestWithSession,
+  });
+
+  try {
+    socket.fire("connect");
+    assert.ok(await waitUntil(() => requests.some((request) => request.path === "/snapshot")));
+    await wait(0);
+
+    await transport.startRound();
+
+    assert.deepEqual(
+      requests.filter((request) => request.path === "/start-round").map((request) => request.token),
+      ["old-token", "fresh-token"],
+      "the rejected command is retried once with the renewed token",
+    );
+    assert.equal(socket.auth.token, "fresh-token", "future game socket connections use the renewed token");
+    assert.equal(
+      requests.filter((request) => request.path === "/snapshot").at(-1)?.token,
+      "fresh-token",
+      "the command's follow-up snapshot also uses the renewed token",
+    );
+  } finally {
+    transport.disconnect();
+  }
+});
+
+test("the public match snapshot preserves the authoritative winner when totals are equal", async () => {
+  for (const [mySide, winner, outcome] of [
+    ["left", "left", "You win the match."],
+    ["right", "left", "Opponent wins the match."],
+    ["left", null, "The match is a draw."],
+  ]) {
+    let socket;
+    const snapshot = {
+      ...matchSnapshot(1),
+      roundPhase: "MATCH_COMPLETE",
+      mySide,
+      final: { scores: { left: 125, right: 125 }, outcome: winner ?? "draw", winner, forfeit: null },
+    };
+    const { SocketArenaTransport } = loadTypeScriptModule("../lib/arena/socket.ts", {
+      "socket.io-client": { io() { socket = new FakeSocket(); return socket; } },
+      "./transport": loadTypeScriptModule("../lib/arena/transport.ts"),
+    }, { fetch: async () => ({ ok: true, json: async () => snapshot }) });
+    const transport = new SocketArenaTransport({ baseUrl: "http://game.test", userId: "player-1", matchId: "match-1" });
+    try {
+      socket.fire("connect");
+      assert.ok(await waitUntil(() => transport.snapshot().revision === 1));
+      assert.equal(transport.snapshot().matchFinal.outcome, outcome);
+      assert.equal(transport.snapshot().matchFinal.you, 125);
+      assert.equal(transport.snapshot().matchFinal.opponent, 125);
+    } finally {
+      transport.disconnect();
+    }
+  }
+});
+
+test("SocketArenaTransport transitions to offline and stops polling on unrecoverable auth failure", async () => {
+  let socket;
+  const requests = [];
+  const socketModule = loadTypeScriptModule(
+    "../lib/arena/socket.ts",
+    {
+      "socket.io-client": {
+        io(_url, options) {
+          socket = new FakeSocket();
+          socket.auth = options.auth;
+          return socket;
+        },
+      },
+      "./transport": loadTypeScriptModule("../lib/arena/transport.ts"),
+      "../auth/client": {},
+    },
+    {
+      fetch: async (url) => {
+        const path = new URL(url).pathname.split("/matches/match-1")[1];
+        requests.push(path);
+        return { ok: false, status: 401, json: async () => ({ error: "unauthorized" }) };
+      },
+    },
+  );
+
+  const requestWithSession = async (send) => {
+    return send("expired-token");
+  };
+
+  const transport = new socketModule.SocketArenaTransport({
+    baseUrl: "http://game.test",
+    userId: "player-1",
+    matchId: "match-1",
+    token: "expired-token",
+    requestWithSession,
+  });
+
+  try {
+    socket.fire("connect");
+    await waitUntil(() => requests.length > 0);
+    await wait(30);
+    assert.equal(transport.connection(), "offline");
+    assert.equal(socket.connected, false, "socket is disconnected on auth failure");
+    const countBefore = requests.length;
+    await wait(60);
+    assert.equal(requests.length, countBefore, "sync timer was stopped, no polling storm");
+  } finally {
+    transport.disconnect();
+  }
+});
+test("SocketArenaTransport transitions to offline and cleans up timers when session renewal throws AuthRequestError(401)", async () => {
+  let socket;
+  const requests = [];
+  const authModule = loadTypeScriptModule("../lib/auth/client.ts");
+  const socketModule = loadTypeScriptModule(
+    "../lib/arena/socket.ts",
+    {
+      "socket.io-client": {
+        io(_url, options) {
+          socket = new FakeSocket();
+          socket.auth = options.auth;
+          return socket;
+        },
+      },
+      "./transport": loadTypeScriptModule("../lib/arena/transport.ts"),
+      "../auth/client": authModule,
+    },
+    {
+      fetch: async (url) => {
+        const path = new URL(url).pathname.split("/matches/match-1")[1];
+        requests.push(path);
+        return { ok: true, json: async () => ({ ...matchSnapshot(1), revision: 1 }) };
+      },
+    },
+  );
+
+  let refreshAttempts = 0;
+  const requestWithSession = async () => {
+    refreshAttempts += 1;
+    throw new authModule.AuthRequestError("Your session has expired. Please log in again.", 401);
+  };
+
+  const transport = new socketModule.SocketArenaTransport({
+    baseUrl: "http://game.test",
+    userId: "player-1",
+    matchId: "match-1",
+    token: "expired-token",
+    requestWithSession,
+  });
+
+  try {
+    socket.fire("connect");
+    await waitUntil(() => refreshAttempts > 0);
+    await wait(30);
+    assert.equal(transport.connection(), "offline", "transport must transition to offline on AuthRequestError(401)");
+    assert.equal(socket.connected, false, "socket must be disconnected on AuthRequestError(401)");
+    assert.equal(transport.snapshot().notice, "Session expired. Please sign in again.");
+    const attemptsBefore = refreshAttempts;
+    await wait(60);
+    assert.equal(refreshAttempts, attemptsBefore, "sync timer was cleared, no polling storm");
+  } finally {
+    transport.disconnect();
+  }
+});
+test("an unreachable auth service keeps the Arena transport online, polling and recoverable", async () => {
+  let socket;
+  const requests = [];
+  let authServiceDown = true;
+
+  // The real AuthProvider drives the transport: only the auth service is faked.
+  const provider = await mountAuthProvider("/login", {
+    onRefresh: async () => (authServiceDown
+      ? { networkError: true }
+      : {
+        status: 200,
+        body: { user: { id: "p1" }, accessToken: "recovered-token", tokenType: "Bearer", expiresIn: 900 },
+      }),
+  });
+  provider.value.setSession({ user: { id: "p1" }, accessToken: "near-expiry", tokenType: "Bearer", expiresIn: 10 });
+
+  const socketModule = loadTypeScriptModule(
+    "../lib/arena/socket.ts",
+    {
+      "socket.io-client": {
+        io(_url, options) {
+          socket = new FakeSocket();
+          socket.auth = options.auth;
+          return socket;
+        },
+      },
+      "./transport": loadTypeScriptModule("../lib/arena/transport.ts"),
+    },
+    {
+      fetch: async (url) => {
+        const path = new URL(url).pathname.split("/matches/match-1")[1];
+        requests.push(path);
+        return { ok: true, status: 200, json: async () => matchSnapshot(1) };
+      },
+    },
+  );
+
+  const transport = new socketModule.SocketArenaTransport({
+    baseUrl: "http://game.test",
+    userId: "p1",
+    matchId: "match-1",
+    token: "near-expiry",
+    requestWithSession: provider.value.requestWithSession,
+  });
+
+  try {
+    socket.fire("connect");
+    assert.ok(await waitUntil(() => provider.calls() > 0), "the provider attempts a session refresh");
+    await wait(30);
+    assert.match(transport.snapshot().notice ?? "", /Retrying automatically/, "the transport reports a retryable notice");
+
+    const refreshesBefore = provider.calls();
+    assert.ok(
+      await waitUntil(() => provider.calls() > refreshesBefore, 5000),
+      "the sync timer survives and the transport keeps retrying while the auth service is unreachable",
+    );
+
+    assert.notEqual(transport.connection(), "offline", "a transient auth failure must not take the transport offline");
+    assert.equal(socket.connected, true, "the game socket stays connected");
+    assert.doesNotMatch(transport.snapshot().notice ?? "", /Session expired/, "a transient failure is not an expired session");
+
+    authServiceDown = false;
+    socket.emitFromServer("match:event", { revision: 1, round: 1 });
+    assert.ok(
+      await waitUntil(() => transport.snapshot().revision === 1, 5000),
+      "the transport recovers once the auth service returns",
+    );
+    assert.equal(transport.snapshot().notice, null, "a successful sync clears the notice");
   } finally {
     transport.disconnect();
   }

@@ -127,7 +127,12 @@ test('refresh-token verification and rotation', async (t) => {
     }),
   );
   await app.init();
+  // Bind once: SuperTest's per-request listen/close churn resets in-flight sockets.
+  await app.listen(0);
   const server = app.getHttpServer();
+  // The harness owns the listener: SuperTest must not close and restart an
+  // ephemeral port around a request (that churn resets in-flight sockets).
+  assert.ok(server.listening, 'the test server must be bound before the first request');
   const service = module.get(AuthService);
   const signer = module.get(JwtService);
 
@@ -261,11 +266,17 @@ test('refresh-token verification and rotation', async (t) => {
       const otherSession = seed();
       const anotherUser = seed({ userId: randomUUID() });
       const first = await service.refresh({ refreshToken: old.token });
-      await request(server)
+      const intendedPort = server.address()?.port ?? null;
+      const reuse = await request(server)
         .post('/auth/refresh')
         .set("Cookie", `auth-refresh=${old.token}`)
-        .send({})
-        .expect(401);
+        .send({});
+      const answeredPort = reuse.res?.socket?.remotePort ?? null;
+      assert.equal(
+        reuse.status,
+        401,
+        `refresh reuse must be rejected; intended port ${intendedPort}, answered by port ${answeredPort}, body ${JSON.stringify(reuse.body)}`,
+      );
       assert.ok(rows.get(first.refreshToken.split('.')[0]).revokedAt);
       assert.equal(rows.get(otherSession.id).revokedAt, null);
       assert.equal(rows.get(anotherUser.id).revokedAt, null);

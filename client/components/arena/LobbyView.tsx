@@ -67,7 +67,7 @@ function TeamSlotCard({
 export function LobbyView({ code }: { code: string }) {
   const normalizedCode = code.toUpperCase();
   const router = useRouter();
-  const { session, isRestoring } = useAuth();
+  const { session, isRestoring, requestWithSession } = useAuth();
   const userId = session?.user?.id ?? "guest-user";
   const token = session?.accessToken;
   const lobbyKey = `${normalizedCode}:${userId}:${token ?? ""}`;
@@ -97,7 +97,7 @@ export function LobbyView({ code }: { code: string }) {
     if (isRestoring) return;
     if (!token) return;
 
-    let client: LobbyClient | null = new LobbyClient("", userId, token);
+    let client: LobbyClient | null = new LobbyClient("", userId, token, undefined, requestWithSession);
     let active = true;
     let currentRoomId: string | null = null;
 
@@ -164,12 +164,12 @@ export function LobbyView({ code }: { code: string }) {
       client?.disconnect();
       client = null;
     };
-  }, [normalizedCode, userId, token, isRestoring, router, lobbyKey]);
+  }, [normalizedCode, userId, token, requestWithSession, isRestoring, router, lobbyKey]);
 
   async function handleToggleReady() {
     if (!lobbyData) return;
     const currentMember = lobbyData.members.find((m) => m.userId === userId);
-    const client = new LobbyClient("", userId, token);
+    const client = new LobbyClient("", userId, token, undefined, requestWithSession);
     const updated = await client.setReady(lobbyData.room.id, !currentMember?.ready);
     setLobbyData(updated);
   }
@@ -178,21 +178,21 @@ export function LobbyView({ code }: { code: string }) {
     if (!lobbyData) return;
     const currentMember = lobbyData.members.find((m) => m.userId === userId);
     const nextSide = currentMember?.sideId === "left" ? "right" : "left";
-    const client = new LobbyClient("", userId, token);
+    const client = new LobbyClient("", userId, token, undefined, requestWithSession);
     const updated = await client.setSide(lobbyData.room.id, nextSide);
     setLobbyData(updated);
   }
 
   async function handleStart() {
     if (!lobbyData) return;
-    const client = new LobbyClient("", userId, token);
+    const client = new LobbyClient("", userId, token, undefined, requestWithSession);
     const { matchId } = await client.startRoom(lobbyData.room.id);
     router.push(`/play/match/${matchId}`);
   }
 
   async function handleLeave() {
     if (lobbyData) {
-      const client = new LobbyClient("", userId, token);
+      const client = new LobbyClient("", userId, token, undefined, requestWithSession);
       await client.leaveRoom(lobbyData.room.id).catch(() => {});
     }
     router.push("/play");

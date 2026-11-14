@@ -5,6 +5,8 @@ export type AuthSession = {
   expiresIn: number;
 };
 
+export type AuthenticatedRequest = <T>(send: (accessToken: string) => Promise<T>) => Promise<T>;
+
 type ApiErrorBody = { message?: string | string[]; error?: string };
 
 export class AuthRequestError extends Error {
@@ -14,6 +16,13 @@ export class AuthRequestError extends Error {
     super(message);
     this.status = status;
     this.name = "AuthRequestError";
+  }
+}
+
+export class UnauthenticatedSessionError extends AuthRequestError {
+  constructor(message = "Please sign in to continue.") {
+    super(message, 401);
+    this.name = "UnauthenticatedSessionError";
   }
 }
 

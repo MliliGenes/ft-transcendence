@@ -46,6 +46,8 @@ export interface RevealInput {
   groups: RevealSnapshot["groups"];
   totals: Partial<Record<SideId, number>>;
   publishedAt: number;
+  cause?: RevealCause;
+  noSubmission?: Partial<Record<SideId, boolean>>;
 }
 
 /**
@@ -62,13 +64,20 @@ export class RoundLifecycle {
     match.roundPhase = "ROUND_INTRO";
   }
 
-  beginCoding(match: MatchRecord): void {
+  beginCoding(match: MatchRecord, codingDeadlineMs?: number): void {
+    if (match.roundPhase === "CODING") {
+      // Idempotent repeated Begin Coding: preserve state and existing deadline
+      return;
+    }
     if (!canTransition(match.roundPhase, "CODING")) {
       throw new IllegalStateError(`cannot begin coding in ${match.roundPhase}`);
     }
     match.roundPhase = "CODING";
     const round = this.currentRound(match);
     for (const side of Object.keys(round.activities)) round.activities[side] = "coding";
+    if (codingDeadlineMs !== undefined && round.codingDeadlineMs == null) {
+      round.codingDeadlineMs = codingDeadlineMs;
+    }
   }
 
   beginReveal(match: MatchRecord): void {
@@ -126,6 +135,8 @@ export class RoundLifecycle {
       groups: Object.freeze({ ...input.groups }),
       totals: Object.freeze({ ...input.totals }),
       publishedAt: input.publishedAt,
+      ...(input.cause ? { cause: input.cause } : {}),
+      ...(input.noSubmission ? { noSubmission: Object.freeze({ ...input.noSubmission }) } : {}),
     }) as RevealSnapshot;
   }
 
@@ -168,6 +179,7 @@ export class RoundLifecycle {
     round.closing = false;
     round.cutoffPassed = false;
     round.superseded = [];
+    round.codingDeadlineMs = null;
     if (match.mode === "2v2") {
       round.readiness = {};
       round.teamDocs ??= {};

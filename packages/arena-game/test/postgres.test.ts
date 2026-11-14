@@ -483,4 +483,72 @@ describe.runIf(HAS_PG)("postgres persistence + restart (real database)", () => {
     const reveal = await engine2.publishReveal(left, matchId);
     expect(reveal.scores.right).toBe(100);
   });
+
+  it("9. round coding deadline persists in relational column and recovers accurately across engine connections", async () => {
+    // 1. Verify round deadline in both match snapshot and relational rounds column
+    const engine1 = liveEngine(stores, [P100], clock);
+    const matchId = await createMatch(engine1);
+
+    const snap1 = await engine1.snapshot(left, matchId);
+    expect(snap1.roundPhase).toBe("CODING");
+    expect(snap1.roundRemainingMs).toBe(600_000);
+
+    const storedMatch1 = await stores.matches.load(matchId);
+    const round1 = storedMatch1!.rounds[0]!;
+    expect(round1.codingDeadlineMs).toBe(now + 600_000);
+
+    const roundRows = await stores.raw.query(
+      "SELECT round_id, coding_deadline_ms FROM rounds WHERE match_id = $1",
+      [matchId],
+    );
+    expect(roundRows.rows).toHaveLength(1);
+    expect(Number(roundRows.rows[0].coding_deadline_ms)).toBe(now + 600_000);
+
+    // Record an active pending submission before cutoff
+    const pendingEvaluationId = `eval-pg-pending-${Date.now()}`;
+    const pendingSubmission: SubmissionRecord = {
+      submissionId: `sub-pg-${Date.now()}`,
+      evaluationId: pendingEvaluationId,
+      matchId,
+      roundId: round1.roundId,
+      sideId: "left",
+      problemVersionId: round1.problemVersionId,
+      language: "Python",
+      source: SOLVED_PY,
+      sourceHash: createHash("sha256").update(SOLVED_PY, "utf8").digest("hex"),
+      documentRevision: null,
+      submittedAt: now + 60_000,
+      elapsedMatchMs: 60_000,
+      status: "pending",
+      score: null,
+      scoreBp: null,
+      groups: null,
+      testStatuses: null,
+      failureCode: null,
+    };
+    await stores.submissions.append(pendingSubmission);
+
+    // 2. Recover a fresh engine/connection after clock advancement, retain exact remaining time
+    now += 180_000; // 3 minutes advance
+    const freshStores = new PostgresStores(PG_URL);
+    try {
+      const engine2 = liveEngine(freshStores, [P70], clock);
+      const snap2 = await engine2.snapshot(left, matchId);
+      expect(snap2.roundPhase).toBe("CODING");
+      // Retain exact remaining time: 600,000 - 180,000 = 420,000 ms
+      expect(snap2.roundRemainingMs).toBe(420_000);
+
+      // 3. Enforce expired pending cutoff: advance past round deadline + grace
+      now = 1_000_000 + 600_000 + 5_000; // 5 seconds past round cutoff + grace
+
+      const recoveryReport = await engine2.recover();
+      expect(recoveryReport.retried).toBe(0);
+
+      const dbSub = await freshStores.submissions.getByEvaluationId(pendingEvaluationId);
+      expect(dbSub?.status).toBe("superseded");
+      expect(dbSub?.score).toBeNull();
+    } finally {
+      await freshStores.close();
+    }
+  });
 });

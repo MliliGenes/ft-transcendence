@@ -47,6 +47,17 @@ export function RoundScoreReveal({ reveal, round, totalRounds, onAdvance }: Roun
           </span>
         </div>
 
+        {reveal.noSubmission?.you && (
+          <p className="mt-3 text-xs text-muted-foreground border-l-2 border-primary/50 pl-2 font-mono">
+            You received 0 points: no scored submission was completed before the round deadline.
+          </p>
+        )}
+        {reveal.noSubmission?.opponent && (
+          <p className="mt-2 text-xs text-muted-foreground border-l-2 border-muted pl-2 font-mono">
+            Opponent received 0 points: no scored submission was completed before the round deadline.
+          </p>
+        )}
+
         <div className="mt-6 flex justify-end">
           <Button onClick={onAdvance} className="w-full">
             <IconPlayerPlay className="size-4 mr-2" />

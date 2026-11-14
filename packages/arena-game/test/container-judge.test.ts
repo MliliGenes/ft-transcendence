@@ -24,6 +24,52 @@ describe("container judge (real isolated execution)", () => {
     expect(bad[0].status).toBe("accepted");
   });
 
+  it("python snippet: bank entrypoint resolves a class-based starter", async () => {
+    const judge = new ContainerJudge();
+    const classSolution = `class Solution:\n    def ledger_sum(self, nums):\n        return sum(value if index % 2 == 0 else -value for index, value in enumerate(nums))\n`;
+    const result = await judge.runVisible(
+      "Python",
+      "snippet",
+      classSolution,
+      [{ id: "ex1", input: "nums = [1,2,3,4]", expected: "-2" }],
+      LIMITS,
+      "ledger_sum",
+    );
+
+    expect(result[0]).toMatchObject({ passed: true, status: "accepted" });
+  });
+
+  it("python snippet: handles Solution __init__ errors as runtime_error without crashing runner", async () => {
+    const judge = new ContainerJudge();
+    const badInit = `class Solution:\n    def __init__(self, required_arg):\n        self.x = required_arg\n    def ledger_sum(self, nums):\n        return 0\n`;
+    const result = await judge.runVisible(
+      "Python",
+      "snippet",
+      badInit,
+      [{ id: "ex1", input: "nums = [1,2,3,4]", expected: "-2" }],
+      LIMITS,
+      "ledger_sum",
+    );
+
+    expect(result[0].status).toBe("runtime_error");
+    expect(result[0].passed).toBe(false);
+  });
+
+  it("python snippet: falls back to top-level entrypoint when Solution class lacks it", async () => {
+    const judge = new ContainerJudge();
+    const helperClass = `class Solution:\n    pass\n\ndef ledger_sum(nums):\n    return sum(v if i % 2 == 0 else -v for i, v in enumerate(nums))\n`;
+    const result = await judge.runVisible(
+      "Python",
+      "snippet",
+      helperClass,
+      [{ id: "ex1", input: "nums = [1,2,3,4]", expected: "-2" }],
+      LIMITS,
+      "ledger_sum",
+    );
+
+    expect(result[0]).toMatchObject({ passed: true, status: "accepted" });
+  });
+
   it("python malformed maps to compile_error without hanging", async () => {
     const judge = new ContainerJudge();
     const res = await judge.runVisible("Python", "snippet", "def broken(:\n", [{ id: "ex1", input: "nums = []", expected: "0" }], LIMITS);

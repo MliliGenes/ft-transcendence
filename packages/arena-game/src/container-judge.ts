@@ -82,7 +82,16 @@ def main():
     functions = [(name, fn) for name, fn in inspect.getmembers(player, inspect.isfunction)
                  if getattr(fn, "__module__", None) == "player" and not name.startswith("_")]
     if entry:
-        function = getattr(player, entry, None)
+        function = None
+        solution_cls = getattr(player, "Solution", None)
+        if inspect.isclass(solution_cls):
+            try:
+                instance = solution_cls()
+                function = getattr(instance, entry, None)
+            except Exception as exc:
+                _fail("runtime_error", f"failed to instantiate Solution: {type(exc).__name__}: {exc}")
+        if function is None:
+            function = getattr(player, entry, None)
         if not callable(function):
             _fail("runtime_error", f"missing entrypoint {entry}")
         functions = [(entry, function)]
@@ -203,10 +212,11 @@ export class ContainerJudge implements GameJudge {
     source: string,
     tests: VisibleTest[],
     limits: JudgeLimits,
+    entrypoint?: string,
   ): Promise<CaseResult[]> {
     const results: CaseResult[] = [];
     for (const test of tests) {
-      const verdict = await this.runCase(language, driver, source, undefined, test, limits);
+      const verdict = await this.runCase(language, driver, source, entrypoint, test, limits);
       results.push({
         id: test.id,
         passed: verdict.passed,
