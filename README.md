@@ -1,25 +1,27 @@
+*This project has been created as part of the 42 curriculum by sel-mlil, ayousr, amsbai, elakhfif.*
+
 # Nook
 
 ## Description
 
-Nook is a community platform for the 1337 / 42 student community. It brings profiles, friendships, a feed, conversations and games into one web app. This repository contains the Next.js client, User and Chat services, Code Arena game service, judge worker, databases, storage, gateway and monitoring stack.
+Nook is a community platform that gives students a welcoming place to share what they are thinking and building, connect with one another, and learn through friendly competition. Its feed brings together thoughts, code snippets, images, and videos. Direct messages and group spaces with channels give students places to continue conversations and collaborate.
 
-The current playable game is **Code Arena**: authenticated 1v1 and 2v2 programming matches with timed rounds, server-side scoring, matchmaking and private rooms. The 2v2 mode has a shared editor and team chat. Players can challenge someone from a direct conversation or profile, then open the invitation in the Play area. Match history, win/loss statistics, a leaderboard, XP, levels, rank titles and six unlockable achievements are available. The leaderboard is based on wins and win rate; this build does not have an Elo rating.
+For coding competitions, **Code Arena** supports 1v1 challenges and 2v2 team matches. Teams can work together in a shared editor and coordinate through in-game chat. Match history, player statistics, a leaderboard, XP, levels, rank titles, and achievements connect competition to longer-term progress. By bringing sharing, conversation, and play into one platform, Nook makes it easier for students to connect around both their interests and their work.
 
-## 42 curriculum attribution and team
+## Team and contributions
 
-The subject requires the very first README line to be italicized and follow this wording: “This project has been created as part of the 42 curriculum by &lt;login1&gt;[, &lt;login2&gt;[, &lt;login3&gt;[...]]].” The team must supply confirmed 42 logins and place the completed attribution before the title; no member names have been inferred. See [the subject](ft_trans_subject.pdf), Chapter VI.
-
-The team roster and role assignments have not been reconfirmed in this repository. These responsibilities describe the expected roles, but do not assign them to individuals:
-
-| Role | Responsibility | Assigned team member |
+| 42 login | Role(s) | Contributions |
 |---|---|---|
-| Product Owner (PO) | Set user needs, scope, priorities and acceptance criteria | Not confirmed |
-| Project Manager / Scrum Master (PM) | Maintain the plan, coordinate work and track risks and progress | Not confirmed |
-| Technical Lead | Own architecture, interfaces, integration and technical review | Not confirmed |
-| Developers | Implement features, tests, documentation and demonstrations | Not confirmed |
+| `sel-mlil` | Product Owner, Technical Lead, Developer | Proposed the project and selected its technology stack, drawing on prior web and full-stack experience. Built user management and its Next.js client integration; implemented Chat endpoints and client integration, including service integration informed by the RabbitMQ setup. Co-developed infrastructure specifications with `elakhfif`. |
+| `ayousr` | Project Manager, Developer | Coordinated work through Trello and Discord and helped mediate team tensions. Built the game service and judge server, contributed to 1v1 design decisions, and continued with 2v2 gameplay and client integration. |
+| `amsbai` | Developer | Helped plan the Chat service and contributed to 1v1 design decisions. The project was also a hands-on learning experience. |
+| `elakhfif` | Infrastructure / DevOps contributor | Shared infrastructure guidance from prior experience and helped shape the Nginx routing and Grafana monitoring specifications. |
 
-Individual contributions and Git-history evidence must be mapped to the confirmed roster before submission. The project plan is in [the points roadmap](docs/project/POINTS_ROADMAP.md); the current product context and open decisions are in [Project Context](docs/project/PROJECT_CONTEXT.md).
+### Team reflection
+
+The project brought together people with different experience levels, work styles, and availability. Workload did not always feel evenly distributed, and deadline pressure and communication gaps sometimes made collaboration difficult. `ayousr` played an important role in calming tensions and helping the team keep moving. This experience taught us to align expectations earlier, make workload visible, and raise blockers before they become deadline problems. Differences in experience also gave the team opportunities to learn from one another.
+
+The project plan is in the [points roadmap](docs/project/POINTS_ROADMAP.md); the current product context and open decisions are in [Project Context](docs/project/PROJECT_CONTEXT.md).
 
 ## Architecture
 
@@ -140,6 +142,12 @@ Run `npm run check` for the complete project gate. Setup, disposable integration
 
 Invitation cards poll room status every ten seconds, show Open, In Match or Expired, route matched rooms to their match, and disable expired rooms. The Game service enforces joinability. Game retains match records and source submissions until account erasure or the instance operator's retention policy applies; erasure removes affected-side source/editor data and anonymizes retained results. See the [Privacy Policy](/privacy) and [Terms of Service](/terms).
 
+## Module coverage and tracker
+
+The team tracks ft_transcendence module coverage against the [42 subject](ft_trans_subject.pdf) and the [local module tracker](docs/requirements/index.html). `sel-mlil` built [FT Trans Score](https://ft-trans-score.vercel.app/) to keep the module counter, evidence, and acceptance status organized during the project.
+
+The current coverage snapshot records **19 modules with verified evidence** (29 raw points maximum) and **4 modules with implementation present but an acceptance demonstration still open** (6 raw points maximum), for **23 modules and 35 raw points under consideration**. These are sums of module values, not the evaluator score. The local catalog lists 55 modules and 79 raw possible points. Its scoring display has a **14-point required threshold plus up to 5 bonus points**; the module score can therefore exceed 14, up to 19 points. Twelve mandatory foundation checks are separate from module points. No tracker total is an evaluator award; final acceptance rests with the evaluators. See the [submission gate and foundation requirements](docs/project/POINTS_ROADMAP.md#submission-gate--foundation-requirements).
+
 ## Module evidence and point calculation
 
 The [ft_transcendence v21.2 subject](ft_trans_subject.pdf) is the requirements source; [the module tracker](docs/requirements/index.html) assigns local IDs such as G01 and U02 for planning. Evaluator decisions are not recorded here. The table below is an evidence map, not a claim that the team has been awarded points. `Maximum` is the module value in the local tracker; assessors decide whether every requirement is met.
@@ -156,7 +164,7 @@ The [ft_transcendence v21.2 subject](ft_trans_subject.pdf) is the requirements s
 | D03 · Backend microservices | 2 | User, Chat, Game and judge responsibilities have separate service boundaries and APIs/events. Demonstrate the service interactions. |
 | D04 · Health/status/backups/recovery | 1 | Compose health checks cover all service containers; public `/status` page and `/api/status` endpoint; multi-database (User, Chat, Game) and MinIO snapshot/restore scripts with checksums and retention. Install one operator-managed schedule and demonstrate clean-service recovery; prior live restore smoke checks do not establish that. See [backup guidance](docs/infra/BACKUP_RECOVERY.md). |
 
-No evaluator-awarded total is recorded here. The nine listed modules have a **14-point maximum** (2 + 2 + 2 + 2 + 1 + 1 + 1 + 2 + 1), but several still need acceptance demonstrations; an implementation or local test alone does not guarantee points. The G06 notification check has been demonstrated live and is marked complete in the roadmap, while final module acceptance remains with the evaluators. G09 gamification is a candidate outside this subtotal: achievements, leaderboards and XP/levels exist, but database persistence across restart, visual feedback and clear progression rules still need an acceptance demonstration against subject §IV.6.
+No evaluator-awarded total is recorded here. This table is a selected evidence map: its nine listed modules sum to a **14-point raw maximum**, not the total module coverage for Nook. The broader snapshot records 29 raw points maximum across verified evidence and 6 more across modules with acceptance demonstrations still open. Several entries still need acceptance demonstrations; implementation or a local test alone does not guarantee points. The scoring tracker applies a 14-point required threshold and up to 5 bonus points, subject to module eligibility and evaluator review. G09 gamification is a candidate outside this table's subtotal: achievements, leaderboards and XP/levels exist, but database persistence across restart, visual feedback and clear progression rules still need an acceptance demonstration against subject §IV.6.
 
 ## Privacy, terms and operational notes
 
@@ -164,7 +172,7 @@ Public pages are available at [Privacy Policy](/privacy) and [Terms of Service](
 
 ## Resources and AI use
 
-We used AI tools openly. The team chose the product, architecture, API contracts, design direction and final behavior. AI-assisted code was reviewed and tested by project members; team members remain responsible for explaining and modifying it.
+We used AI as an engineering assistant while the team remained responsible for product decisions, architecture, API contracts, and final behavior. Agentic tools helped patch code the team was building, review security, refactor existing work, improve code quality, and support tests and documentation. Team members reviewed and integrated the resulting changes.
 
 | Resource/tool | Use |
 |---|---|
@@ -174,7 +182,7 @@ We used AI tools openly. The team chose the product, architecture, API contracts
 | Graphify | Generated a code relationship map in `graphify-out/` |
 | Understand Anything | Generated a repository knowledge graph and codebase tour in `.ua/` |
 
-AI-assisted frontend work includes the Next.js client and design-token/component iterations. AI was also used for selected feature planning, implementation suggestions, tests and documentation. Backend account and chat work was primarily written by the team, with AI used for explanations, reviews and targeted assistance. Review the project team's final AI-use statement and individual contribution list against the actual Git history before submission.
+AI helped translate the Figma design into React components and shape frontend state handling: React Query for server data and caching, and `useState` for local component state. Security reviews helped surface early XSS risks and the risk of storing refresh tokens in `localStorage`; refresh tokens are now carried in HttpOnly cookies. AI suggestions were reviewed and adapted by the team rather than accepted as a substitute for implementation decisions or security review.
 
 ## Verification commands
 
