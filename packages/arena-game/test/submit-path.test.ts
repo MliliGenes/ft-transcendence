@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { ArenaEngine } from '../src/engine.js';
+import { InMemoryMatchStore, InMemorySubmissionStore } from '../src/store.js';
+import { FileBank } from '../src/file-bank.js';
 import {
   P100,
   P40,
@@ -32,29 +35,20 @@ describe('08 submit path (sealed hidden evaluation, last-wins)', () => {
     expect(snap.sides.left?.submissions).toBe(1);
   });
 
-  it('2. second submit overwrites counted result (100 then 40)', async () => {
+  it('2. consecutive problem submissions advance independently and record attempts', async () => {
     const { engine, left, matchId } = await setup([P100, P40]);
     await engine.submit(left, matchId, { code: SOLVED_PY, language: 'Python' });
+    const snap1 = await engine.snapshot(left, matchId);
+    expect(snap1.progress.self.currentRound).toBe(2);
+    expect(snap1.progress.self.lastScore).toBe(100);
     await engine.submit(left, matchId, {
       code: STARTER_PY,
       language: 'Python',
     });
-    const reveal = await engine.publishReveal(left, matchId);
-    expect(reveal.scores.left).toBe(40);
-    expect((await engine.snapshot(left, matchId)).sides.left?.submissions).toBe(
-      2,
-    );
-  });
-
-  it('40 then 100 counts 100', async () => {
-    const { engine, left, matchId } = await setup([P40, P100]);
-    await engine.submit(left, matchId, {
-      code: STARTER_PY,
-      language: 'Python',
-    });
-    await engine.submit(left, matchId, { code: SOLVED_PY, language: 'Python' });
-    const reveal = await engine.publishReveal(left, matchId);
-    expect(reveal.scores.left).toBe(100);
+    const snap2 = await engine.snapshot(left, matchId);
+    expect(snap2.progress.self.currentRound).toBe(3);
+    expect(snap2.progress.self.lastScore).toBe(40);
+    expect(snap2.sides.left?.submissions).toBe(2);
   });
 
   it('3. failed resubmit preserves previous counted result', async () => {
@@ -63,6 +57,8 @@ describe('08 submit path (sealed hidden evaluation, last-wins)', () => {
       { infra: 'hidden suite timeout' },
     ]);
     await engine.submit(left, matchId, { code: SOLVED_PY, language: 'Python' });
+    const snap1 = await engine.snapshot(left, matchId);
+    expect(snap1.progress.self.lastScore).toBe(70);
     await expect(
       engine.submit(left, matchId, { code: STARTER_PY, language: 'Python' }),
     ).rejects.toThrow();
@@ -71,8 +67,6 @@ describe('08 submit path (sealed hidden evaluation, last-wins)', () => {
     expect(snap.sides.left?.status).toBe('coding');
     expect(snap.sides.left?.submissions).toBe(1);
     expect(snap.failures).toEqual(['submit: hidden suite timeout']);
-    const reveal = await engine.publishReveal(left, matchId);
-    expect(reveal.scores.left).toBe(70);
   });
 
   it('4. idempotent retry of the same evaluationId creates no second attempt', async () => {
@@ -91,11 +85,10 @@ describe('08 submit path (sealed hidden evaluation, last-wins)', () => {
     });
     expect(retry).toEqual(first);
     expect(judge.evalCalls).toBe(1);
-    expect((await engine.snapshot(left, matchId)).sides.left?.submissions).toBe(
-      1,
-    );
-    const reveal = await engine.publishReveal(left, matchId);
-    expect(reveal.scores.left).toBe(100);
+    const snap = await engine.snapshot(left, matchId);
+    expect(snap.sides.left?.submissions).toBe(1);
+    expect(snap.progress.self.lastScore).toBe(100);
+    expect(snap.reveal).toBeNull();
   });
 
   it('concurrent retry of an in-flight evaluation does not hold the Match lock', async () => {
@@ -219,8 +212,9 @@ describe('08 submit path (sealed hidden evaluation, last-wins)', () => {
     });
     const snap = await engine.snapshot(left, matchId);
     expect(snap.sides.left?.submissions).toBe(1);
-    const reveal = await engine.publishReveal(left, matchId);
-    expect(reveal.scores.left).toBe(0);
+    expect(snap.progress.self.currentRound).toBe(2);
+    expect(snap.progress.self.lastScore).toBe(0);
+    expect(snap.reveal).toBeNull();
   });
 
   it('6. TLE, MLE and OLE count as attempts', async () => {
@@ -236,8 +230,9 @@ describe('08 submit path (sealed hidden evaluation, last-wins)', () => {
       });
       const snap = await engine.snapshot(left, matchId);
       expect(snap.sides.left?.submissions).toBe(1);
-      const reveal = await engine.publishReveal(left, matchId);
-      expect(reveal.scores.left).toBe(0);
+      expect(snap.progress.self.currentRound).toBe(2);
+      expect(snap.progress.self.lastScore).toBe(0);
+      expect(snap.reveal).toBeNull();
     }
   });
 
@@ -254,8 +249,7 @@ describe('08 submit path (sealed hidden evaluation, last-wins)', () => {
     await engine.submit(left, matchId, { code: SOLVED_PY, language: 'Python' });
     const snap = await engine.snapshot(left, matchId);
     expect(snap.sides.left?.submissions).toBe(2);
-    const reveal = await engine.publishReveal(left, matchId);
-    expect(reveal.scores.left).toBe(100);
+    expect(snap.progress.self.lastScore).toBe(100);
   });
 
   it('8+9. A evaluating does not block B; B can submit while A evaluates', async () => {
@@ -269,7 +263,7 @@ describe('08 submit path (sealed hidden evaluation, last-wins)', () => {
     });
     await tick();
     expect((await engine.snapshot(right, matchId)).sides.left?.status).toBe(
-      'evaluating',
+      'coding',
     );
     const receipt = await engine.submit(right, matchId, {
       code: SOLVED_PY,
@@ -285,9 +279,8 @@ describe('08 submit path (sealed hidden evaluation, last-wins)', () => {
     expect((await engine.snapshot(left, matchId)).sides.left?.status).toBe(
       'coding',
     );
-    const reveal = await engine.publishReveal(left, matchId);
-    expect(reveal.scores.left).toBe(55);
-    expect(reveal.scores.right).toBe(100);
+    expect((await engine.snapshot(left, matchId)).progress.self.lastScore).toBe(55);
+    expect((await engine.snapshot(right, matchId)).progress.self.lastScore).toBe(100);
   });
 
   it('10. reveal unavailable before explicit publish action', async () => {
@@ -297,9 +290,15 @@ describe('08 submit path (sealed hidden evaluation, last-wins)', () => {
   });
 
   it('11. post-reveal submit rejected', async () => {
-    const { engine, left, matchId } = await setup([{ score: 100 }]);
-    await engine.submit(left, matchId, { code: SOLVED_PY, language: 'Python' });
-    await engine.publishReveal(left, matchId);
+    const { engine, left, right, matchId } = await setup(
+      Array.from({ length: 6 }, () => P100),
+    );
+    for (let i = 0; i < 3; i++) {
+      await engine.submit(left, matchId, { code: SOLVED_PY, language: 'Python' });
+      await engine.submit(right, matchId, { code: SOLVED_PY, language: 'Python' });
+    }
+    const snap = await engine.snapshot(left, matchId);
+    expect(['SCORE_REVEAL', 'MATCH_COMPLETE']).toContain(snap.roundPhase);
     await expect(
       engine.submit(left, matchId, { code: SOLVED_PY, language: 'Python' }),
     ).rejects.toThrow();
@@ -325,5 +324,134 @@ describe('08 submit path (sealed hidden evaluation, last-wins)', () => {
         expect(body).not.toContain(marker);
       }
     }
+  });
+
+  it('retry of an accepted submission after problem cutoff passed returns original receipt', async () => {
+    const { engine, left, matchId } = await setup([P100]);
+    const input = {
+      code: SOLVED_PY,
+      language: 'Python',
+      submissionId: 'sub-cutoff',
+      evaluationId: 'eval-cutoff',
+    };
+    const first = await engine.submit(left, matchId, input);
+    expect(first.round).toBe(1);
+
+    const retry = await engine.submit(left, matchId, input);
+    expect(retry).toEqual(first);
+  });
+
+  it('retry of an accepted submission after match completion returns original receipt', async () => {
+    const { engine, left, right, matchId } = await setup([P100, P100], {}, ['even-ledger-v2']);
+    const input = {
+      code: SOLVED_PY,
+      language: 'Python',
+      submissionId: 'sub-done',
+      evaluationId: 'eval-done',
+    };
+    const first = await engine.submit(left, matchId, input);
+    await engine.submit(right, matchId, { code: SOLVED_PY, language: 'Python' });
+    const snap = await engine.snapshot(left, matchId);
+    expect(snap.roundPhase).toBe('MATCH_COMPLETE');
+
+    const retry = await engine.submit(left, matchId, input);
+    expect(retry).toEqual(first);
+  });
+
+  it('retry of an accepted submission after engine restart returns original receipt', async () => {
+    const matches = new InMemoryMatchStore();
+    const submissions = new InMemorySubmissionStore();
+    const bank = new FileBank();
+    const { engine, judge, left, matchId } = await setup([P100], { matches, submissions, bank });
+    const input = {
+      code: SOLVED_PY,
+      language: 'Python',
+      submissionId: 'sub-restart',
+      evaluationId: 'eval-restart',
+    };
+    const first = await engine.submit(left, matchId, input);
+
+    const restarted = new ArenaEngine({
+      judge,
+      bank,
+      matches,
+      submissions,
+    });
+    await restarted.recover();
+
+    const retry = await restarted.submit(left, matchId, input);
+    expect(retry).toEqual(first);
+  });
+
+  it('rejects tampered submission data on retry after completion', async () => {
+    const { engine, left, matchId } = await setup([P100]);
+    const input = {
+      code: SOLVED_PY,
+      language: 'Python',
+      submissionId: 'sub-tamper',
+      evaluationId: 'eval-tamper',
+    };
+    await engine.submit(left, matchId, input);
+
+    await expect(
+      engine.submit(left, matchId, {
+        code: STARTER_PY,
+        language: 'Python',
+        submissionId: 'sub-tamper',
+        evaluationId: 'eval-tamper',
+      }),
+    ).rejects.toThrow('evaluation id is already bound to different submission data');
+
+    await expect(
+      engine.submit(left, matchId, {
+        code: SOLVED_PY,
+        language: 'C++',
+        submissionId: 'sub-tamper',
+        evaluationId: 'eval-tamper',
+      }),
+    ).rejects.toThrow('evaluation id is already bound to different submission data');
+  });
+
+  it('retry with only submissionId or only evaluationId resolves original receipt', async () => {
+    const { engine, left, matchId } = await setup([P100]);
+    const input = {
+      code: SOLVED_PY,
+      language: 'Python',
+      submissionId: 'sub-partial-only',
+      evaluationId: 'eval-partial-only',
+    };
+    const first = await engine.submit(left, matchId, input);
+
+    // Retry with only submissionId
+    const retrySub = await engine.submit(left, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+      submissionId: 'sub-partial-only',
+    });
+    expect(retrySub).toEqual(first);
+
+    // Retry with only evaluationId
+    const retryEval = await engine.submit(left, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+      evaluationId: 'eval-partial-only',
+    });
+    expect(retryEval).toEqual(first);
+  });
+
+  it('rejects cross-side forged submission retry', async () => {
+    const { engine, left, right, matchId } = await setup([P100]);
+    const input = {
+      code: SOLVED_PY,
+      language: 'Python',
+      submissionId: 'sub-left-owned',
+      evaluationId: 'eval-left-owned',
+    };
+    await engine.submit(left, matchId, input);
+
+    // Right tries to claim Left's submissionId / evaluationId
+    await expect(
+      engine.submit(right, matchId, input),
+    ).rejects.toThrow('evaluation id is already bound to different submission data');
   });
 });

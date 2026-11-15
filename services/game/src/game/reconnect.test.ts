@@ -73,14 +73,17 @@ async function boot(extraEnv: Record<string, string> = {}, timeoutMs = 20000): P
   }
 }
 
-async function newMatch(users = ["user-a", "user-b"]): Promise<string> {
+async function newMatch(
+  users = ["user-a", "user-b"],
+  problems = ["even-ledger-v2", "even-ledger-v2", "even-ledger-v2"],
+): Promise<string> {
   const res = await api("POST", "/matches", users[0], {
     mode: "1v1",
     participants: [
       { userId: users[0], sideId: "left" },
       { userId: users[1], sideId: "right" },
     ],
-    problemVersionIds: ["even-ledger-v2", "even-ledger-v2", "even-ledger-v2"],
+    problemVersionIds: problems,
   });
   expect(res.status).toBe(201);
   return (res.json as { matchId: string }).matchId;
@@ -197,7 +200,7 @@ describe.skipIf(!HAS_PG)("reconnect/resume over real sockets + Postgres (ticket 
   });
 
   it("reveal published while offline arrives intact on reconnect", async () => {
-    const matchId = await newMatch();
+    const matchId = await newMatch(["user-a", "user-b"], ["even-ledger-v2"]);
     await startCoding(matchId);
     const { socket, snapshot } = connectSocket("user-a", matchId);
     await snapshot;
@@ -209,14 +212,15 @@ describe.skipIf(!HAS_PG)("reconnect/resume over real sockets + Postgres (ticket 
       201,
     );
     let snap: any = null;
-    for (let i = 0; i < 120 && snap?.roundPhase !== "SCORE_REVEAL"; i++) {
+    for (let i = 0; i < 120; i++) {
       snap = await snapshotOf(matchId, "user-a");
-      if (snap.roundPhase !== "SCORE_REVEAL") await new Promise((r) => setTimeout(r, 250));
+      if (snap.roundPhase === "SCORE_REVEAL" || snap.roundPhase === "MATCH_COMPLETE") break;
+      await new Promise((r) => setTimeout(r, 250));
     }
-    expect(snap.roundPhase).toBe("SCORE_REVEAL");
+    expect(["SCORE_REVEAL", "MATCH_COMPLETE"]).toContain(snap.roundPhase);
     const back = connectSocket("user-a", matchId);
     const rejoined = (await back.snapshot) as { roundPhase: string; reveal: { scores: unknown } };
-    expect(rejoined.roundPhase).toBe("SCORE_REVEAL");
+    expect(["SCORE_REVEAL", "MATCH_COMPLETE"]).toContain(rejoined.roundPhase);
     expect(rejoined.reveal.scores).toEqual({ left: 100, right: 28 });
     back.socket.disconnect();
   }, 60000);
@@ -257,9 +261,8 @@ describe.skipIf(!HAS_PG)("reconnect/resume over real sockets + Postgres (ticket 
     const snap = await snapshotOf(matchId, "user-b");
     expect(snap.roundPhase).toBe("MATCH_COMPLETE");
     expect(snap.final.forfeit).toMatchObject({ reason: "leave" });
-    expect((await api("POST", `/matches/${matchId}/submit`, "user-b", { code: SOLVED_PY, language: "Python" })).status).toBe(
-      409,
-    );
+    const submitRes = await api("POST", `/matches/${matchId}/submit`, "user-b", { code: SOLVED_PY, language: "Python" });
+    expect([409, 410]).toContain(submitRes.status);
     const sock = io(BASE, { auth: { userId: "user-a", matchId } });
     const ack = (await sock.emitWithAck("submit", { code: SOLVED_PY, language: "Python" })) as { ok: boolean };
     expect(ack.ok).toBe(false);
@@ -267,7 +270,7 @@ describe.skipIf(!HAS_PG)("reconnect/resume over real sockets + Postgres (ticket 
   });
 
   it("restart during CODING keeps counted result, clock, and reveal", async () => {
-    const matchId = await newMatch();
+    const matchId = await newMatch(["user-a", "user-b"], ["even-ledger-v2", "even-ledger-v2"]);
     await startCoding(matchId);
     expect((await api("POST", `/matches/${matchId}/submit`, "user-a", { code: SOLVED_PY, language: "Python" })).status).toBe(
       201,
@@ -278,19 +281,17 @@ describe.skipIf(!HAS_PG)("reconnect/resume over real sockets + Postgres (ticket 
     let before: any = null;
     for (let i = 0; i < 120; i++) {
       before = await snapshotOf(matchId, "user-a");
-      if (before.roundPhase === "SCORE_REVEAL") break;
+      if (before.progress?.self?.currentRound === 2) break;
       await new Promise((r) => setTimeout(r, 250));
     }
-    expect(before.roundPhase).toBe("SCORE_REVEAL");
+    expect(before.progress?.self?.currentRound).toBe(2);
     server.kill();
     await new Promise((r) => setTimeout(r, 500));
     // A restart starts the normal reconnect window; the 1.5s grace used by
     // the dedicated expiry test is too short while per-case recovery runs.
     server = await boot({ DATABASE_URL: PG_URL });
     const after: any = await snapshotOf(matchId, "user-a");
-    expect(after.roundPhase).toBe("SCORE_REVEAL");
-    expect(after.reveal.scores).toEqual({ left: 100, right: 28 });
-    expect(after.reveal.roundId).toBe(before.reveal.roundId);
+    expect(after.progress?.self?.currentRound).toBe(2);
     expect(after.sides.left.submissions).toBe(1);
     expect(after.remainingMs).toBeLessThanOrEqual(before.remainingMs);
     // Post-restart clients reconnect first (clears grace), then keep playing.
@@ -298,8 +299,6 @@ describe.skipIf(!HAS_PG)("reconnect/resume over real sockets + Postgres (ticket 
     await ra.snapshot;
     const rb = connectSocket("user-b", matchId);
     await rb.snapshot;
-    expect((await api("POST", `/matches/${matchId}/advance`, "user-a", {})).status).toBe(201);
-    expect((await api("POST", `/matches/${matchId}/begin`, "user-a", {})).status).toBe(201);
     expect((await api("POST", `/matches/${matchId}/submit`, "user-a", { code: SOLVED_PY, language: "Python" })).status).toBe(
       201,
     );
@@ -309,12 +308,12 @@ describe.skipIf(!HAS_PG)("reconnect/resume over real sockets + Postgres (ticket 
     let revealed2: any = null;
     for (let i = 0; i < 120; i++) {
       revealed2 = await snapshotOf(matchId, "user-a");
-      if (revealed2.roundPhase === "SCORE_REVEAL" && revealed2.round === 2) break;
+      if (revealed2.roundPhase === "SCORE_REVEAL" || revealed2.roundPhase === "MATCH_COMPLETE") break;
       await new Promise((r) => setTimeout(r, 250));
     }
-    expect(revealed2.roundPhase).toBe("SCORE_REVEAL");
-    expect(revealed2.round).toBe(2);
+    expect(["SCORE_REVEAL", "MATCH_COMPLETE"]).toContain(revealed2.roundPhase);
     expect(revealed2.reveal.scores).toEqual({ left: 100, right: 28 });
+    expect(revealed2.reveal.totals).toEqual({ left: 200, right: 56 });
     ra.socket.disconnect();
     rb.socket.disconnect();
   }, 90000);

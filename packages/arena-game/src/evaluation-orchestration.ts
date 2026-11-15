@@ -51,6 +51,13 @@ export class EvaluationInFlightRegistry {
     return this.entries.get(evaluationId);
   }
 
+  findBySubmissionId(submissionId: string): InFlightEvaluation | undefined {
+    for (const entry of this.entries.values()) {
+      if (entry.submissionId === submissionId) return entry;
+    }
+    return undefined;
+  }
+
   track(evaluationId: string, identity: EvaluationIdentity): InFlightEvaluation {
     let resolve!: (completion: EvaluationCompletion) => void;
     const promise = new Promise<EvaluationCompletion>((settle) => {
@@ -143,7 +150,7 @@ interface EvaluationOrchestrationHost {
   activityOf(round: RoundState, side: SideId): PlayerStatus;
   transitionActivity(match: MatchRecord, round: RoundState, side: SideId, next: PlayerStatus): void;
   emit(event: ArenaEvent, payload: unknown): void;
-  onCounted(match: MatchRecord, round: RoundState, side: SideId, stored: SubmissionRecord, now: number): Promise<void>;
+  onCounted(match: MatchRecord, round: RoundState, side: SideId, stored: SubmissionRecord, now: number, skipAutoReveal?: boolean): Promise<void>;
 }
 
 export interface EvaluationOrchestratorOptions {
@@ -176,6 +183,10 @@ export class EvaluationOrchestrator {
 
   get(evaluationId: string): InFlightEvaluation | undefined {
     return this.inFlight.get(evaluationId);
+  }
+
+  findBySubmissionId(submissionId: string): InFlightEvaluation | undefined {
+    return this.inFlight.findBySubmissionId(submissionId);
   }
 
   track(evaluationId: string, identity: EvaluationIdentity): InFlightEvaluation {
@@ -331,12 +342,16 @@ export class EvaluationOrchestrator {
           cutoff !== undefined &&
           stored.submittedAt < cutoff &&
           this.options.clock() <= cutoff + this.options.deadlineGraceMs;
+        const currentSideRound = match?.rounds[(match.sideProgress?.[stored.sideId]?.currentRound ?? match.currentRound) - 1];
+        const isCurrentRound = round && currentSideRound && round.roundId === currentSideRound.roundId && stored.roundId === round.roundId;
+        const problemMatches = round && round.problemVersionId === stored.problemVersionId;
         const live =
           match &&
           match.roundPhase === "CODING" &&
           round &&
           progress?.stage === "CODING" &&
-          round.roundId === match.rounds[(match.sideProgress?.[stored.sideId]?.currentRound ?? match.currentRound) - 1]?.roundId &&
+          isCurrentRound &&
+          problemMatches &&
           !round.cutoffPassed && !round.cutoffPassedSides?.[stored.sideId] &&
           withinDeadlineGrace;
         if (!live) {
@@ -382,7 +397,7 @@ export class EvaluationOrchestrator {
         await this.options.host.withMatchLock(
           stored.matchId,
           async () => {
-            await this.commitStoredEvaluation(claim!, stored.matchId, stored.evaluationId, verdict, this.options.clock());
+            await this.commitStoredEvaluation(claim!, stored.matchId, stored.evaluationId, verdict, this.options.clock(), true);
           },
           { skipFinalSave: true },
         );
@@ -459,6 +474,7 @@ export class EvaluationOrchestrator {
     evaluationId: string,
     verdict: SealedVerdict,
     now: number,
+    skipAutoReveal = false,
   ): Promise<void> {
     const match = structuredClone(await this.options.host.loadMatchOrThrow(matchId));
     const stored = structuredClone(await this.storedSubmission(evaluationId));
@@ -484,9 +500,13 @@ export class EvaluationOrchestrator {
       ? Math.min(match.sideProgress[side]!.problemDeadlineMs!, matchDeadline)
       : matchDeadline;
     const withinDeadlineGrace = stored.submittedAt < deadline && now <= deadline + this.options.deadlineGraceMs;
+    const currentSideRound = match.rounds[(match.sideProgress?.[side]?.currentRound ?? match.currentRound) - 1];
+    const isCurrentRound = currentSideRound && round.roundId === currentSideRound.roundId && stored.roundId === round.roundId;
+    const problemMatches = round.problemVersionId === stored.problemVersionId;
     if (
       match.roundPhase === "CODING" &&
-      round.roundId === match.rounds[(match.sideProgress?.[side]?.currentRound ?? match.currentRound) - 1]?.roundId &&
+      isCurrentRound &&
+      problemMatches &&
       !round.cutoffPassed && !round.cutoffPassedSides?.[side] &&
       !round.superseded.includes(evaluationId) &&
       withinDeadlineGrace
@@ -500,7 +520,7 @@ export class EvaluationOrchestrator {
       stored.scoreBp = scoreBp;
       stored.groups = groupResults;
       stored.testStatuses = statuses;
-      await this.options.host.onCounted(match, round, side, stored, now);
+      await this.options.host.onCounted(match, round, side, stored, now, skipAutoReveal);
     } else {
       stored.status = "superseded";
       stored.score = null;

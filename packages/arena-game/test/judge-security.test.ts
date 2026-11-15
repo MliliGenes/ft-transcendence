@@ -126,8 +126,8 @@ int main() {
       [{ id: 't1', input: '1', expected: '0' }],
       LIMITS,
     );
-    // ponytail: TLE is an equally safe bound (wall clock killed the fork storm).
-    expect(['runtime_error', 'accepted', 'time_limit_exceeded']).toContain(
+    // ponytail: TLE or MLE is an equally safe bound (wall clock or memory killed the fork storm).
+    expect(['runtime_error', 'accepted', 'time_limit_exceeded', 'memory_limit_exceeded']).toContain(
       res[0].status,
     );
   }, 30000);

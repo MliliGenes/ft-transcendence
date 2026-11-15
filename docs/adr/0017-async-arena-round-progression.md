@@ -1,7 +1,7 @@
 # 0017. Independent Code Arena side progression
 
 Date: 2026-11-15
-Status: Implemented on `feature/arena-async-rounds`; verification pending
+Status: Implemented and repaired on `fix/arena-async-rounds-review`; unit, client, container, and full project gate verification complete. EGM status not fully resolved until reviewed; external gate remains open.
 
 ## Context
 
@@ -23,4 +23,9 @@ The previous match advanced both sides through a problem together. A side that s
 
 ## Verification
 
-Pending `npm run check` and focused asynchronous progression, privacy, recovery, and timeout regressions.
+Verified on `fix/arena-async-rounds-review` (pinned `cc0fff3a492a1186f1d13cb0d64d3b75f1ab19b7`):
+- All 32 non-container engine test suites passed (259 passed, 31 skipped, 0 failed) covering independent side progression, pre-dispatch stale pending guards, canonical ID binding, submission retry idempotency, readiness resetting, activity privacy, disconnect grace, and 2v2 document collaboration.
+- All 5 container test suites passed (45 passed, 0 failed) on Kiri Docker runtime covering container judge, isolation security matrix, judge payload transport, compiled bank execution, and problem version recovery.
+- All 120 client tests passed (120 passed, 0 failed) including draft scoping per match/round/problem/language, accessible decoupled polite score notice, match scope reset, and theme token validation.
+- All workspace packages and client typecheck and build cleanly with zero errors.
+- Full gate `npm run check` completed 100% cleanly (exit code 0): secret scanning, topology checks, tool tests (30/30), Prisma generation, oxlint/eslint, workspace builds/typechecks, arena tests, client tests, chat tests, user tests, Turbopack client production build (25/25 pages), and PostgreSQL integration tests (`game-postgres-reconnect`, `chat-postgres`, `user-postgres`).

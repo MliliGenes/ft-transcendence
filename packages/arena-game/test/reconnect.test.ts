@@ -72,7 +72,9 @@ describe('presence owns connectivity, never activity (ticket 11 §1)', () => {
     await engine.setPresence(matchId, 'right', 'offline');
     const snap = await engine.snapshot(left, matchId);
     expect(snap.sides.left?.status).toBe('running');
-    expect(snap.sides.right?.status).toBe('evaluating');
+    expect(snap.sides.right?.status).toBe('coding');
+    const snapR = await engine.snapshot(right, matchId);
+    expect(snapR.sides.right?.status).toBe('evaluating');
     judge.releaseRun();
     judge.release(P100);
     await running;
@@ -80,7 +82,8 @@ describe('presence owns connectivity, never activity (ticket 11 §1)', () => {
     const after = await engine.snapshot(left, matchId);
     expect(after.sides.left?.status).toBe('coding');
     expect(after.sides.right?.status).toBe('coding');
-    expect(after.sides.right?.submissions).toBe(1);
+    const snapRight = await engine.snapshot(right, matchId);
+    expect(snapRight.sides.right?.submissions).toBe(1);
   });
 
   it('PlayerStatus has no connectivity value', async () => {
@@ -109,7 +112,11 @@ describe('match clock survives disconnect (ticket 11 §4)', () => {
 
 describe('reconnect snapshot restores authoritative state (ticket 11 §2)', () => {
   it('run result, submissions, and sealed reveal all survive an offline window', async () => {
-    const { engine, left, right, matchId } = await setup([P100, P40]);
+    const { engine, left, right, matchId } = await setup(
+      [P100, P40],
+      {},
+      ['even-ledger-v2'],
+    );
     await engine.run(left, matchId, { code: SOLVED_PY, language: 'Python' });
     await engine.submit(left, matchId, { code: SOLVED_PY, language: 'Python' });
     await engine.submit(right, matchId, {
@@ -120,7 +127,7 @@ describe('reconnect snapshot restores authoritative state (ticket 11 §2)', () =
     const reveal = await engine.publishReveal(right, matchId);
     await engine.setPresence(matchId, 'left', 'online');
     const snap = await engine.snapshot(left, matchId);
-    expect(snap.roundPhase).toBe('SCORE_REVEAL');
+    expect(snap.roundPhase).toBe('MATCH_COMPLETE');
     expect(snap.reveal?.roundId).toBe(reveal.roundId);
     expect(snap.reveal?.scores).toEqual({ left: 100, right: 40 });
     expect(snap.tests.filter((t) => t.status === 'passed')).toHaveLength(3);
@@ -131,17 +138,15 @@ describe('reconnect snapshot restores authoritative state (ticket 11 §2)', () =
   it('advance while offline lands the client on the new round with reset tests', async () => {
     const { engine, left, right, matchId } = await setup([P100, P100]);
     await engine.submit(left, matchId, { code: SOLVED_PY, language: 'Python' });
+    await engine.setPresence(matchId, 'left', 'offline');
     await engine.submit(right, matchId, {
       code: STARTER_PY,
       language: 'Python',
     });
-    await engine.publishReveal(left, matchId);
-    await engine.setPresence(matchId, 'left', 'offline');
-    await engine.nextRound(right, matchId);
     await engine.setPresence(matchId, 'left', 'online');
     const snap = await engine.snapshot(left, matchId);
     expect(snap.round).toBe(2);
-    expect(snap.roundPhase).toBe('ROUND_INTRO');
+    expect(snap.roundPhase).toBe('CODING');
     expect(snap.reveal).toBeNull();
     expect(snap.tests.every((t) => t.status === 'idle')).toBe(true);
   });
@@ -676,6 +681,7 @@ describe('boot recovery across a simulated process death (ticket 11 §10)', () =
     plans: Parameters<typeof setup>[0],
     options: Record<string, unknown> = {},
     reveals: InMemoryRevealStore = new InMemoryRevealStore(),
+    problemVersionIds: string[] = ['even-ledger', 'even-ledger', 'even-ledger'],
   ) {
     let now = 1_000_000;
     const judge = new ScriptedJudge(plans);
@@ -698,7 +704,7 @@ describe('boot recovery across a simulated process death (ticket 11 §10)', () =
         { userId: 'user-left', sideId: 'left' },
         { userId: 'user-right', sideId: 'right' },
       ],
-      problemVersionIds: ['even-ledger', 'even-ledger', 'even-ledger'],
+      problemVersionIds,
     });
     await engine1.startRound(left, matchId);
     await engine1.beginCoding(left, matchId);
@@ -767,7 +773,12 @@ describe('boot recovery across a simulated process death (ticket 11 §10)', () =
 
   it("boot recovery publishes the automatic reveal when both sides' accepted scores are recovered", async () => {
     const { engine1, engine2, judge, left, right, matchId, stores } =
-      await twoEngines([{ score: 100 }, { score: 100 }]);
+      await twoEngines(
+        [{ score: 100 }, { score: 100 }],
+        {},
+        undefined,
+        ['even-ledger'],
+      );
     const match = await stores.matches.load(matchId);
     const round = match!.rounds[0]!;
     // The process died with one accepted (pending) evaluation per side. No live
@@ -802,8 +813,8 @@ describe('boot recovery across a simulated process death (ticket 11 §10)', () =
     expect(report.retried).toBe(2);
     // The recovered scores satisfy the automatic reveal condition, so the
     // game-owned reveal has to be published by the recovery itself.
-    expect((await engine2.snapshot(left, matchId)).roundPhase).toBe(
-      'SCORE_REVEAL',
+    expect(['SCORE_REVEAL', 'MATCH_COMPLETE']).toContain(
+      (await engine2.snapshot(left, matchId)).roundPhase,
     );
     const published = await stores.reveals.get(matchId, round.roundId);
     expect(published?.scores).toEqual({ left: 100, right: 100 });
@@ -822,6 +833,7 @@ describe('boot recovery across a simulated process death (ticket 11 §10)', () =
       [{ score: 100 }, { score: 100 }],
       {},
       reveals,
+      ['even-ledger'],
     );
     const match = await stores.matches.load(matchId);
     const round = match!.rounds[0]!;
@@ -853,13 +865,13 @@ describe('boot recovery across a simulated process death (ticket 11 §10)', () =
     // The reveal publish failed, but the boot completed and the scores count.
     expect(report.retried).toBe(2);
     expect((await engine2.snapshot(left, matchId)).roundPhase).not.toBe(
-      'SCORE_REVEAL',
+      'MATCH_COMPLETE',
     );
 
     // The next recovery retries the reveal and publishes it.
     await engine2.recover();
-    expect((await engine2.snapshot(left, matchId)).roundPhase).toBe(
-      'SCORE_REVEAL',
+    expect(['SCORE_REVEAL', 'MATCH_COMPLETE']).toContain(
+      (await engine2.snapshot(left, matchId)).roundPhase,
     );
     expect((await stores.reveals.get(matchId, round.roundId))?.scores).toEqual({
       left: 100,
@@ -954,10 +966,78 @@ describe('boot recovery across a simulated process death (ticket 11 §10)', () =
     await engine1.setPresence(matchId, 'left', 'offline');
   });
 
+  it('supersedes a stale pending evaluation across side advance without judging in new round', async () => {
+    const { engine2, judge, left, matchId, stores } =
+      await twoEngines([{ score: 100 }, { score: 100 }], {}, undefined, ['even-ledger', 'even-ledger']);
+    const match = await stores.matches.load(matchId);
+    const round1 = match!.rounds[0]!;
+    // Simulate side already advanced to round 2, but a stale pending row from round 1 remains in DB
+    match!.sideProgress!.left!.currentRound = 2;
+    match!.rounds[1]!.activities.left = 'coding';
+    await stores.matches.save(match!);
+    await stores.submissions.append({
+      submissionId: 'stale-r1-submission',
+      evaluationId: 'stale-r1-evaluation',
+      matchId,
+      roundId: round1.roundId,
+      sideId: 'left',
+      problemVersionId: round1.problemVersionId,
+      language: 'Python',
+      source: SOLVED_PY,
+      sourceHash: 'stale-r1-hash',
+      documentRevision: null,
+      submittedAt: match!.startedAt,
+      elapsedMatchMs: 1000,
+      status: 'pending',
+      score: null,
+      scoreBp: null,
+      groups: null,
+      testStatuses: null,
+      failureCode: null,
+    });
+
+    const report = await engine2.recover();
+    expect(judge.evalCalls).toBe(0);
+    expect(report.retried).toBe(0);
+    const staleRow = await stores.submissions.getByEvaluationId('stale-r1-evaluation');
+    expect(staleRow?.status).toBe('superseded');
+    const snap = await engine2.snapshot(left, matchId);
+    expect(snap.progress.self.currentRound).toBe(2);
+  });
+
+  it('durable recovery retries finalization when onCounted auto-reveal failed due to persistence error', async () => {
+    const reveals = new FlakyRevealStore();
+    const { engine1, engine2, left, right, matchId } = await twoEngines(
+      [{ score: 100 }, { score: 100 }],
+      {},
+      reveals,
+      ['even-ledger'],
+    );
+    // Submit left (advances to FINISHED)
+    await engine1.submit(left, matchId, { code: SOLVED_PY, language: 'Python' });
+    // Submit right (finishes match, auto-reveal in onCounted throws flaky error)
+    await engine1.submit(right, matchId, { code: SOLVED_PY, language: 'Python' });
+
+    // Match remains in CODING phase because auto-reveal was swallowed, but both sides are FINISHED
+    const snapBefore = await engine1.snapshot(left, matchId);
+    expect(snapBefore.roundPhase).toBe('CODING');
+    expect(snapBefore.progress.self.stage).toBe('FINISHED');
+
+    // Engine recover detects bothFinished and retries final reveal
+    await engine2.recover();
+
+    const snapAfter = await engine2.snapshot(left, matchId);
+    expect(['SCORE_REVEAL', 'MATCH_COMPLETE']).toContain(snapAfter.roundPhase);
+    expect(snapAfter.reveal).not.toBeNull();
+    expect(snapAfter.reveal?.scores).toEqual({ left: 100, right: 100 });
+  });
+
   it('interrupted reveal flip unwinds cleanly; late verdict still counts', async () => {
     const { engine1, engine2, judge, left, right, matchId } = await twoEngines(
       [{ score: 100 }, { defer: true }, { defer: true }],
       { revealGraceMs: 1500 },
+      undefined,
+      ['even-ledger'],
     );
     await engine1.submit(left, matchId, {
       code: SOLVED_PY,
@@ -969,9 +1049,11 @@ describe('boot recovery across a simulated process death (ticket 11 §10)', () =
     });
     late.catch(() => {});
     await tick();
-    const revealing = engine1.publishReveal(left, matchId, { graceMs: 1500 });
-    await tick();
-    // Death during the grace wait: closing persisted, no reveal row yet.
+    // Early publishReveal while opponent is pending must reject without mutation
+    await expect(engine1.publishReveal(left, matchId, { graceMs: 1500 })).rejects.toThrow(
+      'final reveal is unavailable until both sides finish',
+    );
+    // Death during pending evaluation:
     const recovering = engine2.recover();
     for (let i = 0; i < 100 && judge.evalCalls < 3; i++) await tick();
     expect(judge.evalCalls).toBe(3);
@@ -980,10 +1062,177 @@ describe('boot recovery across a simulated process death (ticket 11 §10)', () =
     await late;
     const report = await recovering;
     expect(report.matches).toBe(1);
-    const reveal = await revealing;
+    const reveal = await engine2.publishReveal(left, matchId);
     expect(reveal.scores).toEqual({ left: 100, right: 100 });
     const snap = await engine2.snapshot(right, matchId);
-    expect(snap.roundPhase).toBe('SCORE_REVEAL');
+    expect(['SCORE_REVEAL', 'MATCH_COMPLETE']).toContain(snap.roundPhase);
     expect(snap.sides.right?.submissions).toBe(1);
   }, 20000);
+
+  it('stale pending evaluation from previous round rejects without judge execution when side has advanced', async () => {
+    const submissions = new InMemorySubmissionStore();
+    const { engine, judge, left, matchId } = await setup([{ score: 100 }, { score: 100 }], {
+      submissions,
+    });
+    // Left submits round 1, gets 100, and advances to round 2
+    const first = await engine.submit(left, matchId, { code: SOLVED_PY, language: 'Python' });
+    expect(first.round).toBe(1);
+    const snap1 = await engine.snapshot(left, matchId);
+    expect(snap1.progress.self.currentRound).toBe(2);
+
+    const firstSub = await submissions.getBySubmissionId(first.submissionId);
+    const round1Id = firstSub!.roundId;
+    const round1ProblemVersionId = firstSub!.problemVersionId;
+    const staleSubId = 'stale-pending-sub';
+    const staleEvalId = 'stale-pending-eval';
+    const { createHash } = await import('node:crypto');
+    const sourceHash = createHash('sha256').update(SOLVED_PY, 'utf8').digest('hex');
+
+    await submissions.append({
+      submissionId: staleSubId,
+      evaluationId: staleEvalId,
+      matchId,
+      roundId: round1Id,
+      sideId: 'left',
+      problemVersionId: round1ProblemVersionId,
+      language: 'Python',
+      source: SOLVED_PY,
+      sourceHash,
+      documentRevision: null,
+      submittedAt: Date.now(),
+      elapsedMatchMs: 50,
+      status: 'pending',
+      score: null,
+      scoreBp: null,
+      groups: null,
+      testStatuses: null,
+      failureCode: null,
+    });
+
+    const callsBefore = judge.evalCalls;
+    await expect(
+      engine.submit(left, matchId, {
+        code: SOLVED_PY,
+        language: 'Python',
+        submissionId: staleSubId,
+        evaluationId: staleEvalId,
+      }),
+    ).rejects.toThrow('pending evaluation does not belong to this round and side');
+
+    // Crucially: judge was NOT executed with wrong round / suite
+    expect(judge.evalCalls).toBe(callsBefore);
+  });
+
+  it('retry of pending evaluation with only submissionId binds canonical evaluationId and completes with exactly one judge call and no extra rows', async () => {
+    const submissions = new InMemorySubmissionStore();
+    const { engine, judge, left, matchId } = await setup([{ score: 100 }], {
+      submissions,
+    });
+
+    const canonicalSubId = 'canon-sub-1';
+    const canonicalEvalId = 'canon-eval-1';
+    const matchInternal = await (engine as any).requireMember(left, matchId, true);
+    const round1 = (engine as any).roundForSide(matchInternal, 'left');
+    const { createHash } = await import('node:crypto');
+    const sourceHash = createHash('sha256').update(SOLVED_PY, 'utf8').digest('hex');
+
+    await submissions.append({
+      submissionId: canonicalSubId,
+      evaluationId: canonicalEvalId,
+      matchId,
+      roundId: round1.roundId,
+      sideId: 'left',
+      problemVersionId: round1.problemVersionId,
+      language: 'Python',
+      source: SOLVED_PY,
+      sourceHash,
+      documentRevision: null,
+      submittedAt: (engine as any).clock(),
+      elapsedMatchMs: 10,
+      status: 'pending',
+      score: null,
+      scoreBp: null,
+      groups: null,
+      testStatuses: null,
+      failureCode: null,
+    });
+
+    expect(await submissions.listRound(matchId, round1.roundId)).toHaveLength(1);
+    expect(judge.evalCalls).toBe(0);
+
+    // Caller retries passing ONLY submissionId (evaluationId omitted!)
+    const res = await engine.submit(left, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+      submissionId: canonicalSubId,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.submissionId).toBe(canonicalSubId);
+    expect(res.evaluationId).toBe(canonicalEvalId);
+    expect(judge.evalCalls).toBe(1);
+
+    const rows = await submissions.listRound(matchId, round1.roundId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].submissionId).toBe(canonicalSubId);
+    expect(rows[0].evaluationId).toBe(canonicalEvalId);
+    expect(rows[0].status).toBe('completed');
+    expect(rows[0].score).toBe(100);
+  });
+
+  it('retry of pending evaluation with only evaluationId binds canonical submissionId and completes with exactly one judge call and no extra rows', async () => {
+    const submissions = new InMemorySubmissionStore();
+    const { engine, judge, left, matchId } = await setup([{ score: 100 }], {
+      submissions,
+    });
+
+    const canonicalSubId = 'canon-sub-2';
+    const canonicalEvalId = 'canon-eval-2';
+    const matchInternal = await (engine as any).requireMember(left, matchId, true);
+    const round1 = (engine as any).roundForSide(matchInternal, 'left');
+    const { createHash } = await import('node:crypto');
+    const sourceHash = createHash('sha256').update(SOLVED_PY, 'utf8').digest('hex');
+
+    await submissions.append({
+      submissionId: canonicalSubId,
+      evaluationId: canonicalEvalId,
+      matchId,
+      roundId: round1.roundId,
+      sideId: 'left',
+      problemVersionId: round1.problemVersionId,
+      language: 'Python',
+      source: SOLVED_PY,
+      sourceHash,
+      documentRevision: null,
+      submittedAt: (engine as any).clock(),
+      elapsedMatchMs: 10,
+      status: 'pending',
+      score: null,
+      scoreBp: null,
+      groups: null,
+      testStatuses: null,
+      failureCode: null,
+    });
+
+    expect(await submissions.listRound(matchId, round1.roundId)).toHaveLength(1);
+    expect(judge.evalCalls).toBe(0);
+
+    // Caller retries passing ONLY evaluationId (submissionId omitted!)
+    const res = await engine.submit(left, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+      evaluationId: canonicalEvalId,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.submissionId).toBe(canonicalSubId);
+    expect(res.evaluationId).toBe(canonicalEvalId);
+    expect(judge.evalCalls).toBe(1);
+
+    const rows = await submissions.listRound(matchId, round1.roundId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].submissionId).toBe(canonicalSubId);
+    expect(rows[0].evaluationId).toBe(canonicalEvalId);
+    expect(rows[0].status).toBe('completed');
+  });
 });

@@ -1,7 +1,7 @@
 # Plan: Independent per-side progression in Code Arena ("async rounds")
 
-Branch: `feature/arena-async-rounds` (already created from `main`, clean tree).
-Status: PLAN ONLY. Nothing has been implemented. Written to be handed to another model.
+Branch: `feature/arena-async-rounds` / repair branch `fix/arena-async-rounds-review`.
+Status: Implemented and repaired. Core async rounds logic, pre-dispatch stale pending guards, canonical ID binding, retry receipt idempotency, 2v2 original document binding, document draft scoping, decoupled polite score status notice, and test suites adapted. 32/32 non-container engine suites (259 tests) pass; 5/5 container suites (45 tests) pass on Kiri Docker; 120/120 client tests pass; 4/4 coordinator editor tests pass; 5/5 coordinator diagnostic invariants pass. Full project gate `npm run check` completed 100% cleanly (exit code 0).
 
 > Implementer: read this whole file first. Before each step, open the named files and
 > confirm the code still matches what is described here. Line numbers are approximate.

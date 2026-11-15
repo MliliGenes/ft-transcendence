@@ -22,31 +22,29 @@ describe("09 engine-level 1v1 integration (bank + judge + clock + events)", () =
       expect((await engine.snapshot(left, matchId)).reveal).toBeNull();
       judge.queuePlan(r);
       await engine.submit(right, matchId, { code: SOLVED_PY, language: "Python" });
-      const reveal = await engine.publishReveal(left, matchId);
-      expect(reveal.scores).toEqual({ left: [100, 70, 55][round], right: [85, 45, 30][round] });
       remaining.push((await engine.snapshot(left, matchId)).remainingMs);
       fx.advance(60 * 1000);
-      const snap = await engine.snapshot(left, matchId);
-      if (snap.round < snap.totalRounds) {
-        await engine.nextRound(left, matchId);
-        await engine.beginCoding(left, matchId);
-      }
     }
+    const reveal = await engine.publishReveal(left, matchId);
+    expect(reveal.scores).toEqual({ left: 55, right: 30 });
+    const snap = await engine.snapshot(left, matchId);
+    expect(snap.reveals[0]?.scores).toEqual({ left: 100, right: 85 });
+    expect(snap.reveals[1]?.scores).toEqual({ left: 70, right: 45 });
+    expect(snap.reveals[2]?.scores).toEqual({ left: 55, right: 30 });
     expect(remaining[0]).toBeGreaterThan(remaining[1]);
     expect(remaining[1]).toBeGreaterThan(remaining[2]);
     expect(remaining[0]).toBeLessThanOrEqual(30 * 60 * 1000);
 
-    await engine.nextRound(left, matchId);
     const final = await engine.finalResult(left, matchId);
     expect(final.scores).toEqual({ left: 225, right: 160 });
     expect(final.winner).toBe("left");
-    for (const e of ["phase.changed", "player.statusChanged", "tests.updated", "reveal.published", "round.advanced", "match.ended"] as ArenaEvent[]) {
+    for (const e of ["player.statusChanged", "tests.updated", "side.advanced", "progress.updated", "reveal.published", "match.ended"] as ArenaEvent[]) {
       expect(seen).toContain(e);
     }
   });
 
   it("match timeout rejects play and saves its Reveal and final result without player action", async () => {
-    const fx = await setup([{ score: 100 }]);
+    const fx = await setup([{ score: 100 }], {}, ["even-ledger-v2"]);
     const { engine, left, right, matchId } = fx;
     await engine.submit(left, matchId, { code: SOLVED_PY, language: "Python" });
     fx.advance(31 * 60 * 1000);

@@ -56,9 +56,6 @@ describe("playable problem languages", () => {
     for (const member of [right, rightMate]) await engine.setReady(member, matchId, { ready: true, documentRevision: 1 });
     await engine.submit(left, matchId, { code: "", language: "C++", documentRevision: 2 });
     await engine.submit(right, matchId, { code: "", language: "Python", documentRevision: 1 });
-    await engine.publishReveal(left, matchId);
-    await engine.nextRound(left, matchId);
-    await engine.beginCoding(left, matchId);
     const snapshot = await engine.snapshot(left, matchId);
     expect(snapshot.teams?.find((team) => team.side === "left")?.language).toBe("Python");
     expect((await engine.collabSync(left, matchId)).source).toContain("ledger_sum");

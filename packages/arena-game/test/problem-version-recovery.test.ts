@@ -62,6 +62,8 @@ describe("problem versions across deployment recovery", () => {
 
     const afterRestart = new ArenaEngine(options);
     await expect(afterRestart.recover()).resolves.toMatchObject({ retried: 1, failed: 0 });
+    const right = testPrincipal("legacy-right");
+    await afterRestart.leaveMatch(right, matchId);
     const reveal = await afterRestart.publishReveal(left, matchId);
     expect(reveal.scores.left).toBe(100);
   }, 120000);

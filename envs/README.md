@@ -103,3 +103,18 @@ For standalone User-service development, use
 [`user-service/.env.example`](../user-service/.env.example). It includes all
 settings in one local file and uses host addresses instead of Compose DNS.
 See [Infrastructure](../docs/services/infrastructure.md) for the full deployment workflow.
+
+## Judge container CPU limits and rootless/school compatibility
+
+By default, evaluation containers enforce strict CPU quotas (`--cpus <runCpus>`) alongside memory and process limits:
+- `JUDGE_CPU_LIMIT_ENABLED` defaults to strict `true`.
+- Only an explicit case-insensitive trimmed value of `"false"` opts out of passing `--cpus` to Docker.
+- **Rootless / School environments**: On rootless Docker or shared school cluster setups where the host cgroup v2 controller does not delegate CPU quotas (`NanoCPUs unsupported`), set `JUDGE_CPU_LIMIT_ENABLED=false` in the local git-ignored `envs/judge-worker.env` (or `envs/game-service.env` if using direct container runner).
+- **Retained security boundaries**: Disabling CPU limits retains all other sandboxing boundaries:
+  - 64 MiB memory limit and 64 MiB swap limit
+  - 16 maximum process limit (`--pids-limit 16`)
+  - Network disabled (`--network none`)
+  - Read-only container root with temporary writable scratch (`/scratch` and `/tmp` tmpfs)
+  - Dropped Linux capabilities (`--cap-drop=ALL`, `--security-opt=no-new-privileges`)
+  - Unprivileged non-root execution (`--user nobody`)
+- **Tradeoff**: Running without CPU limits risks CPU contention during concurrent test executions. Physical school hardware verification is pending. Never commit private or environment-specific `.env` overrides to version control.

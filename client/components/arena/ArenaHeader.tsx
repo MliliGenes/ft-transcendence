@@ -40,7 +40,7 @@ export function ArenaHeader({ snapshot, connection, onLeave, pending, pendingAct
     }
   }
 
-  const isCoding = roundPhase === "CODING" && snapshot.progress.self.stage === "CODING";
+  const isCoding = roundPhase === "CODING" && (snapshot.progress?.self?.stage ? snapshot.progress.self.stage === "CODING" : true);
   const hasRoundTimer = isCoding && snapshot.roundRemainingSeconds != null;
   const displaySeconds = hasRoundTimer ? snapshot.roundRemainingSeconds! : remainingSeconds;
   const isLowTime = displaySeconds <= 30 && displaySeconds > 0 && isCoding;
@@ -59,17 +59,19 @@ export function ArenaHeader({ snapshot, connection, onLeave, pending, pendingAct
           <span className="font-mono tabular-nums">Round {round} / {totalRounds}</span>
           <span>•</span>
           <span className="uppercase tracking-wide">{roundPhase.replace(/_/g, " ")}</span>
-          <span className="rounded border border-border px-2 py-0.5 font-mono tabular-nums">
-            Opponent: {snapshot.progress.opponent.stage === "FINISHED" ? "finished" : `problem ${snapshot.progress.opponent.currentRound} of ${totalRounds}`}
-          </span>
+          {snapshot.progress?.opponent && (
+            <span className="rounded border border-border px-2 py-0.5 font-mono tabular-nums">
+              Opponent: {snapshot.progress.opponent.stage === "FINISHED" ? "finished" : `problem ${snapshot.progress.opponent.currentRound} of ${totalRounds}`}
+            </span>
+          )}
         </div>
       </div>
 
       <div className="flex min-w-0 flex-wrap items-center gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-4 text-sm font-medium font-mono tabular-nums">
-          {snapshot.reveals.length > 0 && <span className="text-foreground">{you.name}: {snapshot.reveals.at(-1)?.totals.you ?? 0}</span>}
+          {(snapshot.reveals?.length ?? 0) > 0 && <span className="text-foreground">{you.name}: {snapshot.reveals.at(-1)?.totals.you ?? 0}</span>}
           <span className="text-muted-foreground">vs</span>
-          {snapshot.reveals.length > 0 && <span className="text-muted-foreground">{opponent.name}: {snapshot.reveals.at(-1)?.totals.opponent ?? 0}</span>}
+          {(snapshot.reveals?.length ?? 0) > 0 && <span className="text-muted-foreground">{opponent.name}: {snapshot.reveals.at(-1)?.totals.opponent ?? 0}</span>}
         </div>
 
         <div

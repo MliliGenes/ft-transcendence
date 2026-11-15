@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import { ArenaEngine, type EngineOptions } from "../src/engine.js";
+import { InMemoryMatchStore, InMemorySubmissionStore, DuplicateError } from "../src/store.js";
 import { FileBank } from "../src/file-bank.js";
 import { testPrincipal, type AuthenticatedPrincipal } from "../src/principal.js";
 import { ScriptedJudge, type ScriptPlan } from "./scripted-judge.js";
@@ -24,7 +25,11 @@ interface TeamFixture {
   advance: (ms: number) => void;
 }
 
-async function setup2v2(plans: ScriptPlan[] = [{ score: 100 }], options: Partial<EngineOptions> = {}): Promise<TeamFixture> {
+async function setup2v2(
+  plans: ScriptPlan[] = [{ score: 100 }],
+  options: Partial<EngineOptions> = {},
+  problemVersionIds: string[] = ["even-ledger-v2", "even-ledger-v2"],
+): Promise<TeamFixture> {
   let now = 1_000_000;
   const judge = new ScriptedJudge(plans);
   const engine = new ArenaEngine({ judge, bank: new FileBank(), clock: () => now, revealGraceMs: 0, ...options });
@@ -41,7 +46,7 @@ async function setup2v2(plans: ScriptPlan[] = [{ score: 100 }], options: Partial
       { userId: "user-b1", sideId: "right" },
       { userId: "user-b2", sideId: "right" },
     ],
-    problemVersionIds: ["even-ledger-v2", "even-ledger-v2"],
+    problemVersionIds,
   });
   await engine.startRound(a1, matchId);
   await engine.beginCoding(a1, matchId);
@@ -165,8 +170,10 @@ describe("team activity is per side and independent across teams", () => {
     const pending = fx.engine.submit(fx.a1, fx.matchId, { code: SOLVED_PY, language: "Python", documentRevision: 1 });
     await tick();
     const snap = await fx.engine.snapshot(fx.b1, fx.matchId);
-    expect(snap.teams?.find((t) => t.side === "left")?.activity).toBe("evaluating");
+    expect(snap.teams?.find((t) => t.side === "left")?.activity).toBe("coding");
     expect(snap.teams?.find((t) => t.side === "right")?.activity).toBe("coding");
+    const snapA = await fx.engine.snapshot(fx.a1, fx.matchId);
+    expect(snapA.teams?.find((t) => t.side === "left")?.activity).toBe("evaluating");
     // Beta runs and submits freely while Alpha is in flight.
     await fx.engine.run(fx.b1, fx.matchId, { code: SOLVED_PY, language: "Python" });
     fx.judge.release(P100);
@@ -199,7 +206,10 @@ describe("team activity is per side and independent across teams", () => {
     await tick();
     const snap = await fx.engine.snapshot(fx.a1, fx.matchId);
     expect(snap.teams?.find((t) => t.side === "left")?.activity).toBe("evaluating");
-    expect(snap.teams?.find((t) => t.side === "right")?.activity).toBe("evaluating");
+    expect(snap.teams?.find((t) => t.side === "right")?.activity).toBe("coding");
+    const snapB = await fx.engine.snapshot(fx.b1, fx.matchId);
+    expect(snapB.teams?.find((t) => t.side === "right")?.activity).toBe("evaluating");
+    expect(snapB.teams?.find((t) => t.side === "left")?.activity).toBe("coding");
     fx.judge.release(P100);
     fx.judge.release(P100);
     await pa;
@@ -418,9 +428,6 @@ describe("2v2 departure and surrender rules", () => {
       await fx.engine.submit(fx.a1, fx.matchId, { code: SOLVED_PY, language: "Python", documentRevision: 1 });
       await readyBeta(fx);
       await fx.engine.submit(fx.b1, fx.matchId, { code: SOLVED_PY, language: "Python", documentRevision: 1 });
-      await fx.engine.publishReveal(fx.a1, fx.matchId, { graceMs: 0 });
-      await fx.engine.nextRound(fx.a1, fx.matchId);
-      if (round === 0) await fx.engine.beginCoding(fx.a1, fx.matchId);
     }
 
     await expect(fx.engine.setSurrenderVote(fx.a1, fx.matchId, true)).rejects.toThrow(/complete/);
@@ -516,7 +523,7 @@ describe("2v2 departure and surrender rules", () => {
   });
 
   it("auto reveals after the accepted final score completes, even if its submitter left", async () => {
-    const fx = await setup2v2([{ score: 100 }, { defer: true }]);
+    const fx = await setup2v2([{ score: 100 }, { defer: true }], {}, ["even-ledger-v2"]);
     await readyBeta(fx);
     await fx.engine.submit(fx.b1, fx.matchId, { code: SOLVED_PY, language: "Python", documentRevision: 1 });
     await readyBoth(fx);
@@ -532,7 +539,7 @@ describe("2v2 departure and surrender rules", () => {
 
     const reveal = await fx.engine.autoRevealIfAllSidesCounted(fx.matchId, { graceMs: 0 });
     expect(reveal?.scores).toEqual({ left: 100, right: 100 });
-    await expect(fx.engine.snapshot(fx.a2, fx.matchId)).resolves.toMatchObject({ roundPhase: "SCORE_REVEAL" });
+    await expect(fx.engine.snapshot(fx.a2, fx.matchId)).resolves.toMatchObject({ roundPhase: "MATCH_COMPLETE" });
   });
 
   it("does not auto reveal until every side has a counted score", async () => {
@@ -588,13 +595,14 @@ describe("one team = one submission stream = one counted result", () => {
   });
 
   it("22. last-completed-result-wins holds per team (resubmission overwrites)", async () => {
-    const fx = await setup2v2([{ score: 0 }, P100]);
+    const fx = await setup2v2([{ score: 0 }, P100, { score: 0 }, { score: 0 }]);
     await readyBoth(fx);
     await fx.engine.submit(fx.a1, fx.matchId, { code: STARTER_PY, language: "Python", documentRevision: 1 });
     await readyBoth(fx);
     await fx.engine.submit(fx.a2, fx.matchId, { code: SOLVED_PY, language: "Python", documentRevision: 1 });
-    await fx.engine.setReady(fx.b1, fx.matchId, { ready: true, documentRevision: 1 });
-    await fx.engine.setReady(fx.b2, fx.matchId, { ready: true, documentRevision: 1 });
+    await readyBeta(fx);
+    await fx.engine.submit(fx.b1, fx.matchId, { code: STARTER_PY, language: "Python", documentRevision: 1 });
+    await readyBeta(fx);
     await fx.engine.submit(fx.b1, fx.matchId, { code: STARTER_PY, language: "Python", documentRevision: 1 });
     const reveal = await fx.engine.publishReveal(fx.a1, fx.matchId);
     expect(reveal.scores.left).toBe(100);
@@ -695,12 +703,6 @@ describe("round boundaries reset readiness and revision", () => {
     const fx = await setup2v2([P100, P100]);
     await readyBoth(fx, 1);
     await fx.engine.submit(fx.a1, fx.matchId, { code: SOLVED_PY, language: "Python", documentRevision: 1 });
-    await fx.engine.setReady(fx.b1, fx.matchId, { ready: true, documentRevision: 1 });
-    await fx.engine.setReady(fx.b2, fx.matchId, { ready: true, documentRevision: 1 });
-    await fx.engine.submit(fx.b1, fx.matchId, { code: SOLVED_PY, language: "Python", documentRevision: 1 });
-    await fx.engine.publishReveal(fx.a1, fx.matchId);
-    await fx.engine.nextRound(fx.a1, fx.matchId);
-    await fx.engine.beginCoding(fx.a1, fx.matchId);
     const snap = await fx.engine.snapshot(fx.a1, fx.matchId);
     expect(snap.round).toBe(2);
     const alpha = snap.teams?.find((t) => t.side === "left");
@@ -747,7 +749,7 @@ describe("ready/edit/submit race is deterministic under the match lock", () => {
 
 describe("2v2 reveal is team scores only; 1v1 unchanged", () => {
   it("23. reveal carries one score per team, identical for both members", async () => {
-    const fx = await setup2v2([{ score: 100 }, { score: 0 }]);
+    const fx = await setup2v2([{ score: 100 }, { score: 0 }], {}, ["even-ledger-v2"]);
     await readyBoth(fx, 1);
     await fx.engine.submit(fx.a1, fx.matchId, { code: SOLVED_PY, language: "Python", documentRevision: 1 });
     await fx.engine.setReady(fx.b1, fx.matchId, { ready: true, documentRevision: 1 });
@@ -914,5 +916,157 @@ describe("gameplay review: important issue repairs", () => {
     const snap = await fx.engine.snapshot(fx.a1, fx.matchId);
     const left = snap.teams?.find((team) => team.side === "left");
     expect(left?.members.find((member) => member.userId === "user-a1")?.surrenderPending).toBe(true);
+  });
+});
+
+describe("2v2 retry and tamper resistance", () => {
+  it("2v2 retry of accepted submission after problem cutoff passed returns original receipt", async () => {
+    const fx = await setup2v2([P100, P100], {}, ["even-ledger-v2", "even-ledger-v2"]);
+    await readyBoth(fx);
+    const input = {
+      code: SOLVED_PY,
+      language: "Python",
+      documentRevision: 1,
+      submissionId: "sub-2v2-cutoff",
+      evaluationId: "eval-2v2-cutoff",
+    };
+    const first = await fx.engine.submit(fx.a1, fx.matchId, input);
+    // Left advances to round 2
+    const snap1 = await fx.engine.snapshot(fx.a1, fx.matchId);
+    expect(snap1.progress.self.currentRound).toBe(2);
+
+    // Now advance past round 1 problem deadline / cutoff
+    fx.advance(15 * 60 * 1000);
+
+    // Retrying with the same accepted identity returns original receipt without ExpiredError
+    const retry = await fx.engine.submit(fx.a1, fx.matchId, input);
+    expect(retry).toEqual(first);
+  });
+
+  it("2v2 retry of accepted submission after match completion returns original receipt", async () => {
+    const fx = await setup2v2([P100, P100, P100, P100], {}, ["even-ledger-v2"]);
+    await readyBoth(fx);
+    await readyBeta(fx);
+    const input = {
+      code: SOLVED_PY,
+      language: "Python",
+      documentRevision: 1,
+      submissionId: "sub-2v2-done",
+      evaluationId: "eval-2v2-done",
+    };
+    const first = await fx.engine.submit(fx.a1, fx.matchId, input);
+    await fx.engine.submit(fx.b1, fx.matchId, { code: SOLVED_PY, language: "Python", documentRevision: 1 });
+    const snap = await fx.engine.snapshot(fx.a1, fx.matchId);
+    expect(snap.roundPhase).toBe("MATCH_COMPLETE");
+
+    const retry = await fx.engine.submit(fx.a1, fx.matchId, input);
+    expect(retry).toEqual(first);
+  });
+
+  it("2v2 retry of accepted submission after engine restart returns original receipt", async () => {
+    const matches = new InMemoryMatchStore();
+    const submissions = new InMemorySubmissionStore();
+    const bank = new FileBank();
+    const fx = await setup2v2([P100], { matches, submissions, bank }, ["even-ledger-v2"]);
+    await readyBoth(fx);
+    const input = {
+      code: SOLVED_PY,
+      language: "Python",
+      documentRevision: 1,
+      submissionId: "sub-2v2-restart",
+      evaluationId: "eval-2v2-restart",
+    };
+    const first = await fx.engine.submit(fx.a1, fx.matchId, input);
+
+    const restarted = new ArenaEngine({
+      judge: fx.judge,
+      bank,
+      matches,
+      submissions,
+    });
+    await restarted.recover();
+
+    const retry = await restarted.submit(fx.a1, fx.matchId, input);
+    expect(retry).toEqual(first);
+  });
+
+  it("2v2 rejects tampered submission data on retry (mismatched documentRevision or language)", async () => {
+    const fx = await setup2v2([P100], {}, ["even-ledger-v2"]);
+    await readyBoth(fx);
+    const input = {
+      code: SOLVED_PY,
+      language: "Python",
+      documentRevision: 1,
+      submissionId: "sub-2v2-tamper",
+      evaluationId: "eval-2v2-tamper",
+    };
+    await fx.engine.submit(fx.a1, fx.matchId, input);
+
+    // Tampered documentRevision throws DuplicateError
+    await expect(
+      fx.engine.submit(fx.a1, fx.matchId, { ...input, documentRevision: 2 }),
+    ).rejects.toThrow(DuplicateError);
+
+    // Tampered language throws DuplicateError
+    await expect(
+      fx.engine.submit(fx.a1, fx.matchId, { ...input, language: "C++" }),
+    ).rejects.toThrow(DuplicateError);
+  });
+
+  it("resuming a 2v2 pending evaluation preserves original document revision and source code even if team document was subsequently modified", async () => {
+    const submissions = new InMemorySubmissionStore();
+    const fx = await setup2v2([P100], { submissions }, ["even-ledger-v2"]);
+
+    const matchInternal = await (fx.engine as any).requireMember(fx.a1, fx.matchId, true);
+    const round1 = (fx.engine as any).roundForSide(matchInternal, "left");
+    const originalSource = SOLVED_PY;
+    const { createHash } = await import("node:crypto");
+    const sourceHash = createHash("sha256").update(originalSource, "utf8").digest("hex");
+
+    const canonicalSubId = "2v2-pending-sub";
+    const canonicalEvalId = "2v2-pending-eval";
+
+    await submissions.append({
+      submissionId: canonicalSubId,
+      evaluationId: canonicalEvalId,
+      matchId: fx.matchId,
+      roundId: round1.roundId,
+      sideId: "left",
+      problemVersionId: round1.problemVersionId,
+      language: "Python",
+      source: originalSource,
+      sourceHash,
+      documentRevision: 1,
+      submittedAt: (fx.engine as any).clock(),
+      elapsedMatchMs: 20,
+      status: "pending",
+      score: null,
+      scoreBp: null,
+      groups: null,
+      testStatuses: null,
+      failureCode: null,
+    });
+
+    // Subsequent team edit modifies the shared document
+    await pushEdit(fx, fx.a1, "# mutated comment");
+
+    // Retrying with only submissionId binds the original document revision and source
+    const res = await fx.engine.submit(fx.a1, fx.matchId, {
+      code: "unrelated-client-draft",
+      language: "Python",
+      submissionId: canonicalSubId,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.submissionId).toBe(canonicalSubId);
+    expect(res.evaluationId).toBe(canonicalEvalId);
+    expect(fx.judge.evalCalls).toBe(1);
+
+    const rows = await submissions.listRound(fx.matchId, round1.roundId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source).toBe(originalSource);
+    expect(rows[0].documentRevision).toBe(1);
+    expect(rows[0].status).toBe("completed");
+    expect(rows[0].score).toBe(100);
   });
 });

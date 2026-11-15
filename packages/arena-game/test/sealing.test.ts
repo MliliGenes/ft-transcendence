@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { P100, P40, SOLVED_PY, STARTER_PY, setup } from './setup.js';
 
+const tick = (ms = 10) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Hidden-only markers: absent from every visible/bank-public surface.
 const HIDDEN_MARKERS = [
   '"b1"',
@@ -66,8 +68,13 @@ describe('client-facing sealing (hidden + opponent isolation)', () => {
   });
 
   it('reveal discloses groups but never raw hidden inputs or expected values', async () => {
-    const { engine, left, matchId } = await setup([{ score: 100 }]);
+    const { engine, left, right, matchId } = await setup(
+      [{ score: 100 }, { score: 100 }],
+      {},
+      ['even-ledger-v2'],
+    );
     await engine.submit(left, matchId, { code: SOLVED_PY, language: 'Python' });
+    await engine.submit(right, matchId, { code: SOLVED_PY, language: 'Python' });
     const reveal = await engine.publishReveal(left, matchId);
     const body = JSON.stringify((await engine.snapshot(left, matchId)).reveal);
     expect(body).toContain('Basic');
@@ -82,5 +89,54 @@ describe('client-facing sealing (hidden + opponent isolation)', () => {
       expect(body).not.toContain(marker);
     }
     expect(reveal.groups.left?.every((g) => g.earned <= g.weight)).toBe(true);
+  });
+
+  it('early publishReveal rejects without modifying coding, cutoffs, or closing state', async () => {
+    const { engine, left, matchId } = await setup([P100, P100], {}, ['even-ledger-v2', 'even-ledger-v2']);
+    await expect(engine.publishReveal(left, matchId)).rejects.toThrow(
+      'final reveal is unavailable until both sides finish',
+    );
+    const snap = await engine.snapshot(left, matchId);
+    expect(snap.roundPhase).toBe('CODING');
+    expect(snap.reveal).toBeNull();
+    // Submissions continue to succeed without closing/cutoff blockage
+    const receipt = await engine.submit(left, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
+    expect(receipt.ok).toBe(true);
+    expect(receipt.round).toBe(1);
+  });
+
+  it('early publishReveal while evaluation is pending rejects without setting closing or blocking opponent', async () => {
+    const { engine, judge, left, right, matchId } = await setup(
+      [{ defer: true }, { score: 100 }],
+      {},
+      ['even-ledger-v2', 'even-ledger-v2'],
+    );
+    // Left submits, evaluation is pending in judge
+    const leftPending = engine.submit(left, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
+    await tick();
+
+    // While evaluation is pending, caller attempts early publishReveal
+    await expect(engine.publishReveal(left, matchId)).rejects.toThrow(
+      'final reveal is unavailable until both sides finish',
+    );
+
+    // Opponent can still submit new code without being blocked by any closing state
+    const rightReceipt = await engine.submit(right, matchId, {
+      code: SOLVED_PY,
+      language: 'Python',
+    });
+    expect(rightReceipt.ok).toBe(true);
+    expect(rightReceipt.round).toBe(1);
+
+    // Release deferred judge to clean up
+    judge.release(P100);
+    const leftReceipt = await leftPending;
+    expect(leftReceipt.ok).toBe(true);
   });
 });

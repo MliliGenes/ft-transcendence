@@ -56,7 +56,9 @@ const overlayPendingActions: ArenaPendingAction[] = ["begin"];
 export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
   const snapshot = useArena(transport);
   const [sidecars, setSidecars] = useState<SidecarState>({ collab: null, chat: null });
-  const codeKey = `${snapshot.problem.id}:${snapshot.language}`;
+  const currentRound = snapshot.progress?.self?.currentRound ?? snapshot.round ?? 1;
+  const matchId = transport.scopeKey?.() ?? (snapshot as unknown as { matchId?: string }).matchId ?? "";
+  const codeKey = `${matchId}:${currentRound}:${snapshot.problem.id}:${snapshot.language}`;
   const starterCode = snapshot.problem.starters[snapshot.language as "C++" | "Python" | "C"] ?? "";
   const [codeState, setCodeState] = useState(() => ({ key: codeKey, value: starterCode }));
   if (!sidecars.collab && codeState.key !== codeKey) setCodeState({ key: codeKey, value: starterCode });
@@ -65,10 +67,29 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
   const [fontSize, setFontSize] = useState(14);
   const [pendingAction, setPendingAction] = useState<ArenaPendingAction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [dismissedScoredState, setDismissedScoredState] = useState<{ matchId: string; round: number | null }>(() => ({ matchId, round: null }));
+  const dismissedScoredRound = dismissedScoredState.matchId === matchId ? dismissedScoredState.round : null;
+  const lastScoredRound = snapshot.progress?.self?.lastScoredRound;
+  const lastScore = snapshot.progress?.self?.lastScore;
+
+  useEffect(() => {
+    if (lastScoredRound && dismissedScoredRound !== lastScoredRound) {
+      const timer = setTimeout(() => {
+        setDismissedScoredState({ matchId, round: lastScoredRound });
+      }, 5000);
+      return () => {
+        if (typeof clearTimeout !== "undefined") clearTimeout(timer);
+      };
+    }
+  }, [matchId, lastScoredRound, dismissedScoredRound]);
+
+  const scoreNoticeText = (lastScoredRound && dismissedScoredRound !== lastScoredRound)
+    ? `Problem ${lastScoredRound} scored: ${lastScore ?? 0}/100 — moving to problem ${snapshot.progress?.self?.currentRound ?? (lastScoredRound + 1)}${snapshot.progress?.self?.stage === "FINISHED" ? " (finished)" : ""}.`
+    : null;
+
   const isRunning = pendingAction === "run";
   const isSubmitting = pendingAction === "submit";
   const pendingInOverlay = pendingAction !== null && overlayPendingActions.includes(pendingAction);
-  const feedback = actionError ?? snapshot.notice;
 
   const sidecarLifecycleRef = useRef(createArenaSidecarLifecycle());
 
@@ -147,8 +168,8 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
     await performAction("surrender", () => transport.surrender(!snapshot.surrender.you), "Unable to update surrender approval. Please try again.");
   }
 
-  const isCoding = snapshot.roundPhase === "CODING" && snapshot.progress.self.stage === "CODING";
-  const canSubmit2v2 = snapshot.mode === "2v2" ? (snapshot.ready.you && snapshot.ready.mate) : true;
+  const isCoding = snapshot.roundPhase === "CODING" && (snapshot.progress?.self?.stage ? snapshot.progress.self.stage === "CODING" : true);
+  const canSubmit2v2 = snapshot.mode === "2v2" ? (snapshot.ready?.you && snapshot.ready?.mate) : true;
   const isSubmitDisabled = !isCoding || Boolean(pendingAction) || !canSubmit2v2;
 
   return (
@@ -160,8 +181,14 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
         pendingAction={pendingAction}
         onLeave={() => performAction("leave", () => transport.leave(), "Unable to leave the match. Please try again.")}
       />
-      {feedback && snapshot.roundPhase !== "SCORE_REVEAL" && (
-        <p role="alert" className="border-b border-border bg-card px-4 py-2 text-sm text-destructive">{feedback}</p>
+      {actionError && snapshot.roundPhase !== "SCORE_REVEAL" && (
+        <p role="alert" className="border-b border-border bg-card px-4 py-2 text-sm text-destructive">{actionError}</p>
+      )}
+      {scoreNoticeText && snapshot.roundPhase !== "SCORE_REVEAL" && (
+        <p role="status" aria-live="polite" className="border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">{scoreNoticeText}</p>
+      )}
+      {snapshot.notice && snapshot.roundPhase !== "SCORE_REVEAL" && (
+        <p role="alert" className="border-b border-border bg-card px-4 py-2 text-sm text-destructive">{snapshot.notice}</p>
       )}
 
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -365,7 +392,9 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                     {arenaActionStatus.begin}
                   </p>
                 )}
-                {feedback && <p role="alert" className="mt-3 text-sm text-destructive">{feedback}</p>}
+                {(actionError ?? snapshot.notice) && (
+                  <p role="alert" className="mt-3 text-sm text-destructive">{actionError ?? snapshot.notice}</p>
+                )}
               </div>
             )}
           </div>

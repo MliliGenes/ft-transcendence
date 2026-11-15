@@ -54,7 +54,9 @@ describe('real compiled bank execution (double-it, isolated containers)', () => 
   it('C solution scores 100 end-to-end', async () => {
     const { engine, matchId } = await realEngine(['double-it']);
     const left = testPrincipal('user-left');
+    const right = testPrincipal('user-right');
     await engine.submit(left, matchId, { code: C_SOLVE, language: 'C' });
+    await engine.leaveMatch(right, matchId);
     const reveal = await engine.publishReveal(left, matchId);
     expect(reveal.scores.left).toBe(100);
   }, 120000);
@@ -62,7 +64,9 @@ describe('real compiled bank execution (double-it, isolated containers)', () => 
   it('C++ solution scores 100 end-to-end', async () => {
     const { engine, matchId } = await realEngine(['double-it']);
     const left = testPrincipal('user-left');
+    const right = testPrincipal('user-right');
     await engine.submit(left, matchId, { code: CPP_SOLVE, language: 'C++' });
+    await engine.leaveMatch(right, matchId);
     const reveal = await engine.publishReveal(left, matchId);
     expect(reveal.scores.left).toBe(100);
   }, 120000);
@@ -70,8 +74,10 @@ describe('real compiled bank execution (double-it, isolated containers)', () => 
   it('C starter scores 25, not 100 (only the zero case passes its 50-weight group half)', async () => {
     const { engine, matchId } = await realEngine(['double-it']);
     const left = testPrincipal('user-left');
+    const right = testPrincipal('user-right');
     const starter = new FileBank().loadProblem('double-it').starters.C!;
     await engine.submit(left, matchId, { code: starter, language: 'C' });
+    await engine.leaveMatch(right, matchId);
     const reveal = await engine.publishReveal(left, matchId);
     expect(reveal.scores.left).toBe(25);
   }, 120000);
@@ -79,7 +85,9 @@ describe('real compiled bank execution (double-it, isolated containers)', () => 
   it('Python bank solution scores 100 via snippet entrypoint', async () => {
     const { engine, matchId } = await realEngine(['even-ledger']);
     const left = testPrincipal('user-left');
+    const right = testPrincipal('user-right');
     await engine.submit(left, matchId, { code: PY_SOLVE, language: 'Python' });
+    await engine.leaveMatch(right, matchId);
     const reveal = await engine.publishReveal(left, matchId);
     expect(reveal.scores.left).toBe(100);
   }, 120000);
@@ -87,6 +95,7 @@ describe('real compiled bank execution (double-it, isolated containers)', () => 
   it("C++ solution scores 100 on even-ledger-v2 via stdio", async () => {
     const { engine, matchId } = await realEngine(["even-ledger-v2"]);
     const left = testPrincipal("user-left");
+    const right = testPrincipal("user-right");
     const CPP_EVEN_LEDGER = `#include <iostream>
 int main() {
     int n;
@@ -102,6 +111,7 @@ int main() {
 }
 `;
     await engine.submit(left, matchId, { code: CPP_EVEN_LEDGER, language: "C++" });
+    await engine.leaveMatch(right, matchId);
     const reveal = await engine.publishReveal(left, matchId);
     expect(reveal.scores.left).toBe(100);
   }, 120000);
@@ -135,7 +145,9 @@ print(sum(value if i % 2 == 0 else -value for i, value in enumerate(tokens[1:n +
   ])("$language solution scores 100 on even-ledger-v2 via stdio", async ({ language, code }) => {
     const { engine, matchId } = await realEngine(["even-ledger-v2"]);
     const left = testPrincipal("user-left");
+    const right = testPrincipal("user-right");
     await engine.submit(left, matchId, { code, language });
+    await engine.leaveMatch(right, matchId);
     const reveal = await engine.publishReveal(left, matchId);
     expect(reveal.scores.left).toBe(100);
   }, 120000);

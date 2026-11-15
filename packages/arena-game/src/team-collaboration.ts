@@ -337,10 +337,19 @@ export class TeamCollaboration {
       const doc = round.teamDocs?.[side];
       return {
         side,
-        activity: own
-          ? this.activityOf(round, side)
-          : match.sideProgress?.[side]?.stage === "FINISHED" ? "locked" : "coding",
-        submissions: own ? match.rounds.reduce((count, entry) => count + (entry.attempts[side] ?? 0), 0) : 0,
+        activity:
+          match.sideProgress?.[side]?.stage === "FINISHED"
+            ? "locked"
+            : own
+              ? this.activityOf(
+                  match.rounds[(match.sideProgress?.[side]?.currentRound ?? match.currentRound) - 1] ?? round,
+                  side,
+                )
+              : "coding",
+        submissions: match.rounds.reduce(
+          (count, entry) => count + (entry.attempts[side] ?? 0),
+          0,
+        ),
         members: this.teamMembers(match, side).map((participant) => {
           const record = own
             ? round.readiness?.[participant.userId]

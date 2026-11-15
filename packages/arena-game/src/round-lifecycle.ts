@@ -139,6 +139,7 @@ export class RoundLifecycle {
       }
       match.rounds[0]!.activities[side] = "coding";
     }
+    match.rounds[0]!.codingDeadlineMs = Math.min(startedAtMs + problemCapMs, matchDeadline);
     this.syncCurrentRound(match);
   }
 
@@ -161,6 +162,7 @@ export class RoundLifecycle {
     const next = match.rounds[progress.currentRound - 1];
     if (!next) throw new IllegalStateError(`side ${side} has no next round`);
     next.activities[side] = "coding";
+    next.codingDeadlineMs = progress.problemDeadlineMs;
     next.runTests[side] = undefined;
     if (match.mode === "2v2") {
       const users = new Set(match.participants.filter((participant) => participant.sideId === side).map((participant) => participant.userId));

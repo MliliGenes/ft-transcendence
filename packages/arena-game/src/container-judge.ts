@@ -22,6 +22,7 @@ export interface ContainerJudgeOptions {
   dockerBin?: string;
   images?: Partial<Record<SupportedLanguage, string>>;
   outerTimeoutMs?: number;
+  cpuLimitEnabled?: boolean;
 }
 
 const DEFAULT_IMAGES: Record<SupportedLanguage, string> = {
@@ -210,11 +211,13 @@ export class ContainerJudge implements GameJudge {
   private readonly dockerBin: string;
   private readonly images: Record<SupportedLanguage, string>;
   private readonly outerTimeoutMs: number;
+  private readonly cpuLimitEnabled: boolean;
 
   constructor(options: ContainerJudgeOptions = {}) {
     this.dockerBin = options.dockerBin ?? "docker";
     this.images = { ...DEFAULT_IMAGES, ...options.images };
     this.outerTimeoutMs = options.outerTimeoutMs ?? 240000;
+    this.cpuLimitEnabled = options.cpuLimitEnabled ?? true;
   }
 
   async runVisible(
@@ -327,8 +330,7 @@ export class ContainerJudge implements GameJudge {
       "--security-opt=no-new-privileges",
       "--network",
       "none",
-      "--cpus",
-      String(input.limits.runCpus),
+      ...(this.cpuLimitEnabled ? ["--cpus", String(input.limits.runCpus)] : []),
       "--memory",
       memory,
       "--memory-swap",

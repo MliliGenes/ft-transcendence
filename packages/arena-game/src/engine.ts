@@ -247,7 +247,7 @@ export class ArenaEngine {
         activityOf: (round, side) => this.activityOf(round, side),
         transitionActivity: (match, round, side, next) => this.transitionActivity(match, round, side, next),
         emit: (event, payload) => this.emit(event, payload),
-        onCounted: (match, round, side, stored, now) => this.onCounted(match, round, side, stored, now),
+        onCounted: (match, round, side, stored, now, skipAutoReveal) => this.onCounted(match, round, side, stored, now, skipAutoReveal),
       },
     });
   }
@@ -500,7 +500,7 @@ export class ArenaEngine {
     matchId: string,
     input: { code: string; language: string },
   ): Promise<{ runId: string; tests: Array<{ id: string; passed: boolean; output: string; runtimeMs: number }> }> {
-    await this.closeExpiredForCaller(matchId, principal);
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredForCaller(matchId, principal);
     const setup = await this.withMatchLock(matchId, async () => {
       const match = await this.requireMember(principal, matchId);
       const side = this.sideOf(match, principal);
@@ -581,37 +581,161 @@ export class ArenaEngine {
     matchId: string,
     input: { code: string; language: string; submissionId?: string; evaluationId?: string; documentRevision?: DocumentRevision },
   ): Promise<{ ok: true; round: number; submissionId: string; evaluationId: string }> {
-    await this.closeExpiredForCaller(matchId, principal);
+    // Fast-path in-flight lookup outside lock (resolves before any deadline/cutoff check)
+    const inFlight = (input.evaluationId ? this.evaluation.get(input.evaluationId) : undefined)
+      ?? (input.submissionId ? this.evaluation.findBySubmissionId(input.submissionId) : undefined);
+    if (inFlight) {
+      const match = await this.requireMember(principal, matchId, true);
+      const side = this.sideOf(match, principal);
+      assertSupportedLanguage(input.language);
+      if (
+        inFlight.matchId !== matchId ||
+        inFlight.sideId !== side ||
+        (input.submissionId !== undefined && inFlight.submissionId !== input.submissionId) ||
+        (input.evaluationId !== undefined && inFlight.evaluationId !== input.evaluationId) ||
+        inFlight.language !== input.language ||
+        (input.documentRevision !== undefined && inFlight.documentRevision !== null && inFlight.documentRevision !== input.documentRevision)
+      ) {
+        throw new DuplicateError("evaluation id is already bound to different submission data");
+      }
+      if (match.mode !== "2v2") {
+        this.validateSource(input.code);
+        const sourceHash = createHash("sha256").update(input.code, "utf8").digest("hex");
+        if (inFlight.sourceHash !== sourceHash) {
+          throw new DuplicateError("evaluation id is already bound to different submission data");
+        }
+      }
+      const roundIndex = match.rounds.findIndex((r) => r.roundId === inFlight.roundId);
+      const roundNo = roundIndex >= 0 ? roundIndex + 1 : (match.sideProgress?.[side]?.currentRound ?? match.currentRound);
+      const completion = await inFlight.promise;
+      if (!completion.ok) throw completion.error;
+      const settled = await this.persistence.findSubmissionByEvaluationId(inFlight.evaluationId);
+      if (!settled) throw new IllegalStateError("evaluation vanished");
+      return { ok: true, round: roundNo, submissionId: settled.submissionId, evaluationId: settled.evaluationId };
+    }
+
+    // Early persistence lookup for already-settled submissions (resolves before any deadline/cutoff check)
+    if (input.evaluationId || input.submissionId) {
+      const preExisting = (input.evaluationId ? await this.persistence.findSubmissionByEvaluationId(input.evaluationId) : null)
+        ?? (input.submissionId ? await this.persistence.findSubmissionById(input.submissionId) : null);
+      if (preExisting) {
+        const match = await this.requireMember(principal, matchId, true);
+        const side = this.sideOf(match, principal);
+        assertSupportedLanguage(input.language);
+        if (
+          preExisting.matchId !== matchId ||
+          preExisting.sideId !== side ||
+          (input.submissionId !== undefined && preExisting.submissionId !== input.submissionId) ||
+          (input.evaluationId !== undefined && preExisting.evaluationId !== input.evaluationId) ||
+          preExisting.language !== input.language ||
+          (input.documentRevision !== undefined && preExisting.documentRevision !== null && preExisting.documentRevision !== input.documentRevision)
+        ) {
+          throw new DuplicateError("evaluation id is already bound to different submission data");
+        }
+        if (match.mode !== "2v2") {
+          this.validateSource(input.code);
+          const sourceHash = createHash("sha256").update(input.code, "utf8").digest("hex");
+          if (preExisting.sourceHash !== sourceHash) {
+            throw new DuplicateError("evaluation id is already bound to different submission data");
+          }
+        }
+        if (preExisting.status !== "pending") {
+          if (preExisting.status === "failed") {
+            throw this.evaluation.failureFor(preExisting.evaluationId) ?? new JudgeInfraError("evaluation previously failed");
+          }
+          const roundIndex = match.rounds.findIndex((r) => r.roundId === preExisting.roundId);
+          const roundNo = roundIndex >= 0 ? roundIndex + 1 : (match.sideProgress?.[side]?.currentRound ?? match.currentRound);
+          return { ok: true, round: roundNo, submissionId: preExisting.submissionId, evaluationId: preExisting.evaluationId };
+        }
+      }
+    }
+
+    // Only new submissions undergo deadline / cutoff / expiration gates
+    if (this.deadlineHasElapsedOrUnknown(matchId)) await this.closeExpiredForCaller(matchId, principal);
+
     // Phase 1 (locked): gates, ids, pending record, activity dispatch.
     const setup = await this.withMatchLock(matchId, async () => {
-      const match = await this.requireMember(principal, matchId);
+      const match = await this.requireMember(principal, matchId, true);
       const side = this.sideOf(match, principal);
-      const round = this.roundForSide(match, side);
-      this.requireUnexpired(match);
-      this.requireRoundUnexpired(match, round, side);
-      // 1v1 keeps the legacy gate (phase only). 2v2 additionally requires
-      // both teammates ready via the arena-model gate AND both approvals
-      // bound to the current document revision — stale R1 readiness can
-      // never authorize an R2 submission. The lock makes the gate + record
-      // atomic, so a concurrent edit deterministically wins or loses whole.
       this.requireActiveMember(match, principal.userId);
-      const readiness = match.mode === "2v2"
-        ? this.teamCollaboration.readinessFor(match, side, this.clock(), this.reconnectGraceMs)
-        : { you: false, mate: false };
-      const progress = match.sideProgress?.[side];
-      if (!progress || progress.stage !== "CODING" || !canSubmit(match.roundPhase, match.mode, readiness)) {
-        throw new IllegalStateError(`submit rejected in ${match.roundPhase} (team not both ready)`);
-      }
-      if (round.closing || round.closingSides?.[side]) throw new IllegalStateError("submit rejected while reveal is closing the round");
       assertSupportedLanguage(input.language);
+
+      // Early persistence lookup inside lock for concurrent settlements
+      const preExisting = (input.evaluationId ? await this.persistence.findSubmissionByEvaluationId(input.evaluationId) : null)
+        ?? (input.submissionId ? await this.persistence.findSubmissionById(input.submissionId) : null);
+      if (preExisting) {
+        if (
+          preExisting.matchId !== matchId ||
+          preExisting.sideId !== side ||
+          (input.submissionId !== undefined && preExisting.submissionId !== input.submissionId) ||
+          (input.evaluationId !== undefined && preExisting.evaluationId !== input.evaluationId) ||
+          preExisting.language !== input.language ||
+          (input.documentRevision !== undefined && preExisting.documentRevision !== null && preExisting.documentRevision !== input.documentRevision)
+        ) {
+          throw new DuplicateError("evaluation id is already bound to different submission data");
+        }
+        if (match.mode !== "2v2") {
+          this.validateSource(input.code);
+          const sourceHash = createHash("sha256").update(input.code, "utf8").digest("hex");
+          if (preExisting.sourceHash !== sourceHash) {
+            throw new DuplicateError("evaluation id is already bound to different submission data");
+          }
+        }
+      }
+
+      const canonicalSubmissionId = preExisting ? preExisting.submissionId : (input.submissionId ?? this.uuid());
+      const canonicalEvaluationId = preExisting ? preExisting.evaluationId : (input.evaluationId ?? this.uuid());
+
+      if (preExisting && preExisting.status !== "pending") {
+        if (preExisting.status === "failed") {
+          throw this.evaluation.failureFor(canonicalEvaluationId) ?? new JudgeInfraError("evaluation previously failed");
+        }
+        const roundIndex = match.rounds.findIndex((r) => r.roundId === preExisting.roundId);
+        const roundNo = roundIndex >= 0 ? roundIndex + 1 : (match.sideProgress?.[side]?.currentRound ?? match.currentRound);
+        return { attached: true as const, roundNo, submissionId: canonicalSubmissionId, evaluationId: canonicalEvaluationId };
+      }
+
+      const resumed = preExisting?.status === "pending";
+      const round = this.roundForSide(match, side);
+
+      // Pre-dispatch guard: reject stale pending bound to another round or problem WITHOUT judge execution
+      if (resumed && (
+        preExisting.matchId !== matchId ||
+        preExisting.sideId !== side ||
+        preExisting.roundId !== round.roundId ||
+        preExisting.problemVersionId !== round.problemVersionId
+      )) {
+        throw new IllegalStateError("pending evaluation does not belong to this round and side");
+      }
+
+      if (!resumed) {
+        this.requireUnexpired(match);
+        this.requireRoundUnexpired(match, round, side);
+        const readiness = match.mode === "2v2"
+          ? this.teamCollaboration.readinessFor(match, side, this.clock(), this.reconnectGraceMs)
+          : { you: false, mate: false };
+        const progress = match.sideProgress?.[side];
+        if (!progress || progress.stage !== "CODING" || !canSubmit(match.roundPhase, match.mode, readiness)) {
+          throw new IllegalStateError(`submit rejected in ${match.roundPhase} (team not both ready)`);
+        }
+        if (round.closing || round.closingSides?.[side]) throw new IllegalStateError("submit rejected while reveal is closing the round");
+        if (!canSideSubmit(this.activityOf(round, side))) {
+          throw new IllegalStateError(`submit rejected for side while ${this.activityOf(round, side)}`);
+        }
+      }
+
       const problem = this.loadPlayableProblem(round.problemVersionId);
       this.requireProblemLanguage(problem, input.language);
-      // 2v2 frozen source (ticket 15 §11): the judge receives the immutable
-      // authoritative Y.Text snapshot, never the client payload. The client
-      // language must equal the team language (no split-language document).
-      let submitCode = input.code;
-      let submitDocRevision: DocumentRevision | null = null;
-      if (match.mode === "2v2") {
+
+      let submitCode: string;
+      let submitDocRevision: DocumentRevision | null;
+      let sourceHash: string;
+
+      if (resumed) {
+        submitCode = preExisting.source;
+        submitDocRevision = preExisting.documentRevision ?? null;
+        sourceHash = preExisting.sourceHash;
+      } else if (match.mode === "2v2") {
         const document = await this.teamCollaboration.submissionDocument(
           match,
           side,
@@ -622,18 +746,22 @@ export class ArenaEngine {
         );
         submitCode = document.source;
         submitDocRevision = document.documentRevision;
+        this.validateSource(submitCode);
+        sourceHash = createHash("sha256").update(submitCode, "utf8").digest("hex");
+      } else {
+        submitCode = input.code;
+        submitDocRevision = null;
+        this.validateSource(submitCode);
+        sourceHash = createHash("sha256").update(submitCode, "utf8").digest("hex");
       }
-      this.validateSource(submitCode);
-      const submissionId = input.submissionId ?? this.uuid();
-      const evaluationId = input.evaluationId ?? this.uuid();
-      const sourceHash = createHash("sha256").update(submitCode, "utf8").digest("hex");
-      const dup = this.evaluation.get(evaluationId);
+
+      const dup = this.evaluation.get(canonicalEvaluationId) ?? this.evaluation.findBySubmissionId(canonicalSubmissionId);
       if (dup) {
         if (
           dup.matchId !== matchId ||
           dup.roundId !== round.roundId ||
           dup.sideId !== side ||
-          dup.submissionId !== submissionId ||
+          dup.submissionId !== canonicalSubmissionId ||
           dup.problemVersionId !== round.problemVersionId ||
           dup.language !== input.language ||
           dup.sourceHash !== sourceHash ||
@@ -641,58 +769,28 @@ export class ArenaEngine {
         ) {
           throw new DuplicateError("evaluation id is already bound to different submission data");
         }
-        // Concurrent duplicate under the same ids: attach to the accepted
-        // evaluation, never duplicate work or history.
-        // The caller waits after leaving the Match lock. The original
-        // evaluator must re-enter this lock to commit its verdict.
-        return { attached: true as const, waitFor: dup.promise, roundNo: progress.currentRound, evaluationId };
+        const roundNo = match.sideProgress?.[side]?.currentRound ?? match.currentRound;
+        return { attached: true as const, waitFor: dup.promise, roundNo, evaluationId: canonicalEvaluationId };
       }
-      const tracked = this.evaluation.track(evaluationId, {
+
+      const tracked = this.evaluation.track(canonicalEvaluationId, {
         matchId,
         roundId: round.roundId,
         sideId: side,
-        submissionId,
+        submissionId: canonicalSubmissionId,
         problemVersionId: round.problemVersionId,
         language: input.language,
         sourceHash,
         documentRevision: submitDocRevision,
       });
+
       try {
-        const existing = await this.persistence.findSubmissionByEvaluationId(evaluationId);
-        if (
-          existing &&
-          (existing.submissionId !== submissionId ||
-            existing.matchId !== matchId ||
-            existing.roundId !== round.roundId ||
-            existing.sideId !== side ||
-            existing.problemVersionId !== round.problemVersionId ||
-            existing.language !== input.language ||
-            existing.sourceHash !== sourceHash ||
-            (existing.documentRevision ?? null) !== submitDocRevision)
-        ) {
-          throw new DuplicateError("evaluation id is already bound to different submission data");
-        }
-        if (existing && existing.status !== "pending") {
-          if (existing.status === "failed") {
-            throw this.evaluation.failureFor(evaluationId) ?? new JudgeInfraError("evaluation previously failed");
-          }
-          // Idempotent retry: same stored outcome, no second logical evaluation.
-          this.evaluation.settle(evaluationId, tracked, { ok: true });
-          return { attached: true as const, roundNo: progress.currentRound, submissionId: existing.submissionId, evaluationId: existing.evaluationId };
-        }
-        const resumed = existing?.status === "pending";
-        if (resumed && (existing!.matchId !== matchId || existing!.roundId !== round.roundId || existing!.sideId !== side)) {
-          throw new IllegalStateError("pending evaluation does not belong to this round and side");
-        }
-        if (!resumed && !canSideSubmit(this.activityOf(round, side))) {
-          throw new IllegalStateError(`submit rejected for side while ${this.activityOf(round, side)}`);
-        }
-        const now = this.clock();
-        let record = existing ?? null;
+        let record = preExisting ?? null;
         if (!record) {
+          const now = this.clock();
           record = {
-            submissionId,
-            evaluationId,
+            submissionId: canonicalSubmissionId,
+            evaluationId: canonicalEvaluationId,
             matchId,
             roundId: round.roundId,
             sideId: side,
@@ -716,11 +814,12 @@ export class ArenaEngine {
           await this.setActivity(match, round, side, "submitted");
           await this.setActivity(match, round, side, "evaluating");
         }
+        const roundNo = match.sideProgress?.[side]?.currentRound ?? match.currentRound;
         return {
           attached: false as const,
-          roundNo: progress.currentRound,
-          submissionId: record.submissionId,
-          evaluationId,
+          roundNo,
+          submissionId: canonicalSubmissionId,
+          evaluationId: canonicalEvaluationId,
           side,
           roundId: round.roundId,
           problemVersionId: round.problemVersionId,
@@ -737,10 +836,11 @@ export class ArenaEngine {
           tracked,
         };
       } catch (error) {
-        this.evaluation.settle(evaluationId, tracked, { ok: false, error });
+        this.evaluation.settle(canonicalEvaluationId, tracked, { ok: false, error });
         throw error;
       }
-    });
+    }, { skipFinalSave: true });
+
     if (setup.attached) {
       if (setup.waitFor) {
         const completion = await setup.waitFor;
@@ -748,7 +848,10 @@ export class ArenaEngine {
       }
       const settled = await this.persistence.findSubmissionByEvaluationId(setup.evaluationId);
       if (!settled) throw new IllegalStateError("evaluation vanished");
-      return { ok: true, round: setup.roundNo, submissionId: settled.submissionId, evaluationId: setup.evaluationId };
+      const match = await this.requireMember(principal, matchId, true);
+      const roundIndex = match.rounds.findIndex((r) => r.roundId === settled.roundId);
+      const roundNo = roundIndex >= 0 ? roundIndex + 1 : setup.roundNo;
+      return { ok: true, round: roundNo, submissionId: settled.submissionId, evaluationId: settled.evaluationId };
     }
     return this.evaluation.run({
       matchId,
@@ -772,9 +875,9 @@ export class ArenaEngine {
   async publishReveal(
     principal: AuthenticatedPrincipal,
     matchId: string,
-    options: { graceMs?: number } = {},
+    _options: { graceMs?: number } = {},
   ): Promise<RevealSnapshot> {
-    return this.withMatchLock(matchId, async () => {
+    return this.withRevisionRetry(matchId, async () => {
       const match = await this.requireMember(principal, matchId);
       if (!this.roundLifecycle.bothFinished(match)) throw new IllegalStateError("final reveal is unavailable until both sides finish");
       await this.publishFinalReveal(match, "REVEAL_CONDITION_MET");
@@ -796,105 +899,6 @@ export class ArenaEngine {
       await this.publishFinalReveal(match, "REVEAL_CONDITION_MET");
       await this.authority.saveMatch(match);
       return [...match.rounds].reverse().find((round) => round.reveal)?.reveal ?? null;
-    });
-  }
-
-  private async publishRevealInternal(
-    matchId: string,
-    options: { graceMs?: number },
-    loadMatch: () => Promise<MatchRecord>,
-    automatic: boolean,
-  ): Promise<RevealSnapshot | null> {
-    if (this.deadlineHasElapsedOrUnknown(matchId) && await this.closeExpiredMatch(matchId)) {
-      const match = await loadMatch();
-      const reveal = this.currentRound(match).reveal;
-      return reveal ? JSON.parse(JSON.stringify(reveal)) as RevealSnapshot : null;
-    }
-    const start = await this.withMatchLock(matchId, async () => {
-      const match = await loadMatch();
-      const round = this.currentRound(match);
-      if ((match.roundPhase === "MATCH_COMPLETE" || automatic) && round.reveal) {
-        return { status: "existing" as const, reveal: JSON.parse(JSON.stringify(round.reveal)) as RevealSnapshot };
-      }
-      if (match.roundPhase === "MATCH_COMPLETE" || match.forfeit) {
-        return { status: "skip" as const };
-      }
-      if (automatic) {
-        const sides = Object.keys(round.activities);
-        if (match.roundPhase !== "CODING" || sides.length === 0 ||
-          !sides.every((side) => round.counted[side] !== undefined)) {
-          return { status: "skip" as const };
-        }
-        if (await this.applyGraceToMatch(match)) {
-          await this.authority.saveMatch(match);
-          return { status: "skip" as const };
-        }
-      }
-      this.roundLifecycle.beginReveal(match);
-      await this.authority.saveMatch(match);
-      return { status: "wait" as const, roundId: round.roundId };
-    });
-    if (start.status === "existing") return start.reveal;
-    if (start.status === "skip") return null;
-    const graceMs = options.graceMs ?? this.revealGraceMs;
-    const pending = this.evaluation.forRound(matchId, start.roundId);
-    if (pending.length > 0 && graceMs > 0) {
-      await Promise.race([
-        Promise.allSettled(pending.map((p) => p.promise)),
-        new Promise((resolve) => setTimeout(resolve, graceMs)),
-      ]);
-    }
-    return this.withMatchLock(matchId, async () => {
-      const match = await loadMatch();
-      const round = match.rounds.find((entry) => entry.roundId === start.roundId);
-      if (!round) throw new IllegalStateError("reveal round no longer exists");
-      if (automatic && round.reveal) return JSON.parse(JSON.stringify(round.reveal)) as RevealSnapshot;
-      if (match.roundPhase === "MATCH_COMPLETE" || match.forfeit) {
-        return round.reveal ? JSON.parse(JSON.stringify(round.reveal)) as RevealSnapshot : null;
-      }
-      this.roundLifecycle.prepareReveal(
-        match,
-        new Set(
-          (await this.persistence.listRoundSubmissions(matchId, start.roundId))
-            .filter((s) => s.status === "completed")
-            .map((s) => s.evaluationId),
-        ),
-        this.evaluation.forRound(matchId, start.roundId).map((entry) => entry.evaluationId),
-      );
-      const now = this.clock();
-      const scores: Partial<Record<SideId, number>> = {};
-      const groups: RevealSnapshot["groups"] = {};
-      const totals: Partial<Record<SideId, number>> = {};
-      const noSubmission: Partial<Record<SideId, boolean>> = {};
-      for (const side of Object.keys(round.activities)) {
-        const counted = round.counted[side];
-        scores[side] = counted?.score ?? 0;
-        const latest = await this.latestCompleted(matchId, round.roundId, side);
-        groups[side] = latest?.groups ?? [];
-        totals[side] = this.roundLifecycle.totalScore(match, side);
-        noSubmission[side] = latest === undefined;
-      }
-      const snapshot = this.roundLifecycle.createReveal(match, {
-        scores,
-        groups,
-        totals,
-        publishedAt: now,
-        cause: "REVEAL_CONDITION_MET",
-        noSubmission,
-      });
-      try {
-        await this.persistence.publishReveal(match.id, round.roundId, snapshot);
-      } catch (error) {
-        if (error instanceof DuplicateError) throw new IllegalStateError("reveal already published");
-        throw error;
-      }
-      this.roundLifecycle.commitReveal(match, snapshot);
-      for (const side of Object.keys(round.activities)) {
-        if (this.activityOf(round, side) !== "locked") await this.setActivity(match, round, side, "locked");
-      }
-      await this.authority.saveMatch(match);
-      this.emit("reveal.published", { matchId: match.id, round: match.currentRound });
-      return JSON.parse(JSON.stringify(snapshot)) as RevealSnapshot;
     });
   }
 
@@ -1218,6 +1222,7 @@ export class ArenaEngine {
         if (round.counted[side] === undefined) round.noSubmission ??= {};
         if (round.counted[side] === undefined) round.noSubmission![side] = true;
         this.roundLifecycle.advanceSide(match, side, nowAfterGrace, this.roundDurationMs);
+        this.ensureValidTeamLanguage(match, side);
         this.emit("progress.updated", {
           matchId: match.id,
           sides: Object.fromEntries(Object.entries(match.sideProgress ?? {}).map(([key, value]) => [key, { currentRound: value!.currentRound, stage: value!.stage }])),
@@ -1732,7 +1737,7 @@ export class ArenaEngine {
       throw new ExpiredError("round coding deadline expired");
     }
     if (_round.cutoffPassed || _round.cutoffPassedSides?.[side]) {
-      throw new ExpiredError("round coding cutoff passed");
+      throw new ExpiredError("round coding cutoff passed (expired)");
     }
   }
 
@@ -1768,13 +1773,28 @@ export class ArenaEngine {
     return all[all.length - 1];
   }
 
-  private async onCounted(match: MatchRecord, round: RoundState, side: SideId, stored: SubmissionRecord, now: number): Promise<void> {
+  private ensureValidTeamLanguage(match: MatchRecord, side: SideId): void {
+    if (match.mode !== "2v2") return;
+    const progress = match.sideProgress?.[side];
+    if (!progress || progress.stage === "FINISHED") return;
+    const round = match.rounds[progress.currentRound - 1];
+    if (!round) return;
+    const doc = round.teamDocs?.[side];
+    if (!doc) return;
+    const problem = this.loadPlayableProblem(round.problemVersionId);
+    if (typeof problem.starters[doc.language as SupportedLanguage] !== "string") {
+      doc.language = "Python";
+    }
+  }
+
+  private async onCounted(match: MatchRecord, round: RoundState, side: SideId, stored: SubmissionRecord, now: number, skipAutoReveal = false): Promise<void> {
     const progress = match.sideProgress?.[side];
     if (match.roundPhase !== "CODING" || !progress || progress.stage !== "CODING" || match.rounds[progress.currentRound - 1]?.roundId !== round.roundId) return;
     const fromRound = progress.currentRound;
     progress.lastScore = stored.score ?? 0;
     progress.lastScoredRound = fromRound;
     const result = this.roundLifecycle.advanceSide(match, side, now, this.roundDurationMs);
+    this.ensureValidTeamLanguage(match, side);
     this.emit("side.advanced", {
       matchId: match.id,
       side,
@@ -1785,7 +1805,11 @@ export class ArenaEngine {
       matchId: match.id,
       sides: Object.fromEntries(Object.entries(match.sideProgress ?? {}).map(([key, value]) => [key, { currentRound: value!.currentRound, stage: value!.stage }])),
     });
-    if (this.roundLifecycle.bothFinished(match)) await this.publishFinalReveal(match, "REVEAL_CONDITION_MET", stored);
+    if (!skipAutoReveal && this.roundLifecycle.bothFinished(match)) {
+      await this.publishFinalReveal(match, "REVEAL_CONDITION_MET", stored).catch((error) => {
+        console.error(`[arena] auto final reveal failed for match ${match.id}`, error);
+      });
+    }
   }
 
   private async publishFinalReveal(match: MatchRecord, cause: RevealCause, currentSubmission?: SubmissionRecord): Promise<void> {

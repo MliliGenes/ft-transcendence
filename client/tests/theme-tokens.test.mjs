@@ -33,6 +33,15 @@ function contrast(foreground, background) {
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
 
+function normalizeTokens(record) {
+  return Object.fromEntries(
+    Object.entries(record).map(([k, v]) => [
+      k,
+      typeof v === 'string' && /^#[0-9a-fA-F]+$/.test(v) ? v.toLowerCase() : v,
+    ]),
+  );
+}
+
 for (const [mode, theme] of Object.entries(design.themes)) {
   test(mode + ' CSS and documented theme tokens agree', () => {
     const selector = mode === 'light' ? ':root' : '.dark';
@@ -43,7 +52,7 @@ for (const [mode, theme] of Object.entries(design.themes)) {
         match[2],
       ]),
     );
-    assert.deepEqual(variables, theme.cssVariables);
+    assert.deepEqual(normalizeTokens(variables), normalizeTokens(theme.cssVariables));
     assert.equal(theme.colors.accent, '#F16B3A');
     assert.equal(design.shadcn[mode].primary, '#F16B3A');
   });

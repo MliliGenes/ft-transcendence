@@ -266,9 +266,7 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
     surrender,
     reveal: adaptReveal(server.reveal, server.mySide, otherId),
     reveals: (server.reveals ?? []).map((reveal) => adaptReveal(reveal, server.mySide, otherId)).filter((reveal): reveal is RevealView => reveal !== null),
-    notice: progress.self.lastScoredRound
-      ? `Problem ${progress.self.lastScoredRound} scored: ${progress.self.lastScore ?? 0}/100 — moving to problem ${progress.self.currentRound}${progress.self.stage === "FINISHED" ? " (finished)" : ""}.`
-      : null,
+    notice: null,
     revision: server.revision,
     matchFinal: adaptFinal(server.final, server.mySide, otherId),
   };
