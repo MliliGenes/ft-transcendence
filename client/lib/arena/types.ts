@@ -68,7 +68,9 @@ export interface TeamView {
 }
 
 export interface RevealView {
+  round: number;
   roundScore: number;
+  opponentRoundScore: number;
   groups: Array<{ name: string; weight: number; earned: number }>;
   totals: { you: number; opponent: number };
   noSubmission?: { you: boolean; opponent: boolean };
@@ -89,6 +91,10 @@ export interface ArenaSnapshot {
   mode: MatchMode;
   roundPhase: RoundPhase;
   round: number;
+  progress: {
+    self: { currentRound: number; stage: "CODING" | "FINISHED"; problemDeadlineMs: number | null; lastScore?: number; lastScoredRound?: number };
+    opponent: { currentRound: number; stage: "CODING" | "FINISHED" };
+  };
   totalRounds: number;
   remainingSeconds: number;
   roundRemainingSeconds: number | null;
@@ -110,6 +116,7 @@ export interface ArenaSnapshot {
   /** Pending surrender approvals from the current and partner team member. */
   surrender: { you: boolean; mate: boolean };
   reveal: RevealView | null;
+  reveals: RevealView[];
   notice: string | null;
   /** Server mutation counter (§3): orders snapshots against events. */
   revision: number;

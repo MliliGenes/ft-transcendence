@@ -87,6 +87,41 @@ describe("RoundLifecycle", () => {
     });
   });
 
+  it("advances one side without moving the opponent and clamps its next deadline", () => {
+    const lifecycle = new RoundLifecycle();
+    const current = match();
+    current.roundPhase = "ROUND_INTRO";
+    current.startedAt = 0;
+    current.durationMs = 1_500;
+    current.sideProgress = {};
+
+    lifecycle.beginCoding(current, 100, 1_000);
+    expect(current.sideProgress?.left?.problemDeadlineMs).toBe(1_100);
+    expect(current.sideProgress?.right?.currentRound).toBe(1);
+
+    const advanced = lifecycle.advanceSide(current, "left", 900, 1_000);
+    expect(advanced).toMatchObject({ finished: false, previousRoundId: "round-1", newRoundId: "round-2" });
+    expect(current.sideProgress?.left).toMatchObject({ currentRound: 2, stage: "CODING", problemDeadlineMs: 1_500 });
+    expect(current.sideProgress?.right).toMatchObject({ currentRound: 1, stage: "CODING" });
+    expect(current.roundPhase).toBe("CODING");
+  });
+
+  it("finishes each side independently and reports when both have finished", () => {
+    const lifecycle = new RoundLifecycle();
+    const current = match();
+    current.roundPhase = "ROUND_INTRO";
+    current.sideProgress = {};
+    lifecycle.beginCoding(current, 1_000, 600);
+    current.sideProgress!.left!.currentRound = 2;
+    current.currentRound = 2;
+
+    expect(lifecycle.advanceSide(current, "left", 2_000, 600).finished).toBe(true);
+    expect(lifecycle.bothFinished(current)).toBe(false);
+    current.sideProgress!.right!.currentRound = 2;
+    expect(lifecycle.advanceSide(current, "right", 3_000, 600).finished).toBe(true);
+    expect(lifecycle.bothFinished(current)).toBe(true);
+  });
+
   describe("computeFinal authoritative outcome", () => {
     it("computes final with scoring-time tiebreak when scores are equal", () => {
       const lifecycle = new RoundLifecycle();

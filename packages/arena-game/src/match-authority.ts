@@ -190,7 +190,7 @@ export class MatchAuthority {
     principal: AuthenticatedPrincipal,
     matchId: string,
   ): Promise<MatchRecord> {
-    const match = await this.loadOrThrow(matchId);
+    const match = normalizeMatch(await this.loadOrThrow(matchId));
     if (
       !match.participants.some(
         (participant) => participant.userId === principal.userId,
@@ -204,7 +204,7 @@ export class MatchAuthority {
   async loadOrThrow(matchId: string): Promise<MatchRecord> {
     const match = await this.persistence.loadMatch(matchId);
     if (!match) throw new NotMemberError(matchId);
-    return match;
+    return normalizeMatch(match);
   }
 
   sideOf(match: MatchRecord, principal: AuthenticatedPrincipal): SideId {
@@ -221,4 +221,28 @@ export class MatchAuthority {
       throw new IllegalStateError(`match ${match.id} has no current round`);
     return round;
   }
+}
+
+/** Upgrade old persisted round-wide progress and closure fields on read. */
+export function normalizeMatch(match: MatchRecord): MatchRecord {
+  match.sideProgress ??= {};
+  const sides = [...new Set(match.participants.map((participant) => participant.sideId))];
+  const legacyRound = match.rounds[match.currentRound - 1];
+  for (const side of sides) {
+    match.sideProgress[side] ??= {
+      currentRound: match.currentRound,
+      stage: match.roundPhase === "MATCH_COMPLETE" ? "FINISHED" : "CODING",
+      problemDeadlineMs: legacyRound?.codingDeadlineMs ?? null,
+      ...(match.roundPhase === "MATCH_COMPLETE" ? { finishedAtMs: null } : {}),
+    };
+  }
+  for (const round of match.rounds) {
+    round.closingSides ??= {};
+    round.cutoffPassedSides ??= {};
+    for (const side of sides) {
+      if (round.closing && round.roundId === legacyRound?.roundId) round.closingSides[side] = true;
+      if (round.cutoffPassed && round.roundId === legacyRound?.roundId) round.cutoffPassedSides[side] = true;
+    }
+  }
+  return match;
 }

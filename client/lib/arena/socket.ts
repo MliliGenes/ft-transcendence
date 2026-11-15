@@ -66,6 +66,7 @@ interface ServerSnapshot {
   mode: "1v1" | "2v2";
   roundPhase: ArenaSnapshot["roundPhase"];
   round: number;
+  progress?: ArenaSnapshot["progress"];
   totalRounds: number;
   remainingMs: number;
   roundRemainingMs?: number | null;
@@ -90,6 +91,7 @@ interface ServerSnapshot {
     language: string | null;
   }>;
   reveal: ServerReveal | null;
+  reveals?: ServerReveal[];
   revision: number;
   pendingEvaluation: boolean;
   final: {
@@ -150,7 +152,9 @@ export function adaptReveal(server: ServerReveal | null, mySide: string, otherId
   if (!server) return null;
   const mine = Array.isArray(server.groups?.[mySide]) ? server.groups[mySide] : [];
   return {
+    round: server.round,
     roundScore: server.scores?.[mySide] ?? 0,
+    opponentRoundScore: server.scores?.[otherId] ?? 0,
     groups: mine.map((g) => ({ name: g.name, weight: g.weight, earned: g.earned })),
     totals: { you: server.totals?.[mySide] ?? 0, opponent: server.totals?.[otherId] ?? 0 },
     noSubmission: {
@@ -162,6 +166,10 @@ export function adaptReveal(server: ServerReveal | null, mySide: string, otherId
 
 /** Server SealedSnapshot -> client ArenaSnapshot */
 function adapt(server: ServerSnapshot, language: string, userId: string): ArenaSnapshot {
+  const progress = server.progress ?? {
+    self: { currentRound: server.round, stage: "CODING" as const, problemDeadlineMs: server.roundRemainingMs == null ? null : Date.now() + server.roundRemainingMs },
+    opponent: { currentRound: server.round, stage: "CODING" as const },
+  };
   const mine = server.sides[server.mySide] ?? { status: "coding" as const, submissions: 0, presence: "online" as const };
   const otherId = Object.keys(server.sides).find((k) => k !== server.mySide) ?? "right";
   const other = server.sides[otherId] ?? mine;
@@ -241,6 +249,7 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
     mode: server.mode,
     roundPhase: server.roundPhase,
     round: server.round,
+    progress,
     totalRounds: server.totalRounds,
     remainingSeconds: Math.max(0, Math.ceil(server.remainingMs / 1000)),
     roundRemainingSeconds: server.roundRemainingMs != null ? Math.max(0, Math.ceil(server.roundRemainingMs / 1000)) : null,
@@ -256,7 +265,10 @@ function adapt(server: ServerSnapshot, language: string, userId: string): ArenaS
     readyRevision,
     surrender,
     reveal: adaptReveal(server.reveal, server.mySide, otherId),
-    notice: null,
+    reveals: (server.reveals ?? []).map((reveal) => adaptReveal(reveal, server.mySide, otherId)).filter((reveal): reveal is RevealView => reveal !== null),
+    notice: progress.self.lastScoredRound
+      ? `Problem ${progress.self.lastScoredRound} scored: ${progress.self.lastScore ?? 0}/100 — moving to problem ${progress.self.currentRound}${progress.self.stage === "FINISHED" ? " (finished)" : ""}.`
+      : null,
     revision: server.revision,
     matchFinal: adaptFinal(server.final, server.mySide, otherId),
   };
@@ -293,6 +305,10 @@ export class SocketArenaTransport implements ArenaTransport {
       mode: "1v1",
       roundPhase: "ROUND_INTRO",
       round: 1,
+      progress: {
+        self: { currentRound: 1, stage: "CODING", problemDeadlineMs: null },
+        opponent: { currentRound: 1, stage: "CODING" },
+      },
       totalRounds: 3,
       remainingSeconds: 0,
       roundRemainingSeconds: null,
@@ -308,6 +324,7 @@ export class SocketArenaTransport implements ArenaTransport {
       readyRevision: null,
       surrender: { you: false, mate: false },
       reveal: null,
+      reveals: [],
       notice: null,
       revision: -1,
       matchFinal: null,

@@ -2,15 +2,16 @@
 
 import Link from 'next/link';
 import { IconTrophy, IconArrowLeft } from '@tabler/icons-react';
-import type { MatchFinalView } from '@/lib/arena/types';
+import type { MatchFinalView, RevealView } from '@/lib/arena/types';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export interface MatchResultProps {
   final: MatchFinalView;
+  rounds?: RevealView[];
 }
 
-export function MatchResult({ final }: MatchResultProps) {
+export function MatchResult({ final, rounds = [] }: MatchResultProps) {
   const isWinner = final.you > final.opponent;
 
   return (
@@ -19,6 +20,20 @@ export function MatchResult({ final }: MatchResultProps) {
         <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-sm bg-primary/10 text-primary">
           <IconTrophy className="size-8" />
         </div>
+
+        {rounds.length > 0 && (
+          <div className="mb-6 border-b border-border pb-4 text-left">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Round scores</h3>
+            <div className="space-y-1">
+              {rounds.map((round) => (
+                <div key={round.round} className="flex justify-between font-mono text-sm tabular-nums">
+                  <span>Problem {round.round}</span>
+                  <span>{round.roundScore} : {round.opponentRoundScore}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <h2 className="text-3xl font-extrabold tracking-tight text-foreground">
           {final.outcome}

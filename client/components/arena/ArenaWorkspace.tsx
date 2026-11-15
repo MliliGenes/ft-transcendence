@@ -10,7 +10,6 @@ import { ArenaHeader } from "./ArenaHeader";
 import { ProblemPanel } from "./ProblemPanel";
 import { DuelPanel } from "./DuelPanel";
 import { TestPanel } from "./TestPanel";
-import { RoundScoreReveal } from "./RoundScoreReveal";
 import { MatchResult } from "./MatchResult";
 import { TeamChat } from "./TeamChat";
 import { Button } from "@/components/ui/button";
@@ -35,8 +34,7 @@ type ArenaPendingAction =
   | "surrender"
   | "language"
   | "leave"
-  | "begin"
-  | "advance";
+  | "begin";
 
 // Progress for every action that stays on screen while its request runs. The
 // action label is preserved while loading, so the announcement carries the
@@ -49,12 +47,11 @@ const arenaActionStatus: Record<ArenaPendingAction, string> = {
   language: "Changing language…",
   leave: "Leaving the match…",
   begin: "Preparing the coding round…",
-  advance: "Advancing to the next round…",
 };
 
 // These two run behind a full overlay, so the overlay itself carries the
 // progress instead of the toolbar status line.
-const overlayPendingActions: ArenaPendingAction[] = ["begin", "advance"];
+const overlayPendingActions: ArenaPendingAction[] = ["begin"];
 
 export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
   const snapshot = useArena(transport);
@@ -150,7 +147,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
     await performAction("surrender", () => transport.surrender(!snapshot.surrender.you), "Unable to update surrender approval. Please try again.");
   }
 
-  const isCoding = snapshot.roundPhase === "CODING";
+  const isCoding = snapshot.roundPhase === "CODING" && snapshot.progress.self.stage === "CODING";
   const canSubmit2v2 = snapshot.mode === "2v2" ? (snapshot.ready.you && snapshot.ready.mate) : true;
   const isSubmitDisabled = !isCoding || Boolean(pendingAction) || !canSubmit2v2;
 
@@ -276,7 +273,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                 disabled={isSubmitDisabled}
                 aria-busy={isSubmitting}
                 className={cn("h-7 text-xs font-medium", isSubmitting && "disabled:opacity-100")}
-                title="Your latest completed submission replaces your team's scored answer. The round reveals when both sides score or the 10-minute round deadline expires."
+                title="A counted score advances your side to its next problem immediately. Your opponent's scores stay hidden until the match ends."
               >
                 {isSubmitting
                   ? <IconLoader2 className="size-3.5 mr-1 animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -292,7 +289,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
           </div>
 
           <p className="border-t border-border bg-muted/30 px-3 py-1 text-xs text-muted-foreground" role="status">
-            Your latest completed submission replaces your team&apos;s scored answer. The round reveals when both sides score or the 10-minute round deadline expires.
+            A counted score advances your side immediately. Opponent scores stay hidden until the match ends.
           </p>
           {snapshot.mode === "2v2" && (
             <p className="border-t border-border bg-muted/30 px-3 py-1 text-xs text-muted-foreground" role="status">
@@ -326,6 +323,13 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
               onChange={setCode}
               collab={sidecars.collab ?? undefined}
             />
+
+            {snapshot.roundPhase === "CODING" && snapshot.progress.self.stage === "FINISHED" && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/95 p-6 text-center">
+                <h3 className="text-2xl font-bold text-foreground">You finished all problems</h3>
+                <p className="mt-2 text-sm text-muted-foreground">Waiting for opponent (problem {snapshot.progress.opponent.currentRound} of {snapshot.totalRounds}{snapshot.progress.opponent.stage === "FINISHED" ? ", finished" : ""})</p>
+              </div>
+            )}
 
             {/* Round Intro / Match Found Banner */}
             {(snapshot.roundPhase === "MATCH_FOUND" || snapshot.roundPhase === "ROUND_INTRO") && (
@@ -374,20 +378,8 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
       </div>
 
       {/* Overlays for Reveal and Match Result */}
-      {snapshot.roundPhase === "SCORE_REVEAL" && (
-        <RoundScoreReveal
-          reveal={snapshot.reveal}
-          round={snapshot.round}
-          totalRounds={snapshot.totalRounds}
-          onAdvance={() => performAction("advance", () => transport.advance(), "Unable to advance the match. Please try again.")}
-          pending={Boolean(pendingAction)}
-          error={feedback}
-          status={pendingAction === "advance" ? arenaActionStatus.advance : null}
-        />
-      )}
-
       {(snapshot.roundPhase === "MATCH_COMPLETE" || snapshot.matchFinal) && snapshot.matchFinal && (
-        <MatchResult final={snapshot.matchFinal} />
+        <MatchResult final={snapshot.matchFinal} rounds={snapshot.reveals} />
       )}
     </div>
   );

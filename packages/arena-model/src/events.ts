@@ -12,6 +12,8 @@ export const ARENA_EVENTS = [
   'tests.updated',
   'reveal.published',
   'round.advanced',
+  'side.advanced',
+  'progress.updated',
   'match.clock',
   'match.ended',
 ] as const;
@@ -53,6 +55,8 @@ export interface ArenaEventPayloads {
   };
   'reveal.published': { round: number; revision: number };
   'round.advanced': { round: number; problemId: string; revision: number };
+  'side.advanced': { matchId: string; side: string; fromRound: number; toRound: number | null; revision: number };
+  'progress.updated': { matchId: string; sides: Record<string, { currentRound: number; stage: string }>; revision: number };
   'match.clock': { remainingSeconds: number };
   'match.ended': {
     result: string;

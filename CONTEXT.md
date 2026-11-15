@@ -37,8 +37,10 @@ The game is hosted inside Nook's web client under the `/play` route and follows 
 - **Submission**: Final code sent for evaluation against the sealed hidden test suite. In 2v2, each participating teammate must approve the current shared document. If a teammate explicitly leaves, or remains disconnected past the 90-second reconnect window, the remaining teammate can approve and submit alone.
 - **Readiness**: The 2v2 gate. Approvals apply to the current document revision. A returning teammate must approve that revision again; see the [gameplay review](docs/spec/code-arena-gameplay-review.md) for the agreed rules.
 - **Hidden Suite**: Sealed evaluation tests evaluated inside `judge-worker`. Breakdown is disclosed only during Score Reveal.
-- **Reveal**: Per-round score disclosure (percentages and hidden-group breakdown) shown after evaluation settles.
-- **Match Phase**: State machine: `ROUND_INTRO` → `CODING` → (`RUNNING_TESTS` → `CODING`)* → `SUBMITTED` → `EVALUATING` → `SCORE_REVEAL` → next round / match end.
-- **Round Coding Deadline**: Server-authoritative 10-minute coding deadline per round, starting at the first `CODING` transition and capped by the overall 30-minute match budget. Persisted in `rounds.coding_deadline_ms`. New submissions are rejected at/after cutoff; pre-cutoff submissions follow bounded 2s evaluation grace. Unsubmitted sides receive 0 points at round deadline. Immediate reveal when both sides score before cutoff is preserved.
+- **Reveal**: Per-round score and hidden-group breakdown, disclosed to both sides only in the final reveal.
+- **Side progress**: Each player or team tracks its current problem, coding/finished stage, and per-problem deadline while the match stays in `CODING`.
+- **Final reveal**: All problem scores and hidden-group results become visible when both sides finish, the match deadline hits, or a forfeit ends the match.
+- **Match Phase**: Match-level flow: `ROUND_INTRO` → `CODING` for independent races → final `SCORE_REVEAL` → `MATCH_COMPLETE`.
+- **Problem deadline**: Server-authoritative 10-minute cap for each side's current problem, clamped by the overall 30-minute match budget. Accepted evaluations retain bounded grace; timeout without a counted score gives zero and advances that side.
 - **Match Deadline**: Server-authoritative 30-minute overall match budget. Capped across rounds; submissions accepted before deadline are evaluated within a bounded grace window.
 - **Player Status**: One of `coding`, `running`, `submitted`, `evaluating`, `locked in`, `disconnected`. Modeled independently of presence (`online`/`offline`).

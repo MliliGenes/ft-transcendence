@@ -1,7 +1,7 @@
 import type { ArenaEvent, PlayerStatus } from "arena-model";
 import type { DriverKind, GameJudge, JudgeLimits, SealedGroup, SupportedLanguage } from "./judge.js";
 import { JudgeInfraError } from "./judge.js";
-import { IllegalStateError, type MatchAuthority, type MatchLockOptions } from "./match-authority.js";
+import { IllegalStateError, normalizeMatch, type MatchAuthority, type MatchLockOptions } from "./match-authority.js";
 import type { EvaluationClaim, MatchPersistence } from "./persistence.js";
 import type {
   CountedResult,
@@ -143,6 +143,7 @@ interface EvaluationOrchestrationHost {
   activityOf(round: RoundState, side: SideId): PlayerStatus;
   transitionActivity(match: MatchRecord, round: RoundState, side: SideId, next: PlayerStatus): void;
   emit(event: ArenaEvent, payload: unknown): void;
+  onCounted(match: MatchRecord, round: RoundState, side: SideId, stored: SubmissionRecord, now: number): Promise<void>;
 }
 
 export interface EvaluationOrchestratorOptions {
@@ -318,11 +319,13 @@ export class EvaluationOrchestrator {
       let judgeStarted = false;
       let completion: EvaluationCompletion = { ok: true };
       try {
-        const match = await this.options.persistence.loadMatch(stored.matchId);
+        const storedMatch = await this.options.persistence.loadMatch(stored.matchId);
+        const match = storedMatch ? normalizeMatch(storedMatch) : undefined;
         const round = match?.rounds.find((candidate) => candidate.roundId === stored.roundId);
         const matchDeadline = match ? match.startedAt + match.durationMs : undefined;
+        const progress = match?.sideProgress?.[stored.sideId];
         const cutoff = matchDeadline !== undefined
-          ? (round?.codingDeadlineMs != null ? Math.min(round.codingDeadlineMs, matchDeadline) : matchDeadline)
+          ? (progress?.problemDeadlineMs != null ? Math.min(progress.problemDeadlineMs, matchDeadline) : matchDeadline)
           : undefined;
         const withinDeadlineGrace =
           cutoff !== undefined &&
@@ -332,8 +335,9 @@ export class EvaluationOrchestrator {
           match &&
           match.roundPhase === "CODING" &&
           round &&
-          round.roundId === match.rounds[match.currentRound - 1]?.roundId &&
-          !round.cutoffPassed &&
+          progress?.stage === "CODING" &&
+          round.roundId === match.rounds[(match.sideProgress?.[stored.sideId]?.currentRound ?? match.currentRound) - 1]?.roundId &&
+          !round.cutoffPassed && !round.cutoffPassedSides?.[stored.sideId] &&
           withinDeadlineGrace;
         if (!live) {
           await this.options.host.withMatchLock(stored.matchId, async () => {
@@ -476,14 +480,14 @@ export class EvaluationOrchestrator {
     }
     const { score, scoreBp, groups: groupResults, testStatuses: statuses } = scored;
     const matchDeadline = match.startedAt + match.durationMs;
-    const deadline = round.codingDeadlineMs != null
-      ? Math.min(round.codingDeadlineMs, matchDeadline)
+    const deadline = match.sideProgress?.[side]?.problemDeadlineMs != null
+      ? Math.min(match.sideProgress[side]!.problemDeadlineMs!, matchDeadline)
       : matchDeadline;
     const withinDeadlineGrace = stored.submittedAt < deadline && now <= deadline + this.options.deadlineGraceMs;
     if (
       match.roundPhase === "CODING" &&
-      round.roundId === this.options.host.currentRound(match).roundId &&
-      !round.cutoffPassed &&
+      round.roundId === match.rounds[(match.sideProgress?.[side]?.currentRound ?? match.currentRound) - 1]?.roundId &&
+      !round.cutoffPassed && !round.cutoffPassedSides?.[side] &&
       !round.superseded.includes(evaluationId) &&
       withinDeadlineGrace
     ) {
@@ -496,6 +500,7 @@ export class EvaluationOrchestrator {
       stored.scoreBp = scoreBp;
       stored.groups = groupResults;
       stored.testStatuses = statuses;
+      await this.options.host.onCounted(match, round, side, stored, now);
     } else {
       stored.status = "superseded";
       stored.score = null;
