@@ -273,7 +273,7 @@ describe('TeamChatGateway: 2v2 isolation, contextual pings, and security', () =>
     cA2.sock.disconnect();
     cB1.sock.disconnect();
     cB2.sock.disconnect();
-  }, 15000);
+  });
 
   it('enforces security: stranger rejected, 1v1 rejected, client-forged identity overridden', async () => {
     const matchId = await newTeamMatch();

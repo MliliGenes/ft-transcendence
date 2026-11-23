@@ -19,34 +19,23 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-export function resolveCpuLimitEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.JUDGE_CPU_LIMIT_ENABLED?.trim().toLowerCase() !== 'false';
-}
-
-export function createJudgeWorkerJudge(env: NodeJS.ProcessEnv = process.env): ContainerJudge {
-  const dockerBin = env.JUDGE_DOCKER_BIN?.trim() || 'docker';
-  const pythonImage =
-    env.JUDGE_PYTHON_IMAGE?.trim() || 'python:3.12-slim';
-  const gccImage = env.JUDGE_GCC_IMAGE?.trim() || 'gcc:14-bookworm';
-  const cpuLimitEnabled = resolveCpuLimitEnabled(env);
-  return new ContainerJudge({
-    dockerBin,
-    cpuLimitEnabled,
-    images: { Python: pythonImage, 'C++': gccImage, C: gccImage },
-  });
-}
-
 function start(): void {
   const token = requiredEnv('JUDGE_WORKER_TOKEN');
   const dockerBin = process.env.JUDGE_DOCKER_BIN?.trim() || 'docker';
   const pythonImage =
     process.env.JUDGE_PYTHON_IMAGE?.trim() || 'python:3.12-slim';
   const gccImage = process.env.JUDGE_GCC_IMAGE?.trim() || 'gcc:14-bookworm';
+  const cpuLimitEnabled =
+    process.env.JUDGE_CPU_LIMIT_ENABLED?.trim().toLowerCase() !== 'false';
   const port = integerEnv('JUDGE_WORKER_PORT', 3010, 1);
   const concurrency = integerEnv('JUDGE_WORKER_CONCURRENCY', 2, 1);
   const maxQueueSize = integerEnv('JUDGE_WORKER_MAX_QUEUE', 8, 0);
 
-  const judge = createJudgeWorkerJudge(process.env);
+  const judge = new ContainerJudge({
+    dockerBin,
+    images: { Python: pythonImage, 'C++': gccImage, C: gccImage },
+    cpuLimitEnabled,
+  });
   const readiness = new DockerImageReadiness({
     dockerBin,
     images: { python: pythonImage, gcc: gccImage },
@@ -67,13 +56,11 @@ function start(): void {
   process.once('SIGINT', shutdown);
 }
 
-if (process.env.NODE_ENV !== 'test') {
-  try {
-    start();
-  } catch (error) {
-    console.error(
-      `[judge-worker] startup failed: ${error instanceof Error ? error.message : 'configuration error'}`,
-    );
-    process.exitCode = 1;
-  }
+try {
+  start();
+} catch (error) {
+  console.error(
+    `[judge-worker] startup failed: ${error instanceof Error ? error.message : 'configuration error'}`,
+  );
+  process.exitCode = 1;
 }

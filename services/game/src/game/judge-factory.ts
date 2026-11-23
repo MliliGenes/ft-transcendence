@@ -27,9 +27,7 @@ export function createGameJudge(
   const backend = (environment.JUDGE_BACKEND ?? 'container')
     .trim()
     .toLowerCase();
-  const cpuLimitEnabled =
-    environment.JUDGE_CPU_LIMIT_ENABLED?.trim().toLowerCase() !== 'false';
-  if (backend === 'container') return new ContainerJudge({ cpuLimitEnabled });
+  if (backend === 'container') return new ContainerJudge();
   if (backend === 'worker') {
     const baseUrl = environment.JUDGE_WORKER_URL?.trim();
     if (!baseUrl)

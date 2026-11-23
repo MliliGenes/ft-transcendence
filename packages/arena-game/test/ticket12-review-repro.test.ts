@@ -204,8 +204,7 @@ describe("TICKET-12 Desired Behavior: Round coding deadline regressions", () => 
     expect(round.counted.left?.score).toBe(60);
 
     const finalSnap = await fx.engine.snapshot(fx.left, fx.matchId);
-    expect(finalSnap.progress.self.currentRound).toBe(3);
-    expect((await fx.engine["authority"].loadOrThrow(fx.matchId)).rounds[0].counted.left?.score).toBe(60);
+    expect(finalSnap.reveal?.scores.left).toBe(60);
   });
 
   it("checks exact boundary rejection: accepts at cutoff - 1, rejects at exact cutoff", async () => {

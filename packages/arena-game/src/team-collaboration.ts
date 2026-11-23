@@ -118,7 +118,7 @@ export class TeamCollaboration {
     reconnectGraceMs: number,
   ): Readiness {
     const members = this.teamMembers(match, side);
-    const readiness = this.roundForSide(match, side).readiness ?? {};
+    const readiness = this.currentRound(match).readiness ?? {};
     const required = members.map((member) =>
       this.approvalRequired(match, member.userId, now, reconnectGraceMs),
     );
@@ -137,7 +137,7 @@ export class TeamCollaboration {
     reconnectGraceMs = 90_000,
   ): boolean {
     if (revision === undefined) return false;
-    const round = this.roundForSide(match, side);
+    const round = this.currentRound(match);
     const doc = round.teamDocs?.[side];
     if (!doc || revision !== doc.revision) return false;
     return this.teamMembers(match, side)
@@ -162,14 +162,13 @@ export class TeamCollaboration {
     if (match.roundPhase !== 'CODING')
       throw new IllegalStateError(`ready rejected in ${match.roundPhase}`);
     const { sideId: side } = this.memberOf(match, userId);
-    this.requireSideCoding(match, side);
     const doc = this.teamDocOf(match, side);
     if (input.ready === true && input.documentRevision !== doc.revision) {
       throw new IllegalStateError(
         `stale readiness revision: approved r${String(input.documentRevision)}, current r${doc.revision}`,
       );
     }
-    const round = this.roundForSide(match, side);
+    const round = this.currentRound(match);
     round.readiness ??= {};
     const readiness: MemberReadiness = {
       userId,
@@ -192,8 +191,7 @@ export class TeamCollaboration {
         `document change rejected in ${match.roundPhase}`,
       );
     const { sideId: side } = this.memberOf(match, userId);
-    this.requireSideCoding(match, side);
-    const round = this.roundForSide(match, side);
+    const round = this.currentRound(match);
     if (input.roundId !== round.roundId)
       throw new IllegalStateError('stale round document (write denied)');
     const doc = this.teamDocOf(match, side);
@@ -218,8 +216,7 @@ export class TeamCollaboration {
   async sync(match: MatchRecord, userId: string): Promise<TeamSyncResult> {
     this.requireTeamMode(match);
     const { sideId: side } = this.memberOf(match, userId);
-    this.requireSideCoding(match, side);
-    const round = this.roundForSide(match, side);
+    const round = this.currentRound(match);
     const doc = this.teamDocOf(match, side);
     const room = collabRoomId(match.id, round.roundId, side);
     await this.ensureLoaded(match, round, side, room);
@@ -246,7 +243,7 @@ export class TeamCollaboration {
       );
     assertSupportedLanguage(language);
     const { sideId: side } = this.memberOf(match, userId);
-    const round = this.roundForSide(match, side);
+    const round = this.currentRound(match);
     const doc = this.teamDocOf(match, side);
     if (language === doc.language) return { side, revision: doc.revision };
     const room = collabRoomId(match.id, round.roundId, side);
@@ -274,8 +271,7 @@ export class TeamCollaboration {
     reconnectGraceMs = 90_000,
   ): Promise<SubmissionDocument> {
     this.requireTeamMode(match);
-    this.requireSideCoding(match, side);
-    const round = this.roundForSide(match, side);
+    const round = this.currentRound(match);
     const doc = this.teamDocOf(match, side);
     if (
       !this.documentRevisionMatches(
@@ -337,19 +333,8 @@ export class TeamCollaboration {
       const doc = round.teamDocs?.[side];
       return {
         side,
-        activity:
-          match.sideProgress?.[side]?.stage === "FINISHED"
-            ? "locked"
-            : own
-              ? this.activityOf(
-                  match.rounds[(match.sideProgress?.[side]?.currentRound ?? match.currentRound) - 1] ?? round,
-                  side,
-                )
-              : "coding",
-        submissions: match.rounds.reduce(
-          (count, entry) => count + (entry.attempts[side] ?? 0),
-          0,
-        ),
+        activity: this.activityOf(round, side),
+        submissions: round.attempts[side] ?? 0,
         members: this.teamMembers(match, side).map((participant) => {
           const record = own
             ? round.readiness?.[participant.userId]
@@ -386,12 +371,6 @@ export class TeamCollaboration {
       throw new IllegalStateError('no shared document in 1v1');
   }
 
-  private requireSideCoding(match: MatchRecord, side: SideId): void {
-    if (match.sideProgress?.[side]?.stage === "FINISHED") {
-      throw new IllegalStateError(`side ${side} has finished the match problems`);
-    }
-  }
-
   private memberOf(match: MatchRecord, userId: string): Participant {
     const participant = match.participants.find(
       (entry) => entry.userId === userId,
@@ -419,14 +398,13 @@ export class TeamCollaboration {
   }
 
   private teamDocOf(match: MatchRecord, side: SideId): TeamDocState {
-    const doc = this.roundForSide(match, side).teamDocs?.[side];
+    const doc = this.currentRound(match).teamDocs?.[side];
     if (!doc) throw new IllegalStateError(`no team document for side ${side}`);
     return doc;
   }
 
-  private roundForSide(match: MatchRecord, side: SideId): RoundState {
-    const roundNumber = match.sideProgress?.[side]?.currentRound ?? match.currentRound;
-    const round = match.rounds[roundNumber - 1];
+  private currentRound(match: MatchRecord): RoundState {
+    const round = match.rounds[match.currentRound - 1];
     if (!round)
       throw new IllegalStateError(`match ${match.id} has no current round`);
     return round;

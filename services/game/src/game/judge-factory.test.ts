@@ -56,22 +56,4 @@ describe('Game judge backend selection', () => {
       'unsupported JUDGE_BACKEND unknown',
     );
   });
-
-  it('wires JUDGE_CPU_LIMIT_ENABLED to ContainerJudge options with default true and false optout', async () => {
-    const { createGameJudge } = await loadFactory();
-    const defaultJudge = createGameJudge({ JUDGE_BACKEND: 'container' });
-    expect((defaultJudge as any).cpuLimitEnabled).toBe(true);
-
-    const optOutJudge = createGameJudge({
-      JUDGE_BACKEND: 'container',
-      JUDGE_CPU_LIMIT_ENABLED: 'false',
-    });
-    expect((optOutJudge as any).cpuLimitEnabled).toBe(false);
-
-    const whitespaceOptOut = createGameJudge({
-      JUDGE_BACKEND: 'container',
-      JUDGE_CPU_LIMIT_ENABLED: '  FaLsE  ',
-    });
-    expect((whitespaceOptOut as any).cpuLimitEnabled).toBe(false);
-  });
 });

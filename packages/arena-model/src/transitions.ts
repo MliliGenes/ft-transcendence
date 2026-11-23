@@ -6,8 +6,6 @@ import {
   bothReady,
 } from "./model.js";
 
-export type SideStage = "CODING" | "FINISHED";
-
 /**
  * Round lifecycle: the ONE global state machine. Tracks match/round progress
  * only — never per-side execution activity. Each side runs its own activity
@@ -50,10 +48,6 @@ export function canRun(phase: RoundPhase): boolean {
 export function canSubmit(phase: RoundPhase, mode: MatchMode, readiness: Readiness): boolean {
   if (phase !== "CODING") return false;
   return mode === "1v1" || bothReady(readiness);
-}
-
-export function canSubmitAsync(phase: RoundPhase, stage: SideStage, mode: MatchMode, readiness: Readiness): boolean {
-  return stage === "CODING" && canSubmit(phase, mode, readiness);
 }
 
 /** Only round CODING allows editing; every other round phase is read-only. */

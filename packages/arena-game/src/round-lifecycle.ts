@@ -10,7 +10,7 @@ import {
 } from "arena-model";
 import { isCompetitiveVerdict, type ExecutionStatus } from "./judge.js";
 import { IllegalStateError } from "./match-authority.js";
-import type { CountedResult, GroupResult, MatchRecord, RevealSnapshot, RoundState, SideId, SideProgress } from "./records.js";
+import type { CountedResult, GroupResult, MatchRecord, RevealSnapshot, RoundState, SideId } from "./records.js";
 
 /** Judge output that the Game turns into a scored Match result. */
 export interface SealedVerdict {
@@ -38,13 +38,6 @@ export interface FinalResult {
 export interface RoundAdvance {
   completed: boolean;
   previousRoundId: string | null;
-  activityResets: SideId[];
-}
-
-export interface SideAdvance {
-  finished: boolean;
-  previousRoundId: string;
-  newRoundId?: string;
   activityResets: SideId[];
 }
 
@@ -119,71 +112,20 @@ export class RoundLifecycle {
     match.roundPhase = "ROUND_INTRO";
   }
 
-  beginCoding(match: MatchRecord, startedAtMs: number, problemCapMs: number): void {
-    if (match.roundPhase !== "CODING" && !canTransition(match.roundPhase, "CODING")) {
+  beginCoding(match: MatchRecord, codingDeadlineMs?: number): void {
+    if (match.roundPhase === "CODING") {
+      // Idempotent repeated Begin Coding: preserve state and existing deadline
+      return;
+    }
+    if (!canTransition(match.roundPhase, "CODING")) {
       throw new IllegalStateError(`cannot begin coding in ${match.roundPhase}`);
     }
     match.roundPhase = "CODING";
-    const matchDeadline = match.startedAt + match.durationMs;
-    match.sideProgress ??= {};
-    for (const side of this.matchSides(match)) {
-      if (!match.sideProgress[side]) {
-        match.sideProgress[side] = {
-          currentRound: 1,
-          stage: "CODING",
-          problemDeadlineMs: Math.min(startedAtMs + problemCapMs, matchDeadline),
-          finishedAtMs: null,
-        };
-      } else if (match.sideProgress[side]!.stage === "CODING" && match.sideProgress[side]!.problemDeadlineMs == null) {
-        match.sideProgress[side]!.problemDeadlineMs = Math.min(startedAtMs + problemCapMs, matchDeadline);
-      }
-      match.rounds[0]!.activities[side] = "coding";
+    const round = this.currentRound(match);
+    for (const side of Object.keys(round.activities)) round.activities[side] = "coding";
+    if (codingDeadlineMs !== undefined && round.codingDeadlineMs == null) {
+      round.codingDeadlineMs = codingDeadlineMs;
     }
-    match.rounds[0]!.codingDeadlineMs = Math.min(startedAtMs + problemCapMs, matchDeadline);
-    this.syncCurrentRound(match);
-  }
-
-  advanceSide(match: MatchRecord, side: SideId, nowMs: number, problemCapMs: number): SideAdvance {
-    if (match.roundPhase !== "CODING") throw new IllegalStateError(`cannot advance side in ${match.roundPhase}`);
-    const progress = match.sideProgress?.[side];
-    if (!progress || progress.stage !== "CODING") throw new IllegalStateError(`side ${side} is not coding`);
-    const previous = match.rounds[progress.currentRound - 1];
-    if (!previous) throw new IllegalStateError(`side ${side} has no current round`);
-    previous.activities[side] = "locked";
-    if (progress.currentRound >= match.totalRounds) {
-      progress.stage = "FINISHED";
-      progress.finishedAtMs = nowMs;
-      progress.problemDeadlineMs = null;
-      this.syncCurrentRound(match);
-      return { finished: true, previousRoundId: previous.roundId, activityResets: [] };
-    }
-    progress.currentRound += 1;
-    progress.problemDeadlineMs = Math.min(nowMs + problemCapMs, match.startedAt + match.durationMs);
-    const next = match.rounds[progress.currentRound - 1];
-    if (!next) throw new IllegalStateError(`side ${side} has no next round`);
-    next.activities[side] = "coding";
-    next.codingDeadlineMs = progress.problemDeadlineMs;
-    next.runTests[side] = undefined;
-    if (match.mode === "2v2") {
-      const users = new Set(match.participants.filter((participant) => participant.sideId === side).map((participant) => participant.userId));
-      for (const userId of users) delete next.readiness?.[userId];
-      next.teamDocs ??= {};
-      const language = previous.teamDocs?.[side]?.language ?? "Python";
-      next.teamDocs[side] = { revision: 1, language };
-    }
-    this.syncCurrentRound(match);
-    return { finished: false, previousRoundId: previous.roundId, newRoundId: next.roundId, activityResets: [side] };
-  }
-
-  bothFinished(match: MatchRecord): boolean {
-    return this.matchSides(match).every((side) => match.sideProgress?.[side]?.stage === "FINISHED");
-  }
-
-  expiredSides(match: MatchRecord, nowMs: number): SideId[] {
-    return this.matchSides(match).filter((side) => {
-      const progress = match.sideProgress?.[side];
-      return progress?.stage === "CODING" && progress.problemDeadlineMs != null && nowMs >= progress.problemDeadlineMs;
-    });
   }
 
   beginReveal(match: MatchRecord): void {
@@ -329,17 +271,7 @@ export class RoundLifecycle {
   }
 
   totalScore(match: MatchRecord, side: SideId): number {
-    return matchSum(match.rounds.map((round) => round.counted[side]?.score ?? 0));
-  }
-
-  private matchSides(match: MatchRecord): SideId[] {
-    const sides = Object.keys(match.sideProgress ?? {});
-    if (sides.length === 2) return sides;
-    return Object.keys(match.rounds[0]?.activities ?? {});
-  }
-
-  private syncCurrentRound(match: MatchRecord): void {
-    match.currentRound = Math.max(1, ...Object.values(match.sideProgress ?? {}).map((progress) => progress?.currentRound ?? 1));
+    return matchSum(match.rounds.slice(0, match.currentRound).map((round) => round.counted[side]?.score ?? 0));
   }
 
   private currentRound(match: MatchRecord): RoundState {

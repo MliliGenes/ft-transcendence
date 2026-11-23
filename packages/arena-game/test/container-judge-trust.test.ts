@@ -35,6 +35,45 @@ afterEach(() => {
 });
 
 describe("ContainerJudge trusted boundary", () => {
+  it("enables CPU limits by default and allows them to be disabled", async () => {
+    const runner = JSON.stringify({
+      status: "accepted",
+      output_b64: Buffer.from("1", "utf8").toString("base64"),
+      comparison_b64: Buffer.from("1", "utf8").toString("base64"),
+      ms: 1,
+    });
+    const limits = { ...SPIKE_LIMITS, runWallMs: 1000, compileWallMs: 1000 };
+    const input = {
+      language: "Python" as const,
+      driver: "snippet" as const,
+      source: "def solve(value): return value\n",
+      tests: [{ id: "cpu-limit", input: "value = 1", expected: "1" }],
+      limits,
+    };
+
+    const enabledDocker = fakeDocker(runner);
+    await new ContainerJudge({ dockerBin: enabledDocker.binary }).runVisible(
+      input.language,
+      input.driver,
+      input.source,
+      input.tests,
+      input.limits,
+    );
+    const enabledArgs = JSON.parse(readFileSync(enabledDocker.argsLog, "utf8").trim()) as string[];
+    expect(enabledArgs.slice(enabledArgs.indexOf("--cpus"), enabledArgs.indexOf("--cpus") + 2)).toEqual([
+      "--cpus",
+      "1",
+    ]);
+
+    const disabledDocker = fakeDocker(runner);
+    await new ContainerJudge({
+      dockerBin: disabledDocker.binary,
+      cpuLimitEnabled: false,
+    }).runVisible(input.language, input.driver, input.source, input.tests, input.limits);
+    const disabledArgs = JSON.parse(readFileSync(disabledDocker.argsLog, "utf8").trim()) as string[];
+    expect(disabledArgs).not.toContain("--cpus");
+  });
+
   it("ignores a forged runner pass when captured output differs from the expected answer", async () => {
     const forged = JSON.stringify({
       id: "forged-case",

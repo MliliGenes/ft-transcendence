@@ -336,7 +336,12 @@ export class GameService implements OnModuleInit, OnModuleDestroy {
   }
 
   async submit(userId: string, matchId: string, input: { code: string; language: string; submissionId?: string; evaluationId?: string; documentRevision?: number }) {
-    return this.engine.submit(this.principalFor(userId), matchId, input);
+    const receipt = await this.engine.submit(this.principalFor(userId), matchId, input);
+    // The engine checks the counted-score condition and publishes independently
+    // of this caller's membership, which may change while evaluation is running.
+    // Fire-and-forget: reveal errors never fail the accepted submission.
+    void this.engine.autoRevealIfAllSidesCounted(matchId, { graceMs: 1500 }).catch(() => {});
+    return receipt;
   }
 
   /**

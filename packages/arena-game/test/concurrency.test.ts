@@ -34,11 +34,10 @@ class ConflictOnceMatchStore extends InMemoryMatchStore {
 
 describe('per-match critical sections (no lost updates, no cross-side freeze)', () => {
   it('concurrent submits from both sides both become counted', async () => {
-    const { engine, judge, left, right, matchId } = await setup(
-      [{ defer: true }, { defer: true }],
-      {},
-      ['even-ledger-v2'],
-    );
+    const { engine, judge, left, right, matchId } = await setup([
+      { defer: true },
+      { defer: true },
+    ]);
     const a = engine.submit(left, matchId, {
       code: SOLVED_PY,
       language: 'Python',
@@ -52,9 +51,6 @@ describe('per-match critical sections (no lost updates, no cross-side freeze)', 
       'evaluating',
     );
     expect((await engine.snapshot(left, matchId)).sides.right?.status).toBe(
-      'coding',
-    );
-    expect((await engine.snapshot(right, matchId)).sides.right?.status).toBe(
       'evaluating',
     );
     judge.release(P100);
@@ -65,8 +61,7 @@ describe('per-match critical sections (no lost updates, no cross-side freeze)', 
     expect(reveal.scores).toEqual({ left: 100, right: 100 });
     const snap = await engine.snapshot(left, matchId);
     expect(snap.sides.left?.submissions).toBe(1);
-    const snapRight = await engine.snapshot(right, matchId);
-    expect(snapRight.sides.right?.submissions).toBe(1);
+    expect(snap.sides.right?.submissions).toBe(1);
   });
 
   it('concurrent duplicate submits for one side: second is rejected, first counts once', async () => {
@@ -105,8 +100,8 @@ describe('per-match critical sections (no lost updates, no cross-side freeze)', 
     judge.release(P100);
     const [runRes] = await Promise.all([running, submitting]);
     expect(runRes.tests.every((t) => t.passed)).toBe(true);
-    const snapRight = await engine.snapshot(right, matchId);
-    expect(snapRight.progress?.self?.lastScore).toBe(100);
+    const reveal = await engine.publishReveal(left, matchId);
+    expect(reveal.scores.right).toBe(100);
   });
 
   it('retries an idempotent grace snapshot after an optimistic conflict', async () => {

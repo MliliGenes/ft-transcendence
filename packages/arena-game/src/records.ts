@@ -1,16 +1,7 @@
-import type { MatchMode, PlayerStatus, Presence, RevealCause, RoundPhase, SideStage } from "arena-model";
+import type { MatchMode, PlayerStatus, Presence, RevealCause, RoundPhase } from "arena-model";
 import type { ExecutionStatus } from "./judge.js";
 
 export type SideId = string;
-
-export interface SideProgress {
-  currentRound: number;
-  stage: SideStage;
-  problemDeadlineMs: number | null;
-  finishedAtMs?: number | null;
-  lastScore?: number;
-  lastScoredRound?: number;
-}
 
 export interface ForfeitRecord {
   winner: SideId;
@@ -73,14 +64,10 @@ export interface RoundState {
    */
   readiness?: Record<string, MemberReadiness>;
   reveal: RevealSnapshot | null;
-  /** Legacy round-level closure flags, retained for old persisted rows. */
   closing: boolean;
   cutoffPassed: boolean;
-  closingSides?: Partial<Record<SideId, boolean>>;
-  cutoffPassedSides?: Partial<Record<SideId, boolean>>;
-  noSubmission?: Partial<Record<SideId, boolean>>;
   superseded: string[];
-  /** Legacy persisted deadline, read only while normalizing old matches. */
+  /** Server-owned coding deadline (ms). Set at first CODING transition; never resets. */
   codingDeadlineMs?: number | null;
 }
 
@@ -88,9 +75,7 @@ export interface MatchRecord {
   id: string;
   mode: MatchMode;
   roundPhase: RoundPhase;
-  /** Derived compatibility display value; never use it to select a side's round. */
   currentRound: number;
-  sideProgress?: Partial<Record<SideId, SideProgress>>;
   totalRounds: number;
   durationMs: number;
   startedAt: number;

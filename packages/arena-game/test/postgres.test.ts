@@ -528,14 +528,13 @@ describe.runIf(HAS_PG)('postgres persistence + restart (real database)', () => {
       code: SOLVED_PY,
       language: 'Python',
     });
-    await engine1.leaveMatch(right, matchId);
     const engine2 = liveEngine(stores, [P100], clock);
     const reveal = await engine2.publishReveal(left, matchId);
     expect(reveal.scores.left).toBe(70);
     const engine3 = liveEngine(stores, [P100], clock);
     const snap = await engine3.snapshot(left, matchId);
     expect(snap.reveal?.scores.left).toBe(70);
-    expect(['SCORE_REVEAL', 'MATCH_COMPLETE']).toContain(snap.roundPhase);
+    expect(snap.roundPhase).toBe('SCORE_REVEAL');
   });
 
   it('4+5. duplicate and concurrent reveals publish exactly once', async () => {
@@ -545,12 +544,10 @@ describe.runIf(HAS_PG)('postgres persistence + restart (real database)', () => {
       code: SOLVED_PY,
       language: 'Python',
     });
-    await engine1.leaveMatch(right, matchId);
-    const rev1 = await engine1.publishReveal(left, matchId);
+    await engine1.publishReveal(left, matchId);
+    await expect(engine1.publishReveal(left, matchId)).rejects.toThrow();
     const engine2 = liveEngine(stores, [P100], clock);
-    const rev2 = await engine2.publishReveal(right, matchId);
-    expect(rev1.scores.left).toBe(100);
-    expect(rev2.scores.left).toBe(100);
+    await expect(engine2.publishReveal(right, matchId)).rejects.toThrow();
     const rows = await stores.raw.query(
       'SELECT COUNT(*)::int AS n FROM reveals',
     );
@@ -564,9 +561,8 @@ describe.runIf(HAS_PG)('postgres persistence + restart (real database)', () => {
       code: SOLVED_PY,
       language: 'Python',
     });
-    await engine1.leaveMatch(right, matchId);
     await engine1.publishReveal(left, matchId);
-    await expect(engine1.nextRound(left, matchId)).rejects.toThrow();
+    await engine1.nextRound(left, matchId);
     const engine2 = liveEngine(stores, [P100], clock);
     const snap = await engine2.snapshot(left, matchId);
     expect(snap.roundPhase).toBe('MATCH_COMPLETE');
@@ -583,11 +579,9 @@ describe.runIf(HAS_PG)('postgres persistence + restart (real database)', () => {
     const engine2 = liveEngine(stores, [P100], clock);
     const snap = await engine2.snapshot(left, matchId);
     expect(snap.remainingMs).toBe(30 * 60 * 1000 - 5 * 60 * 1000);
-    expect(snap.sides.right?.status).toBe('locked');
-    const snapRight = await engine2.snapshot(right, matchId);
-    expect(snapRight.sides.right?.submissions).toBe(1);
-    await engine2.leaveMatch(left, matchId);
-    const reveal = await engine2.publishReveal(right, matchId);
+    expect(snap.sides.right?.status).toBe('coding');
+    expect(snap.sides.right?.submissions).toBe(1);
+    const reveal = await engine2.publishReveal(left, matchId);
     expect(reveal.scores.right).toBe(100);
   });
 

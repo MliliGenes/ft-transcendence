@@ -1,0 +1,15 @@
+# game-service and judge-worker build from the repo root (context: .), so
+# everything not needed by their Dockerfiles must stay out of the context.
+# volumes/ is the important one: Postgres data there is owned by the container
+# uid (70, mode 700) and is unreadable to the host user, which makes BuildKit
+# fail the build with "permission denied" while walking the context.
+volumes/
+.git/
+.agents/
+.ua/
+graphify-out/
+docs/
+**/node_modules/
+**/.next/
+**/dist/
+*.pdf

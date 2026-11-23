@@ -35,7 +35,8 @@ services:
   nginx:
     build: ./nginx
     ports:
-      - '443:443'
+      # Rootless Docker cannot bind host port 443; the app lives on 8443.
+      - '8443:443'
       - '9443:9443'
     volumes:
       - ./volumes/nginx/certs:/etc/nginx/certs
@@ -283,7 +284,10 @@ services:
     env_file:
       - ./envs/judge-worker.env
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      # Rootless Docker serves its API on $XDG_RUNTIME_DIR/docker.sock, not on
+      # /var/run/docker.sock (which belongs to a rootful daemon here). Set
+      # DOCKER_SOCKET in .env on rootless hosts.
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
     networks:
       - judge-internal
     restart: unless-stopped

@@ -1,9 +1,11 @@
-.DEFAULT_GOAL := help
+.DEFAULT_GOAL := all
 
 COMPOSE ?= docker compose
 SERVICE ?=
 
 .PHONY: help config build up start stop down restart rebuild ps logs format backup-up backup-down clean destroy prune
+
+all: build up
 
 help:
 	@echo "Nook project commands:"

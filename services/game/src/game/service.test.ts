@@ -139,32 +139,24 @@ describe("game service integration (real HTTP + sockets + containers)", () => {
     const matchId = await newMatch();
     await api("POST", `/matches/${matchId}/start`, "user-a", {});
     await api("POST", `/matches/${matchId}/begin`, "user-a", {});
-    for (let round = 0; round < 3; round++) {
+        for (let round = 0; round < 3; round++) {
       const run = await api("POST", `/matches/${matchId}/run`, "user-a", { code: SOLVED_PY, language: "Python" });
       expect(run.status).toBe(201);
       expect((run.json as { tests: Array<{ passed: boolean }> }).tests.every((t) => t.passed)).toBe(true);
       expect((await api("POST", `/matches/${matchId}/submit`, "user-a", { code: SOLVED_PY, language: "Python" })).status).toBe(201);
       expect((await api("POST", `/matches/${matchId}/submit`, "user-b", { code: STARTER_PY, language: "Python" })).status).toBe(201);
       let snap: unknown = null;
-      const targetPhase = round === 2 ? "SCORE_REVEAL" : "CODING";
-      const targetRound = round < 2 ? round + 2 : 3;
       for (let i = 0; i < 40; i++) {
         const s = await api("GET", `/matches/${matchId}/snapshot`, "user-a");
         snap = s.json;
-        if (round === 2) {
-          const phase = (snap as { roundPhase: string }).roundPhase;
-          if (phase === "SCORE_REVEAL" || phase === "MATCH_COMPLETE") break;
-        } else {
-          const current = (snap as { progress?: { self?: { currentRound?: number } } }).progress?.self?.currentRound;
-          if (current === targetRound) break;
-        }
+        if ((snap as { roundPhase: string }).roundPhase === "SCORE_REVEAL") break;
         await new Promise((r) => setTimeout(r, 250));
       }
-      if (round === 2) {
-        expect(["SCORE_REVEAL", "MATCH_COMPLETE"]).toContain((snap as { roundPhase: string }).roundPhase);
-        expect((snap as { reveal: { scores: unknown } }).reveal.scores).toEqual({ left: 100, right: 28 });
-        expect((snap as { reveal: { groups: unknown } }).reveal.groups).toBeDefined();
-      }
+      expect((snap as { roundPhase: string }).roundPhase).toBe("SCORE_REVEAL");
+      expect((snap as { reveal: { scores: unknown } }).reveal.scores).toEqual({ left: 100, right: 28 });
+      expect((snap as { reveal: { groups: unknown } }).reveal.groups).toBeDefined();
+      await api("POST", `/matches/${matchId}/advance`, "user-a", {});
+      if (round < 2) await api("POST", `/matches/${matchId}/begin`, "user-a", {});
     }
     const fin = await api("GET", `/matches/${matchId}/final`, "user-a");
     expect((fin.json as { scores: unknown }).scores).toEqual({ left: 300, right: 84 });
@@ -172,15 +164,7 @@ describe("game service integration (real HTTP + sockets + containers)", () => {
   }, 180000);
 
   it("sockets: snapshot on connect, actions by ack, shared reveal broadcast", async () => {
-    const res = await api("POST", "/matches", "user-a", {
-      mode: "1v1",
-      participants: [
-        { userId: "user-a", sideId: "left" },
-        { userId: "user-b", sideId: "right" },
-      ],
-      problemVersionIds: ["even-ledger-v2"],
-    });
-    const matchId = (res.json as { matchId: string }).matchId;
+    const matchId = await newMatch();
     await api("POST", `/matches/${matchId}/start`, "user-a", {});
     await api("POST", `/matches/${matchId}/begin`, "user-a", {});
     const sockA = io(BASE, { auth: { userId: "user-a", matchId } });

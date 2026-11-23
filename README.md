@@ -1,4 +1,4 @@
-_This project has been created as part of the 42 curriculum by sel-mlil, ayousr, amsbai, elakhfif._
+_This project has been created as part of the 42 curriculum by sel-mlil, ayousr, elakhfif._
 
 # Nook
 
@@ -12,16 +12,39 @@ For coding competitions, **Code Arena** supports 1v1 challenges and 2v2 team mat
 
 | 42 login   | Role(s)                                  | Contributions                                                                                                                                                                                                                                                                                                                                  |
 | ---------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sel-mlil` | Product Owner, Technical Lead, Developer | Proposed the project and selected its technology stack, drawing on prior web and full-stack experience. Built user management and its Next.js client integration; implemented Chat endpoints and client integration, including service integration informed by the RabbitMQ setup. Co-developed infrastructure specifications with `elakhfif`. |
-| `ayousr`   | Project Manager, Developer               | Coordinated work through Trello and Discord and helped mediate team tensions. Built the game service and judge server, contributed to 1v1 design decisions, and continued with 2v2 gameplay and client integration.                                                                                                                            |
-| `amsbai`   | Developer                                | Helped plan the Chat service and contributed to 1v1 design decisions. The project was also a hands-on learning experience.                                                                                                                                                                                                                     |
-| `elakhfif` | Infrastructure / DevOps contributor      | Shared infrastructure guidance from prior experience and helped shape the Nginx routing and Grafana monitoring specifications.                                                                                                                                                                                                                 |
+| `sel-mlil` | Product Owner, Technical Lead, Developer | Proposed Nook and selected its stack. Built the User service and auth/profile/friends/search client flows; established the Next.js `(app)` and `(auth)` structure and shared UI foundation. Designed and completed Chat API gaps, implemented group/channel and attachment flows, User-to-Chat RabbitMQ profile synchronization, and the Feed backend/UI. Implemented Nginx and monitoring infrastructure with guidance from `elakhfif`. |
+| `ayousr`   | Project Manager, Developer               | Co-created the Trello project board with `sel-mlil`. Built the Game and Judge services, 1v1 and 2v2 match flows, collaborative gameplay, and Code Arena client integration. Implemented match history, statistics, leaderboard and progression, plus G06 chat capabilities and game-lifecycle integration. |
+| `elakhfif` | Infrastructure / DevOps contributor      | Advised on Compose file separation and extension fields, the `infra/` layout, monitoring-stack organization, and Nginx brute-force rate limiting; `sel-mlil` implemented the infrastructure configuration.                                                                                                                                                                                                                 |
 
 ### Team reflection
 
 The project brought together people with different experience levels, work styles, and availability. Workload did not always feel evenly distributed, and deadline pressure and communication gaps sometimes made collaboration difficult. `ayousr` played an important role in calming tensions and helping the team keep moving. This experience taught us to align expectations earlier, make workload visible, and raise blockers before they become deadline problems. Differences in experience also gave the team opportunities to learn from one another.
 
 The project plan is in the [points roadmap](docs/project/POINTS_ROADMAP.md); the current product context and open decisions are in [Project Context](docs/project/PROJECT_CONTEXT.md).
+
+## Project management
+
+`sel-mlil` and `ayousr` created the Trello board to organize the backlog, technology stack, project specifications, and features. Members chose areas based on their interests and prior experience, moving tasks through **To Do → Doing → Tested → Done**. The plan, stack, and features were established upfront; each member organized their own work and owned implementation, testing, and fixes.
+
+We mainly communicated in person at school, using Discord when members were away. We met as needed, with no fixed cadence, for merges, feature status checks, brainstorming, and technical advice. We helped one another resolve blockers through research and brainstorming, supported by AI assistance. Technical decisions gave weight to relevant experience and research into suitable solutions.
+
+Each member worked on branches from `main`, with `sel-mlil` and `ayousr` handling merges directly. For our small team, we used Trello and direct communication rather than formal pull requests and issue tracking. Tests and agent-assisted checks supported integration, and errors were patched as they arose.
+
+## Features
+
+| Feature | Description | Implemented by |
+| --- | --- | --- |
+| Authentication and profiles | Registration, login, OAuth, account settings, profile images, public profiles, and account search | `sel-mlil` |
+| Friends | Friend requests, friend lists, and social client integration | `sel-mlil` |
+| Nook Feed | Feed backed by a fixed Chat group and channel, startup provisioning and membership backfill, new-user membership, and a dedicated UI kept separate from normal chat listings | `sel-mlil` |
+| DMs and groups | Persistent DMs, group and channel APIs, RabbitMQ profile synchronization, and client integration | `sel-mlil`: API design and completion, groups/channels, User-to-Chat event consumption, and client integration |
+| Advanced chat | Blocking checks, typing indicators, read receipts, and game lifecycle notices supporting G06 | `ayousr`, integrating these features and game history after the Chat service was completed |
+| Attachments | Private MinIO storage with presigned uploads/downloads and attachment UI | `sel-mlil` |
+| 1v1 and 2v2 gameplay | Matchmaking, private rooms, timed rounds, real-time collaboration, and Code Arena client integration | `ayousr` |
+| Judge | Submission evaluation in isolated, resource-limited Docker containers | `ayousr` |
+| Leaderboard and gamification | Match history, player statistics, XP, levels, rank titles, and achievements | `ayousr` |
+| Monitoring and gateway | Nginx reverse proxy and rate limiting; Prometheus/Grafana monitoring and log collection | `sel-mlil`, with infrastructure guidance from `elakhfif` |
+| Client UI | Next.js route groups, shared design-system components, and social interfaces; `/play` composed from shared components | `sel-mlil` built the client foundation and social UI; `ayousr` built the Code Arena client |
 
 ## Architecture
 
@@ -70,18 +93,18 @@ The judge worker currently mounts the host Docker socket because it creates the 
 
 ## Stack and why
 
-| Area                         | Technology                                          | Use in Nook                                                                                                  |
-| ---------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Web client                   | Next.js App Router, React, TypeScript, Tailwind CSS | Shared application, public pages, server-rendered routes, accessible responsive components                   |
-| Backend services             | NestJS, Node.js, TypeScript                         | Separate account, chat and game boundaries with validated APIs and WebSocket gateways                        |
-| Account and Chat persistence | PostgreSQL and Prisma                               | Relational identity/social data and conversation/group data with migrations                                  |
-| Game persistence             | PostgreSQL with parameterized SQL                   | Atomic match snapshots, round/submission records and collaborative state                                     |
-| Realtime                     | Socket.IO, Yjs                                      | Presence, chat, matchmaking and collaborative 2v2 editing                                                    |
-| Service events               | RabbitMQ                                            | Profile synchronization to Chat, account deletion to Chat and Game, and Code Arena lifecycle notices to Chat |
-| Attachments                  | MinIO                                               | Private object storage with presigned browser uploads/downloads                                              |
-| Code execution               | Judge worker and Docker                             | Isolated execution of Code Arena submissions                                                                 |
-| Local orchestration          | Docker Compose                                      | Repeatable multi-service development and demonstration                                                       |
-| Gateway and monitoring       | Nginx, Grafana, Prometheus, Loki, Alloy             | TLS termination, path routing, health/metrics dashboards and operational logs                                |
+| Area                         | Technology                                                           | Use in Nook                                                                                                  | Why we chose it                                                                                                                                                            |
+| ---------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web client                   | Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui       | Shared application, public pages, server-rendered routes, accessible responsive components                   | Next.js provided routing, page/component separation, SSR, and a useful build workflow. Tailwind and shadcn/ui helped keep styling consistent with reusable components and less custom UI code. |
+| Backend services             | NestJS, Node.js, TypeScript                                          | Separate account, chat and game boundaries with validated APIs and WebSocket gateways                        | NestJS encouraged modular structure and SOLID-oriented boundaries; TypeScript's types improved readability and made service contracts easier to work with.                   |
+| Account and Chat persistence | PostgreSQL and Prisma                                                | Relational identity/social data and conversation/group data with migrations                                  | Separate databases reinforced the microservice boundaries and avoided a shared database dependency. PostgreSQL offered strong data integrity, built-in statistics, extensibility, and performance; Prisma provided migrations and a generated typed client. |
+| Game persistence             | PostgreSQL with parameterized SQL                                    | Atomic match snapshots, round/submission records and collaborative state                                     | Direct SQL gave the Game service explicit control over persistence and transactions spanning related match records.                                                        |
+| Realtime                     | Socket.IO, Yjs                                                       | Presence, chat, matchmaking and collaborative 2v2 editing                                                    | Socket.IO rooms, heartbeat checks, and reconnection support reduced realtime plumbing; Yjs supplied CRDT synchronization for shared CodeMirror editing.                     |
+| Service events               | RabbitMQ                                                             | Profile synchronization to Chat, account deletion to Chat and Game, and Code Arena lifecycle notices to Chat | Asynchronous events avoid making each consumer's availability a requirement for the publisher; temporarily stale data was preferable to unavailable features.                 |
+| Attachments                  | MinIO                                                                | Private object storage with presigned browser uploads/downloads                                              | Self-hosted S3-compatible object storage kept large attachments out of PostgreSQL and enabled direct browser transfers through presigned URLs.                               |
+| Code execution               | Judge worker and Docker                                              | Isolated execution of Code Arena submissions                                                                 | Containers isolate submitted code and limit resources, while Compose makes the environment reproducible across machines.                                                   |
+| Local orchestration          | Docker Compose                                                       | Repeatable multi-service development and demonstration                                                       | One-command startup made the multi-service stack easier to reproduce and demonstrate, matching the subject's deployment expectation.                                         |
+| Gateway and monitoring       | Nginx, Grafana, Prometheus, Loki, Alloy, cAdvisor                    | TLS termination, path routing, health/metrics dashboards and operational logs                                | Nginx was familiar from `ft_webserv` and suited reverse proxying and rate limits. The subject called for monitoring; `elakhfif` helped guide the stack layout, with documentation and AI-assisted configuration. |
 
 ## Instructions: start the local stack
 
@@ -102,12 +125,12 @@ docker compose config --quiet
 docker compose up --build
 ```
 
-Open **https://localhost** and accept or trust the development certificate generated by Nginx. The default development certificate is self-signed and is not suitable for a public deployment. Compose persists application data in local bind-mounted directories and named monitoring volumes; `docker compose down` stops the stack but keeps that data.
+Open **https://localhost:8443** and accept or trust the development certificate generated by Nginx. The default development certificate is self-signed and is not suitable for a public deployment. Compose persists application data in local bind-mounted directories and named monitoring volumes; `docker compose down` stops the stack but keeps that data.
 
 | Local address                | Service                                               |
 | ---------------------------- | ----------------------------------------------------- |
-| `https://localhost`          | Nook web application and API gateway                  |
-| `https://localhost/grafana/` | Login-protected Grafana dashboards                    |
+| `https://localhost:8443`      | Nook web application and API gateway                  |
+| `https://localhost:8443/grafana/` | Login-protected Grafana dashboards                |
 | `https://localhost:9443`     | Loopback-bound MinIO S3 proxy for browser attachments |
 | `http://localhost:9001`      | Loopback-bound MinIO console                          |
 | `http://localhost:15672`     | Loopback-bound RabbitMQ management console            |
@@ -123,7 +146,59 @@ Prometheus, Loki, Alloy, databases, backend services and the judge worker are no
 | Game PostgreSQL | Private rooms, match snapshots, rounds, submissions, results and collaborative editor snapshots                                        | Code Arena service, SQL schema initialization |
 | MinIO           | Chat attachment objects                                                                                                                | Chat service presigned upload/download flows  |
 
-The databases have separate owners and no cross-database foreign keys. The Chat service receives profile changes through RabbitMQ and stores the existing User UUID. MinIO stores Chat attachments. Code Arena sends evaluations to the judge worker over a dedicated internal Docker network. The worker runs submitted code in resource-limited containers without network access. Judge concurrency and waiting work are bounded by the judge process; Postgres stores durable match and submission records. See the [User service guide](docs/services/user-service.md), [Chat schema notes](docs/services/chat-service.md), and [game persistence implementation](packages/arena-game/src/postgres-store.ts).
+### User PostgreSQL
+
+Defined by `user-service/prisma/schema.prisma`. The primary account key is `User.id`; username and email are unique.
+
+| Table | Key fields and relationships |
+| --- | --- |
+| `User` | **PK** `id`; unique `username`, `email`; account/profile fields and optional `passwordHash`. Parent for auth providers, refresh tokens, images, friendships, blocks, 2FA, recovery codes, and auth tokens. |
+| `AuthProvider` | **PK** `id`; **FK** `userId → User.id`; unique `(provider, providerUserId)` and `(userId, provider)`. |
+| `RefreshToken` | **PK** `id`; **FK** `userId → User.id`; hashed token, expiry/revocation fields, and `sessionId` shared across rotations. There is no separate Session table. |
+| `Friendship` | **PK** `id`; **FKs** `requesterId`, `addresseeId → User.id`; unique `(requesterId, addresseeId)` and a status. |
+| `Block` | **PK** `id`; **FKs** `blockerId`, `blockedId → User.id`; unique `(blockerId, blockedId)`. |
+| `UserImage` | **PK** `id`; **FK** `userId → User.id`; unique `(userId, kind)` for avatar/banner images stored as bytes. |
+| `OAuthState` | **PK** `tokenHash`; optional **FK** `userId → User.id`; browser hash, purpose, and expiry. |
+| `TwoFactorAuth` | **PK/FK** `userId → User.id`; encrypted secret and enablement state; one row per user. |
+| `RecoveryCode` | **PK** `id`; **FK** `userId → User.id`; hashed code and use timestamp. |
+| `AuthToken` | **PK** `id`; **FK** `userId → User.id`; unique `tokenHash`, purpose, expiry, and use timestamp. |
+
+### Chat PostgreSQL
+
+Defined by `chat-service/prisma/schema.prisma`. Relations below are within Chat's database only.
+
+| Table | Key fields and relationships |
+| --- | --- |
+| `ChatUser` | **PK** `id` (the User-service UUID); cached profile fields and deletion timestamp. It intentionally has **no cross-database FK** to User. |
+| `Group` | **PK** `id`; group name and metadata; parent of memberships and channel conversations. |
+| `GroupMember` | **Composite PK** `(groupId, userId)`; **FKs** `groupId → Group.id`, `userId → ChatUser.id`; per-group role. |
+| `Conversation` | **PK** `id`; either a DM with **FKs** `dmUserAId`, `dmUserBId → ChatUser.id`, or a group channel with **FK** `groupId → Group.id`; channel name/topic. DM participant pair is unique. |
+| `Message` | **PK** `id`; **FKs** `conversationId → Conversation.id`, `authorId → ChatUser.id`; content, attachment-reference strings, timestamps, kind, and idempotency fields. Unique `(authorId, clientRequestId)`. |
+| `Reaction` | **Composite PK** `(messageId, userId, emoji)`; **FKs** `messageId → Message.id`, `userId → ChatUser.id`. |
+| `ConversationReadState` | **Composite PK** `(conversationId, userId)`; **FKs** `conversationId → Conversation.id`, `userId → ChatUser.id`; `lastReadMessageId` is stored as a value, not declared as an FK. |
+| `GameChallenge` | **PK** `roomCode`; **FK** `conversationId → Conversation.id`; optional unique `matchId` associates a challenge with a match for lifecycle notices. |
+
+DMs store their two participants on `Conversation`; group-channel access is through `GroupMember`. Attachment values on messages are references; attachment objects live in MinIO.
+
+### Game PostgreSQL
+
+The Code Arena SQL schemas are declared in `packages/arena-game/src/lobby.ts` and `packages/arena-game/src/postgres-store.ts`.
+
+| Table | Key fields and relationships |
+| --- | --- |
+| `arena_queue_entries` | **PK** `id`; user, mode, status, queue timestamps, optional matched match ID; no FK to User or Match. A partial unique index permits one waiting entry per user. |
+| `arena_private_rooms` | **PK** `id`; unique invite `code`, mode, owner user ID, status, expiry, optional match ID; user and match IDs are not declared FKs. |
+| `arena_private_room_members` | **Composite PK** `(room_id, user_id)`; **FK** `room_id → arena_private_rooms.id`; side and readiness. User IDs have no cross-database FK. |
+| `matches` | **PK** `id`; full match snapshot in `data JSONB`, including participant and match state. |
+| `rounds` | **Composite PK** `(match_id, idx)`; **FK** `match_id → matches.id`; unique `round_id`, problem version, and coding deadline. |
+| `round_sides` | **Composite PK** `(match_id, round_id, side_id)`; **FK** `round_id → rounds.round_id`; activity, attempts, and score fields. `match_id` is stored but is not separately declared as an FK here. |
+| `submissions` | **PK** `submission_id`; unique `evaluation_id`; `match_id`, `round_id`, and submission record in `data JSONB`. Match and round IDs are not declared as FKs. |
+| `reveals` | **Composite PK** `(match_id, round_id)`; publication time and reveal snapshot in `data JSONB`; no declared FKs. |
+| `collab_documents` | **Composite PK** `(match_id, round_id, side_id)`; revision, language, Yjs document state, and update time; no declared FKs. |
+| `match_failures` | **PK** serial `idx`; `match_id` and failure message; no declared FK. |
+| `erased_account_tokens` | **PK** `user_hash`; expiry timestamp, used for account-erasure handling. |
+
+The databases have separate owners and no cross-database foreign keys. Chat receives profile changes through RabbitMQ and stores the existing User UUID; Game stores user identifiers in its own records without cross-database relations. See the [User service guide](docs/services/user-service.md), [Chat schema notes](docs/services/chat-service.md), [Game lobby schema](packages/arena-game/src/lobby.ts), and [game persistence implementation](packages/arena-game/src/postgres-store.ts).
 
 ## Verification
 
@@ -145,6 +220,8 @@ Invitation cards poll room status every ten seconds, show Open, In Match or Expi
 ## Module coverage and tracker
 
 The team tracks ft_transcendence module coverage against the [42 subject](ft_trans_subject.pdf) and the [local module tracker](docs/requirements/index.html). `sel-mlil` built [FT Trans Score](https://ft-trans-score.vercel.app/) to keep the module counter, evidence, and acceptance status organized during the project.
+
+We chose modules around the product rather than chasing points alone. Nook's social-platform direction naturally led to identity, profiles, friends, chat, groups, and the Feed; Code Arena added gameplay, real-time collaboration, statistics, and gamification. We used FT Trans Score while planning to map these features to the subject, track points, and organize evidence, while framework and stack practices helped keep the product cohesive. The goal was a product-oriented submission, not only module validation; the claims and evaluator caveats below still apply.
 
 The team currently claims the **22 modules** in the table below, worth **31 raw points** under the local tracker. `U04` (advanced permissions) is excluded from this claim. The tracker catalog lists 55 modules and 79 raw possible points. Its scoring display has a **14-point required threshold plus up to 5 bonus points**; the bonus is capped even when raw module points exceed 19. Twelve mandatory foundation checks are separate from module points. This is a team coverage calculation, not an evaluator award; evaluators decide whether each requirement is met. See the [submission gate and foundation requirements](docs/project/POINTS_ROADMAP.md#submission-gate--foundation-requirements).
 

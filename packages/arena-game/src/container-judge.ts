@@ -330,7 +330,13 @@ export class ContainerJudge implements GameJudge {
       "--security-opt=no-new-privileges",
       "--network",
       "none",
-      ...(this.cpuLimitEnabled ? ["--cpus", String(input.limits.runCpus)] : []),
+    ];
+
+    if (this.cpuLimitEnabled) {
+      args.push("--cpus", String(input.limits.runCpus));
+    }
+
+    args.push(
       "--memory",
       memory,
       "--memory-swap",
@@ -352,7 +358,7 @@ export class ContainerJudge implements GameJudge {
       "bash",
       "-c",
       this.oneCaseScript(input.language, input.driver, input.limits),
-    ];
+    );
 
     const outputCap = Math.max(1, Math.floor(input.limits.runOutputBytes));
     const maxBuffer = Math.max(64 * 1024, Math.ceil((outputCap + 1) * 4 / 3) + 16 * 1024);

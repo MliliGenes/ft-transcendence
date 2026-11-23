@@ -16,11 +16,16 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
-  it('/ (GET)', () => {
-    return request(app.getHttpServer())
+  it('/ (GET) serves an editable email-style HTML page', async () => {
+    const response = await request(app.getHttpServer())
       .get('/')
       .expect(200)
-      .expect('Hello World!');
+      .expect('Content-Type', /text\/html/);
+
+    expect(response.text).toContain(
+      '<strong>Subject:</strong> Write your subject here',
+    );
+    expect(response.text).toContain('<p>Write your message here</p>');
   });
 
   afterEach(async () => {

@@ -31,7 +31,7 @@ describe("Match deadline closure", () => {
 
     const snapshot = await fx.engine.snapshot(fx.left, fx.matchId);
     expect(snapshot.roundPhase).toBe("MATCH_COMPLETE");
-    expect(snapshot.reveals[0]?.scores).toEqual({ left: 70, right: 0 });
+    expect(snapshot.reveal?.scores).toEqual({ left: 70, right: 0 });
     expect(snapshot.final?.scores).toEqual({ left: 70, right: 0 });
     expect(events.indexOf("reveal.published")).toBeLessThan(events.indexOf("match.ended"));
     expect(events.filter((event) => event === "match.ended")).toHaveLength(1);
@@ -78,7 +78,7 @@ describe("Match deadline closure", () => {
     await Promise.all([submission, closing]);
 
     const snapshot = await fx.engine.snapshot(fx.left, fx.matchId);
-    expect(snapshot.reveals[0]?.scores.left).toBe(70);
+    expect(snapshot.reveal?.scores.left).toBe(70);
     expect(snapshot.final?.scores.left).toBe(70);
   });
 
@@ -129,7 +129,7 @@ describe("Match deadline closure", () => {
     expect(closedBeforeRemoteJudge).toBe(false);
     const snapshot = await gameClosingMatch.snapshot(left, matchId);
     expect(snapshot.roundPhase).toBe("MATCH_COMPLETE");
-    expect(snapshot.reveals[0]?.scores.left).toBe(70);
+    expect(snapshot.reveal?.scores.left).toBe(70);
   });
 
   it("supersedes a pre-deadline Submit that settles after reveal grace", async () => {

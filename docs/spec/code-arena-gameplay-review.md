@@ -12,8 +12,6 @@ Status: agreed gameplay implemented and reviewed. The full `npm run check` suite
 
 ## Agreed rules
 
-**Progression update:** ADR-0017 supersedes the shared-round closure and reveal bullets below. Each side now advances independently, opponent scores remain hidden until the match ends, and the 10-minute cap is measured per side and problem. The implementation and current verification status are tracked in ADR-0017.
-
 Confirmed by the user on 2026-11-12:
 
 - A match has three rounds sharing a 30-minute match budget.
@@ -22,8 +20,8 @@ Confirmed by the user on 2026-11-12:
 - In 2v2, an individual leaving must allow their teammate to continue. When the entire team is offline, start a 90-second forfeit window. Explicit team surrender is separate from an individual leaving.
 - A remaining teammate may submit alone immediately after an explicit teammate leave, or after that teammate has been disconnected for 90 seconds. Before that timeout, both approvals remain required. Restore both-player approval if the teammate returns. The user specifically requires careful conflict handling.
 - Team surrender requires agreement from both participating teammates; once solo continuation applies, the remaining teammate may decide alone.
-- Historical shared-round rule: automatic reveal after both sides scored. Superseded by ADR-0017.
-- Historical shared round deadline: superseded by ADR-0017's per-side, per-problem cap; accepted evaluations retain bounded grace.
+- Keep automatic round closure once both sides have a scored submission. The user requested a fuller explanation of how this affects replacement submissions.
+- Round coding deadline (TICKET-12): Each round has a shared 10-minute coding deadline starting at the first CODING transition, capped by the overall 30-minute match deadline. New submissions are rejected at/after cutoff; submissions accepted before cutoff follow bounded evaluation grace (2s). If a side does not have a completed scored submission by deadline, it receives zero points and the reveal explains this. Immediate reveal when both sides score before deadline is preserved. Advancing to subsequent rounds is enabled after round deadline reveal. The server-owned deadline is persisted and never reset by reconnect, restart, or repeated Begin Coding calls.
 - Keep the existing problem pool for this review. A larger pool is deferred; the user intends to add problems from the 42 Network later.
 
 ## Conflict behavior and regression coverage

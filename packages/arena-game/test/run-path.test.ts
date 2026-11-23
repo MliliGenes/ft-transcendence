@@ -90,14 +90,16 @@ describe("07 run path (visible tests only, independent sides)", () => {
   });
 
   it("10. a Run that completes after its round advanced leaves the new round's activity alone", async () => {
-    const { engine, judge, left, matchId, advance } = await setup([P100]);
-    // The left side starts a Run that stays in flight.
+    const { engine, judge, left, right, matchId } = await setup([P100]);
+    // The left side is counted first, then starts a Run that stays in flight.
+    await engine.submit(left, matchId, { code: SOLVED_PY, language: "Python" });
     judge.deferNextRun();
     const stale = engine.run(left, matchId, { code: SOLVED_PY, language: "Python" });
     await tick();
-    // The round deadline elapses and advances the side to the next problem.
-    advance(11 * 60 * 1000);
-    await engine.snapshot(left, matchId);
+    await engine.submit(right, matchId, { code: SOLVED_PY, language: "Python" });
+    await engine.publishReveal(left, matchId, { graceMs: 0 });
+    await engine.nextRound(left, matchId);
+    await engine.beginCoding(left, matchId);
 
     // The same side starts a new Run in the new round while the old one is
     // still in flight: the activity gate is per round.

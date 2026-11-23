@@ -9,7 +9,7 @@ const ca = readFileSync(
 function request(path) {
   return new Promise((resolve, reject) => {
     const req = get(
-      `https://localhost${path}`,
+      `https://localhost:8443${path}`,
       { ca, timeout: 5000 },
       (response) => {
         let body = '';
@@ -46,7 +46,9 @@ assert.ok(
 );
 const api = await request('/api/');
 assert.equal(api.status, 200);
-assert.equal(typeof JSON.parse(api.body).message, 'string');
+assert.match(api.headers['content-type'], /text\/html/);
+assert.match(api.body, /<strong>Subject:<\/strong> hello my friend/);
+assert.match(api.body, /<p>If you read this, that means i am probably dead, or gone insane, or both. i did not ask for anything more than a cool team, people who can communicate, and a chance to do something meaningful. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this. i did not ask for this.<\/p>/);
 const missing = await request('/api/does-not-exist');
 assert.equal(missing.status, 404);
 assert.match(missing.headers['content-type'], /application\/json/);
@@ -61,5 +63,5 @@ assert.equal(
 );
 assert.match(socket.body, /^0\{"sid":/);
 console.log(
-  'HTTPS certificate, Next.js pages, User API, Game HTTP and Game Socket.IO routing passed.',
+  'HTTPS certificate, Next.js pages, User HTML page, Game HTTP and Game Socket.IO routing passed.',
 );

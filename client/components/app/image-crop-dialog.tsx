@@ -280,7 +280,17 @@ export function ImageCropDialog({
             Cancel
           </Button>
           <Button
-            onClick={saveCrop}
+            onClick={() => {
+              try {
+                saveCrop();
+              } catch (error) {
+                setError(
+                  error instanceof Error
+                    ? error.message
+                    : 'Unable to prepare this image. Please try again.',
+                );
+              }
+            }}
             disabled={!image || pending}
             className="min-h-11"
           >

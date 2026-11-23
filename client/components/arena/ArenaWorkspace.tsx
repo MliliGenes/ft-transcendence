@@ -10,6 +10,7 @@ import { ArenaHeader } from "./ArenaHeader";
 import { ProblemPanel } from "./ProblemPanel";
 import { DuelPanel } from "./DuelPanel";
 import { TestPanel } from "./TestPanel";
+import { RoundScoreReveal } from "./RoundScoreReveal";
 import { MatchResult } from "./MatchResult";
 import { TeamChat } from "./TeamChat";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,8 @@ type ArenaPendingAction =
   | "surrender"
   | "language"
   | "leave"
-  | "begin";
+  | "begin"
+  | "advance";
 
 // Progress for every action that stays on screen while its request runs. The
 // action label is preserved while loading, so the announcement carries the
@@ -47,18 +49,17 @@ const arenaActionStatus: Record<ArenaPendingAction, string> = {
   language: "Changing language…",
   leave: "Leaving the match…",
   begin: "Preparing the coding round…",
+  advance: "Advancing to the next round…",
 };
 
 // These two run behind a full overlay, so the overlay itself carries the
 // progress instead of the toolbar status line.
-const overlayPendingActions: ArenaPendingAction[] = ["begin"];
+const overlayPendingActions: ArenaPendingAction[] = ["begin", "advance"];
 
 export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
   const snapshot = useArena(transport);
   const [sidecars, setSidecars] = useState<SidecarState>({ collab: null, chat: null });
-  const currentRound = snapshot.progress?.self?.currentRound ?? snapshot.round ?? 1;
-  const matchId = transport.scopeKey?.() ?? (snapshot as unknown as { matchId?: string }).matchId ?? "";
-  const codeKey = `${matchId}:${currentRound}:${snapshot.problem.id}:${snapshot.language}`;
+  const codeKey = `${snapshot.problem.id}:${snapshot.language}`;
   const starterCode = snapshot.problem.starters[snapshot.language as "C++" | "Python" | "C"] ?? "";
   const [codeState, setCodeState] = useState(() => ({ key: codeKey, value: starterCode }));
   if (!sidecars.collab && codeState.key !== codeKey) setCodeState({ key: codeKey, value: starterCode });
@@ -67,29 +68,10 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
   const [fontSize, setFontSize] = useState(14);
   const [pendingAction, setPendingAction] = useState<ArenaPendingAction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [dismissedScoredState, setDismissedScoredState] = useState<{ matchId: string; round: number | null }>(() => ({ matchId, round: null }));
-  const dismissedScoredRound = dismissedScoredState.matchId === matchId ? dismissedScoredState.round : null;
-  const lastScoredRound = snapshot.progress?.self?.lastScoredRound;
-  const lastScore = snapshot.progress?.self?.lastScore;
-
-  useEffect(() => {
-    if (lastScoredRound && dismissedScoredRound !== lastScoredRound) {
-      const timer = setTimeout(() => {
-        setDismissedScoredState({ matchId, round: lastScoredRound });
-      }, 5000);
-      return () => {
-        if (typeof clearTimeout !== "undefined") clearTimeout(timer);
-      };
-    }
-  }, [matchId, lastScoredRound, dismissedScoredRound]);
-
-  const scoreNoticeText = (lastScoredRound && dismissedScoredRound !== lastScoredRound)
-    ? `Problem ${lastScoredRound} scored: ${lastScore ?? 0}/100 — moving to problem ${snapshot.progress?.self?.currentRound ?? (lastScoredRound + 1)}${snapshot.progress?.self?.stage === "FINISHED" ? " (finished)" : ""}.`
-    : null;
-
   const isRunning = pendingAction === "run";
   const isSubmitting = pendingAction === "submit";
   const pendingInOverlay = pendingAction !== null && overlayPendingActions.includes(pendingAction);
+  const feedback = actionError ?? snapshot.notice;
 
   const sidecarLifecycleRef = useRef(createArenaSidecarLifecycle());
 
@@ -168,8 +150,8 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
     await performAction("surrender", () => transport.surrender(!snapshot.surrender.you), "Unable to update surrender approval. Please try again.");
   }
 
-  const isCoding = snapshot.roundPhase === "CODING" && (snapshot.progress?.self?.stage ? snapshot.progress.self.stage === "CODING" : true);
-  const canSubmit2v2 = snapshot.mode === "2v2" ? (snapshot.ready?.you && snapshot.ready?.mate) : true;
+  const isCoding = snapshot.roundPhase === "CODING";
+  const canSubmit2v2 = snapshot.mode === "2v2" ? (snapshot.ready.you && snapshot.ready.mate) : true;
   const isSubmitDisabled = !isCoding || Boolean(pendingAction) || !canSubmit2v2;
 
   return (
@@ -181,14 +163,8 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
         pendingAction={pendingAction}
         onLeave={() => performAction("leave", () => transport.leave(), "Unable to leave the match. Please try again.")}
       />
-      {actionError && snapshot.roundPhase !== "SCORE_REVEAL" && (
-        <p role="alert" className="border-b border-border bg-card px-4 py-2 text-sm text-destructive">{actionError}</p>
-      )}
-      {scoreNoticeText && snapshot.roundPhase !== "SCORE_REVEAL" && (
-        <p role="status" aria-live="polite" className="border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">{scoreNoticeText}</p>
-      )}
-      {snapshot.notice && snapshot.roundPhase !== "SCORE_REVEAL" && (
-        <p role="alert" className="border-b border-border bg-card px-4 py-2 text-sm text-destructive">{snapshot.notice}</p>
+      {feedback && snapshot.roundPhase !== "SCORE_REVEAL" && (
+        <p role="alert" className="border-b border-border bg-card px-4 py-2 text-sm text-destructive">{feedback}</p>
       )}
 
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -300,7 +276,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                 disabled={isSubmitDisabled}
                 aria-busy={isSubmitting}
                 className={cn("h-7 text-xs font-medium", isSubmitting && "disabled:opacity-100")}
-                title="A counted score advances your side to its next problem immediately. Your opponent's scores stay hidden until the match ends."
+                title="Your latest completed submission replaces your team's scored answer. The round reveals when both sides score or the 10-minute round deadline expires."
               >
                 {isSubmitting
                   ? <IconLoader2 className="size-3.5 mr-1 animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -316,7 +292,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
           </div>
 
           <p className="border-t border-border bg-muted/30 px-3 py-1 text-xs text-muted-foreground" role="status">
-            A counted score advances your side immediately. Opponent scores stay hidden until the match ends.
+            Your latest completed submission replaces your team&apos;s scored answer. The round reveals when both sides score or the 10-minute round deadline expires.
           </p>
           {snapshot.mode === "2v2" && (
             <p className="border-t border-border bg-muted/30 px-3 py-1 text-xs text-muted-foreground" role="status">
@@ -350,13 +326,6 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
               onChange={setCode}
               collab={sidecars.collab ?? undefined}
             />
-
-            {snapshot.roundPhase === "CODING" && snapshot.progress.self.stage === "FINISHED" && (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/95 p-6 text-center">
-                <h3 className="text-2xl font-bold text-foreground">You finished all problems</h3>
-                <p className="mt-2 text-sm text-muted-foreground">Waiting for opponent (problem {snapshot.progress.opponent.currentRound} of {snapshot.totalRounds}{snapshot.progress.opponent.stage === "FINISHED" ? ", finished" : ""})</p>
-              </div>
-            )}
 
             {/* Round Intro / Match Found Banner */}
             {(snapshot.roundPhase === "MATCH_FOUND" || snapshot.roundPhase === "ROUND_INTRO") && (
@@ -392,9 +361,7 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
                     {arenaActionStatus.begin}
                   </p>
                 )}
-                {(actionError ?? snapshot.notice) && (
-                  <p role="alert" className="mt-3 text-sm text-destructive">{actionError ?? snapshot.notice}</p>
-                )}
+                {feedback && <p role="alert" className="mt-3 text-sm text-destructive">{feedback}</p>}
               </div>
             )}
           </div>
@@ -407,8 +374,20 @@ export function ArenaWorkspace({ transport }: ArenaWorkspaceProps) {
       </div>
 
       {/* Overlays for Reveal and Match Result */}
+      {snapshot.roundPhase === "SCORE_REVEAL" && (
+        <RoundScoreReveal
+          reveal={snapshot.reveal}
+          round={snapshot.round}
+          totalRounds={snapshot.totalRounds}
+          onAdvance={() => performAction("advance", () => transport.advance(), "Unable to advance the match. Please try again.")}
+          pending={Boolean(pendingAction)}
+          error={feedback}
+          status={pendingAction === "advance" ? arenaActionStatus.advance : null}
+        />
+      )}
+
       {(snapshot.roundPhase === "MATCH_COMPLETE" || snapshot.matchFinal) && snapshot.matchFinal && (
-        <MatchResult final={snapshot.matchFinal} rounds={snapshot.reveals} />
+        <MatchResult final={snapshot.matchFinal} />
       )}
     </div>
   );

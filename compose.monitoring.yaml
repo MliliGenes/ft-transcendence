@@ -1,6 +1,6 @@
 # Monitoring stack for Nook (included from compose.yaml, so `docker compose up`
 # starts it with the app). Only Grafana is reachable, through Nginx at
-# https://localhost/grafana/. See docs/services/infrastructure.md.
+# https://localhost:8443/grafana/. See docs/services/infrastructure.md.
 
 x-logging: &logging
   driver: json-file
@@ -14,7 +14,7 @@ services:
     restart: unless-stopped
     env_file: ./envs/grafana.env
     environment:
-      GF_SERVER_ROOT_URL: https://localhost/grafana/
+      GF_SERVER_ROOT_URL: https://localhost:8443/grafana/
       GF_SERVER_SERVE_FROM_SUB_PATH: 'true'
       GF_AUTH_ANONYMOUS_ENABLED: 'false'
       GF_USERS_ALLOW_SIGN_UP: 'false'
@@ -106,6 +106,7 @@ services:
     privileged: true
     command:
       - --docker_only=true
+      - --containerd=/host/containerd/containerd.sock
       - --housekeeping_interval=15s
       - --store_container_labels=false
       - --whitelisted_container_labels=com.docker.compose.service,com.docker.compose.project
@@ -113,6 +114,13 @@ services:
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
+      # Rootless dockerd runs its own containerd; without a reachable socket
+      # cAdvisor panics (nil client) as soon as it meets the containerd
+      # snapshotter driver. Mounted outside /run on purpose: in this image
+      # /var/run -> /run, so a /var/run bind lands on /run and would cover
+      # anything mounted underneath it.
+      - ${CONTAINERD_DIR:-/run/containerd}:/host/containerd:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
@@ -132,7 +140,8 @@ services:
       INFO: '0'
       POST: '0'
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # See compose.yaml: overridden by DOCKER_SOCKET on rootless hosts.
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
     networks:
       - docker-api
     logging: *logging

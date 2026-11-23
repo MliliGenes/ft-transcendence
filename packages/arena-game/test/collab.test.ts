@@ -212,7 +212,9 @@ describe("round isolation", () => {
     await fx.engine.setReady(fx.a1, fx.matchId, { ready: true, documentRevision: 2 });
     await fx.engine.setReady(fx.a2, fx.matchId, { ready: true, documentRevision: 2 });
     await fx.engine.submit(fx.a1, fx.matchId, { code: "ignored-client-payload", language: "Python", documentRevision: 2 });
-    // Side advances independently on counted score; old round is locked.
+    await fx.engine.publishReveal(fx.a1, fx.matchId, { graceMs: 0 });
+    await fx.engine.nextRound(fx.a1, fx.matchId);
+    await fx.engine.beginCoding(fx.a1, fx.matchId);
     // Late frame for the OLD round: rejected, new doc untouched.
     await expect(
       fx.engine.applyCollabUpdate(fx.a1, fx.matchId, { roundId: oldRoundId, updateB64: frame(doc, (t) => t.insert(0, "LATE")) }),
@@ -283,13 +285,13 @@ describe("frozen submission from the authoritative doc", () => {
     await readyBoth(fx, 2);
     const receipt = await fx.engine.submit(fx.a1, fx.matchId, { code: "forged-client-code", language: "Python", documentRevision: 2 });
     expect(receipt.ok).toBe(true);
-    // Team keeps editing after acceptance in their newly advanced round (round 2 starts at revision 1, bumps to 2).
+    // Team keeps editing into R3 AFTER acceptance.
     const c2 = await clientFromSync(fx, fx.a2);
     await fx.engine.applyCollabUpdate(fx.a2, fx.matchId, {
       roundId: c2.sync.roundId,
       updateB64: frame(c2.doc, (t) => t.insert(t.length, "\n# post-submit-edit")),
     });
-    expect(await revisionOf(fx, fx.a1)).toBe(2);
+    expect(await revisionOf(fx, fx.a1)).toBe(3);
     // Judge got exactly the R2 source: forged payload ignored, later edit absent.
     expect(seen).toHaveLength(1);
     expect(seen[0]).toContain("# frozen-v1");

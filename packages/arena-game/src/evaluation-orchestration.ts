@@ -1,7 +1,7 @@
 import type { ArenaEvent, PlayerStatus } from "arena-model";
 import type { DriverKind, GameJudge, JudgeLimits, SealedGroup, SupportedLanguage } from "./judge.js";
 import { JudgeInfraError } from "./judge.js";
-import { IllegalStateError, normalizeMatch, type MatchAuthority, type MatchLockOptions } from "./match-authority.js";
+import { IllegalStateError, type MatchAuthority, type MatchLockOptions } from "./match-authority.js";
 import type { EvaluationClaim, MatchPersistence } from "./persistence.js";
 import type {
   CountedResult,
@@ -49,13 +49,6 @@ export class EvaluationInFlightRegistry {
 
   get(evaluationId: string): InFlightEvaluation | undefined {
     return this.entries.get(evaluationId);
-  }
-
-  findBySubmissionId(submissionId: string): InFlightEvaluation | undefined {
-    for (const entry of this.entries.values()) {
-      if (entry.submissionId === submissionId) return entry;
-    }
-    return undefined;
   }
 
   track(evaluationId: string, identity: EvaluationIdentity): InFlightEvaluation {
@@ -150,7 +143,6 @@ interface EvaluationOrchestrationHost {
   activityOf(round: RoundState, side: SideId): PlayerStatus;
   transitionActivity(match: MatchRecord, round: RoundState, side: SideId, next: PlayerStatus): void;
   emit(event: ArenaEvent, payload: unknown): void;
-  onCounted(match: MatchRecord, round: RoundState, side: SideId, stored: SubmissionRecord, now: number, skipAutoReveal?: boolean): Promise<void>;
 }
 
 export interface EvaluationOrchestratorOptions {
@@ -183,10 +175,6 @@ export class EvaluationOrchestrator {
 
   get(evaluationId: string): InFlightEvaluation | undefined {
     return this.inFlight.get(evaluationId);
-  }
-
-  findBySubmissionId(submissionId: string): InFlightEvaluation | undefined {
-    return this.inFlight.findBySubmissionId(submissionId);
   }
 
   track(evaluationId: string, identity: EvaluationIdentity): InFlightEvaluation {
@@ -330,29 +318,22 @@ export class EvaluationOrchestrator {
       let judgeStarted = false;
       let completion: EvaluationCompletion = { ok: true };
       try {
-        const storedMatch = await this.options.persistence.loadMatch(stored.matchId);
-        const match = storedMatch ? normalizeMatch(storedMatch) : undefined;
+        const match = await this.options.persistence.loadMatch(stored.matchId);
         const round = match?.rounds.find((candidate) => candidate.roundId === stored.roundId);
         const matchDeadline = match ? match.startedAt + match.durationMs : undefined;
-        const progress = match?.sideProgress?.[stored.sideId];
         const cutoff = matchDeadline !== undefined
-          ? (progress?.problemDeadlineMs != null ? Math.min(progress.problemDeadlineMs, matchDeadline) : matchDeadline)
+          ? (round?.codingDeadlineMs != null ? Math.min(round.codingDeadlineMs, matchDeadline) : matchDeadline)
           : undefined;
         const withinDeadlineGrace =
           cutoff !== undefined &&
           stored.submittedAt < cutoff &&
           this.options.clock() <= cutoff + this.options.deadlineGraceMs;
-        const currentSideRound = match?.rounds[(match.sideProgress?.[stored.sideId]?.currentRound ?? match.currentRound) - 1];
-        const isCurrentRound = round && currentSideRound && round.roundId === currentSideRound.roundId && stored.roundId === round.roundId;
-        const problemMatches = round && round.problemVersionId === stored.problemVersionId;
         const live =
           match &&
           match.roundPhase === "CODING" &&
           round &&
-          progress?.stage === "CODING" &&
-          isCurrentRound &&
-          problemMatches &&
-          !round.cutoffPassed && !round.cutoffPassedSides?.[stored.sideId] &&
+          round.roundId === match.rounds[match.currentRound - 1]?.roundId &&
+          !round.cutoffPassed &&
           withinDeadlineGrace;
         if (!live) {
           await this.options.host.withMatchLock(stored.matchId, async () => {
@@ -397,7 +378,7 @@ export class EvaluationOrchestrator {
         await this.options.host.withMatchLock(
           stored.matchId,
           async () => {
-            await this.commitStoredEvaluation(claim!, stored.matchId, stored.evaluationId, verdict, this.options.clock(), true);
+            await this.commitStoredEvaluation(claim!, stored.matchId, stored.evaluationId, verdict, this.options.clock());
           },
           { skipFinalSave: true },
         );
@@ -474,7 +455,6 @@ export class EvaluationOrchestrator {
     evaluationId: string,
     verdict: SealedVerdict,
     now: number,
-    skipAutoReveal = false,
   ): Promise<void> {
     const match = structuredClone(await this.options.host.loadMatchOrThrow(matchId));
     const stored = structuredClone(await this.storedSubmission(evaluationId));
@@ -496,18 +476,14 @@ export class EvaluationOrchestrator {
     }
     const { score, scoreBp, groups: groupResults, testStatuses: statuses } = scored;
     const matchDeadline = match.startedAt + match.durationMs;
-    const deadline = match.sideProgress?.[side]?.problemDeadlineMs != null
-      ? Math.min(match.sideProgress[side]!.problemDeadlineMs!, matchDeadline)
+    const deadline = round.codingDeadlineMs != null
+      ? Math.min(round.codingDeadlineMs, matchDeadline)
       : matchDeadline;
     const withinDeadlineGrace = stored.submittedAt < deadline && now <= deadline + this.options.deadlineGraceMs;
-    const currentSideRound = match.rounds[(match.sideProgress?.[side]?.currentRound ?? match.currentRound) - 1];
-    const isCurrentRound = currentSideRound && round.roundId === currentSideRound.roundId && stored.roundId === round.roundId;
-    const problemMatches = round.problemVersionId === stored.problemVersionId;
     if (
       match.roundPhase === "CODING" &&
-      isCurrentRound &&
-      problemMatches &&
-      !round.cutoffPassed && !round.cutoffPassedSides?.[side] &&
+      round.roundId === this.options.host.currentRound(match).roundId &&
+      !round.cutoffPassed &&
       !round.superseded.includes(evaluationId) &&
       withinDeadlineGrace
     ) {
@@ -520,7 +496,6 @@ export class EvaluationOrchestrator {
       stored.scoreBp = scoreBp;
       stored.groups = groupResults;
       stored.testStatuses = statuses;
-      await this.options.host.onCounted(match, round, side, stored, now, skipAutoReveal);
     } else {
       stored.status = "superseded";
       stored.score = null;

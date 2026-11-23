@@ -18,6 +18,7 @@ const arenaCases = [
   ['leave', null, 'CODING'],
   ['startRound', 'Begin Coding', 'MATCH_FOUND'],
   ['beginCoding', 'Begin Coding', 'ROUND_INTRO'],
+  ['advance', null, 'SCORE_REVEAL'],
 ];
 
 for (const [method, label, phase] of arenaCases) {
@@ -38,10 +39,6 @@ for (const [method, label, phase] of arenaCases) {
       alpha: { members: [{}, {}] },
       docRevision: 7,
       notice: null,
-      progress: {
-        self: { currentRound: 1, stage: 'CODING' },
-        opponent: { currentRound: 1, stage: 'CODING' },
-      },
     };
     let reject;
     let input;
@@ -171,10 +168,6 @@ for (const [method, label, progress] of [
       alpha: { members: [{}, {}] },
       docRevision: 7,
       notice: null,
-      progress: {
-        self: { currentRound: 1, stage: 'CODING' },
-        opponent: { currentRound: 1, stage: 'CODING' },
-      },
     };
     let resolveRequest;
     const transport = {
@@ -285,10 +278,6 @@ for (const [method, label, action, progress] of arenaPendingCases) {
       alpha: { members: [{}, {}] },
       docRevision: 7,
       notice: null,
-      progress: {
-        self: { currentRound: 1, stage: 'CODING' },
-        opponent: { currentRound: 1, stage: 'CODING' },
-      },
     };
     let resolveRequest;
     const transport = {
@@ -421,11 +410,6 @@ test('the arena header marks the leave control busy while the leave request is p
       you: { name: 'You' },
       opponent: { name: 'Rival' },
       reveal: null,
-      reveals: [],
-      progress: {
-        self: { currentRound: 1, stage: 'CODING' },
-        opponent: { currentRound: 1, stage: 'CODING' },
-      },
     },
     connection: 'connected',
     onLeave: async () => {},

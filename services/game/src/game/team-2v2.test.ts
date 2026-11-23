@@ -67,7 +67,7 @@ async function boot(extraEnv: Record<string, string> = {}): Promise<ChildProcess
   }
 }
 
-async function newTeamMatch(problemVersionIds: string[] = ["even-ledger-v2", "even-ledger-v2"]): Promise<string> {
+async function newTeamMatch(): Promise<string> {
   const res = await api("POST", "/matches", A1, {
     mode: "2v2",
     participants: [
@@ -76,7 +76,7 @@ async function newTeamMatch(problemVersionIds: string[] = ["even-ledger-v2", "ev
       { userId: B1, sideId: "right" },
       { userId: B2, sideId: "right" },
     ],
-    problemVersionIds,
+    problemVersionIds: ["even-ledger-v2", "even-ledger-v2"],
   });
   expect(res.status).toBe(201);
   return res.json.matchId as string;
@@ -246,7 +246,7 @@ describe("2v2 service integration (real HTTP + sockets + Postgres)", () => {
   }, 30000);
 
   it("10. Alpha evaluation does not block Beta; both teams count, reveal is team scores", async () => {
-    const matchId = await newTeamMatch(["even-ledger-v2"]);
+    const matchId = await newTeamMatch();
     await startCoding(matchId);
     // Real collaborative text per team: the judge scores the frozen shared
     // source, never the submit payload (payload here is deliberately stale).
@@ -263,11 +263,11 @@ describe("2v2 service integration (real HTTP + sockets + Postgres)", () => {
     // ponytail: auto-reveal is fire-and-forget off submit, so poll like the
     // 1v1 suite instead of asserting the immediate snapshot.
     let snap = await api("GET", `/matches/${matchId}/snapshot`, A1);
-    for (let i = 0; i < 120 && !["SCORE_REVEAL", "MATCH_COMPLETE"].includes(snap.json.roundPhase); i++) {
+    for (let i = 0; i < 120 && snap.json.roundPhase !== "SCORE_REVEAL"; i++) {
       await new Promise((r) => setTimeout(r, 250));
       snap = await api("GET", `/matches/${matchId}/snapshot`, A1);
     }
-    expect(["SCORE_REVEAL", "MATCH_COMPLETE"]).toContain(snap.json.roundPhase);
+    expect(snap.json.roundPhase).toBe("SCORE_REVEAL");
     expect(snap.json.reveal.scores).toEqual({ left: 100, right: 100 });
   }, 60000);
 
@@ -291,7 +291,7 @@ describe("2v2 service integration (real HTTP + sockets + Postgres)", () => {
   });
 
   it("12. reveal reaches all four authorized clients", async () => {
-    const matchId = await newTeamMatch(["even-ledger-v2"]);
+    const matchId = await newTeamMatch();
     await startCoding(matchId);
     const socks = await Promise.all([connect(A1, matchId), connect(A2, matchId), connect(B1, matchId), connect(B2, matchId)]);
     try {

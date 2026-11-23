@@ -52,13 +52,6 @@ docker compose logs -f user-service
 
 Postgres initializes fresh storage, then its health checks allow the owning services to start. The User service's Dockerfile generates Prisma Client and compiles during build; at runtime it applies migrations and bootstraps the initial superadmin. Game initializes its owned schema before reporting ready. A failed migration or bootstrap prevents the corresponding API from starting.
 
-After configuring the environment files, `make up` runs the Compose validation
-and build/start commands. `make build` only builds images; it does not update
-running containers. The PostgreSQL monitoring initializer is tracked as executable
-so fresh checkouts receive its required execution permission. A fresh-data
-[startup rehearsal](../evidence/fresh-start-2026-11-14.md) verified this correction
-and the auth, storage and judging flows on the tested Docker Desktop host.
-
 Set `SUPERADMIN_USERNAME`, `SUPERADMIN_EMAIL`, and `SUPERADMIN_PASSWORD` in `envs/user-service.env` before the first startup. The username must be 3–30 characters and the password 8–32 characters (at most 72 UTF-8 bytes). Use a valid email. Passwords are bcrypt-hashed with cost 12. Keep these settings in the ignored local env file, never in the Docker image or committed examples. Single-quote values containing `$` to prevent Compose interpolation.
 
 The bootstrap runs after migrations on every service start, but creates an account only when no superadmin exists. Existing superadmins and their credentials remain unchanged, even if the env settings change. It does not automatically promote a regular account with a matching username or email: that conflict stops startup. The manual promotion command remains available: `docker compose exec user-service npm run bootstrap:superadmin -- existing-user@example.com` (use `docker compose run --rm --no-deps user-service npm run bootstrap:superadmin -- existing-user@example.com` if the service cannot start). Changing the env password does not reset an existing account's password.
